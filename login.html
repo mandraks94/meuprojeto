@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Player com Cast</title>
+
+  <!-- Cast SDK -->
+  <script type="text/javascript" src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 30px;
+    }
+
+    /* Tamanho do vídeo aumentado */
+    video {
+      width: 100%;
+      max-width: 800px;  /* Aumentei o tamanho máximo do vídeo */
+      margin-top: 20px;
+    }
+
+    .cast-button-container {
+      display: inline-block;
+      margin-left: 10px;  /* Espaço entre o título e o ícone */
+      width: 30px;
+      height: 30px;
+      cursor: pointer;
+    }
+
+    /* Contêiner para o player de vídeo */
+    .video-container {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+      max-width: 800px;
+    }
+
+    /* Estilo para o título com o ícone de cast ao lado */
+    .title-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+
+    google-cast-launcher {
+      width: 30px;
+      height: 30px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Contêiner do título com o ícone de cast -->
+  <div class="title-container">
+    <h1>Minha Live</h1>
+    <!-- Botão de Cast -->
+    <div class="cast-button-container">
+      <google-cast-launcher></google-cast-launcher>
+    </div>
+  </div>
+
+  <!-- Contêiner do vídeo -->
+  <div class="video-container">
+    <!-- Player de vídeo -->
+    <video id="video" controls autoplay>
+    </video>
+  </div>
+
+  <!-- HLS.js -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+  <script>
+    var video = document.getElementById('video');
+    var videoSrc = 'https://sae11.playlist.live-video.net/v1/playlist/Cv8FDSx551U0F6EOcV8Y2drahw-a9pxnlIoi2cIuuLUx9kchUwH2PRSNdVPjam_mTX2p38xPsqF7OeanabQFspIh3dSedhE2aOmdun2ooFwkpCzhX2pfdkhgaYhWpgcxXi0t9OPs3V1hPrHKfRSNCUpwVER7_JBlxt4cCLCw4fdDm_gK_ziwW-oMFrYZZg3Hv6888SWzgXF4lcv-1V6VA2s7PPVUCKjX62n_i6QWIqWdifGDYNERUZB4HoAO-SKMwktD6f-OUjBJX6o1qqiFiOUBBRF1A0Ira9fOL6HddJzXWxsxlJrme8bjRZsNxWnl_kly_YMxzUPxp0DwOkCO1AEv5df0bOJzABmmbjfVudabOTDAjEGhi7MKisBOUHkZn7z7gnmSWaLTcXGdjcFEBKzypXpc-rzZb3jP5UJofRUwuOA0MGzsJ_kxV9tbRK_1ZBpfwwy4lueEXTDYjb-sHx4hWLFiklhVvgkkjsrqComY4Z5xiSL9H47EWHrN31L_WbXjw_cbFgdpJ4Uqc_uxpQeUv2Iaz9jJLWC0uxbOct9ctS5O_ElsfTdzq5Huh6MxxRtAAh1AScZJrDglkuO3gnrKhb-hzxIi9229hTyzcqjCU7StOvktp2fm1oIUYTxZ7wZyhDW-kT2KRLFuF95aCkShO34hVOsIj0t3LPUPckazU1EnQLqZtgcc2oxwI5Kmirod9gkxPwX0PmE6J59g6MJtZuVxkoTfuVbWXQmGk8aoapj6SufuoYBKF79zqaxO12Bz6NTQF9AMAhE4DnU2mP4LznZbqaxtUXnIo8zusuNzBR2zNx3S4ZPZk5geXwneX5fKgArGhPSCcu0ikkaH42dXYoKfN8Kk4H9O3zGbT8pxnrryAnNHS2GMWOnydiHbpdp62XDNTxPMJOvny7sh4WagkbjkC_zm2c19HfM18sHjFwlfd0mEmQnrGE6VQp8jSjGPzbH_VgdQYd7obySQmG0wyph5bKaPgiL9Iyi5sKwg5LcMsnCoJhqfhGUa72o5WpEaDEyHYJhNC3bTn1-NxiABKgl1cy1lYXN0LTIwkAw.m3u8';
+
+    if (Hls.isSupported()) {
+      var hls = new Hls();
+      hls.loadSource(videoSrc);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, function() {
+        video.play();
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = videoSrc;
+      video.addEventListener('loadedmetadata', function() {
+        video.play();
+      });
+    }
+  </script>
+
+  <!-- Inicialização do Cast -->
+  <script>
+    window['__onGCastApiAvailable'] = function(isAvailable) {
+      if (isAvailable) {
+        const context = cast.framework.CastContext.getInstance();
+        context.setOptions({
+          receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+          autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+        });
+      }
+    };
+  </script>
+
+</body>
+</html>

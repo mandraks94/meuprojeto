@@ -1,23 +1,32 @@
 javascript:(function(){
-    if(window.location.href.includes("instagram.com")){
-        // Redirecionar para a página de Curtidas
-        document.getElementById('curtidasBtn').addEventListener('click', function(){
-            window.location.href = 'https://www.instagram.com/your_activity/interactions/likes/';
+    if (window.location.href.includes("instagram.com")) {
+        // Função para simular a navegação sem recarregar a página
+        function navigateTo(url) {
+            // Atualiza a URL no navegador sem recarregar
+            history.pushState(null, '', url);
+
+            // Simula o carregamento do conteúdo (você pode personalizar isso)
+            document.body.innerHTML = `<h1>Carregando conteúdo de ${url}...</h1>`;
+            
+            // Aqui você pode adicionar lógica para carregar o conteúdo dinamicamente
+            // Exemplo: Fazer uma requisição AJAX para buscar o conteúdo da página
+        }
+
+        // Adiciona os eventos de clique
+        document.getElementById('curtidasBtn').addEventListener('click', function() {
+            navigateTo('https://www.instagram.com/your_activity/interactions/likes/');
         });
 
-        // Redirecionar para a página de Comentários
-        document.getElementById('comentariosBtn').addEventListener('click', function(){
-            window.location.href = 'https://www.instagram.com/your_activity/interactions/comments/';
+        document.getElementById('comentariosBtn').addEventListener('click', function() {
+            navigateTo('https://www.instagram.com/your_activity/interactions/comments/');
         });
 
-        // Redirecionar para a página de Bloqueados
-        document.getElementById('bloqueadosBtn').addEventListener('click', function(){
-            window.location.href = 'https://www.instagram.com/accounts/access_tool/block_list/';
+        document.getElementById('bloqueadosBtn').addEventListener('click', function() {
+            navigateTo('https://www.instagram.com/accounts/access_tool/block_list/');
         });
 
-        // Redirecionar para a página de Direct
-        document.getElementById('mensagensBtn').addEventListener('click', function(){
-            window.location.href = 'https://www.instagram.com/direct/inbox/';
+        document.getElementById('mensagensBtn').addEventListener('click', function() {
+            navigateTo('https://www.instagram.com/direct/inbox/');
         });
     }
 })();

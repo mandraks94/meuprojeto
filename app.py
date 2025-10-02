@@ -23,25 +23,15 @@ if INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD:
 @app.route('/download_story_video', methods=['POST'])
 def download_story_video():
     data = request.get_json()
-    shortcode = data.get('shortcode')
-    if not shortcode:
-        return jsonify({'error': 'Missing shortcode parameter'}), 400
+    story_url = data.get('story_url')
+    if not story_url:
+        return jsonify({'error': 'Missing story_url parameter'}), 400
 
     try:
         # Create a temporary directory to save the video
         with tempfile.TemporaryDirectory() as tmpdirname:
-            # Download the story video using Instaloader
-            profile = instaloader.Profile.from_username(L.context, INSTAGRAM_USERNAME)
-            # Note: Instaloader does not provide direct story download by shortcode,
-            # so this is a placeholder for actual implementation.
-            # You may need to adjust this logic based on Instaloader capabilities.
-
-            # For demonstration, let's assume we have the video URL or path
-            video_path = os.path.join(tmpdirname, 'story_video.mp4')
-
-            # Here you would download or save the video to video_path
-
-            # For now, just return an error to indicate this needs implementation
+            # Placeholder: Implement logic to download story video from story_url
+            # For now, return not implemented error
             return jsonify({'error': 'Story video download not implemented yet'}), 501
 
             # If implemented, send the file:

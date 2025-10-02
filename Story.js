@@ -99,7 +99,7 @@
                         downloadMedia(videoUrl, 'story.mp4', video);
                     } else {
                         try {
-                            const response = await fetch('https://galvanotropic-leatrice-unapplausive.ngrok-free.dev/download_story_video', {
+                            const response = await fetch('https://meuprojeto-production-580b.up.railway.app/download_story_video', {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json'

@@ -43,16 +43,37 @@ def download_story_video():
     if not story_url:
         return jsonify({'error': 'Missing story_url parameter'}), 400
 
+    from urllib.parse import urlparse
+
+    def extract_username_from_url(story_url):
+        # Exemplo: https://www.instagram.com/stories/username/1234567890123456789/
+        try:
+            parts = urlparse(story_url).path.strip('/').split('/')
+            if len(parts) >= 2 and parts[0] == 'stories':
+                return parts[1]
+        except Exception as e:
+            print(f"Erro ao extrair username: {e}")
+        return None
+
     try:
-        # Create a temporary directory to save the video
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            # Placeholder: Implement logic to download story video from story_url
-            # For now, return not implemented error
-            return jsonify({'error': 'Story video download not implemented yet'}), 501
+        data = request.get_json()
+        story_url = data.get('story_url')
+        if not story_url:
+            return jsonify({'error': 'Missing story_url parameter'}), 400
 
-            # If implemented, send the file:
-            # return send_file(video_path, mimetype='video/mp4', as_attachment=True, download_name='story_video.mp4')
+        username = extract_username_from_url(story_url)
+        if not username:
+            return jsonify({'error': 'Could not extract username from URL'}), 400
 
+        profile = instaloader.Profile.from_username(L.context, username)
+        for story in L.get_stories(userids=[profile.userid]):
+            for item in story.get_items():
+                if item.video_url and story_url in item.video_url:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmpfile:
+                        L.download_storyitem(item, target=tmpfile.name)
+                        return send_file(tmpfile.name, mimetype='video/mp4', as_attachment=True, download_name='story_video.mp4')
+
+        return jsonify({'error': 'Story video not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

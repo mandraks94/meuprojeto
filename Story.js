@@ -99,12 +99,12 @@
                         downloadMedia(videoUrl, 'story.mp4', video);
                     } else {
                         try {
-                            const response = await fetch('http://localhost:5000/proxy', {
+                            const response = await fetch('https://meuprojeto-production-580b.up.railway.app/download_story_video', {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json'
                                 },
-                                body: JSON.stringify({ url: videoUrl })
+                                body: JSON.stringify({ story_url: videoUrl })
                             });
                             if (!response.ok) {
                                 throw new Error('Resposta do servidor não OK: ' + response.status);

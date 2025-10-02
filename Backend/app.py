@@ -20,8 +20,11 @@ if INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD:
     except Exception as e:
         print(f"Failed to login to Instagram: {e}")
 
-@app.route('/download_story_video', methods=['POST'])
+@app.route('/download_story_video', methods=['POST', 'GET'])
 def download_story_video():
+    if request.method == 'GET':
+        return jsonify({'error': 'GET method not allowed for this endpoint'}), 405
+
     data = request.get_json()
     story_url = data.get('story_url')
     if not story_url:

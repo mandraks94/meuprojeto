@@ -5,7 +5,20 @@ import os
 import tempfile
 
 app = Flask(__name__)
-CORS(app)
+# Ajustar CORS para permitir requisições do Instagram
+from flask_cors import CORS
+
+cors = CORS(app, resources={
+    r"/*": {
+        "origins": [
+            "https://www.instagram.com",
+            "https://instagram.com",
+            "https://www.facebook.com",
+            "https://facebook.com"
+        ],
+        "supports_credentials": True
+    }
+})
 
 INSTAGRAM_USERNAME = os.getenv('INSTAGRAM_USERNAME')
 INSTAGRAM_PASSWORD = os.getenv('INSTAGRAM_PASSWORD')

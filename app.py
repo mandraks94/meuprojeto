@@ -7,7 +7,7 @@ import tempfile
 app = Flask(__name__)
 CORS(app)
 
-INSTAGRAM_USERNAME = os.getenv('jehnfison_')
+INSTAGRAM_USERNAME = os.getenv('INSTAGRAM_USERNAME')
 INSTAGRAM_PASSWORD = os.getenv('INSTAGRAM_PASSWORD')
 
 L = instaloader.Instaloader()

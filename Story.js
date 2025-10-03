@@ -26,7 +26,7 @@
         const videos = document.querySelectorAll('video');
 
         images.forEach(img => {
-            if (!img.parentNode.querySelector('.download-btn') && img.closest('div[role="presentation"]')) {
+            if (!img.parentNode.querySelector('.download-btn')) {
                 const btn = document.createElement('button');
                 btn.className = 'download-btn';
                 btn.innerText = 'Download';
@@ -71,7 +71,7 @@
         });
 
         videos.forEach(video => {
-            if (!video.parentNode.querySelector('.download-btn') && video.closest('div[role="presentation"]')) {
+            if (!video.parentNode.querySelector('.download-btn')) {
                 const btn = document.createElement('button');
                 btn.className = 'download-btn';
                 btn.innerText = 'Download';

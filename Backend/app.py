@@ -30,6 +30,12 @@ if INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD:
     try:
         L.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
         print("Logged in to Instagram successfully.")
+    except instaloader.exceptions.BadCredentialsException as e:
+        print(f"Failed to login to Instagram: Bad credentials - {e}")
+    except instaloader.exceptions.TwoFactorAuthRequiredException as e:
+        print(f"Failed to login to Instagram: Two-factor authentication required - {e}")
+    except instaloader.exceptions.ConnectionException as e:
+        print(f"Failed to login to Instagram: Connection error - {e}")
     except Exception as e:
         print(f"Failed to login to Instagram: {e}")
 
@@ -81,6 +87,38 @@ def download_story_video():
                         return send_file(tmpfile.name, mimetype='video/mp4', as_attachment=True, download_name='story_video.mp4')
 
         return jsonify({'error': 'Story video not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+from flask import send_file
+import json
+import io
+
+@app.route('/extract_followers_following', methods=['GET'])
+def extract_followers_following():
+    try:
+        username = "jehnfison_"
+        profile = instaloader.Profile.from_username(L.context, username)
+
+        followers = []
+        for follower in profile.get_followers():
+            followers.append(follower.username)
+
+        followees = []
+        for followee in profile.get_followees():
+            followees.append(followee.username)
+
+        data = {
+            "followers": followers,
+            "following": followees
+        }
+
+        json_data = json.dumps(data, ensure_ascii=False)
+        buffer = io.BytesIO()
+        buffer.write(json_data.encode('utf-8'))
+        buffer.seek(0)
+
+        return send_file(buffer, mimetype='application/json', as_attachment=True, download_name='followers_following.json')
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

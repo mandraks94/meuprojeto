@@ -30,6 +30,12 @@ if INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD:
     try:
         L.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
         print("Logged in to Instagram successfully.")
+    except instaloader.exceptions.BadCredentialsException as e:
+        print(f"Failed to login to Instagram: Bad credentials - {e}")
+    except instaloader.exceptions.TwoFactorAuthRequiredException as e:
+        print(f"Failed to login to Instagram: Two-factor authentication required - {e}")
+    except instaloader.exceptions.ConnectionException as e:
+        print(f"Failed to login to Instagram: Connection error - {e}")
     except Exception as e:
         print(f"Failed to login to Instagram: {e}")
 

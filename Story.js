@@ -145,32 +145,23 @@
                 if (!videoUrl && video.hasAttribute('data-src')) {
                     videoUrl = video.getAttribute('data-src');
                 }
-                btn.onclick = async () => {
-                    try {
-                        // Sempre enviar para o backend a URL atual da story para captura via Puppeteer
-                        const backendUrl = 'https://meuprojeto-production-580b.up.railway.app/download_story_media';
-                        const response = await fetch(backendUrl, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ story_url: window.location.href })
-                        });
-                        if (!response.ok) {
-                            throw new Error('Resposta do servidor não OK: ' + response.status);
-                        }
-                        const blob = await response.blob();
-                        const blobUrl = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = blobUrl;
-                        a.download = 'story_media';
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-                        window.URL.revokeObjectURL(blobUrl);
-                    } catch (error) {
-                        alert('Erro na comunicação com o servidor de download: ' + error.message);
-                    }
+                btn.onclick = () => {
+                    // Criar formulário dinâmico para enviar POST em nova aba, evitando CSP e método não permitido
+                    const backendUrl = 'https://meuprojeto-production-580b.up.railway.app/download_story_media';
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = backendUrl;
+                    form.target = '_blank';
+
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'story_url';
+                    input.value = window.location.href;
+                    form.appendChild(input);
+
+                    document.body.appendChild(form);
+                    form.submit();
+                    form.remove();
                 };
                 video.parentNode.style.position = 'relative';
                 video.parentNode.appendChild(btn);

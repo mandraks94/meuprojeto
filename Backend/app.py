@@ -176,10 +176,14 @@ async def capture_media_from_story(url):
     await browser.close()
     return tmpfile.name, 'video/mp4' if suffix == '.mp4' else 'image/jpeg'
 
-@app.route('/download_story_media', methods=['POST'])
+@app.route('/download_story_media', methods=['POST', 'GET'])
 def download_story_media():
-    data = request.get_json()
-    story_url = data.get('story_url')
+    if request.method == 'POST':
+        data = request.get_json()
+        story_url = data.get('story_url')
+    else:
+        story_url = request.args.get('story_url')
+
     if not story_url:
         return jsonify({'error': 'Missing story_url parameter'}), 400
 

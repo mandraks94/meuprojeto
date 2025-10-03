@@ -179,8 +179,11 @@ async def capture_media_from_story(url):
 @app.route('/download_story_media', methods=['POST', 'GET'])
 def download_story_media():
     if request.method == 'POST':
-        data = request.get_json()
-        story_url = data.get('story_url')
+        if request.content_type == 'application/json':
+            data = request.get_json()
+            story_url = data.get('story_url')
+        else:
+            story_url = request.form.get('story_url')
     else:
         story_url = request.args.get('story_url')
 

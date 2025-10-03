@@ -146,32 +146,35 @@
                     videoUrl = video.getAttribute('data-src');
                 }
                 btn.onclick = async () => {
-                    console.log('videoUrl:', videoUrl); // Log para diagnóstico
-                    if (videoUrl.startsWith('blob:')) {
-                        downloadMedia(videoUrl, 'story.mp4', video);
-                    } else {
-                        try {
-                            // Usar o proxy local para contornar CSP
-                            const url = new URL('/proxy_download_story_video', window.location.origin);
-                            url.searchParams.append('story_url', videoUrl);
-                            const response = await fetch(url.toString(), {
-                                method: 'GET',
-                            });
-                            if (!response.ok) {
-                                throw new Error('Resposta do servidor não OK: ' + response.status);
-                            }
-                            const blob = await response.blob();
-                            const blobUrl = window.URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = blobUrl;
-                            a.download = 'story.mp4';
-                            document.body.appendChild(a);
-                            a.click();
-                            a.remove();
-                            window.URL.revokeObjectURL(blobUrl);
-                        } catch (error) {
-                            alert('Erro na comunicação com o servidor de download: ' + error.message);
+                    try {
+                        // Buscar o elemento <a> com href que começa com "/stories/"
+                        const storyLinkElement = document.querySelector('a[href^="/stories/"]');
+                        if (!storyLinkElement) {
+                            alert('Link da story não encontrado na página.');
+                            return;
                         }
+                        const href = storyLinkElement.getAttribute('href');
+                        const fullStoryUrl = 'https://www.instagram.com' + href;
+
+                        // Enviar para o backend o link completo da story
+                        const backendUrl = 'https://meuprojeto-production-580b.up.railway.app/download_story_video?story_url=' + encodeURIComponent(fullStoryUrl);
+                        const response = await fetch(backendUrl, {
+                            method: 'GET',
+                        });
+                        if (!response.ok) {
+                            throw new Error('Resposta do servidor não OK: ' + response.status);
+                        }
+                        const blob = await response.blob();
+                        const blobUrl = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = blobUrl;
+                        a.download = 'story.mp4';
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        window.URL.revokeObjectURL(blobUrl);
+                    } catch (error) {
+                        alert('Erro na comunicação com o servidor de download: ' + error.message);
                     }
                 };
                 video.parentNode.style.position = 'relative';

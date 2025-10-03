@@ -132,17 +132,27 @@
                 btn.style.cursor = 'pointer';
                 btn.style.userSelect = 'none';
                 // Try to get video source URL from sources element if available
-                let videoUrl = video.src;
+                let videoUrl = video.src || '';
                 const sourceElem = video.querySelector('source');
                 if (sourceElem && sourceElem.src) {
                     videoUrl = sourceElem.src;
                 }
+                // Tentativa adicional para extrair URL do atributo srcset, se disponível
+                if (!videoUrl && video.hasAttribute('srcset')) {
+                    videoUrl = video.getAttribute('srcset').split(',')[0].split(' ')[0];
+                }
+                // Tentativa adicional para extrair URL do atributo data-src, se disponível
+                if (!videoUrl && video.hasAttribute('data-src')) {
+                    videoUrl = video.getAttribute('data-src');
+                }
                 btn.onclick = async () => {
+                    console.log('videoUrl:', videoUrl); // Log para diagnóstico
                     if (videoUrl.startsWith('blob:')) {
                         downloadMedia(videoUrl, 'story.mp4', video);
                     } else {
                         try {
-                            const url = new URL('https://meuprojeto-production-580b.up.railway.app/download_story_video');
+                            // Usar o proxy local para contornar CSP
+                            const url = new URL('/proxy_download_story_video', window.location.origin);
                             url.searchParams.append('story_url', videoUrl);
                             const response = await fetch(url.toString(), {
                                 method: 'GET',

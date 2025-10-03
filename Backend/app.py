@@ -117,6 +117,23 @@ def extract_followers_following():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+import requests
+
+@app.route('/proxy_download_story_video', methods=['GET'])
+def proxy_download_story_video():
+    story_url = request.args.get('story_url')
+    if not story_url:
+        return jsonify({'error': 'Missing story_url parameter'}), 400
+    try:
+        # Encaminha a requisição para o backend externo
+        external_url = 'https://meuprojeto-production-580b.up.railway.app/download_story_video'
+        params = {'story_url': story_url}
+        response = requests.get(external_url, params=params, stream=True)
+        # Retorna a resposta do backend externo para o frontend
+        return (response.raw.read(), response.status_code, response.headers.items())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port, debug=True)

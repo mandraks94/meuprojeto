@@ -35,14 +35,6 @@ if INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD:
 
 @app.route('/download_story_video', methods=['POST', 'GET'])
 def download_story_video():
-    if request.method == 'GET':
-        return jsonify({'error': 'GET method not allowed for this endpoint'}), 405
-
-    data = request.get_json()
-    story_url = data.get('story_url')
-    if not story_url:
-        return jsonify({'error': 'Missing story_url parameter'}), 400
-
     from urllib.parse import urlparse
 
     def extract_username_from_url(story_url):
@@ -56,8 +48,12 @@ def download_story_video():
         return None
 
     try:
-        data = request.get_json()
-        story_url = data.get('story_url')
+        if request.method == 'GET':
+            story_url = request.args.get('story_url')
+        else:
+            data = request.get_json()
+            story_url = data.get('story_url')
+
         if not story_url:
             return jsonify({'error': 'Missing story_url parameter'}), 400
 
@@ -66,6 +62,7 @@ def download_story_video():
             return jsonify({'error': 'Could not extract username from URL'}), 400
 
         profile = instaloader.Profile.from_username(L.context, username)
+
         def extract_story_id(story_url):
             try:
                 parts = urlparse(story_url).path.strip('/').split('/')

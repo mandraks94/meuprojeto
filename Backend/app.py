@@ -87,6 +87,38 @@ def download_story_video():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+from flask import send_file
+import json
+import io
+
+@app.route('/extract_followers_following', methods=['GET'])
+def extract_followers_following():
+    try:
+        username = "jehnfison"
+        profile = instaloader.Profile.from_username(L.context, username)
+
+        followers = []
+        for follower in profile.get_followers():
+            followers.append(follower.username)
+
+        followees = []
+        for followee in profile.get_followees():
+            followees.append(followee.username)
+
+        data = {
+            "followers": followers,
+            "following": followees
+        }
+
+        json_data = json.dumps(data, ensure_ascii=False)
+        buffer = io.BytesIO()
+        buffer.write(json_data.encode('utf-8'))
+        buffer.seek(0)
+
+        return send_file(buffer, mimetype='application/json', as_attachment=True, download_name='followers_following.json')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port, debug=True)

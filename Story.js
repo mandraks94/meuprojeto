@@ -11,6 +11,49 @@
     'use strict';
 
     function addDownloadButtons() {
+        // Adiciona botão para extrair seguidores e seguindo na página do usuário específico
+        if (window.location.href === "https://www.instagram.com/jehnfison/") {
+            if (!document.querySelector('#extract-followers-btn')) {
+                const btn = document.createElement('button');
+                btn.id = 'extract-followers-btn';
+                btn.innerText = 'Extrair Seguidores e Seguindo';
+                btn.style.position = 'fixed';
+                btn.style.top = '80px';
+                btn.style.right = '20px';
+                btn.style.zIndex = '2147483647';
+                btn.style.background = '#3897f0';
+                btn.style.color = 'white';
+                btn.style.border = 'none';
+                btn.style.padding = '10px 15px';
+                btn.style.fontSize = '16px';
+                btn.style.borderRadius = '5px';
+                btn.style.cursor = 'pointer';
+                btn.style.userSelect = 'none';
+                btn.onclick = async () => {
+                    try {
+                        const response = await fetch('https://meuprojeto-production-580b.up.railway.app/extract_followers_following', {
+                            method: 'GET',
+                        });
+                        if (!response.ok) {
+                            throw new Error('Resposta do servidor não OK: ' + response.status);
+                        }
+                        const blob = await response.blob();
+                        const blobUrl = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = blobUrl;
+                        a.download = 'followers_following.json';
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        window.URL.revokeObjectURL(blobUrl);
+                    } catch (error) {
+                        alert('Erro na comunicação com o servidor: ' + error.message);
+                    }
+                };
+                document.body.appendChild(btn);
+            }
+        }
+
         // Só habilita o botão se a URL começar com https://www.instagram.com/stories
         if (!window.location.href.startsWith("https://www.instagram.com/stories")) {
             return;

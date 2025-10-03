@@ -10,12 +10,7 @@ from flask_cors import CORS
 
 cors = CORS(app, resources={
     r"/*": {
-        "origins": [
-            "https://www.instagram.com",
-            "https://instagram.com",
-            "https://www.facebook.com",
-            "https://facebook.com"
-        ],
+        "origins": "*",
         "supports_credentials": True
     }
 })

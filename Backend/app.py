@@ -66,9 +66,19 @@ def download_story_video():
             return jsonify({'error': 'Could not extract username from URL'}), 400
 
         profile = instaloader.Profile.from_username(L.context, username)
+        def extract_story_id(story_url):
+            try:
+                parts = urlparse(story_url).path.strip('/').split('/')
+                if len(parts) >= 3:
+                    return parts[2]
+            except Exception:
+                return None
+
+        story_id = extract_story_id(story_url)
+
         for story in L.get_stories(userids=[profile.userid]):
             for item in story.get_items():
-                if item.video_url and story_url in item.video_url:
+                if item.video_url and story_id and str(item.mediaid) == story_id:
                     with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmpfile:
                         L.download_storyitem(item, target=tmpfile.name)
                         return send_file(tmpfile.name, mimetype='video/mp4', as_attachment=True, download_name='story_video.mp4')

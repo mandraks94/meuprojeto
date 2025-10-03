@@ -147,60 +147,27 @@
                 }
                 btn.onclick = async () => {
                     try {
-                        // Capturar o elemento <video> visível na página
-                        const videoElement = document.querySelector('video');
-                        if (!videoElement) {
-                            alert('Vídeo da story não encontrado na página.');
-                            return;
+                        // Sempre enviar para o backend a URL atual da story para captura via Puppeteer
+                        const backendUrl = 'https://meuprojeto-production-580b.up.railway.app/download_story_media';
+                        const response = await fetch(backendUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ story_url: window.location.href })
+                        });
+                        if (!response.ok) {
+                            throw new Error('Resposta do servidor não OK: ' + response.status);
                         }
-                        const videoSrc = videoElement.getAttribute('src');
-                        if (!videoSrc) {
-                            alert('O vídeo não possui atributo src.');
-                            return;
-                        }
-
-                        // Se o src for um blob, fazer download direto do blob
-                        if (videoSrc.startsWith('blob:')) {
-                            try {
-                                const response = await fetch(videoSrc);
-                                if (!response.ok) {
-                                    throw new Error('Falha ao buscar o blob do vídeo');
-                                }
-                                const blob = await response.blob();
-                                const blobUrl = window.URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.href = blobUrl;
-                                a.download = 'story_video.mp4';
-                                document.body.appendChild(a);
-                                a.click();
-                                a.remove();
-                                window.URL.revokeObjectURL(blobUrl);
-                            } catch (error) {
-                                alert('Erro ao baixar o vídeo blob: ' + error.message);
-                            }
-                        } else {
-                            // Se não for blob, enviar para o backend para captura via Puppeteer
-                            const backendUrl = 'https://meuprojeto-production-580b.up.railway.app/download_story_media';
-                            const response = await fetch(backendUrl, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({ story_url: window.location.href })
-                            });
-                            if (!response.ok) {
-                                throw new Error('Resposta do servidor não OK: ' + response.status);
-                            }
-                            const blob = await response.blob();
-                            const blobUrl = window.URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = blobUrl;
-                            a.download = 'story_media';
-                            document.body.appendChild(a);
-                            a.click();
-                            a.remove();
-                            window.URL.revokeObjectURL(blobUrl);
-                        }
+                        const blob = await response.blob();
+                        const blobUrl = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = blobUrl;
+                        a.download = 'story_media';
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        window.URL.revokeObjectURL(blobUrl);
                     } catch (error) {
                         alert('Erro na comunicação com o servidor de download: ' + error.message);
                     }

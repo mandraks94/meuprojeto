@@ -3,6 +3,8 @@ from flask_cors import CORS
 import instaloader
 import os
 import tempfile
+import asyncio
+from pyppeteer import launch
 
 app = Flask(__name__)
 # Ajustar CORS para permitir requisições do Instagram
@@ -131,6 +133,63 @@ def proxy_download_story_video():
         response = requests.get(external_url, params=params, stream=True)
         # Retorna a resposta do backend externo para o frontend
         return (response.raw.read(), response.status_code, response.headers.items())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+async def capture_media_from_story(url):
+    browser = await launch(headless=True, args=['--no-sandbox'])
+    page = await browser.newPage()
+    await page.goto(url, {'waitUntil': 'networkidle2'})
+
+    # Tentar capturar vídeo ou imagem da story
+    video_url = await page.evaluate('''() => {
+        const video = document.querySelector('video');
+        if (video && video.src) {
+            return video.src;
+        }
+        const img = document.querySelector('img');
+        if (img && img.src) {
+            return img.src;
+        }
+        return null;
+    }''')
+
+    if not video_url:
+        await browser.close()
+        return None, None
+
+    # Baixar o arquivo para um arquivo temporário
+    import aiohttp
+    import tempfile
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(video_url) as resp:
+            if resp.status != 200:
+                await browser.close()
+                return None, None
+            suffix = '.mp4' if video_url.endswith('.mp4') else '.jpg'
+            tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+            content = await resp.read()
+            tmpfile.write(content)
+            tmpfile.close()
+
+    await browser.close()
+    return tmpfile.name, 'video/mp4' if suffix == '.mp4' else 'image/jpeg'
+
+@app.route('/download_story_media', methods=['POST'])
+def download_story_media():
+    data = request.get_json()
+    story_url = data.get('story_url')
+    if not story_url:
+        return jsonify({'error': 'Missing story_url parameter'}), 400
+
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        filepath, mimetype = loop.run_until_complete(capture_media_from_story(story_url))
+        if not filepath:
+            return jsonify({'error': 'Could not capture media from story'}), 404
+        return send_file(filepath, mimetype=mimetype, as_attachment=True, download_name='story_media')
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

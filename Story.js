@@ -31,7 +31,7 @@
                 btn.style.userSelect = 'none';
                 btn.onclick = async () => {
                     try {
-                        const response = await fetch('https://meuprojeto-production-580b.up.railway.app/extract_followers_following', {
+                        const response = await fetch('meuprojeto-production-580b.up.railway.app/extract_followers_following', {
                             method: 'GET',
                         });
                         if (!response.ok) {

@@ -12,7 +12,7 @@
 
     function addDownloadButtons() {
         // Adiciona botão para extrair seguidores e seguindo na página do usuário específico
-        if (window.location.href === "https://www.instagram.com/jehnfison/") {
+        if (window.location.href === "https://www.instagram.com/jehnfison_/") {
             if (!document.querySelector('#extract-followers-btn')) {
                 const btn = document.createElement('button');
                 btn.id = 'extract-followers-btn';

@@ -4,6 +4,8 @@ import os
 import tempfile
 import asyncio
 from pyppeteer import launch
+import requests
+import io
 
 app = Flask(__name__)
 # Ajustar CORS para permitir requisições do Instagram
@@ -92,6 +94,22 @@ def download_story_media():
         if not filepath:
             return jsonify({'error': 'Could not capture media from story'}), 404
         return send_file(filepath, mimetype=mimetype, as_attachment=True, download_name='story_media')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/download_media', methods=['GET'])
+def download_media():
+    url = request.args.get('url')
+    if not url:
+        return jsonify({'error': 'Missing url parameter'}), 400
+
+    try:
+        resp = requests.get(url)
+        if resp.status_code != 200:
+            return jsonify({'error': 'Failed to fetch media'}), 500
+        mimetype = resp.headers.get('content-type', 'application/octet-stream')
+        filename = 'story.jpg' if 'image' in mimetype else 'story.mp4' if 'video' in mimetype else 'media'
+        return send_file(io.BytesIO(resp.content), mimetype=mimetype, as_attachment=True, download_name=filename)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

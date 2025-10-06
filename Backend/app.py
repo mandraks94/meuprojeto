@@ -1,8 +1,11 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
-import instaloader
 import os
 import tempfile
+import asyncio
+from pyppeteer import launch
+import requests
+import io
 
 app = Flask(__name__)
 # Ajustar CORS para permitir requisições do Instagram
@@ -10,96 +13,98 @@ from flask_cors import CORS
 
 cors = CORS(app, resources={
     r"/*": {
-        "origins": [
-            "https://www.instagram.com",
-            "https://instagram.com",
-            "https://www.facebook.com",
-            "https://facebook.com"
-        ],
+        "origins": "*",
         "supports_credentials": True
     }
 })
 
-INSTAGRAM_USERNAME = os.getenv('INSTAGRAM_USERNAME')
-INSTAGRAM_PASSWORD = os.getenv('INSTAGRAM_PASSWORD')
+import os
 
-L = instaloader.Instaloader()
+async def capture_media_from_story(url):
+    browser = await launch(headless=True, args=['--no-sandbox', '--disable-setuid-sandbox'])
+    page = await browser.newPage()
 
-# Login to Instagram if credentials are provided
-if INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD:
-    try:
-        L.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-        print("Logged in to Instagram successfully.")
-    except instaloader.exceptions.BadCredentialsException as e:
-        print(f"Failed to login to Instagram: Bad credentials - {e}")
-    except instaloader.exceptions.TwoFactorAuthRequiredException as e:
-        print(f"Failed to login to Instagram: Two-factor authentication required - {e}")
-    except instaloader.exceptions.ConnectionException as e:
-        print(f"Failed to login to Instagram: Connection error - {e}")
-    except Exception as e:
-        print(f"Failed to login to Instagram: {e}")
+    INSTAGRAM_USERNAME = os.getenv('INSTAGRAM_USERNAME')
+    INSTAGRAM_PASSWORD = os.getenv('INSTAGRAM_PASSWORD')
 
-@app.route('/download_story_video', methods=['POST', 'GET'])
-def download_story_video():
-    if request.method == 'GET':
-        return jsonify({'error': 'GET method not allowed for this endpoint'}), 405
+    if INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD:
+        # Fazer login no Instagram
+        await page.goto('https://www.instagram.com/accounts/login/', {'waitUntil': 'networkidle2'})
+        await page.type('input[name="username"]', INSTAGRAM_USERNAME, {'delay': 100})
+        await page.type('input[name="password"]', INSTAGRAM_PASSWORD, {'delay': 100})
+        await page.click('button[type="submit"]')
+        # Esperar a navegação após login
+        await page.waitForNavigation({'waitUntil': 'networkidle2'})
 
-    data = request.get_json()
-    story_url = data.get('story_url')
+    await page.goto(url, {'waitUntil': 'networkidle2'})
+
+    # Tentar capturar vídeo ou imagem da story
+    video_url = await page.evaluate('''() => {
+        const video = document.querySelector('video');
+        if (video && video.src) {
+            return video.src;
+        }
+        const img = document.querySelector('img');
+        if (img && img.src) {
+            return img.src;
+        }
+        return null;
+    }''')
+
+    if not video_url:
+        await browser.close()
+        return None, None
+
+    # Baixar o arquivo para um arquivo temporário
+    import aiohttp
+    import tempfile
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(video_url) as resp:
+            if resp.status != 200:
+                await browser.close()
+                return None, None
+            suffix = '.mp4' if video_url.endswith('.mp4') else '.jpg'
+            tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+            content = await resp.read()
+            tmpfile.write(content)
+            tmpfile.close()
+
+    await browser.close()
+    return tmpfile.name, 'video/mp4' if suffix == '.mp4' else 'image/jpeg'
+
+@app.route('/download_story_media', methods=['POST', 'GET'])
+def download_story_media():
+    if request.method == 'POST':
+        if request.content_type == 'application/json':
+            data = request.get_json()
+            story_url = data.get('story_url')
+        else:
+            story_url = request.form.get('story_url')
+    else:
+        story_url = request.args.get('story_url')
+
     if not story_url:
         return jsonify({'error': 'Missing story_url parameter'}), 400
 
-    from urllib.parse import urlparse
-
-    def extract_username_from_url(story_url):
-        # Exemplo: https://www.instagram.com/stories/username/1234567890123456789/
-        try:
-            parts = urlparse(story_url).path.strip('/').split('/')
-            if len(parts) >= 2 and parts[0] == 'stories':
-                return parts[1]
-        except Exception as e:
-            print(f"Erro ao extrair username: {e}")
-        return None
-
     try:
-        data = request.get_json()
-        story_url = data.get('story_url')
-        if not story_url:
-            return jsonify({'error': 'Missing story_url parameter'}), 400
-
-        username = extract_username_from_url(story_url)
-        if not username:
-            return jsonify({'error': 'Could not extract username from URL'}), 400
-
-        profile = instaloader.Profile.from_username(L.context, username)
-        def extract_story_id(story_url):
-            try:
-                parts = urlparse(story_url).path.strip('/').split('/')
-                if len(parts) >= 3:
-                    return parts[2]
-            except Exception:
-                return None
-
-        story_id = extract_story_id(story_url)
-
-        for story in L.get_stories(userids=[profile.userid]):
-            for item in story.get_items():
-                if item.video_url and story_id and str(item.mediaid) == story_id:
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmpfile:
-                        L.download_storyitem(item, target=tmpfile.name)
-                        return send_file(tmpfile.name, mimetype='video/mp4', as_attachment=True, download_name='story_video.mp4')
-
-        return jsonify({'error': 'Story video not found'}), 404
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        filepath, mimetype = loop.run_until_complete(capture_media_from_story(story_url))
+        if not filepath:
+            return jsonify({'error': 'Could not capture media from story'}), 404
+        return send_file(filepath, mimetype=mimetype, as_attachment=True, download_name='story_media')
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-from flask import send_file
-import json
-import io
+@app.route('/download_media', methods=['GET'])
+def download_media():
+    url = request.args.get('url')
+    if not url:
+        return jsonify({'error': 'Missing url parameter'}), 400
 
-@app.route('/extract_followers_following', methods=['GET'])
-def extract_followers_following():
     try:
+<<<<<<< HEAD
         username = "jehnfison_"
         profile = instaloader.Profile.from_username(L.context, username)
 
@@ -112,6 +117,14 @@ def extract_followers_following():
         }
 
         return jsonify(data)
+=======
+        resp = requests.get(url)
+        if resp.status_code != 200:
+            return jsonify({'error': 'Failed to fetch media'}), 500
+        mimetype = resp.headers.get('content-type', 'application/octet-stream')
+        filename = 'story.jpg' if 'image' in mimetype else 'story.mp4' if 'video' in mimetype else 'media'
+        return send_file(io.BytesIO(resp.content), mimetype=mimetype, as_attachment=True, download_name=filename)
+>>>>>>> 707d28627afd8b36fb8361742ca53970aaf1bfbd
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

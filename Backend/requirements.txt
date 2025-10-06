@@ -2,3 +2,5 @@ flask
 flask-cors
 instaloader
 gunicorn
+pyppeteer
+requests

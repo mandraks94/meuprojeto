@@ -37,15 +37,20 @@
                         if (!response.ok) {
                             throw new Error('Resposta do servidor não OK: ' + response.status);
                         }
-                        const blob = await response.blob();
-                        const blobUrl = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = blobUrl;
-                        a.download = 'followers_following.json';
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-                        window.URL.revokeObjectURL(blobUrl);
+                        const data = await response.json();
+
+                        // Atualiza ou cria o elemento que mostra os números
+                        let infoDiv = document.getElementById('followers-following-info');
+                        if (!infoDiv) {
+                            infoDiv = document.createElement('div');
+                            infoDiv.id = 'followers-following-info';
+                            infoDiv.style.marginTop = '10px';
+                            infoDiv.style.color = 'white';
+                            infoDiv.style.fontSize = '14px';
+                            btn.parentNode.appendChild(infoDiv);
+                        }
+                        infoDiv.innerText = `${data.followers.length} seguidores    ${data.following.length} seguindo`;
+
                     } catch (error) {
                         alert('Erro na comunicação com o servidor: ' + error.message);
                     }

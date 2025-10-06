@@ -103,25 +103,15 @@ def extract_followers_following():
         username = "jehnfison_"
         profile = instaloader.Profile.from_username(L.context, username)
 
-        followers = []
-        for follower in profile.get_followers():
-            followers.append(follower.username)
-
-        followees = []
-        for followee in profile.get_followees():
-            followees.append(followee.username)
+        followers_count = profile.followers
+        following_count = profile.followees
 
         data = {
-            "followers": followers,
-            "following": followees
+            "followers_count": followers_count,
+            "following_count": following_count
         }
 
-        json_data = json.dumps(data, ensure_ascii=False)
-        buffer = io.BytesIO()
-        buffer.write(json_data.encode('utf-8'))
-        buffer.seek(0)
-
-        return send_file(buffer, mimetype='application/json', as_attachment=True, download_name='followers_following.json')
+        return jsonify(data)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

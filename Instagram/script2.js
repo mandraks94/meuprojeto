@@ -39,7 +39,7 @@
                                 transform: translateY(50%);
                                 width: 60px;
                                 height: 60px;
-                                background-color: #0077cc;
+                                background-color: #0095f6;
                                 border-radius: 50%;
                                 display: flex;
                                 align-items: center;
@@ -58,6 +58,10 @@
                                 flex-direction: column;
                                 gap: 10px;
                                 z-index: 9998;
+                                background: ${brightness < 128 ? "rgba(0,0,0,0.8)" : "white"};
+                                padding: 10px;
+                                border-radius: 12px;
+                                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
                             }
                             .menu-item {
                                 display: flex;
@@ -69,17 +73,77 @@
                                 height: 50px;
                                 border-radius: 50%;
                                 border: none;
-                                background: #fff;
-                                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+                                background: #f8f9fa;
+                                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
                                 display: flex;
                                 align-items: center;
                                 justify-content: center;
                                 cursor: pointer;
+                                transition: background 0.2s;
+                            }
+                            .menu-item button:hover {
+                                background: #e9ecef;
                             }
                             .menu-item span {
                                 font-size: 14px;
                                 color: ${textColor};
-                                font-weight: bold;
+                                font-weight: 500;
+                            }
+                            .dark-mode .assistive-menu {
+                                background: black !important;
+                            }
+                            .dark-mode .menu-item span {
+                                color: white !important;
+                            }
+                            .dark-mode #allCloseFriendsDiv {
+                                background: black !important;
+                                color: white !important;
+                            }
+                            .dark-mode #allCloseFriendsDiv h2 {
+                                color: white !important;
+                            }
+                            .dark-mode #allCloseFriendsDiv li span {
+                                color: white !important;
+                            }
+                            .dark-mode #allHideStoryDiv {
+                                background: black !important;
+                                color: white !important;
+                            }
+                            .dark-mode #allHideStoryDiv h2 {
+                                color: white !important;
+                            }
+                            .dark-mode #allHideStoryDiv li span {
+                                color: white !important;
+                            }
+                            .dark-mode #naoSegueDeVoltaDiv {
+                                background: black !important;
+                                color: white !important;
+                            }
+                            .dark-mode #naoSegueDeVoltaDiv h2 {
+                                color: white !important;
+                            }
+                            .dark-mode #naoSegueDeVoltaDiv th, .dark-mode #naoSegueDeVoltaDiv td {
+                                color: white !important;
+                            }
+                            .submenu-modal {
+                                background: white !important;
+                                color: black !important;
+                            }
+                            .submenu-modal h2 {
+                                color: black !important;
+                            }
+                            .submenu-modal span, .submenu-modal th, .submenu-modal td, .submenu-modal li span {
+                                color: black !important;
+                            }
+                            .dark-mode .submenu-modal {
+                                background: black !important;
+                                color: white !important;
+                            }
+                            .dark-mode .submenu-modal h2 {
+                                color: white !important;
+                            }
+                            .dark-mode .submenu-modal span, .dark-mode .submenu-modal th, .dark-mode .submenu-modal td, .dark-mode .submenu-modal li span {
+                                color: white !important;
                             }
                         `;
                     }
@@ -132,6 +196,10 @@
                             <button id="hideStoryBtn">👁️‍🗨️</button>
                             <span>Ocultar Story</span>
                         </div>
+                        <div class="menu-item">
+                            <button id="darkModeBtn">🌙</button>
+                            <span>Modo Escuro</span>
+                        </div>
                     `;
 
                     document.body.appendChild(mainBtn);
@@ -147,6 +215,7 @@
                     let scrollInterval; // Variável global para armazenar o intervalo
                     let isUnfollowing = false; // Flag para prevenir múltiplas execuções
                     let currentExtraction = ''; // Para rastrear se é seguidores ou seguindo
+                    let isDarkMode = false;
 
                     function extractUsernames() {
                         document
@@ -374,7 +443,7 @@
     });
 
     // --- NOVO MENU: OCULTAR STORY ---
-    document.getElementById("hideStoryBtn").addEventListener("click", () => {
+                    document.getElementById("hideStoryBtn").addEventListener("click", () => {
         console.log("Botão Ocultar Story clicado");
         // Direcionar para a página de ocultar story se não estiver lá
         if (window.location.pathname !== "/accounts/hide_story_and_live_from/") {
@@ -390,6 +459,16 @@
             console.log("Já na página /accounts/hide_story_and_live_from/, abrindo modal");
             abrirModalOcultarStory();
         }
+    });
+
+    document.getElementById("darkModeBtn").addEventListener("click", () => {
+        isDarkMode = !isDarkMode;
+        if (isDarkMode) {
+            document.body.classList.add('dark-mode');
+        } else {
+            document.body.classList.remove('dark-mode');
+        }
+        updateColors();
     });
 
     function extractCloseFriendsUsernames() {
@@ -470,6 +549,7 @@
         // Monta a div
         const div = document.createElement("div");
         div.id = "allCloseFriendsDiv";
+        div.className = "submenu-modal";
         div.style.cssText = `
             position: fixed;
             top: 100px;
@@ -479,13 +559,11 @@
             max-width: 700px;
             max-height: 85vh;
             overflow: auto;
-            background: white;
-            border: 2px solid #32b643;
+            border: 2px solid #0095f6;
             border-radius: 10px;
             z-index: 2147483647;
             padding: 20px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            color: #222222;
         `;
 
         const itemsPerPage = 30;
@@ -513,16 +591,16 @@
             html += `
                 <div style="margin-bottom:10px;">
                     <button id="closeFriendsFecharBtn" style="background:#e74c3c;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Fechar</button>
-                    <button id="closeFriendsMarcarTodosBtn" style="background:#32b643;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
-                    <button id="closeFriendsDesmarcarTodosBtn" style="background:#f1c40f;color:black;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
-                    <button id="closeFriendsAplicarBtn" style="background:#0077cc;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
+                    <button id="closeFriendsMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
+                    <button id="closeFriendsDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
+                    <button id="closeFriendsAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
                 </div>
                 <div style="margin-bottom:15px;">
                     <input type="text" id="closeFriendsSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
                 </div>
                 <div style="margin-bottom:15px;">
-                    <button id="tabSelecionados" style="background:${currentTab === 'selecionados' ? '#32b643' : '#ccc'};color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionados</button>
-                    <button id="tabNaoSelecionados" style="background:${currentTab === 'nao_selecionados' ? '#32b643' : '#ccc'};color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Não Selecionados</button>
+                    <button id="tabSelecionados" style="background:${currentTab === 'selecionados' ? '#0095f6' : '#ccc'};color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionados</button>
+                    <button id="tabNaoSelecionados" style="background:${currentTab === 'nao_selecionados' ? '#0095f6' : '#ccc'};color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Não Selecionados</button>
                 </div>
                 <ul id="closeFriendsList" style='list-style:none;padding:0;max-height:40vh;overflow:auto;'>
             `;
@@ -865,6 +943,7 @@
         let currentPage = 1;
         const div = document.createElement("div");
         div.id = "allHideStoryDiv";
+        div.className = "submenu-modal";
         div.style.cssText = `
             position: fixed;
             top: 80px;
@@ -874,22 +953,20 @@
             max-width: 700px;
             max-height: 85vh;
             overflow: auto;
-            background: white;
             border: 2px solid #f39c12;
             border-radius: 10px;
             z-index: 2147483647;
             padding: 20px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            color: #222222;
         `;
         function renderPage(page) {
             let html = `<h2 style="color: black;">Ocultar Story</h2>`;
             html += `
                 <div style="margin-bottom:10px;">
                     <button id="hideStoryFecharBtn" style="background:#e74c3c;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Fechar</button>
-                    <button id="hideStoryMarcarTodosBtn" style="background:#f39c12;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
-                    <button id="hideStoryDesmarcarTodosBtn" style="background:#27ae60;color:black;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
-                    <button id="hideStoryAplicarBtn" style="background:#0077cc;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
+                    <button id="hideStoryMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
+                    <button id="hideStoryDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
+                    <button id="hideStoryAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
                 </div>
                 <div style="margin-bottom:15px;">
                     <input type="text" id="hideStorySearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
@@ -1113,42 +1190,41 @@
                         // Cria a div do submenu
                         const div = document.createElement("div");
                         div.id = "naoSegueDeVoltaDiv";
+                        div.className = "submenu-modal";
                         div.style.cssText = `
                             position: fixed;
                             top: 10%;
                             left: 10%;
                             width: 80%;
                             height: 80%;
-                            background: white;
                             border: 1px solid #ccc;
                             border-radius: 10px;
                             padding: 20px;
                             z-index: 10000;
                             overflow: auto;
-                            color: black;
                         `;
 
                         div.innerHTML = `
                             <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <h2 style="color: black;">Não segue de volta</h2>
+                                <h2>Não segue de volta</h2>
                                 <button id="fecharSubmenuBtn" style="background: red; color: white; border: none; border-radius: 5px; padding: 5px 10px; cursor: pointer;">Fechar</button>
                             </div>
                             <div style="margin-top: 20px;">
-                                <label for="seguidoresCsv" style="color: black; font-weight: bold;">Arquivo de Seguidores:</label>
+                                <label for="seguidoresCsv" style="font-weight: bold;">Arquivo de Seguidores:</label>
                                 <input type="file" id="seguidoresCsv" accept=".csv" />
                             </div>
                             <div style="margin-top: 20px;">
-                                <label for="seguindoCsv" style="color: black; font-weight: bold;">Arquivo de Seguindo:</label>
+                                <label for="seguindoCsv" style="font-weight: bold;">Arquivo de Seguindo:</label>
                                 <input type="file" id="seguindoCsv" accept=".csv" />
                             </div>
                             <button id="compararCsvBtn" style="margin-top: 20px;">Comparar</button>
                             <table id="naoSegueDeVoltaTable" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
                                 <thead>
                                     <tr>
-                                        <th style="border: 1px solid #ccc; padding: 10px; color: black;">ID</th>
-                                        <th style="border: 1px solid #ccc; padding: 10px; color: black;">Username</th>
-                                        <th style="border: 1px solid #ccc; padding: 10px; color: black;">Foto</th>
-                                        <th style="border: 1px solid #ccc; padding: 10px; color: black;">Check</th>
+                                        <th style="border: 1px solid #ccc; padding: 10px;">ID</th>
+                                        <th style="border: 1px solid #ccc; padding: 10px;">Username</th>
+                                        <th style="border: 1px solid #ccc; padding: 10px;">Foto</th>
+                                        <th style="border: 1px solid #ccc; padding: 10px;">Check</th>
                                     </tr>
                                 </thead>
                                 <tbody></tbody>
@@ -1182,6 +1258,22 @@
                         document.getElementById("selecionarTodosBtn").addEventListener("click", selecionarTodos);
                         document.getElementById("desmarcarTodosBtn").addEventListener("click", desmarcarTodos);
                         document.getElementById("unfollowBtn").addEventListener("click", unfollowSelecionados);
+                    }
+
+                    function getProfilePic(username) {
+                        return fetch(`https://www.instagram.com/${username}/`)
+                            .then(response => response.text())
+                            .then(html => {
+                                // Parse the JSON from the script tag containing window._sharedData
+                                const match = html.match(/window\._sharedData\s*=\s*({.+?});/);
+                                if (match) {
+                                    const data = JSON.parse(match[1]);
+                                    const user = data.entry_data.ProfilePage[0].graphql.user;
+                                    return user.profile_pic_url_hd || user.profile_pic_url;
+                                }
+                                return 'https://via.placeholder.com/32';
+                            })
+                            .catch(() => 'https://via.placeholder.com/32');
                     }
 
                     function compararCsv() {
@@ -1230,13 +1322,17 @@
                                         <a href="https://www.instagram.com/${username}" target="_blank">${username}</a>
                                     </td>
                                     <td style="border: 1px solid #ccc; padding: 10px;">
-                                        <img src="https://via.placeholder.com/32" alt="${username}" style="width:32px; height:32px; border-radius:50%;">
+                                        <img id="img_${username}" src="https://via.placeholder.com/32" alt="${username}" style="width:32px; height:32px; border-radius:50%;">
                                     </td>
                                     <td style="border: 1px solid #ccc; padding: 10px;">
                                         <input type="checkbox" class="unfollowCheckbox" data-username="${username}" />
                                     </td>
                                 `;
                                 tbody.appendChild(tr);
+                                getProfilePic(username).then(url => {
+                                    const img = document.getElementById(`img_${username}`);
+                                    if (img) img.src = url;
+                                });
                             });
 
                             updatePaginationControls();
@@ -1428,8 +1524,8 @@
                                         // Aguardar antes do próximo
                                         setTimeout(() => {
                                             console.log(`Avançando para o próximo usuário, índice: ${index + 1}`);
-                                            unfollowUsers(users, index + 1);
-                                        }, 5000); // Aumentar para 5 segundos para garantir que o unfollow seja processado
+                                            unfollowUsers(users, index + 1, callback);
+                                        }, 5000);
                                         // Remove the row after unfollow
                                         setTimeout(() => {
                                             const row = document.querySelector(`tr[data-username="${username}"]`);
@@ -1438,13 +1534,13 @@
                                     } else {
                                         console.log(`Botão de confirmação não encontrado para ${username}, pulando para o próximo`);
                                         alert(`Não conseguiu confirmar unfollow para ${username}`);
-                                        unfollowUsers(users, index + 1);
+                                        unfollowUsers(users, index + 1, callback);
                                     }
                                 }, 2000); // Aumentar para 2 segundos para a caixa abrir
                             } else {
                                 console.log(`Botão Seguindo não encontrado para ${username}, pulando para o próximo`);
                                 alert(`Botão Seguindo não encontrado para ${username}`);
-                                unfollowUsers(users, index + 1);
+                                unfollowUsers(users, index + 1, callback);
                             }
                         }, 4000); // Aumentar para 4 segundos para carregamento da página
                     }

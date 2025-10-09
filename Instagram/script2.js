@@ -1,13 +1,11 @@
-    // ==UserScript==
-    // @name         Instagram
-    // @namespace    http://tampermonkey.net/
-    // @version      2025-10-04
-    // @description  try to take over the world!
-    // @author       You
-    // @match        https://www.instagram.com/*
-    // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
-    // @grant        none
-    // ==/UserScript==
+// ==UserScript==
+// @name         Instagra_2
+// @description  Adds download buttons to Instagram stories
+// @author       You
+// @version      1.0
+// @match        https://www.instagram.com/*
+// @grant        none
+// ==/UserScript==
 
         (function () {
             if (window.location.href.includes("instagram.com")) {

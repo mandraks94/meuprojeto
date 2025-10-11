@@ -175,6 +175,18 @@
                             <button id="hideStoryBtn">👁️‍🗨️</button>
                             <span>Ocultar Story</span>
                         </div>
+                        <div class="menu-item">
+                            <button id="mutedAccountsBtn">🔇</button>
+                            <span>Contas Silenciadas</span>
+                        </div>
+                        <div class="menu-item">
+                            <button id="analysisBtn">📊</button>
+                            <span>Análise de Perfil</span>
+                        </div>
+                        <div class="menu-item">
+                            <button id="restrictBtn">🚫</button>
+                            <span>Restringir</span>
+                        </div>
 
                         <div class="menu-item">
                             <button id="baixarStoryBtn">⬇️</button>
@@ -198,7 +210,6 @@
                     let downloadStarted = false;
                     let scrollInterval; // Variável global para armazenar o intervalo
                     let isUnfollowing = false; // Flag para prevenir múltiplas execuções
-                    let isProcessCancelled = false; // Flag para controlar o cancelamento
                     let currentExtraction = ''; // Para rastrear se é seguidores ou seguindo
                     let isDarkMode = false;
 
@@ -428,6 +439,28 @@
         }
     });
 
+    document.getElementById("mutedAccountsBtn").addEventListener("click", () => {
+        console.log("Botão Contas Silenciadas clicado");
+        if (window.location.pathname !== "/accounts/muted_accounts/") {
+            console.log("Navegando para /accounts/muted_accounts/");
+            history.pushState(null, null, "/accounts/muted_accounts/");
+            window.dispatchEvent(new Event("popstate"));
+            setTimeout(() => {
+                abrirModalContasSilenciadas();
+            }, 1000);
+        } else {
+            abrirModalContasSilenciadas();
+        }
+    });
+
+    document.getElementById("analysisBtn").addEventListener("click", () => {
+        iniciarAnaliseDePerfil();
+    });
+
+    document.getElementById("restrictBtn").addEventListener("click", () => {
+        abrirModalRestringir();
+    });
+
     document.getElementById("baixarStoryBtn").addEventListener("click", () => {
         baixarStoryAtual();
     });
@@ -634,12 +667,26 @@
                 modalAberto = false;
             };
             document.getElementById("closeFriendsMarcarTodosBtn").onclick = () => {
-                // Seleciona apenas os usuários visíveis na página atual
+                // Filtra os usuários da aba atual e depois pega apenas os da página visível
+                const filteredUsers = users.filter(({ username }) => {
+                    return currentTab === 'selecionados' ? modalStates.get(username) : !modalStates.get(username);
+                });
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                const endIndex = Math.min(startIndex + itemsPerPage, filteredUsers.length);
+                const pageUsers = filteredUsers.slice(startIndex, endIndex);
+
                 pageUsers.forEach(({ username }) => modalStates.set(username, true));
                 renderPage(currentPage);
             };
             document.getElementById("closeFriendsDesmarcarTodosBtn").onclick = () => {
-                // Desmarca apenas os usuários visíveis na página atual
+                // Filtra os usuários da aba atual e depois pega apenas os da página visível
+                const filteredUsers = users.filter(({ username }) => {
+                    return currentTab === 'selecionados' ? modalStates.get(username) : !modalStates.get(username);
+                });
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                const endIndex = Math.min(startIndex + itemsPerPage, filteredUsers.length);
+                const pageUsers = filteredUsers.slice(startIndex, endIndex);
+
                 pageUsers.forEach(({ username }) => modalStates.set(username, false));
                 renderPage(currentPage);
             };
@@ -1233,13 +1280,11 @@
 
                     // --- LÓGICA UNIFICADA PARA "NÃO SEGUE DE VOLTA" ---
                     async function iniciarProcessoNaoSegueDeVolta() {
-                        const username = window.location.pathname.split('/')[1];
+                        const pathParts = window.location.pathname.split('/').filter(Boolean);
+                        const username = pathParts[0];
                         const appID = '936619743392459'; // ID público do app web do Instagram
-                        if (!username || window.location.pathname.split('/').length > 3) {
-                            // Limpa o menu para evitar que fique aberto sem contexto
-                            const menu = document.querySelector(".assistive-menu");
-                            if (menu) menu.style.display = "none";
-                            alert("Por favor, vá para a página de perfil do usuário para iniciar esta função.");
+                        if (!username || pathParts.length > 1 && !['followers', 'following'].includes(pathParts[1])) {
+                            alert("Por favor, vá para a página de perfil de um usuário para usar esta função.");
                             return;
                         }
 
@@ -1261,38 +1306,39 @@
                             z-index: 10000;
                             overflow: auto;
                         `;
-                        // Adiciona a estrutura de abas
                         div.innerHTML = `
                             <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <h2>Analisando quem não segue você de volta...</h2>
+                                <h2>Análise de Seguidores</h2>
                                 <button id="fecharSubmenuBtn" style="background: red; color: white; border: none; border-radius: 5px; padding: 5px 10px; cursor: pointer;">Cancelar</button>
                             </div>
-                            <div class="tab-container" style="margin-top: 20px;">
-                                <button id="tabNaoSeguem" class="tab-button active">Não Seguem de Volta</button>
-                                <button id="tabAnalisar" class="tab-button">Analisar</button>
-                                <button id="tabHistorico" class="tab-button">Histórico</button>
+                            <div class="tab-container">
+                                <button class="tab-button active" data-tab="nao-segue">Não Segue de Volta</button>
+                                <button class="tab-button" data-tab="novos">Novos Seguidores</button>
+                                <button class="tab-button" data-tab="unfollows">Histórico de Unfollow</button>
                             </div>
                             <div id="statusNaoSegue" style="margin-top: 20px; font-weight: bold;"></div>
-                            <div id="tabelaContainerNaoSeguem" style="display: none;"></div>
-                            <div id="tabelaContainerAnalisar" style="display: none;"></div>
-                            <div id="tabelaContainerHistorico" style="display: none;"></div>
+                            <div id="tabelaContainer" style="display: block; margin-top: 15px;"></div>
                         `;
                         document.body.appendChild(div);
+
                         document.getElementById("fecharSubmenuBtn").addEventListener("click", () => {
-                            isProcessCancelled = true; // Sinaliza para parar o processo
+                            if (scrollInterval) clearInterval(scrollInterval);
                             div.remove();
                         });
 
+                        div.querySelectorAll('.tab-button').forEach(button => {
+                            button.addEventListener('click', () => handleTabClick(button.dataset.tab));
+                        });
+
                         const statusDiv = document.getElementById("statusNaoSegue");
-                        let currentActiveTab = 'NaoSeguem';
 
                         // Função para extrair lista de usuários via API (muito mais rápido)
-                        const fetchUserListAPI = async (userId, type, total, returnFullObjects = false) => {
+                        const fetchUserListAPI = async (userId, type, total) => {
                             const userList = new Set();
                             let nextMaxId = '';
                             let hasNextPage = true;
 
-                            while (hasNextPage && !isProcessCancelled) { // Verifica a flag de cancelamento
+                            while (hasNextPage) {
                                 try {
                                     const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=50&max_id=${nextMaxId}`, {
                                         headers: { 'X-IG-App-ID': appID }
@@ -1300,11 +1346,7 @@
                                     if (!response.ok) throw new Error(`Erro na API: ${response.statusText}`);
                                     const data = await response.json();
 
-                                    if (returnFullObjects) {
-                                        data.users.forEach(user => userList.add(user));
-                                    } else {
-                                        data.users.forEach(user => userList.add(user.username));
-                                    }
+                                    data.users.forEach(user => userList.add(user.username));
                                     updateProgressBar(userList.size, total, `- Extraindo ${type}`);
 
                                     if (data.next_max_id) {
@@ -1324,182 +1366,123 @@
                             return userList;
                         };
 
-                        // 2. Executar a extração
-                        const bar = document.getElementById("progressBar");
-                        if (bar) {
-                            bar.querySelector("#progressCloseBtn").addEventListener("click", () => isProcessCancelled = true);
-                        }
-
-                        statusDiv.innerText = 'Buscando informações do perfil...';
-                        const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
-                        const profileInfo = await profileInfoResponse.json();
-                        const userId = profileInfo.data.user.id;
-                        const totalFollowing = profileInfo.data.user.edge_follow.count;
-                        const totalFollowers = profileInfo.data.user.edge_followed_by.count;
-
-                        if (!userId) { alert('Não foi possível obter o ID do usuário.'); div.remove(); return; }
-
-                        if (isProcessCancelled) { div.remove(); return; }
-                        const seguindo = await fetchUserListAPI(userId, 'following', totalFollowing, true); // Pede objetos completos
-                        if (isProcessCancelled) { div.remove(); return; }
-                        statusDiv.innerText = `Encontrados ${seguindo.size} usuários que você segue.`;
-                        await new Promise(r => setTimeout(r, 1000));
-
-                        if (isProcessCancelled) { div.remove(); return; }
-                        const seguidores = await fetchUserListAPI(userId, 'followers', totalFollowers);
-                        if (isProcessCancelled) { div.remove(); return; }
-                        statusDiv.innerText = `Encontrados ${seguidores.size} seguidores. Comparando...`;
-                        await new Promise(r => setTimeout(r, 1000));
-
-                        // 3. Comparar e exibir
-                        const naoSegueDeVolta = [...seguindo].filter(user => !seguidores.has(user.username)).map(user => user.username);
-                        if (isProcessCancelled) { div.remove(); return; }
-
-                        statusDiv.innerText = `Análise concluída: ${naoSegueDeVolta.length} usuários não seguem você de volta.`;
-
-                        // 4. Renderizar a tabela
-                        const tabelaContainer = document.getElementById("tabelaContainerNaoSeguem");
-                        tabelaContainer.style.display = "block";
-                        tabelaContainer.innerHTML = `
-                            <table id="naoSegueDeVoltaTable" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-                                <thead>
-                                    <tr>
-                                        <th style="border: 1px solid #ccc; padding: 10px;">ID</th>
-                                        <th style="border: 1px solid #ccc; padding: 10px;">Username</th>
-                                        <th style="border: 1px solid #ccc; padding: 10px;">Foto</th>
-                                        <th style="border: 1px solid #ccc; padding: 10px;">Check</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
-                            <div style="margin-top: 20px;">
-                                <button id="selecionarTodosBtn">Selecionar Todos</button>
-                                <button id="desmarcarTodosBtn">Desmarcar Todos</button>
-                                <button id="unfollowBtn">Unfollow</button>
-                            </div>
-                        `;
-                        preencherTabela(naoSegueDeVolta, 'naoSegueDeVoltaTable', 'unfollowCheckbox');
-                        document.getElementById("selecionarTodosBtn").addEventListener("click", () => selecionarTodos('unfollowCheckbox'));
-                        document.getElementById("desmarcarTodosBtn").addEventListener("click", () => desmarcarTodos('unfollowCheckbox'));
-                        document.getElementById("unfollowBtn").addEventListener("click", (event) => unfollowSelecionados(event, 'unfollowCheckbox'));
-
-                        // Lógica das Abas
-                        document.getElementById('tabNaoSeguem').addEventListener('click', () => switchTab('NaoSeguem'));
-                        document.getElementById('tabAnalisar').addEventListener('click', () => switchTab('Analisar', seguindo));
-                        document.getElementById('tabHistorico').addEventListener('click', () => switchTab('Historico'));
-
-                        function switchTab(tabName, data = null) {
-                            // Esconde todos os containers
-                            document.getElementById('tabelaContainerNaoSeguem').style.display = 'none';
-                            document.getElementById('tabelaContainerAnalisar').style.display = 'none';
-                            document.getElementById('tabelaContainerHistorico').style.display = 'none';
-                            // Desativa todos os botões de aba
+                        async function handleTabClick(tab) {
                             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                            document.querySelector(`.tab-button[data-tab="${tab}"]`).classList.add('active');
+                            const tabelaContainer = document.getElementById("tabelaContainer");
+                            tabelaContainer.innerHTML = ''; // Limpa a tabela
 
-                            // Ativa a aba e o container corretos
-                            document.getElementById(`tab${tabName}`).classList.add('active');
-                            const container = document.getElementById(`tabelaContainer${tabName}`);
-                            container.style.display = 'block';
-                            currentActiveTab = tabName;
+                            statusDiv.innerText = 'Buscando informações do perfil...';
+                            const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
+                            const profileInfo = await profileInfoResponse.json();
+                            const userId = profileInfo.data.user.id;
+                            if (!userId) { alert('Não foi possível obter o ID do usuário.'); div.remove(); return; }
 
-                            if (tabName === 'Analisar' && container.innerHTML === '') {
-                                analisarPerfis(container, data);
-                            } else if (tabName === 'Historico' && container.innerHTML === '') {
-                                mostrarHistorico(container);
-                            }
-                        }
+                            if (tab === 'nao-segue') {
+                                const totalFollowing = profileInfo.data.user.edge_follow.count;
+                                const totalFollowers = profileInfo.data.user.edge_followed_by.count;
 
-                        async function analisarPerfis(container, listaSeguindo) {
-                            container.innerHTML = '<p>Analisando perfis... Isso pode levar alguns minutos.</p><div id="progressAnalisar"></div>';
-                            const perfisSuspeitos = [];
-                            const userArray = Array.from(listaSeguindo).map(u => u.username); // Extrai apenas os usernames
-                            const total = userArray.length;
-                            let count = 0;
-                            const batchSize = 50; // Processa 50 perfis em paralelo para mais velocidade
+                                const seguindo = await fetchUserListAPI(userId, 'following', totalFollowing);
+                                statusDiv.innerText = `Encontrados ${seguindo.size} usuários que você segue.`;
+                                await new Promise(r => setTimeout(r, 500));
 
-                            for (let i = 0; i < userArray.length; i += batchSize) {
-                                if (isProcessCancelled) break;
+                                const seguidores = await fetchUserListAPI(userId, 'followers', totalFollowers);
+                                statusDiv.innerText = `Encontrados ${seguidores.size} seguidores. Comparando...`;
+                                await new Promise(r => setTimeout(r, 500));
 
-                                const batch = userArray.slice(i, i + batchSize);
-                                const promises = batch.map(async (username) => {
-                                    if (isProcessCancelled) return;
-                                    const profileInfo = await getProfileInfo(username);
-                                    if (profileInfo && profileInfo.following > profileInfo.followers) {
-                                        perfisSuspeitos.push(username);
+                                const naoSegueDeVolta = [...seguindo].filter(user => !seguidores.has(user));
+                                statusDiv.innerText = `Análise concluída: ${naoSegueDeVolta.length} usuários não seguem você de volta.`;
+
+                                tabelaContainer.innerHTML = `
+                                    <table id="naoSegueDeVoltaTable" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                                        <thead>
+                                            <tr>
+                                                <th style="border: 1px solid #ccc; padding: 10px;">ID</th>
+                                                <th style="border: 1px solid #ccc; padding: 10px;">Username</th>
+                                                <th style="border: 1px solid #ccc; padding: 10px;">Foto</th>
+                                                <th style="border: 1px solid #ccc; padding: 10px;">Check</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                    <div style="margin-top: 20px;">
+                                        <button id="selecionarTodosBtn">Selecionar Todos</button>
+                                        <button id="desmarcarTodosBtn">Desmarcar Todos</button>
+                                        <button id="unfollowBtn">Unfollow</button>
+                                    </div>
+                                `;
+                                preencherTabela(naoSegueDeVolta);
+                                document.getElementById("selecionarTodosBtn").addEventListener("click", selecionarTodos);
+                                document.getElementById("desmarcarTodosBtn").addEventListener("click", desmarcarTodos);
+                                document.getElementById("unfollowBtn").addEventListener("click", unfollowSelecionados);
+
+                            } else if (tab === 'novos' || tab === 'unfollows') {
+                                const storageKey = `instagram_followers_${userId}`;
+                                const storedData = JSON.parse(localStorage.getItem(storageKey));
+                                const totalFollowers = profileInfo.data.user.edge_followed_by.count;
+
+                                if (!storedData) {
+                                    statusDiv.innerHTML = `Nenhum histórico encontrado. <button id="updateListBtn">Clique aqui para salvar a lista de seguidores atual</button> e verificar mudanças no futuro.`;
+                                    document.getElementById('updateListBtn').onclick = async () => {
+                                        const seguidores = await fetchUserListAPI(userId, 'followers', totalFollowers);
+                                        localStorage.setItem(storageKey, JSON.stringify({ date: new Date().toISOString(), followers: [...seguidores] }));
+                                        statusDiv.innerText = `Lista de ${seguidores.size} seguidores salva com sucesso!`;
+                                    };
+                                    return;
+                                }
+
+                                const lastCheckDate = new Date(storedData.date).toLocaleString();
+                                const oldFollowers = new Set(storedData.followers);
+
+                                statusDiv.innerText = `Histórico anterior de ${lastCheckDate} encontrado. Buscando lista atual de seguidores...`;
+                                const currentFollowers = await fetchUserListAPI(userId, 'followers', totalFollowers);
+
+                                let diffList = [];
+                                if (tab === 'novos') {
+                                    diffList = [...currentFollowers].filter(user => !oldFollowers.has(user));
+                                    statusDiv.innerHTML = `Comparação concluída: ${diffList.length} novos seguidores desde ${lastCheckDate}. <button id="updateListBtn">Atualizar Lista</button> <button id="clearHistoryBtn">Limpar Histórico</button>`;
+                                } else { // unfollows
+                                    diffList = [...oldFollowers].filter(user => !currentFollowers.has(user));
+                                    statusDiv.innerHTML = `Comparação concluída: ${diffList.length} pessoas deixaram de seguir desde ${lastCheckDate}. <button id="updateListBtn">Atualizar Lista</button> <button id="clearHistoryBtn">Limpar Histórico</button>`;
+                                }
+
+                                document.getElementById('updateListBtn').onclick = () => {
+                                    localStorage.setItem(storageKey, JSON.stringify({ date: new Date().toISOString(), followers: [...currentFollowers] }));
+                                    statusDiv.innerText = `Lista de seguidores atualizada para ${currentFollowers.size} usuários.`;
+                                    tabelaContainer.innerHTML = '';
+                                };
+                                document.getElementById('clearHistoryBtn').onclick = () => {
+                                    if (confirm('Tem certeza que deseja apagar o histórico de seguidores?')) {
+                                        localStorage.removeItem(storageKey);
+                                        statusDiv.innerText = 'Histórico apagado.';
+                                        tabelaContainer.innerHTML = '';
                                     }
-                                });
+                                };
 
-                                await Promise.all(promises);
-                                count += batch.length;
-                                document.getElementById('progressAnalisar').innerText = `Verificando ${Math.min(count, total)} de ${total}...`;
-
-                                // Pausa longa a cada 5 lotes (250 usuários) para segurança
-                                if ((i / batchSize + 1) % 5 === 0) {
-                                    await new Promise(resolve => setTimeout(resolve, 10000)); // Pausa de 10 segundos
-                                } else {
-                                    // Pausa aleatória entre os lotes para evitar bloqueios
-                                    const randomDelay = Math.floor(Math.random() * 2000) + 1000; // Pausa entre 1 e 3 segundos
-                                    await new Promise(resolve => setTimeout(resolve, randomDelay));
+                                if (diffList.length > 0) {
+                                    tabelaContainer.innerHTML = `
+                                        <table id="naoSegueDeVoltaTable" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                                            <thead>
+                                                <tr>
+                                                    <th style="border: 1px solid #ccc; padding: 10px;">ID</th>
+                                                    <th style="border: 1px solid #ccc; padding: 10px;">Username</th>
+                                                    <th style="border: 1px solid #ccc; padding: 10px;">Foto</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody></tbody>
+                                        </table>
+                                    `;
+                                    preencherTabela(diffList, false); // false para não mostrar checkbox
                                 }
                             }
-
-                            if (isProcessCancelled) return;
-
-                            // Reutiliza a lógica de tabela e paginação
-                            container.innerHTML = `
-                                <p>${perfisSuspeitos.length} contas encontradas que seguem mais do que são seguidas.</p>
-                                <table id="analisarTable" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-                                    <thead>
-                                        <tr>
-                                            <th style="border: 1px solid #ccc; padding: 10px;">ID</th>
-                                            <th style="border: 1px solid #ccc; padding: 10px;">Username</th>
-                                            <th style="border: 1px solid #ccc; padding: 10px;">Foto</th>
-                                            <th style="border: 1px solid #ccc; padding: 10px;">Check</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody></tbody>
-                                </table>
-                                <div style="margin-top: 20px;">
-                                    <button id="selecionarTodosAnalisarBtn">Selecionar Todos</button>
-                                    <button id="desmarcarTodosAnalisarBtn">Desmarcar Todos</button>
-                                    <button id="unfollowAnalisarBtn">Unfollow</button>
-                                </div>`;
-
-                            preencherTabela(perfisSuspeitos, 'analisarTable', 'analisarCheckbox');
-                            document.getElementById("selecionarTodosAnalisarBtn").addEventListener("click", () => selecionarTodos('analisarCheckbox'));
-                            document.getElementById("desmarcarTodosAnalisarBtn").addEventListener("click", () => desmarcarTodos('analisarCheckbox'));
-                            document.getElementById("unfollowAnalisarBtn").addEventListener("click", (event) => unfollowSelecionados(event, 'analisarCheckbox'));
                         }
 
-                        function mostrarHistorico(container) {
-                            const historico = JSON.parse(localStorage.getItem('unfollowedHistory') || '[]');
-                            container.innerHTML = `
-                                <p>${historico.length} usuários no histórico de unfollow.</p>
-                                <button id="limparHistoricoBtn" style="margin-bottom: 10px;">Limpar Histórico</button>
-                                <table id="historicoTable" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-                                    <thead><tr>
-                                        <th style="border: 1px solid #ccc; padding: 10px;">Username</th>
-                                        <th style="border: 1px solid #ccc; padding: 10px;">Data</th>
-                                    </tr></thead>
-                                    <tbody>
-                                        ${historico.map(item => `<tr>
-                                            <td style="border: 1px solid #ccc; padding: 10px;"><a href="https://www.instagram.com/${item.username}" target="_blank">${item.username}</a></td>
-                                            <td style="border: 1px solid #ccc; padding: 10px;">${new Date(item.date).toLocaleString()}</td>
-                                        </tr>`).join('')}
-                                    </tbody>
-                                </table>`;
-
-                            document.getElementById('limparHistoricoBtn').addEventListener('click', () => {
-                                if (confirm('Tem certeza que deseja limpar todo o histórico de unfollow?')) {
-                                    localStorage.removeItem('unfollowedHistory');
-                                    mostrarHistorico(container);
-                                }
-                            });
-                        }
+                        // Inicia com a primeira aba
+                        handleTabClick('nao-segue');
                     }
 
 
-                    async function getProfileInfo(username) {
+                    async function getProfilePic(username) {
                         try {
                             // Usa a API interna do Instagram, que é mais estável que raspar o HTML.
                             const response = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, {
@@ -1509,23 +1492,15 @@
                                 }
                             });
                             const data = await response.json();
-                            if (data.data && data.data.user) {
-                                return {
-                                    url: data.data.user.profile_pic_url,
-                                    followers: data.data.user.edge_followed_by.count,
-                                    following: data.data.user.edge_follow.count
-                                };
-                            }
-                            // Se data.data.user for nulo, o perfil não existe ou está desativado
-                            return null;
+                            return data.data.user.profile_pic_url || 'https://via.placeholder.com/32';
                         } catch (error) {
                             console.error(`Erro ao buscar foto para ${username}:`, error);
-                            return null;
+                            return 'https://via.placeholder.com/32';
                         }
                     }
 
-                    function preencherTabela(listaUsuarios, tableId, checkboxClass) {
-                        const tbody = document.querySelector(`#${tableId} tbody`);
+                    function preencherTabela(userList, showCheckbox = true) {
+                        const tbody = document.querySelector("#naoSegueDeVoltaTable tbody");
                         tbody.innerHTML = ""; // Limpa a tabela
 
                         const itemsPerPage = 10; // Número de itens por página
@@ -1535,9 +1510,9 @@
                         function renderTable(page) {
                             tbody.innerHTML = ""; // Limpa a tabela para a nova página
                             const startIndex = (page - 1) * itemsPerPage;
-                            const endIndex = Math.min(startIndex + itemsPerPage, listaUsuarios.length);
+                            const endIndex = Math.min(startIndex + itemsPerPage, userList.length);
 
-                            listaUsuarios.slice(startIndex, endIndex).forEach((username, index) => {
+                            userList.slice(startIndex, endIndex).forEach((username, index) => {
                                 const tr = document.createElement("tr");
                                 tr.setAttribute('data-username', username);
                                 tr.innerHTML = `
@@ -1546,16 +1521,16 @@
                                         <a href="https://www.instagram.com/${username}" target="_blank">${username}</a>
                                     </td>
                                     <td style="border: 1px solid #ccc; padding: 10px;">
-                                        <img id="img_${username}_${tableId}" src="https://via.placeholder.com/32" alt="${username}" style="width:32px; height:32px; border-radius:50%;">
-                                    </td>
-                                    <td style="border: 1px solid #ccc; padding: 10px;">
-                                        <input type="checkbox" class="${checkboxClass}" data-username="${username}" />
-                                    </td>
+                                        <img id="img_${username}" src="https://via.placeholder.com/32" alt="${username}" style="width:32px; height:32px; border-radius:50%;">
+                                    </td>` +
+                                    (showCheckbox ? `<td style="border: 1px solid #ccc; padding: 10px;">
+                                        <input type="checkbox" class="unfollowCheckbox" data-username="${username}" />
+                                    </td>` : '') + `
                                 `;
                                 tbody.appendChild(tr);
-                                getProfileInfo(username).then((info) => {
-                                    const img = document.getElementById(`img_${username}_${tableId}`);
-                                    if (img && info) img.src = info.url;
+                                getProfilePic(username).then(url => {
+                                    const img = document.getElementById(`img_${username}`);
+                                    if (img) img.src = url;
                                 });
                             });
 
@@ -1563,12 +1538,12 @@
                         }
 
                         function updatePaginationControls() {
-                            let paginationDiv = document.querySelector(`#${tableId} + #paginationControls`);
+                            const paginationDiv = document.getElementById("paginationControls");
                             if (!paginationDiv) return;
 
                             paginationDiv.innerHTML = ""; // Limpa os controles de paginação
 
-                            const totalPages = Math.ceil(listaUsuarios.length / itemsPerPage);
+                            const totalPages = Math.ceil(userList.length / itemsPerPage);
                             const startPage = Math.max(1, currentPage - Math.floor(maxPageButtons / 2));
                             const endPage = Math.min(totalPages, startPage + maxPageButtons - 1);
 
@@ -1620,36 +1595,36 @@
                         }
 
                         // Adiciona os controles de paginação
-                        let paginationDiv = document.querySelector(`#${tableId} ~ #paginationControls`);
+                        let paginationDiv = document.getElementById("paginationControls");
                         if (!paginationDiv) {
                             paginationDiv = document.createElement("div");
                             paginationDiv.id = "paginationControls";
                             paginationDiv.style.marginTop = "20px";
-                            document.querySelector(`#${tableId}`).parentElement.appendChild(paginationDiv);
+                            document.getElementById("tabelaContainer").appendChild(paginationDiv);
                         }
 
                         renderTable(currentPage); // Renderiza a primeira página
                     }
 
-                    function selecionarTodos(checkboxClass = 'unfollowCheckbox') {
-                        document.querySelectorAll(`.${checkboxClass}`).forEach((checkbox) => {
+                    function selecionarTodos() {
+                        document.querySelectorAll(".unfollowCheckbox").forEach((checkbox) => {
                             checkbox.checked = true;
                         });
                     }
 
-                    function desmarcarTodos(checkboxClass = 'unfollowCheckbox') {
-                        document.querySelectorAll(`.${checkboxClass}`).forEach((checkbox) => {
+                    function desmarcarTodos() {
+                        document.querySelectorAll(".unfollowCheckbox").forEach((checkbox) => {
                             checkbox.checked = false;
                         });
                     }
 
-                    function unfollowSelecionados(event, checkboxClass = 'unfollowCheckbox') {
+                    function unfollowSelecionados() {
                         if (isUnfollowing) {
                             alert("Processo de unfollow já em andamento.");
                             return;
                         }
 
-                        const selecionados = Array.from(document.querySelectorAll(`.${checkboxClass}:checked`)).map(
+                        const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(
                             (checkbox) => checkbox.dataset.username
                         );
 
@@ -1659,13 +1634,13 @@
                         }
 
                         // Desabilitar botão para evitar múltiplas execuções
-                        const unfollowBtn = event.target;
+                        const unfollowBtn = document.getElementById("unfollowBtn");
                         unfollowBtn.disabled = true;
                         unfollowBtn.textContent = "Processando...";
                         isUnfollowing = true;
 
                         // Iniciar processo de unfollow
-                        unfollowUsers(selecionados, 0, event, () => {
+                        unfollowUsers(selecionados, 0, () => {
                             // Reabilitar botão ao finalizar
                             unfollowBtn.disabled = false;
                             unfollowBtn.textContent = "Unfollow";
@@ -1673,8 +1648,8 @@
                         });
                     }
 
-                    function unfollowUsers(users, index, event, callback) {
-                        if (index >= users.length || isProcessCancelled) { // Adiciona verificação de cancelamento
+                    function unfollowUsers(users, index, callback) {
+                        if (index >= users.length) {
                             console.log("Todos os usuários processados. Unfollow concluído.");
                             alert("Unfollow concluído.");
                             if (callback) callback();
@@ -1745,12 +1720,6 @@
                                     if (confirmBtn) {
                                         confirmBtn.click();
                                         console.log("Botão 'Deixar de seguir' clicado para " + username);
-
-                                        // Adiciona ao histórico
-                                        const historico = JSON.parse(localStorage.getItem('unfollowedHistory') || '[]');
-                                        historico.unshift({ username: username, date: new Date().toISOString() }); // Adiciona no início
-                                        localStorage.setItem('unfollowedHistory', JSON.stringify(historico));
-
                                         // Aguardar antes do próximo
                                         setTimeout(() => {
                                             console.log(`Avançando para o próximo usuário, índice: ${index + 1}`);

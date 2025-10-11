@@ -1,16 +1,8 @@
 // ==UserScript==
-<<<<<<< HEAD
-// @name         Instagra_2
+// @name         Instagram Tools
 // @description  Adds download buttons to Instagram stories
 // @author       You
 // @version      1.0
-=======
-// @name         Instagram Tools
-// @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  Instagram automation tools
-// @author       You
->>>>>>> f7446070ab28cd6c3cce611fb2a62e8fc0f361d7
 // @match        https://www.instagram.com/*
 // @grant        none
 // ==/UserScript==
@@ -18,7 +10,7 @@
 (function() {
     'use strict';
     
-    function initScript() {
+ function initScript() {
         if (window.location.href.includes("instagram.com")) {
                 function injectMenu() {
                     if (document.getElementById("assistiveTouchMenu")) return;
@@ -398,8 +390,8 @@
                     });
 
                     // --- NOVO MENU: AMIGOS PRÓXIMOS ---
-    document.getElementById("closeFriendsBtn").addEventListener("click", () => {
-        console.log("Botão Amigos Próximos clicado");
+ document.getElementById("closeFriendsBtn").addEventListener("click", () => {
+ console.log("Botão Amigos Próximos clicado");
         // Direcionar para a página de amigos próximos se não estiver lá
         if (window.location.pathname !== "/accounts/close_friends/") {
             console.log("Navegando para /accounts/close_friends/");
@@ -417,7 +409,7 @@
     });
 
     // --- NOVO MENU: OCULTAR STORY ---
-                    document.getElementById("hideStoryBtn").addEventListener("click", () => {
+ document.getElementById("hideStoryBtn").addEventListener("click", () => {
         console.log("Botão Ocultar Story clicado");
         // Direcionar para a página de ocultar story se não estiver lá
         if (window.location.pathname !== "/accounts/hide_story_and_live_from/") {
@@ -500,8 +492,7 @@
                     }
                     if (
                         username.length > 0 &&
-                        !username.includes(" ") &&
-                        photoUrl && // Apenas adiciona se tiver foto
+ !username.includes(" ") && photoUrl && // Apenas adiciona se tiver foto
                         !users.some(u => u.username === username) &&
                         /^[a-zA-Z0-9_.]+$/.test(username)
                     ) {
@@ -596,9 +587,7 @@
             let filteredUsers = users;
             if (currentTab === 'selecionados') {
                 filteredUsers = users.filter(({
-                    username
-                }) => {
-                    return modalStates.get(username) === true;
+ username }) => { return modalStates.get(username) === true;
                 });
             } else if (currentTab === 'nao_selecionados') {
                 filteredUsers = users.filter(({
@@ -612,11 +601,7 @@
 
             pageUsers.forEach(({ username, photoUrl }, idx) => {
                 const isChecked = modalStates.get(username) || false;
-
-                html += `
-                    <li style="padding:5px 0;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px;">
-                        <label class="custom-checkbox" for="cfcb_${username}" style="margin:0;">
-                            <input type="checkbox" class="closeFriendCheckbox" id="cfcb_${username}" data-username="${username}" ${isChecked ? "checked" : ""}>
+ html += ` <li style="padding:5px 0;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px;"> <label class="custom-checkbox" for="cfcb_${username}" style="margin:0;"> <input type="checkbox" class="closeFriendCheckbox" id="cfcb_${username}" data-username="${username}" ${isChecked ? "checked" : ""}>
                             <span class="checkmark"></span>
                         </label>
                         <img src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
@@ -833,8 +818,7 @@
     let tentativasUser = 0;
     let modalAberto = false; // Flag para evitar loop infinito
                     // --- FIM DO MENU AMIGOS PRÓXIMOS ---
-
-                    // --- NOVO MENU: OCULTAR STORY ---
+ // --- NOVO MENU: OCULTAR STORY ---
     function extractHideStoryUsernames() {
         return new Promise((resolve) => {
             const maxAttempts = 20;
@@ -887,8 +871,7 @@
                     }
                     if (
                         username.length > 0 &&
-                        !username.includes(" ") &&
-                        photoUrl && // Apenas adiciona se tiver foto
+ !username.includes(" ") && photoUrl && // Apenas adiciona se tiver foto
                         !users.some(u => u.username === username) &&
                         /^[a-zA-Z0-9_.]+$/.test(username)
                     ) {
@@ -960,8 +943,7 @@
             const pageUsers = users.slice(startIndex, endIndex);
             pageUsers.forEach(({ username, photoUrl }, idx) => {
                 const globalIdx = startIndex + idx;
-                const isChecked = modalStates.get(username) || false;
-                html += `
+ const isChecked = modalStates.get(username) || false; html += `
                     <li style="padding:5px 0;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px;">
                         <label class="custom-checkbox" for="hsb_${globalIdx}" style="margin:0;">
                             <input type="checkbox" class="hideStoryCheckbox" id="hsb_${globalIdx}" data-username="${username}" ${isChecked ? "checked" : ""}>
@@ -1294,19 +1276,30 @@
                         let currentActiveTab = 'NaoSeguem';
 
                         // Função para extrair lista de usuários via API (muito mais rápido)
+                        const apiCache = new Map(); // Cache para as requisições da API
                         const fetchUserListAPI = async (userId, type, total, returnFullObjects = false) => {
                             const userList = new Set();
                             let nextMaxId = '';
                             let hasNextPage = true;
+                            let data; // Declarar 'data' aqui para que seja acessível em todo o loop
 
                             while (hasNextPage && !isProcessCancelled) { // Verifica a flag de cancelamento
                                 try {
-                                    const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=50&max_id=${nextMaxId}`, {
-                                        headers: { 'X-IG-App-ID': appID }
-                                    });
-                                    if (!response.ok) throw new Error(`Erro na API: ${response.statusText}`);
-                                    const data = await response.json();
+                                    const cacheKey = `friendships-${userId}-${type}-${nextMaxId}`;
+                                    if (apiCache.has(cacheKey)) {
+                                        console.log(`Usando cache para ${cacheKey}`);
+                                        const cachedData = apiCache.get(cacheKey);
+                                        data = cachedData.data;
+                                        hasNextPage = cachedData.hasNextPage;
+                                    } else {
+                                        const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=50&max_id=${nextMaxId}`, {
+                                            headers: { 'X-IG-App-ID': appID }
+                                        });
+                                        if (!response.ok) throw new Error(`Erro na API: ${response.statusText}`);
+                                        data = await response.json();
 
+                                        apiCache.set(cacheKey, { data: data, hasNextPage: !!data.next_max_id }, 60000); // Cache por 60 segundos
+                                    }
                                     if (returnFullObjects) {
                                         data.users.forEach(user => userList.add(user));
                                     } else {
@@ -1347,7 +1340,7 @@
                         if (!userId) { alert('Não foi possível obter o ID do usuário.'); div.remove(); return; }
 
                         if (isProcessCancelled) { div.remove(); return; }
-                        const seguindo = await fetchUserListAPI(userId, 'following', totalFollowing, true); // Pede objetos completos
+ const seguindo = await fetchUserListAPI(userId, 'following', totalFollowing, true); // Pede objetos completos
                         if (isProcessCancelled) { div.remove(); return; }
                         statusDiv.innerText = `Encontrados ${seguindo.size} usuários que você segue.`;
                         await new Promise(r => setTimeout(r, 1000));
@@ -1393,7 +1386,7 @@
                         // Lógica das Abas
                         document.getElementById('tabNaoSeguem').addEventListener('click', () => switchTab('NaoSeguem'));
                         document.getElementById('tabAnalisar').addEventListener('click', () => switchTab('Analisar', seguindo));
-                        document.getElementById('tabHistorico').addEventListener('click', () => switchTab('Historico'));
+ document.getElementById('tabHistorico').addEventListener('click', () => switchTab('Historico'));
 
                         function switchTab(tabName, data = null) {
                             // Esconde todos os containers
@@ -1410,7 +1403,7 @@
                             currentActiveTab = tabName;
 
                             if (tabName === 'Analisar' && container.innerHTML === '') {
-                                analisarPerfis(container, data);
+ analisarPerfis(container, data);
                             } else if (tabName === 'Historico' && container.innerHTML === '') {
                                 mostrarHistorico(container);
                             }
@@ -1419,18 +1412,17 @@
                         async function analisarPerfis(container, listaSeguindo) {
                             container.innerHTML = '<p>Analisando perfis... Isso pode levar alguns minutos.</p><div id="progressAnalisar"></div>';
                             const perfisSuspeitos = [];
-                            const userArray = Array.from(listaSeguindo).map(u => u.username); // Extrai apenas os usernames
+ const userArray = Array.from(listaSeguindo);
                             const total = userArray.length;
                             let count = 0;
                             const batchSize = 50; // Processa 50 perfis em paralelo para mais velocidade
 
                             for (let i = 0; i < userArray.length; i += batchSize) {
                                 if (isProcessCancelled) break;
-
-                                const batch = userArray.slice(i, i + batchSize);
-                                const promises = batch.map(async (username) => {
-                                    if (isProcessCancelled) return;
-                                    const profileInfo = await getProfileInfo(username);
+ const batch = userArray.slice(i, i + batchSize);
+ const promises = batch.map(async (user) => {
+ if (isProcessCancelled) return;
+ const profileInfo = await getProfileInfo(user.username);
                                     if (profileInfo && profileInfo.following > profileInfo.followers) {
                                         perfisSuspeitos.push(username);
                                     }
@@ -1452,7 +1444,7 @@
 
                             if (isProcessCancelled) return;
 
-                            // Reutiliza a lógica de tabela e paginação
+ // Reutiliza a lógica de tabela e paginação
                             container.innerHTML = `
                                 <p>${perfisSuspeitos.length} contas encontradas que seguem mais do que são seguidas.</p>
                                 <table id="analisarTable" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
@@ -1472,7 +1464,7 @@
                                     <button id="unfollowAnalisarBtn">Unfollow</button>
                                 </div>`;
 
-                            preencherTabela(perfisSuspeitos, 'analisarTable', 'analisarCheckbox');
+ preencherTabela(perfisSuspeitos, 'analisarTable', 'analisarCheckbox');
                             document.getElementById("selecionarTodosAnalisarBtn").addEventListener("click", () => selecionarTodos('analisarCheckbox'));
                             document.getElementById("desmarcarTodosAnalisarBtn").addEventListener("click", () => desmarcarTodos('analisarCheckbox'));
                             document.getElementById("unfollowAnalisarBtn").addEventListener("click", (event) => unfollowSelecionados(event, 'analisarCheckbox'));
@@ -1550,7 +1542,7 @@
                                 tr.innerHTML = `
                                     <td style="border: 1px solid #ccc; padding: 10px;">${startIndex + index + 1}</td>
                                     <td style="border: 1px solid #ccc; padding: 10px;">
-                                        <a href="https://www.instagram.com/${username}" target="_blank">${username}</a>
+ <a href="https://www.instagram.com/${username}" target="_blank">${username}</a>
                                     </td>
                                     <td style="border: 1px solid #ccc; padding: 10px;">
                                         <img id="img_${username}_${tableId}" src="https://via.placeholder.com/32" alt="${username}" style="width:32px; height:32px; border-radius:50%;">
@@ -1697,7 +1689,7 @@
                         // Aguardar carregamento da página
                         setTimeout(() => {
                             // Encontrar botão Seguindo (tentar vários seletores e textos alternativos)
-                            function getButtonByDescendantText(texts) {
+ function getButtonByDescendantText(texts) {
                                 for (const text of texts) {
                                     const xpath = `//button[descendant::*[normalize-space(text())='${text}']]`;
                                     const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
@@ -1925,15 +1917,15 @@
             }
 
             function createAndAttachButton(container) {
-                 if (!container) return;
+ if (!container) return;
 
-                 // Evita adicionar botão em imagens de perfil nos comentários
+ // Evita adicionar botão em imagens de perfil nos comentários
                  const closestCommentSection = container.closest('ul[class*="x78zum5"]');
                  if (closestCommentSection) {
                      const commentAuthorLink = closestCommentSection.querySelector('a[href*="/p/"]');
-                     if (!commentAuthorLink) { // Se não achar link de post, é provável que seja a lista de comentários principal
+                     if (!commentAuthorLink) {
                          return;
-                     }
+ }
                  }
 
                  // Evita adicionar botão em imagens de perfil no header do post
@@ -1944,8 +1936,7 @@
                  // Se o botão já existe, não faz nada
                  if (container.querySelector('.feed-download-btn')) return;
 
-                 const btn = document.createElement('button');
-                btn.innerHTML = '⬇️';
+ const btn = document.createElement('button'); btn.innerHTML = '⬇️';
                 btn.className = 'feed-download-btn';
                 btn.style.cssText = `
                     position: absolute;
@@ -2000,7 +1991,7 @@
                 };
                 container.style.position = 'relative';
                 container.appendChild(btn);
-            }
+ }
         } // Esta chave fecha o if (window.location.href.includes("instagram.com"))
     }
 

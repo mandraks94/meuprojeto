@@ -5,7 +5,7 @@
         // @description  Instagram automation tools
         // @author       You
         // @match        https://www.instagram.com/*
-        // @grant        none
+        // @grant        none1111111111
         // ==/UserScript==
 
         (function() {

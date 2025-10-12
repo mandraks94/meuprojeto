@@ -1247,58 +1247,82 @@
                             // --- NOVO MENU: CONTAS SILENCIADAS ---
             function extractMutedAccountsUsernames(doc = document) {
                 return new Promise((resolve) => {
-                    const maxAttempts = 20;
-                    let attempts = 0;
+                    const users = new Map(); // Usar Map para evitar duplicados e manter a ordem
+                    let scrollInterval;
+                    let noNewUsersCount = 0;
+                    const maxIdleCount = 10; // Parar após 10 tentativas sem novos usuários
 
-                    function tryExtract() {
-                        attempts++;
-                        const users = [];
-                        // O seletor é similar ao de "Amigos Próximos" e "Ocultar Story"
+                    // --- Lógica da Barra de Progresso ---
+                    let bar = document.createElement("div");
+                    bar.id = "mutedProgressBar";
+                    bar.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);width:80%;height:30px;background:#ccc;z-index:10001;color:black;font-weight:bold;font-size:14px;text-align:center;line-height:30px;";
+                    const text = document.createElement("div");
+                    text.style.position = "relative";
+                    text.innerText = "Buscando e rolando a lista de contas silenciadas...";
+                    bar.appendChild(text);
+                    document.body.appendChild(bar);
+                    // --- Fim da lógica da Barra de Progresso ---
+
+                    function finishExtraction() {
+                        clearInterval(scrollInterval);
+                        if (bar) bar.remove();
+                        console.log(`Extração finalizada. Total de ${users.size} usuários encontrados.`);
+                        resolve(Array.from(users.values()));
+                    }
+
+                    function performScrollAndExtract() {
+                        const initialUserCount = users.size;
+
+                        // Seletor para os elementos que contêm o nome de usuário
                         const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')).filter(el =>
                             el.querySelector('span[data-bloks-name="bk.components.Text"]')
                         );
 
-                        if (userElements.length === 0) {
-                            console.log("Nenhum elemento de usuário encontrado para Contas Silenciadas, tentativa", attempts);
-                            if (attempts < maxAttempts) {
-                                setTimeout(tryExtract, 500);
-                            } else {
-                                resolve(users);
+                        if (userElements.length === 0 && users.size === 0) {
+                            console.log("Nenhum usuário encontrado ainda, tentando novamente...");
+                            return; // Continua tentando se a lista estiver vazia
+                        }
+
+                        userElements.forEach(userElement => {
+                            const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
+                            const username = usernameSpan ? usernameSpan.innerText.trim() : '';
+
+                            if (username && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
+                                const imgTag = userElement.querySelector('img');
+                                const photoUrl = imgTag ? imgTag.src : 'https://via.placeholder.com/32';
+                                users.set(username, { username, photoUrl });
                             }
+                        });
+
+                        text.innerText = `Encontrado(s) ${users.size} usuário(s)... Rolando...`;
+
+                        // Lógica de parada: se não encontrar novos usuários por um tempo, para.
+                        if (users.size === initialUserCount) {
+                            noNewUsersCount++;
+                        } else {
+                            noNewUsersCount = 0; // Reseta o contador se encontrar novos usuários
+                        }
+
+                        if (noNewUsersCount >= maxIdleCount) {
+                            console.log("Nenhum novo usuário encontrado após várias tentativas. Finalizando.");
+                            finishExtraction();
                             return;
                         }
 
-                        console.log("Elementos de usuário encontrados:", userElements.length);
-
-                        for (let i = 0; i < userElements.length; i++) {
-                            const userElement = userElements[i];
-                            let username = "";
-                            let photoUrl = "";
-                            const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
-                            if (usernameSpan) {
-                                username = usernameSpan.innerText.trim();
-                            } else {
-                                username = userElement.innerText.trim().split('\n')[0];
-                            }
-                            const imgTag = userElement.querySelector('img');
-                            if (imgTag && imgTag.src) {
-                                photoUrl = imgTag.src;
-                            }
-                            if (
-                                username.length > 0 &&
-                                !username.includes(" ") &&
-                                photoUrl &&
-                                !users.some(u => u.username === username) &&
-                                /^[a-zA-Z0-9_.]+$/.test(username)
-                            ) {
-                                users.push({ username, photoUrl });
-                            }
-                        }
-                        console.log("Usuários extraídos:", users);
-                        resolve(users);
+                        // Simula a rolagem da janela principal
+                        window.scrollTo(0, document.body.scrollHeight);
                     }
 
-                    tryExtract();
+                    // Inicia o processo de rolagem e extração
+                    scrollInterval = setInterval(performScrollAndExtract, 1000); // Rola e extrai a cada 1 segundo
+
+                    // Adiciona um timeout de segurança para garantir que o processo termine
+                    setTimeout(() => {
+                        if (scrollInterval) {
+                            console.log("Timeout de segurança atingido. Finalizando extração.");
+                            finishExtraction();
+                        }
+                    }, 60000); // Timeout de 60 segundos
                 });
             }
 
@@ -1971,7 +1995,7 @@
                                 div.innerHTML = ` 
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <h2>Seguindo</h2>
-                                        <div style="display: flex; gap: 10px;">
+                                        <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end;">
                                             <button id="atualizarSeguindoBtn" title="Atualizar Dados" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">🔄️</button>
                                             <button id="silenciarSeguindoBtn" style="background: #8e44ad; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Silenciar/Reativar</button>
                                             <button id="closeFriendsSeguindoBtn" style="background: #2ecc71; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Melhores Amigos</button>

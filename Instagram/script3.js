@@ -1968,14 +1968,19 @@
                                     width: 90%; max-width: 800px; max-height: 90vh; border: 1px solid #ccc;
                                     border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
                                 `;
-                                div.innerHTML = `
+                                div.innerHTML = ` 
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <h2>Seguindo</h2>
-                                        <div>
-                                            <button id="bloquearSeguindoBtn" style="background: #3498db; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; margin-right: 10px;">Bloquear</button>
-                                            <button id="restringirSeguindoBtn" style="background: #f39c12; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; margin-right: 10px;">Restringir</button>
+                                        <div style="display: flex; gap: 10px;">
+                                            <button id="atualizarSeguindoBtn" title="Atualizar Dados" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">🔄️</button>
+                                            <button id="silenciarSeguindoBtn" style="background: #8e44ad; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Silenciar/Reativar</button>
+                                            <button id="closeFriendsSeguindoBtn" style="background: #2ecc71; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Melhores Amigos</button>
+                                            <button id="hideStorySeguindoBtn" style="background: #f39c12; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Ocultar Story</button>
                                             <button id="fecharSeguindoBtn" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Fechar</button>
                                         </div>
+                                    </div>
+                                    <div style="margin: 20px 0;">
+                                        <input type="text" id="seguindoSearchInput" placeholder="Pesquisar na lista de seguindo..." style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
                                     </div>
                                     <div id="statusSeguindo" style="margin-top: 20px; font-weight: bold;"></div>
                                     <div id="tabelaSeguindoContainer" style="display: block; margin-top: 15px;"></div>
@@ -1986,6 +1991,13 @@
                                     processoCancelado = true;
                                     document.getElementById("progressBar")?.remove();
                                     div.remove();
+                                });
+
+                                document.getElementById("atualizarSeguindoBtn").addEventListener("click", () => {
+                                    // Limpa o cache e recarrega os dados
+                                    Object.keys(userListCache).forEach(key => userListCache[key] = null);
+                                    div.remove();
+                                    iniciarProcessoSeguindo();
                                 });
 
                                 const statusDiv = document.getElementById("statusSeguindo");
@@ -2078,11 +2090,20 @@
                                     // Configuração para ordenação da tabela
                                     let sortConfig = { key: 'username', direction: 'ascending' };
 
+                                    const getSelectedUsers = () => {
+                                        return Array.from(document.querySelectorAll('#seguindoModal .user-checkbox:checked')).map(cb => cb.dataset.username);
+                                    };
+
                                     const renderList = (page) => {
                                         const startIndex = (page - 1) * itemsPerPage;
                                         const endIndex = startIndex + itemsPerPage;
-                                        // A lista já foi ordenada, apenas paginamos
-
+                                        
+                                        // Filtra por pesquisa antes de ordenar e paginar
+                                        const searchTerm = document.getElementById('seguindoSearchInput')?.value.toLowerCase() || '';
+                                        let filteredUsers = seguindoList;
+                                        if (searchTerm) {
+                                            filteredUsers = seguindoList.filter(user => user.username.toLowerCase().includes(searchTerm));
+                                        }
                                         let tableHtml = `
                                             <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
                                                 <thead style="cursor: pointer;">
@@ -2098,7 +2119,7 @@
                                         `;
 
                                         // Ordena a lista antes de paginar
-                                        const sortedUsers = [...seguindoList].sort((a, b) => {
+                                        const sortedUsers = [...filteredUsers].sort((a, b) => {
                                             const getSortValue = (user, key) => {
                                                 if (key === 'username') return user.username.toLowerCase();
                                                 if (key === 'isMuted') return userListCache.muted ? (userListCache.muted.has(user.username) ? 1 : 2) : 3;
@@ -2170,6 +2191,12 @@
                                         if (prevBtn) prevBtn.onclick = () => renderList(--currentPage);
                                         const nextBtn = document.getElementById("nextPageBtn");
                                         if (nextBtn) nextBtn.onclick = () => renderList(++currentPage);
+                                        
+                                        // Evento para a barra de pesquisa
+                                        const searchInput = document.getElementById("seguindoSearchInput");
+                                        searchInput.oninput = () => {
+                                            renderList(1); // Volta para a primeira página ao pesquisar
+                                        };
 
                                         // Adiciona eventos de clique para ordenação nos cabeçalhos
                                         document.querySelectorAll('#seguindoModal th[data-sort-key]').forEach(th => {
@@ -2185,10 +2212,119 @@
                                         });
                                     };
 
+                                    document.getElementById('silenciarSeguindoBtn').onclick = () => handleActionOnSelected(getSelectedUsers(), 'mute');
+                                    document.getElementById('closeFriendsSeguindoBtn').onclick = () => handleActionOnSelected(getSelectedUsers(), 'closeFriends');
+                                    document.getElementById('hideStorySeguindoBtn').onclick = () => handleActionOnSelected(getSelectedUsers(), 'hideStory');
+
                                     if (seguindoList.length > 0) renderList(currentPage);
                                 }
                                 carregarSeguindo();
                             }
+
+                            async function handleActionOnSelected(selectedUsers, actionType) {
+                                if (selectedUsers.length === 0) {
+                                    alert("Nenhum usuário selecionado.");
+                                    return;
+                                }
+
+                                const actionConfig = {
+                                    mute: {
+                                        buttonId: 'silenciarSeguindoBtn',
+                                        text: 'Silenciar/Reativar',
+                                        func: (users, cb) => unmuteUsers(users, cb, true) // `true` para modo toggle
+                                    },
+                                    closeFriends: {
+                                        buttonId: 'closeFriendsSeguindoBtn',
+                                        text: 'Melhores Amigos',
+                                        func: (users, cb) => toggleListMembership(users, '/accounts/close_friends/', 'closeFriends', cb)
+                                    },
+                                    hideStory: {
+                                        buttonId: 'hideStorySeguindoBtn',
+                                        text: 'Ocultar Story',
+                                        func: (users, cb) => toggleListMembership(users, '/accounts/hide_story_and_live_from/', 'hiddenStory', cb)
+                                    }
+                                };
+
+                                const config = actionConfig[actionType];
+                                if (!config) return;
+
+                                const btn = document.getElementById(config.buttonId);
+                                btn.disabled = true;
+                                btn.textContent = 'Processando...';
+
+                                await config.func(selectedUsers, () => {
+                                    btn.disabled = false;
+                                    btn.textContent = config.text;
+                                    alert(`Ação "${config.text}" concluída para ${selectedUsers.length} usuário(s).`);
+                                    // Recarrega todos os dados para ver a mudança
+                                    document.getElementById("atualizarSeguindoBtn").click();
+                                });
+                            }
+
+                            async function toggleListMembership(users, pageUrl, cacheKey, callback) {
+                                const originalPath = window.location.pathname;
+                                let progressBar, progressFill, progressText;
+
+                                function updateProgressBar(current, total) {
+                                    if (!progressBar) {
+                                        progressBar = document.createElement("div");
+                                        progressBar.id = "actionProgressBar";
+                                        progressBar.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);width:80%;height:30px;background:#ccc;z-index:2147483647;color:black;font-weight:bold;font-size:14px;text-align:center;line-height:30px;";
+                                        progressFill = document.createElement("div");
+                                        progressFill.style.cssText = "height:100%;width:0%;background:#4caf50;position:absolute;left:0;top:0;z-index:-1;";
+                                        progressText = document.createElement("div");
+                                        progressText.style.position = "relative";
+                                        progressBar.appendChild(progressFill);
+                                        progressBar.appendChild(progressText);
+                                        document.body.appendChild(progressBar);
+                                    }
+                                    const percent = Math.min((current / total) * 100, 100);
+                                    progressFill.style.width = percent + "%";
+                                    progressText.innerText = `Processando: ${current} de ${total}`;
+                                }
+
+                                // Navega para a página correta
+                                history.pushState(null, null, pageUrl);
+                                window.dispatchEvent(new Event("popstate"));
+                                await new Promise(r => setTimeout(r, 3000));
+
+                                for (let i = 0; i < users.length; i++) {
+                                    const username = users[i];
+                                    updateProgressBar(i + 1, users.length);
+
+                                    // A lógica para encontrar e clicar no checkbox é a mesma para CF e Hide Story
+                                    const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
+                                    let found = false;
+                                    for (const flex of flexboxes) {
+                                        const userText = flex.innerText && flex.innerText.trim().split('\n')[0];
+                                        if (userText === username) {
+                                            const checkboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção'));
+                                            if (checkboxContainer) {
+                                                checkboxContainer.click();
+                                                found = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if (!found) {
+                                        console.warn(`Não foi possível encontrar o checkbox para ${username} na página ${pageUrl}.`);
+                                    }
+                                    await new Promise(r => setTimeout(r, 1500)); // Pausa entre as ações
+                                }
+
+                                if (progressBar) progressBar.remove();
+
+                                // Retorna para a página original
+                                history.pushState(null, null, originalPath);
+                                window.dispatchEvent(new Event("popstate"));
+                                await new Promise(r => setTimeout(r, 1000));
+
+                                // Limpa o cache específico para forçar a recarga na próxima vez
+                                userListCache[cacheKey] = null;
+
+                                if (callback) callback();
+                            }
+
 
 
                             async function getProfilePic(username) {
@@ -2321,6 +2457,7 @@
                                 // Adiciona os controles de paginação
                                 let paginationDiv = document.getElementById("paginationControls");
                                 if (!paginationDiv) {
+                                    if (!document.getElementById("tabelaContainer")) return; // Garante que o container existe
                                     paginationDiv = document.createElement("div");
                                     paginationDiv.id = "paginationControls";
                                     paginationDiv.style.marginTop = "20px";

@@ -2132,7 +2132,7 @@
                                             <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
                                                 <thead style="cursor: pointer;">
                                                     <tr style="text-align: left; border-bottom: 2px solid #dbdbdb;">
-                                                        <th style="padding: 8px; width: 20px;"></th>
+                                                        <th style="padding: 8px; width: 20px;"><input type="checkbox" id="selectAllCheckbox" title="Selecionar Todos"></th>
                                                         <th style="padding: 8px;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
                                                         <th style="padding: 8px; text-align: center;" data-sort-key="isMuted" title="${userListCache.muted === null ? 'Visite o menu Contas Silenciadas para carregar estes dados.' : ''}">Silenciado? ${userListCache.muted === null ? '??' : (sortConfig.key === 'isMuted' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
                                                         <th style="padding: 8px; text-align: center;" data-sort-key="isCloseFriend" title="${userListCache.closeFriends === null ? 'Visite o menu Amigos Próximos para carregar estes dados.' : ''}">Melhores Amigos? ${userListCache.closeFriends === null ? '??' : (sortConfig.key === 'isCloseFriend' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
@@ -2216,6 +2216,17 @@
                                         const nextBtn = document.getElementById("nextPageBtn");
                                         if (nextBtn) nextBtn.onclick = () => renderList(++currentPage);
                                         
+                                        // Adiciona evento para o checkbox "selecionar tudo"
+                                        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+                                        if (selectAllCheckbox) {
+                                            selectAllCheckbox.addEventListener('change', (e) => {
+                                                const isChecked = e.target.checked;
+                                                document.querySelectorAll('#seguindoModal .user-checkbox').forEach(checkbox => {
+                                                    checkbox.checked = isChecked;
+                                                });
+                                            });
+                                        }
+
                                         // Evento para a barra de pesquisa
                                         const searchInput = document.getElementById("seguindoSearchInput");
                                         searchInput.oninput = () => {

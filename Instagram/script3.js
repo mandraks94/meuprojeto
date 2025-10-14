@@ -2616,7 +2616,7 @@
                                     buttonId: 'closeFriendsSeguindoBtn', 
                                     text: 'Melhores Amigos', 
                                     // Nova função que age no perfil individual 
-                                    func: (users, cb) => performActionOnProfile(users, ['Adicionar à lista Amigos Próximos', 'Amigo Próximo'], cb) 
+                                    func: (users, cb) => performActionOnProfile(users, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], cb) 
                                 }, 
                                 hideStory: { 
                                     buttonId: 'hideStorySeguindoBtn', 

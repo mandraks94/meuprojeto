@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Instagram Tools
+// @name         Instagram Tools_2
 // @description  Adds download buttons to Instagram stories
 // @author       You
 // @version      1.0
@@ -1537,7 +1537,11 @@
                     await new Promise(resolve => setTimeout(resolve, 4000)); // Espera o perfil carregar
 
                     // 2. Clicar no botão "Seguindo"
-                    const followingButton = Array.from(document.querySelectorAll('button, div[role="button"]')).find(el => ['Seguindo', 'Following'].includes(el.innerText));
+                    // Seletor aprimorado para iPhone: procura em mais tipos de elementos e verifica o texto de forma mais flexível.
+                    const followingButton = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"]')).find(el => {
+                        const text = el.innerText.trim();
+                        return text === 'Seguindo' || text === 'Following';
+                    });
                     if (!followingButton) {
                         console.warn(`Botão 'Seguindo' não encontrado para ${username}. Pulando.`);
                         continue;
@@ -1653,14 +1657,20 @@
                             // --- FIM DO MENU CONTAS SILENCIADAS ---
             
             function simulateClick(element, triggerChangeEvent = false) {
-                if (!element) return;
-                const dispatch = (event) => element.dispatchEvent(event);
-                dispatch(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-                dispatch(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-                dispatch(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-                if (triggerChangeEvent) {
-                    dispatch(new Event('change', { bubbles: true }));
-                }
+                 if (!element) return;
+                 const dispatch = (event) => element.dispatchEvent(event);
+            
+                 // Simula eventos de toque, mais confiáveis em mobile
+                 dispatch(new TouchEvent('touchstart', { bubbles: true, cancelable: true, view: window }));
+                 dispatch(new TouchEvent('touchend', { bubbles: true, cancelable: true, view: window }));
+            
+                 // Mantém os eventos de mouse como fallback
+                 dispatch(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                 dispatch(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                 dispatch(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                 if (triggerChangeEvent) {
+                     dispatch(new Event('change', { bubbles: true }));
+                 }
             }
 
 
@@ -2659,13 +2669,13 @@
                                     text: 'Melhores Amigos', 
                                     // Nova função que age no perfil individual 
                                     func: (users, cb) => performActionOnProfile(users, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], cb) 
-                                }, 
+                                },
                                 hideStory: { 
                                     buttonId: 'hideStorySeguindoBtn', 
                                     text: 'Ocultar Story', 
-                                    // Revertido para o método original, que navega para a página de lista
+                                    // Revertido para o método original que navega para a página de lista, conforme solicitado.
                                     func: (users, cb) => toggleListMembership(users, '/accounts/hide_story_and_live_from/', 'hiddenStory', cb)
-                                } 
+                                }
                                 };
 
                                 const config = actionConfig[actionType];
@@ -2706,7 +2716,11 @@
                                 await new Promise(resolve => setTimeout(resolve, 4000)); // Espera o perfil carregar
 
                                 // 2. Clicar no botão "Seguindo"
-                                const followingButton = Array.from(document.querySelectorAll('button, div[role="button"]')).find(el => ['Seguindo', 'Following'].includes(el.innerText));
+                                // Seletor aprimorado para iPhone: procura em mais tipos de elementos e verifica o texto de forma mais flexível.
+                                const followingButton = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"]')).find(el => {
+                                    const text = el.innerText.trim();
+                                    return text === 'Seguindo' || text === 'Following';
+                                });
                                 if (!followingButton) {
                                     console.warn(`Botão 'Seguindo' não encontrado para ${username}. Pulando.`);
                                     continue;
@@ -2715,15 +2729,12 @@
                                 await new Promise(resolve => setTimeout(resolve, 1500)); // Espera o menu dropdown aparecer
 
                                 // 3. Clicar na opção desejada (ex: "Adicionar aos melhores amigos")
-                                const actionOption = Array.from(document.querySelectorAll('div[role="button"], div[role="menuitem"]')).find(el => {
-                                    const span = el.querySelector('span');
-                                    // Procura por qualquer um dos textos fornecidos (para adicionar ou remover)
-                                    if (span) {
-                                        const innerText = span.innerText.trim();
-                                        return menuTexts.includes(innerText);
-                                    }
-                                    return false;
-                                });
+                                 // Seletor aprimorado para encontrar o texto em qualquer lugar dentro do elemento clicável
+                                 const actionOption = Array.from(document.querySelectorAll('div[role="button"], div[role="menuitem"]')).find(el => 
+                                     menuTexts.some(text => el.innerText.includes(text))
+                                 );
+
+
 
                                 if (actionOption) {
                                     simulateClick(actionOption);
@@ -3045,10 +3056,10 @@
                                         console.log("Botão 'Seguindo' clicado para " + username);
                                         // Aguardar diálogo abrir
                                         setTimeout(() => {
-                                            // Encontrar botão Deixar de seguir dentro da caixa de diálogo
-                                            let confirmBtn = document.querySelector('button[aria-label*="Deixar de seguir"], div[aria-label*="Deixar de seguir"], span[aria-label*="Deixar de seguir"]');
+                                            // Seletor aprimorado para o botão "Deixar de seguir"
+                                            let confirmBtn;
                                             if (!confirmBtn) {
-                                                confirmBtn = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"]')).find(el => {
+                                                confirmBtn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(el => {
                                                     const text = el.textContent.trim();
                                                     return text === 'Deixar de seguir' || text === 'Unfollow' || text === 'Dejar de seguir';
                                                 });

@@ -631,6 +631,7 @@
                     let html = `<h2 style="color: black;">Amigos Próximos</h2>`;
                     html += `
                         <div style="margin-bottom:10px;">
+                            <button id="closeFriendsMinimizarBtn" style="background:#f39c12;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Minimizar</button>
                             <button id="closeFriendsFecharBtn" style="background:#e74c3c;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Fechar</button>
                             <button id="closeFriendsMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
                             <button id="closeFriendsDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
@@ -694,6 +695,25 @@
                         div.remove();
                         modalAberto = false;
                     };
+                    document.getElementById("closeFriendsMinimizarBtn").onclick = () => {
+                        const modal = document.getElementById('allCloseFriendsDiv');
+                        const contentToToggle = [
+                            modal.querySelector('input[type="text"]'),
+                            modal.querySelector('.tab-container'),
+                            modal.querySelector('ul'),
+                            modal.querySelector('#paginationControls')
+                        ].filter(Boolean);
+
+                        const btn = document.getElementById('closeFriendsMinimizarBtn');
+                        const isMinimized = modal.dataset.minimized === 'true';
+
+                        contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+                        
+                        modal.dataset.minimized = !isMinimized;
+                        btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
+                        modal.style.maxHeight = isMinimized ? '85vh' : 'none';
+                    };
+
                     document.getElementById("closeFriendsMarcarTodosBtn").onclick = () => {
                         // Filtra os usuários da aba atual e depois pega apenas os da página visível
                         const filteredUsers = users.filter(({ username }) => {
@@ -1024,6 +1044,7 @@
                     let html = `<h2 style="color: black;">Ocultar Story</h2>`;
                     html += `
                         <div style="margin-bottom:10px;">
+                            <button id="hideStoryMinimizarBtn" style="background:#f39c12;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Minimizar</button>
                             <button id="hideStoryFecharBtn" style="background:#e74c3c;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Fechar</button>
                             <button id="hideStoryMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
                             <button id="hideStoryDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
@@ -1084,6 +1105,24 @@
                     document.getElementById("hideStoryFecharBtn").onclick = () => {
                         div.remove();
                         modalAbertoStory = false;
+                    };
+                    document.getElementById("hideStoryMinimizarBtn").onclick = () => {
+                        const modal = document.getElementById('allHideStoryDiv');
+                        const contentToToggle = [
+                            modal.querySelector('input[type="text"]'),
+                            modal.querySelector('.tab-container'),
+                            modal.querySelector('ul'),
+                            modal.querySelector('#paginationControls')
+                        ].filter(Boolean);
+
+                        const btn = document.getElementById('hideStoryMinimizarBtn');
+                        const isMinimized = modal.dataset.minimized === 'true';
+
+                        contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+                        
+                        modal.dataset.minimized = !isMinimized;
+                        btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
+                        modal.style.maxHeight = isMinimized ? '85vh' : 'none';
                     };
                     document.getElementById("hideStoryMarcarTodosBtn").onclick = () => {
                     pageUsers.forEach(({ username }) => modalStates.set(username, true));
@@ -1384,6 +1423,7 @@
                     let html = `<h2>Contas Silenciadas</h2>`;
                     html += `
                         <div style="margin-bottom:10px;">
+                            <button id="mutedMinimizarBtn" style="background:#f39c12;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Minimizar</button>
                             <button id="mutedFecharBtn" style="background:#e74c3c;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Fechar</button>
                             <button id="mutedMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
                             <button id="mutedDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
@@ -1425,6 +1465,24 @@
                     document.body.appendChild(div);
 
                     document.getElementById("mutedFecharBtn").onclick = () => { div.remove(); modalAbertoMuted = false; };
+                    document.getElementById("mutedMinimizarBtn").onclick = () => {
+                        const modal = document.getElementById('allMutedAccountsDiv');
+                        const contentToToggle = [
+                            modal.querySelector('input[type="text"]'),
+                            modal.querySelector('ul'),
+                            modal.querySelector('#paginationControls')
+                        ].filter(Boolean);
+
+                        const btn = document.getElementById('mutedMinimizarBtn');
+                        const isMinimized = modal.dataset.minimized === 'true';
+
+                        contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+                        
+                        modal.dataset.minimized = !isMinimized;
+                        btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
+                        modal.style.maxHeight = isMinimized ? '85vh' : 'none';
+                    };
+
                     document.getElementById("mutedMarcarTodosBtn").onclick = () => {
                         document.querySelectorAll("#mutedList .mutedCheckbox").forEach(cb => { cb.checked = true; modalStates.set(cb.dataset.username, true); });
                     };
@@ -2019,6 +2077,7 @@
                                 div.innerHTML = ` 
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <h2>Seguindo</h2>
+                                        <button id="seguindoMinimizarBtn" style="background:#f39c12;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Minimizar</button>
                                         <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end;">
                                             <button id="atualizarSeguindoBtn" title="Atualizar Dados" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">🔄️</button>
                                             <button id="silenciarSeguindoBtn" style="background: #8e44ad; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Silenciar/Reativar</button>
@@ -2039,6 +2098,23 @@
                                     processoCancelado = true;
                                     document.getElementById("progressBar")?.remove();
                                     div.remove();
+                                });
+
+                                document.getElementById("seguindoMinimizarBtn").addEventListener("click", () => {
+                                    const modal = document.getElementById('seguindoModal');
+                                    const contentToToggle = [
+                                        modal.querySelector('input[type="text"]').parentElement, // div da pesquisa
+                                        modal.querySelector('#statusSeguindo'),
+                                        modal.querySelector('#tabelaSeguindoContainer')
+                                    ].filter(Boolean);
+
+                                    const btn = document.getElementById('seguindoMinimizarBtn');
+                                    const isMinimized = modal.dataset.minimized === 'true';
+
+                                    contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+                                    modal.dataset.minimized = !isMinimized;
+                                    btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
+                                    modal.style.maxHeight = isMinimized ? '90vh' : 'none';
                                 });
 
                                 document.getElementById("atualizarSeguindoBtn").addEventListener("click", () => {

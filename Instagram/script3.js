@@ -382,6 +382,42 @@
                                 if (bar) bar.remove();
                             }
 
+                            /**
+                             * Cria uma barra de progresso com um botão de cancelar.
+                             * @param {function} onCancel - Callback a ser executado quando o botão de cancelar é clicado.
+                             * @returns {object} - Um objeto com as funções { update, remove }.
+                             */
+                            function createCancellableProgressBar() {
+                                document.getElementById("cancellableProgressBar")?.remove();
+
+                                const bar = document.createElement("div");
+                                bar.id = "cancellableProgressBar";
+                                bar.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);width:80%;height:30px;background:#ccc;z-index:2147483647;color:black;font-weight:bold;font-size:14px;text-align:center;line-height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;";
+
+                                const fill = document.createElement("div");
+                                fill.style.cssText = "height:100%;width:0%;background:#4caf50;position:absolute;left:0;top:0;z-index:-1;";
+
+                                const text = document.createElement("div");
+                                text.style.position = "relative";
+
+                                const closeButton = document.createElement("button");
+                                closeButton.innerText = "Cancelar";
+                                closeButton.style.cssText = "background:red;color:white;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;";
+                                
+                                bar.appendChild(fill);
+                                bar.appendChild(text);
+                                bar.appendChild(closeButton);
+                                document.body.appendChild(bar);
+
+                                const update = (current, total, message = '') => {
+                                    const percent = total > 0 ? Math.min((current / total) * 100, 100) : 0;
+                                    fill.style.width = `${percent}%`;
+                                    text.innerText = `${message} ${Math.floor(percent)}% (${current}/${total})`;
+                                };
+
+                                return { bar, update, closeButton };
+                            }
+
                             document
                                 .getElementById("curtidasBtn")
                                 .addEventListener("click", (e) => {
@@ -791,47 +827,21 @@
                             return initialStates.get(username) !== checked;
                         });
                         if (changedUsers.length === 0) {
-                            alert("Nenhuma alteração para aplicar.");
+                            alert("Nenhuma alteração para aplicar."); 
                             isApplyingChanges = false;
                             return;
                         }
-                        let aplicarProgressBar = null;
-                        let aplicarProgressFill = null;
-                        let aplicarProgressText = null;
-                        let aplicarCloseButton = null;
-                        function updateAplicarProgressBar(current, total) {
-                            if (!aplicarProgressBar) {
-                                aplicarProgressBar = document.createElement("div");
-                                aplicarProgressBar.id = "aplicarProgressBar";
-                                aplicarProgressBar.style.cssText =
-                                    "position:fixed;top:20px;left:50%;transform:translateX(-50%);width:80%;height:30px;background:#ccc;z-index:9999;color:black;font-weight:bold;font-size:14px;text-align:center;line-height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;";
-                                aplicarProgressFill = document.createElement("div");
-                                aplicarProgressFill.id = "aplicarProgressFill";
-                                aplicarProgressFill.style.cssText =
-                                    "height:100%;width:0%;background:#4caf50;position:absolute;left:0;top:0;z-index:-1;";
-                                aplicarProgressText = document.createElement("div");
-                                aplicarProgressText.id = "aplicarProgressText";
-                                aplicarProgressText.style.position = "relative";
-                                aplicarProgressText.innerText = "0%";
-                                aplicarCloseButton = document.createElement("button");
-                                aplicarCloseButton.id = "aplicarProgressCloseBtn";
-                                aplicarCloseButton.innerText = "Fechar";
-                                aplicarCloseButton.style.cssText =
-                                    "background:red;color:white;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;";
-                                aplicarCloseButton.addEventListener("click", () => {
-                                    aplicarProgressBar.remove();
-                                    alert("Processo interrompido pelo usuário.");
-                                    isApplyingChanges = false;
-                                });
-                                aplicarProgressBar.appendChild(aplicarProgressFill);
-                                aplicarProgressBar.appendChild(aplicarProgressText);
-                                aplicarProgressBar.appendChild(aplicarCloseButton);
-                                document.body.appendChild(aplicarProgressBar);
-                            }
-                            const percent = Math.min((current / total) * 100, 100);
-                            aplicarProgressFill.style.width = percent + "%";
-                            aplicarProgressText.innerText = `${Math.floor(percent)}% (${current}/${total})`;
-                        }
+
+                        let cancelled = false;
+                        const { bar, update, closeButton } = createCancellableProgressBar();
+                        closeButton.onclick = () => {
+                            cancelled = true;
+                            isApplyingChanges = false;
+                            bar.remove();
+                            alert("Processo interrompido.");
+                        };
+                        const isCancelled = () => cancelled;
+
                         if (window.location.pathname !== "/accounts/close_friends/") {
                             history.pushState(null, null, "/accounts/close_friends/");
                             window.dispatchEvent(new Event("popstate"));
@@ -865,18 +875,16 @@
                             });
                         }
                         for (let i = 0; i < changedUsers.length; i++) {
-                            if (!isApplyingChanges) break;
-                            updateAplicarProgressBar(i, changedUsers.length);
+                            if (isCancelled()) break;
+                            update(i + 1, changedUsers.length, "Aplicando alterações:");
                             const [username, isChecked] = changedUsers[i];
                             await toggleOfficialCheckbox(username);
                             await new Promise(resolve => setTimeout(resolve, 2000));
                             // Atualiza o estado inicial para o próximo "Aplicar"
                             initialStates.set(username, isChecked);
                         }
-                        updateAplicarProgressBar(changedUsers.length, changedUsers.length);
-                        if (aplicarProgressBar) {
-                            aplicarProgressBar.remove();
-                        }
+                        
+                        bar.remove();
                         isApplyingChanges = false;
                     };
 
@@ -1178,43 +1186,17 @@
                             isApplyingChangesStory = false;
                             return;
                         }
-                        let aplicarProgressBar = null;
-                        let aplicarProgressFill = null;
-                        let aplicarProgressText = null;
-                        let aplicarCloseButton = null;
-                        function updateAplicarProgressBar(current, total) {
-                            if (!aplicarProgressBar) {
-                                aplicarProgressBar = document.createElement("div");
-                                aplicarProgressBar.id = "aplicarProgressBarStory";
-                                aplicarProgressBar.style.cssText =
-                                    "position:fixed;top:20px;left:50%;transform:translateX(-50%);width:80%;height:30px;background:#ccc;z-index:9999;color:black;font-weight:bold;font-size:14px;text-align:center;line-height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;";
-                                aplicarProgressFill = document.createElement("div");
-                                aplicarProgressFill.id = "aplicarProgressFillStory";
-                                aplicarProgressFill.style.cssText =
-                                    "height:100%;width:0%;background:#4caf50;position:absolute;left:0;top:0;z-index:-1;";
-                                aplicarProgressText = document.createElement("div");
-                                aplicarProgressText.id = "aplicarProgressTextStory";
-                                aplicarProgressText.style.position = "relative";
-                                aplicarProgressText.innerText = "0%";
-                                aplicarCloseButton = document.createElement("button");
-                                aplicarCloseButton.id = "aplicarProgressCloseBtnStory";
-                                aplicarCloseButton.innerText = "Fechar";
-                                aplicarCloseButton.style.cssText =
-                                    "background:red;color:white;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;";
-                                aplicarCloseButton.addEventListener("click", () => {
-                                    aplicarProgressBar.remove();
-                                    alert("Processo interrompido pelo usuário.");
-                                    isApplyingChangesStory = false;
-                                });
-                                aplicarProgressBar.appendChild(aplicarProgressFill);
-                                aplicarProgressBar.appendChild(aplicarProgressText);
-                                aplicarProgressBar.appendChild(aplicarCloseButton);
-                                document.body.appendChild(aplicarProgressBar);
-                            }
-                            const percent = Math.min((current / total) * 100, 100);
-                            aplicarProgressFill.style.width = percent + "%";
-                            aplicarProgressText.innerText = `${Math.floor(percent)}% (${current}/${total})`;
-                        }
+
+                let cancelled = false;
+                const { bar, update, closeButton } = createCancellableProgressBar();
+                closeButton.onclick = () => {
+                    cancelled = true;
+                    isApplyingChangesStory = false;
+                    bar.remove();
+                    alert("Processo interrompido.");
+                };
+                const isCancelled = () => cancelled;
+
                         if (window.location.pathname !== "/accounts/hide_story_and_live_from/") {
                             history.pushState(null, null, "/accounts/hide_story_and_live_from/");
                             window.dispatchEvent(new Event("popstate"));
@@ -1248,18 +1230,15 @@
                             });
                         }
                         for (let i = 0; i < changedUsers.length; i++) {
-                            if (!isApplyingChangesStory) break;
-                            updateAplicarProgressBar(i, changedUsers.length);
+                    if (isCancelled()) break;
+                    update(i + 1, changedUsers.length, "Aplicando alterações:");
                             await toggleOfficialCheckbox(changedUsers[i].dataset.username);
                             await new Promise(resolve => setTimeout(resolve, 2000));
                             officialStates.set(changedUsers[i].dataset.username, changedUsers[i].checked);
                             // Redesenha a página atual para refletir a mudança em tempo real
                             renderPage(currentPage);
                         }
-                        updateAplicarProgressBar(changedUsers.length, changedUsers.length);
-                        if (aplicarProgressBar) {
-                            aplicarProgressBar.remove();
-                        }
+                bar.remove();
                         isApplyingChangesStory = false;
                     };
                     let isApplyingChangesStory = false;
@@ -1310,22 +1289,21 @@
                     let noNewUsersCount = 0;
                     const maxIdleCount = 3; // Parar após 3 tentativas sem novos usuários (3 segundos)
 
-                    // --- Lógica da Barra de Progresso ---
-                    let bar = document.createElement("div");
-                    bar.id = "mutedProgressBar";
-                    bar.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);width:80%;height:30px;background:#ccc;z-index:10001;color:black;font-weight:bold;font-size:14px;text-align:center;line-height:30px;";
-                    const text = document.createElement("div");
-                    text.style.position = "relative";
-                    text.innerText = "Buscando e rolando a lista de contas silenciadas...";
-                    bar.appendChild(text);
-                    document.body.appendChild(bar);
-                    // --- Fim da lógica da Barra de Progresso ---
+                    let cancelled = false;
+                    const { bar, update, closeButton } = createCancellableProgressBar();
+                    closeButton.onclick = () => {
+                        cancelled = true;
+                        bar.remove();
+                        finishExtraction();
+                    };
+                    update(0, 0, "Buscando e rolando a lista de contas silenciadas...");
 
                     function finishExtraction() {
                         clearInterval(scrollInterval);
                         if (bar) bar.remove();
                         console.log(`Extração finalizada. Total de ${users.size} usuários encontrados.`);
-                        resolve(Array.from(users.values()));
+                        // Se foi cancelado, retorna uma lista vazia para não abrir o modal.
+                        resolve(cancelled ? [] : Array.from(users.values()));
                     }
 
                     function performScrollAndExtract() {
@@ -1352,7 +1330,7 @@
                             }
                         });
 
-                        text.innerText = `Encontrado(s) ${users.size} usuário(s)... Rolando...`;
+                        update(users.size, users.size, `Encontrado(s) ${users.size} usuário(s)... Rolando...`);
 
                         // Lógica de parada: se não encontrar novos usuários por um tempo, para.
                         if (users.size === initialUserCount) {
@@ -1537,31 +1515,21 @@
             }
 
             async function unmuteUsers(usersToUnmute, callback, toggleMode = false) {
-                let progressBar, progressFill, progressText;
-
-                function updateProgressBar(current, total) {
-                    if (!progressBar) {
-                        progressBar = document.createElement("div");
-                        progressBar.id = "unmuteProgressBar";
-                        progressBar.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);width:80%;height:30px;background:#ccc;z-index:2147483647;color:black;font-weight:bold;font-size:14px;text-align:center;line-height:30px;";
-                        progressFill = document.createElement("div");
-                        progressFill.style.cssText = "height:100%;width:0%;background:#8e44ad;position:absolute;left:0;top:0;z-index:-1;";
-                        progressText = document.createElement("div");
-                        progressText.style.position = "relative";
-                        progressBar.appendChild(progressFill);
-                        progressBar.appendChild(progressText);
-                        document.body.appendChild(progressBar);
-                    }
-                    const percent = Math.min((current / total) * 100, 100);
-                    progressFill.style.width = percent + "%";
-                    progressText.innerText = `Reativando som: ${current} de ${total}`;
-                }
+                let cancelled = false;
+                const { bar, update, closeButton } = createCancellableProgressBar();
+                closeButton.onclick = () => {
+                    cancelled = true;
+                    bar.remove();
+                    alert("Processo interrompido.");
+                };
+                const isCancelled = () => cancelled;
 
                 const originalPath = window.location.pathname;
 
                 for (let i = 0; i < usersToUnmute.length; i++) {
+                    if (isCancelled()) break;
                     const username = usersToUnmute[i];
-                    updateProgressBar(i + 1, usersToUnmute.length);
+                    update(i + 1, usersToUnmute.length, toggleMode ? "Alterando status de silenciar:" : "Reativando som:");
 
                     // 1. Navegar para o perfil do usuário
                     history.pushState(null, null, `/${username}/`);
@@ -1671,9 +1639,7 @@
                     }
                 }
 
-                if (progressBar) {
-                    progressBar.remove();
-                }
+                bar.remove();
 
                 // Retorna para a página original de contas silenciadas
                 history.pushState(null, null, originalPath);
@@ -2720,29 +2686,19 @@
 
                         async function performActionOnProfile(users, menuTexts, callback) {
                             const originalPath = window.location.pathname;
-                            let progressBar, progressFill, progressText;
-
-                            function updateProgressBar(current, total) {
-                                if (!progressBar) {
-                                    progressBar = document.createElement("div");
-                                    progressBar.id = "actionProgressBar";
-                                    progressBar.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);width:80%;height:30px;background:#ccc;z-index:2147483647;color:black;font-weight:bold;font-size:14px;text-align:center;line-height:30px;";
-                                    progressFill = document.createElement("div");
-                                    progressFill.style.cssText = "height:100%;width:0%;background:#4caf50;position:absolute;left:0;top:0;z-index:-1;";
-                                    progressText = document.createElement("div");
-                                    progressText.style.position = "relative";
-                                    progressBar.appendChild(progressFill);
-                                    progressBar.appendChild(progressText);
-                                    document.body.appendChild(progressBar);
-                                }
-                                const percent = Math.min((current / total) * 100, 100);
-                                progressFill.style.width = percent + "%";
-                                progressText.innerText = `Processando: ${current} de ${total}`;
-                            }
+                            let cancelled = false;
+                            const { bar, update, closeButton } = createCancellableProgressBar();
+                            closeButton.onclick = () => {
+                                cancelled = true;
+                                bar.remove();
+                                alert("Processo interrompido.");
+                            };
+                            const isCancelled = () => cancelled;
 
                             for (let i = 0; i < users.length; i++) {
+                                if (isCancelled()) break;
                                 const username = users[i];
-                                updateProgressBar(i + 1, users.length);
+                                update(i + 1, users.length, "Processando:");
 
                                 // 1. Navegar para o perfil do usuário
                                 history.pushState(null, null, `/${username}/`);
@@ -2780,7 +2736,7 @@
                                 await new Promise(resolve => setTimeout(resolve, 2000)); // Pausa antes do próximo
                             }
 
-                            if (progressBar) progressBar.remove();
+                            bar.remove();
 
                             // Retorna para a página original
                             history.pushState(null, null, originalPath);
@@ -2796,35 +2752,21 @@
 
                             async function toggleListMembership(users, pageUrl, cacheKey, callback) {
                                 const originalPath = window.location.pathname;
-                                let progressBar, progressFill, progressText;
-
-                                function updateProgressBar(current, total) {
-                                    if (!progressBar) {
-                                        progressBar = document.createElement("div");
-                                        progressBar.id = "actionProgressBar";
-                                        progressBar.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);width:80%;height:30px;background:#ccc;z-index:2147483647;color:black;font-weight:bold;font-size:14px;text-align:center;line-height:30px;";
-                                        progressFill = document.createElement("div");
-                                        progressFill.style.cssText = "height:100%;width:0%;background:#4caf50;position:absolute;left:0;top:0;z-index:-1;";
-                                        progressText = document.createElement("div");
-                                        progressText.style.position = "relative";
-                                        progressBar.appendChild(progressFill);
-                                        progressBar.appendChild(progressText);
-                                        document.body.appendChild(progressBar);
-                                    }
-                                    const percent = Math.min((current / total) * 100, 100);
-                                    progressFill.style.width = percent + "%";
-                                    progressText.innerText = `Processando: ${current} de ${total}`;
-                                }
+                                let cancelled = false;
+                                const { bar, update, closeButton } = createCancellableProgressBar();
+                                closeButton.onclick = () => {
+                                    cancelled = true;
+                                    bar.remove();
+                                    alert("Processo interrompido.");
+                                };
+                                const isCancelled = () => cancelled;
 
                                 // Navega para a página correta
                                 history.pushState(null, null, pageUrl);
                                 window.dispatchEvent(new Event("popstate"));
                                 await new Promise(r => setTimeout(r, 3000));
 
-                                for (let i = 0; i < users.length; i++) {
-                                    const username = users[i];
-                                    updateProgressBar(i + 1, users.length);
-
+                                for (let i = 0; i < users.length; i++) { if (isCancelled()) break; const username = users[i]; update(i + 1, users.length, "Processando:");
                                     // A lógica para encontrar e clicar no checkbox é a mesma para CF e Hide Story
                                     const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
                                     let found = false;
@@ -2845,7 +2787,7 @@
                                     await new Promise(r => setTimeout(r, 1500)); // Pausa entre as ações
                                 }
 
-                                if (progressBar) progressBar.remove();
+                                bar.remove();
 
                                 // Retorna para a página original
                                 history.pushState(null, null, originalPath);

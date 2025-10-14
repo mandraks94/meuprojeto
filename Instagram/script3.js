@@ -1,12 +1,11 @@
-        // ==UserScript==
-        // @name         Instagram Tools
-        // @namespace    http://tampermonkey.net/
-        // @version      1.0
-        // @description  Instagram automation tools
-        // @author       You
-        // @match        https://www.instagram.com/*
-        // @grant        none1111111111
-        // ==/UserScript==
+// ==UserScript==
+// @name         Instagram Tools
+// @description  Adds download buttons to Instagram stories
+// @author       You
+// @version      1.0
+// @match        https://www.instagram.com/*
+// @grant        none
+// ==/UserScript==
 
         (function() {
             'use strict';
@@ -115,6 +114,14 @@
                                     .dark-mode .submenu-modal span, .dark-mode .submenu-modal th, .dark-mode .submenu-modal td, .dark-mode .submenu-modal li span, .dark-mode .submenu-modal a, .dark-mode .submenu-modal label, .dark-mode .submenu-modal input[type="file"] {
                                         color: white !important;
                                     }
+                                    .menu-item-button {
+                                        background: #f8f9fa; border: 1px solid #dbdbdb; padding: 10px; border-radius: 8px; cursor: pointer; text-align: left; font-size: 16px; color: black;
+                                    }
+                                    .dark-mode #reelsSubmenuModal .menu-item-button {
+                                        background: #262626 !important;
+                                        color: white !important;
+                                        border-color: #555 !important;
+                                    }
                                     .tab-container {
                                         display: flex;
                                         border-bottom: 1px solid #dbdbdb;
@@ -185,6 +192,10 @@
                                 </div>
 
                                 <div class="menu-item">
+                                    <button id="reelsMenuBtn">📹</button>
+                                    <span>Menu de Reels</span>
+                                </div>
+                                <div class="menu-item">
                                     <button id="baixarStoryBtn">⬇️</button>
                                     <span>Baixar Story</span>
                                 </div>
@@ -208,6 +219,9 @@
                             let isUnfollowing = false; // Flag para prevenir múltiplas execuções
                             let currentExtraction = ''; // Para rastrear se é seguidores ou seguindo
                             let isDarkMode = false;
+                            let isReelsScrolling = false;
+                            let currentVideoEndedListener = null;
+                            let reelsScrollInterval = null;
 
                             // Cache global para listas de usuários, para evitar buscas repetidas
                             const userListCache = {
@@ -462,6 +476,11 @@
                 } else {
                     abrirModalContasSilenciadas();
                 }
+            });
+
+            // --- NOVO MENU: REELS ---
+            document.getElementById("reelsMenuBtn").addEventListener("click", () => {
+                abrirModalReels();
             });
             document.getElementById("baixarStoryBtn").addEventListener("click", () => {
                 baixarStoryAtual();
@@ -1250,7 +1269,7 @@
                     const users = new Map(); // Usar Map para evitar duplicados e manter a ordem
                     let scrollInterval;
                     let noNewUsersCount = 0;
-                    const maxIdleCount = 10; // Parar após 10 tentativas sem novos usuários
+                    const maxIdleCount = 3; // Parar após 3 tentativas sem novos usuários (3 segundos)
 
                     // --- Lógica da Barra de Progresso ---
                     let bar = document.createElement("div");
@@ -1459,7 +1478,7 @@
                 renderPage(currentPage);
             }
 
-            async function unmuteUsers(usersToUnmute, callback) {
+            async function unmuteUsers(usersToUnmute, callback, toggleMode = false) {
                 let progressBar, progressFill, progressText;
 
                 function updateProgressBar(current, total) {
@@ -1516,80 +1535,82 @@
                     await new Promise(resolve => setTimeout(resolve, 2000)); // Espera o modal de silenciar abrir
 
                     // 4. Desativar os toggles de "Publicações" e "Stories"
-                    console.log('Procurando pelo diálogo de "Silenciar"...');
-                    const dialog = document.querySelector('div[role="dialog"]');
-                    if (dialog) {
-                        console.log('Diálogo de "Silenciar" encontrado.', dialog);
-                        const optionsToUnmute = ['Publicações', 'Posts', 'Stories'];
-                        let togglesClicked = 0;
+                    console.log('Procurando opções "Publicações" e "Stories" para alterar o estado...');
+                    const optionsToToggle = ['Publicações', 'Posts', 'Stories'];
+                    let togglesClicked = 0;
 
-                        for (const optionText of optionsToUnmute) {
-                            console.log(`--- Verificando opção: "${optionText}" ---`);
-                            // Encontra o elemento de texto ("Publicações" ou "Stories")
-                            const textElement = Array.from(dialog.querySelectorAll('span, div')).find(el => el.innerText.trim() === optionText);
-                            if (!textElement) {
-                                console.log(`Elemento de texto para "${optionText}" não encontrado.`);
-                                continue;
-                            }
-                            console.log(`Elemento de texto para "${optionText}" encontrado:`, textElement);
+                    for (const optionText of optionsToToggle) {
+                        // Encontra o elemento de texto ("Publicações" ou "Stories") em toda a página
+                        const textElement = Array.from(document.querySelectorAll('span, div')).find(el => el.innerText.trim() === optionText);
+                        
+                        if (!textElement) {
+                            console.log(`Elemento de texto para "${optionText}" não encontrado.`);
+                            continue;
+                        }
+                        console.log(`Elemento de texto para "${optionText}" encontrado:`, textElement);
 
-                            // Sobe na árvore DOM para encontrar o contêiner da linha inteira, que é clicável
-                            const rowContainer = textElement.closest('div[role="button"]');
-                            if (rowContainer) {
-                                console.log(`Contêiner clicável para "${optionText}" encontrado:`, rowContainer);
-                                // O Instagram usa um input[type="checkbox"] como indicador de estado.
-                                const stateIndicator = rowContainer.querySelector('input[type="checkbox"], div[role="switch"]');
+                        // Sobe na árvore DOM para encontrar o contêiner da linha inteira, que é clicável
+                        const rowContainer = textElement.closest('div[role="button"]');
+                        if (rowContainer) {
+                            console.log(`Contêiner clicável para "${optionText}" encontrado:`, rowContainer);
+                            const stateIndicator = rowContainer.querySelector('input[type="checkbox"], div[role="switch"]');
 
-                                if (stateIndicator) {
-                                    const isChecked = stateIndicator.getAttribute('aria-checked');
-                                    console.log(`Indicador de estado para "${optionText}" encontrado. Estado (aria-checked): ${isChecked}`);
-                                    if (isChecked === 'true') {
-                                        console.log(`Clicando para desativar o silenciamento de "${optionText}"...`);
-                                        simulateClick(rowContainer); // Clica na linha inteira
-                                        togglesClicked++;
-                                        await new Promise(resolve => setTimeout(resolve, 1000));
+                            if (stateIndicator) {
+                                const isChecked = stateIndicator.getAttribute('aria-checked');
+                                console.log(`Indicador de estado para "${optionText}" encontrado. Estado (aria-checked): ${isChecked}. Modo Toggle: ${toggleMode}`);
+
+                                if (toggleMode || isChecked === 'true') {
+                                    console.log(`Tentando alterar o estado de "${optionText}".`);
+                                    
+                                    // --- LÓGICA DE TESTE A/B ---
+                                    if (optionText === 'Publicações' || optionText === 'Posts') {
+                                        console.log(`Usando método 1 (clique no input) para "${optionText}".`);
+                                        simulateClick(stateIndicator, true);
+                                    } else if (optionText === 'Stories') {
+                                        console.log(`Usando método 2 (clique no container) para "${optionText}".`);
+                                        simulateClick(rowContainer);
                                     }
+                                    // --- FIM DA LÓGICA ---
+
+                                    await new Promise(resolve => setTimeout(resolve, 500)); // Pausa final
                                 } else {
-                                    console.warn(`Indicador de estado (checkbox/switch) não encontrado para "${optionText}".`);
+                                    console.log(`Estado de "${optionText}" já é 'false' e o modo toggle está desativado. Nenhuma ação necessária.`);
                                 }
                             } else {
-                                console.warn(`Contêiner clicável (div[role="button"]) não encontrado para a opção: "${optionText}".`);
+                                console.warn(`Indicador de estado (checkbox/switch) não encontrado para "${optionText}".`);
                             }
+                        } else {
+                            console.warn(`Contêiner clicável (div[role="button"]) não encontrado para a opção: "${optionText}".`);
                         }
-
-                        // 5. Clicar no botão para salvar/concluir
-                        console.log('Procurando pelo botão "Salvar" ou "Concluído"...');
-                        const doneButton = Array.from(dialog.querySelectorAll('button, div[role="button"]')).find(
-                            btn => {
-                                const buttonText = btn.innerText.trim();
-                                if (['Concluído', 'Done', 'Salvar', 'Save'].includes(buttonText)) return true;
-                                const innerDiv = btn.querySelector('div');
-                                if (innerDiv) {
-                                    const innerText = innerDiv.innerText.trim();
-                                    return ['Concluído', 'Done', 'Salvar', 'Save'].includes(innerText);
-                                }
-                                return false;
-                            }
-                        );
-                        
-                        if (doneButton) {
-                            console.log('Botão "Salvar/Concluído" encontrado. Clicando...', doneButton);
-                            simulateClick(doneButton);
-                            await new Promise(resolve => setTimeout(resolve, 1500));
-                        } else if (togglesClicked === 0) {
-                            // Se nenhum toggle foi clicado e não há botão "Concluído", fecha o modal para prosseguir
-                            const closeButton = dialog.querySelector('button[aria-label="Fechar"], button[aria-label="Close"]');
-                            if (closeButton) simulateClick(closeButton);
-                        }
-                    } else {
-                        console.error('ERRO: Diálogo de "Silenciar" não foi encontrado na página.');
                     }
 
-                    await new Promise(resolve => setTimeout(resolve, 2000)); // Espera final
+                    // 5. Clicar no botão "Salvar" se ele existir (desktop) ou aguardar se não existir (mobile).
+                    console.log('Procurando pelo botão "Salvar" ou "Concluído"...');
+                    const saveButton = Array.from(document.querySelectorAll('button, div[role="button"]')).find(
+                        btn => ['Salvar', 'Save', 'Concluído', 'Done'].includes(btn.innerText.trim())
+                    );
+
+                    if (saveButton) {
+                        console.log('Botão "Salvar" encontrado (Desktop). Clicando...', saveButton);
+                        simulateClick(saveButton);
+                        await new Promise(resolve => setTimeout(resolve, 2000)); // Pausa após clicar em salvar.
+                    } else {
+                        console.warn('Botão "Salvar" não encontrado (Mobile). A ação deve salvar automaticamente. Aguardando...');
+                        await new Promise(resolve => setTimeout(resolve, 3000)); // Pausa maior para mobile.
+                    }
 
                     // Remove a linha do modal para feedback visual imediato
                     const modalLi = document.querySelector(`#mutedList li input[data-username="${username}"]`);
                     if (modalLi) modalLi.closest('li').remove();
+
+                    // No mobile, o modal de silenciar pode não fechar sozinho. Clicamos em "Voltar".
+                    // O seletor foi melhorado para encontrar o botão que contém o SVG com o aria-label correto.
+                    const backButton = document.querySelector('button svg[aria-label="Voltar"], button svg[aria-label="Back"]')?.closest('button');
+                    if (backButton) {
+                        console.log("Botão 'Voltar' do mobile encontrado. Clicando para salvar a alteração...");
+                        simulateClick(backButton);
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Pausa extra após fechar o modal.
+                    }
                 }
 
                 if (progressBar) {
@@ -1607,12 +1628,15 @@
             let modalAbertoMuted = false;
                             // --- FIM DO MENU CONTAS SILENCIADAS ---
             
-            function simulateClick(element) {
+            function simulateClick(element, triggerChangeEvent = false) {
                 if (!element) return;
                 const dispatch = (event) => element.dispatchEvent(event);
                 dispatch(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
                 dispatch(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
                 dispatch(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                if (triggerChangeEvent) {
+                    dispatch(new Event('change', { bubbles: true }));
+                }
             }
 
 
@@ -2256,6 +2280,326 @@
                                 carregarSeguindo();
                             }
 
+                            // --- LÓGICA PARA O MENU DE REELS ---
+
+                            function abrirModalReels() {
+                                if (document.getElementById("reelsSubmenuModal")) return;
+
+                                const div = document.createElement("div");
+                                div.id = "reelsSubmenuModal";
+                                div.className = "submenu-modal";
+                                div.style.cssText = `
+                                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                    width: 90%; max-width: 400px; border: 1px solid #ccc;
+                                    border-radius: 10px; padding: 20px; z-index: 10000;
+                                `;
+                                div.innerHTML = `
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                                        <h2>Menu de Reels</h2>
+                                        <button id="fecharReelsSubmenuBtn" style="background: red; color: white; border: none; border-radius: 5px; padding: 5px 10px; cursor: pointer;">Fechar</button>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                                        <button id="analiseReelsBtn" class="menu-item-button">📊 Análise de Desempenho</button>
+                                        <button id="baixarReelAtualBtn" class="menu-item-button">⬇️ Baixar Reel Atual</button>
+                                        <button id="copiarLegendaReelBtn" class="menu-item-button">📋 Copiar Legenda</button>
+                                        <button id="rolagemReelsBtn" class="menu-item-button">▶️ Rolagem Automática</button>
+                                    </div>
+                                `;
+                                document.body.appendChild(div);
+
+                                document.getElementById("fecharReelsSubmenuBtn").onclick = () => div.remove();
+                                document.getElementById("analiseReelsBtn").onclick = () => {
+                                    div.remove();
+                                    iniciarAnaliseReels();
+                                };
+                                document.getElementById("baixarReelAtualBtn").onclick = () => {
+                                    baixarReelAtual();
+                                };
+                                document.getElementById("rolagemReelsBtn").onclick = () => {
+                                    toggleRolagemAutomaticaReels();
+                                };
+                            }
+
+                            function toggleRolagemAutomaticaReels() {
+                                if (!window.location.pathname.startsWith('/reels/')) {
+                                    alert("Esta função só pode ser usada na página de Reels.");
+                                    return;
+                                }
+
+                                isReelsScrolling = !isReelsScrolling;
+                                const reelsModal = document.getElementById("reelsSubmenuModal");
+                                const scrollBtn = reelsModal ? reelsModal.querySelector("#rolagemReelsBtn") : null;
+
+                                if (isReelsScrolling) {
+                                    console.log("Iniciando rolagem automática de Reels.");
+                                    if (scrollBtn) scrollBtn.innerHTML = "⏸️ Parar Rolagem";
+                                    startReelsAutoScroll();
+                                } else {
+                                    console.log("Parando rolagem automática de Reels.");
+                                    if (scrollBtn) scrollBtn.innerHTML = "▶️ Rolagem Automática";
+                                    stopReelsAutoScroll();
+                                }
+                            }
+
+                            function stopReelsAutoScroll() {
+                                isReelsScrolling = false;
+                                // Remove o listener de qualquer vídeo que possa tê-lo
+                                document.querySelectorAll('video[data-reels-scroller="true"]').forEach(video => {
+                                    if (video._timeUpdateListener) {
+                                        video.removeEventListener('timeupdate', video._timeUpdateListener);
+                                    }
+                                    video.removeAttribute('data-reels-scroller');
+                                });
+                                if (reelsScrollInterval) {
+                                    clearTimeout(reelsScrollInterval); // Limpa o timeout se houver
+                                    reelsScrollInterval = null;
+                                }
+                                console.log("Rolagem automática de Reels parada.");
+                            }
+
+                            function startReelsAutoScroll() {
+                                if (!isReelsScrolling) return;
+ 
+                                // Encontra o vídeo que está visível na tela
+                                const visibleVideo = Array.from(document.querySelectorAll('video')).find(v => {
+                                    const rect = v.getBoundingClientRect();
+                                    return rect.top >= 0 && rect.bottom <= window.innerHeight && v.readyState > 2;
+                                });
+ 
+                                // Se encontrou um vídeo e ele ainda não tem nosso listener
+                                if (visibleVideo && !visibleVideo.hasAttribute('data-reels-scroller')) {
+                                    visibleVideo.setAttribute('data-reels-scroller', 'true');
+ 
+                                    const timeUpdateListener = () => {
+                                        // Verifica se o vídeo está perto do fim (últimos 700ms)
+                                        if (visibleVideo.duration - visibleVideo.currentTime <= 0.7) {
+                                            console.log("Vídeo quase no fim, rolando para o próximo.");
+                                            
+                                            // Remove o listener para não disparar múltiplas vezes
+                                            visibleVideo.removeEventListener('timeupdate', timeUpdateListener);
+ 
+                                            // Lógica para encontrar o contêiner de rolagem dinamicamente
+                                            let scrollableContainer = visibleVideo.parentElement;
+                                            while (scrollableContainer) {
+                                                // O contêiner correto tem uma altura de rolagem maior que sua altura visível
+                                                if (scrollableContainer.scrollHeight > scrollableContainer.clientHeight) {
+                                                    break; // Encontrou!
+                                                }
+                                                scrollableContainer = scrollableContainer.parentElement;
+                                            }
+
+                                            if (scrollableContainer) {
+                                                console.log("Contêiner de rolagem encontrado. Rolando...");
+                                                // Rola o contêiner para baixo na altura de um reel (altura da janela)
+                                                scrollableContainer.scrollBy({
+                                                    top: scrollableContainer.clientHeight,
+                                                    left: 0,
+                                                    behavior: 'smooth'
+                                                });
+                                            } else {
+                                                console.warn("Contêiner de rolagem não encontrado. Usando fallback de rolagem da janela.");
+                                                // Fallback para o método antigo se a busca dinâmica falhar
+                                                window.scrollBy({
+                                                    top: window.innerHeight,
+                                                    left: 0,
+                                                    behavior: 'smooth'
+                                                });
+                                            }
+  
+                                            // Após a rolagem, chama a função novamente para encontrar o novo vídeo
+                                            // e adicionar o listener a ele.
+                                            setTimeout(startReelsAutoScroll, 2000); // Aguarda a animação de rolagem
+                                        }
+                                    };
+                                    visibleVideo._timeUpdateListener = timeUpdateListener;
+                                    visibleVideo.addEventListener('timeupdate', timeUpdateListener);
+                                } else {
+                                    // Se não encontrou um vídeo novo, tenta novamente em 1 segundo
+                                    reelsScrollInterval = setTimeout(startReelsAutoScroll, 1000);
+                                }
+                            }
+
+                            async function iniciarAnaliseReels() {
+                                const pathParts = window.location.pathname.split('/').filter(Boolean);
+                                const username = pathParts[0];
+                                const appID = '936619743392459';
+                                if (!username || (pathParts.length > 1 && !['followers', 'following'].includes(pathParts[1]))) {
+                                    alert("Por favor, vá para a sua página de perfil para usar esta função.");
+                                    return;
+                                }
+
+                                const statusModal = document.createElement("div");
+                                statusModal.id = "reelsAnalysisStatusModal";
+                                statusModal.className = "submenu-modal";
+                                statusModal.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 500px; border: 1px solid #ccc; border-radius: 10px; padding: 20px; z-index: 10001;`;
+                                statusModal.innerHTML = `<h2>Análise de Reels</h2><p id="reelsStatusText">Buscando informações do perfil...</p>`;
+                                document.body.appendChild(statusModal);
+
+                                const statusText = document.getElementById("reelsStatusText");
+
+                                try {
+                                    const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
+                                    const profileInfo = await profileInfoResponse.json();
+                                    const userId = profileInfo.data?.user?.id;
+                                    if (!userId) throw new Error("Não foi possível obter o ID do usuário.");
+
+                                    statusText.innerText = 'Buscando lista de Reels...';
+
+                                    const reelsList = [];
+                                    let nextMaxId = '';
+                                    let hasNextPage = true;
+
+                                    // O endpoint /api/v1/clips/user/ foi descontinuado. Usaremos GraphQL.
+                                    const queryHash = 'd4d88dc1500312af6f937f7b804c68c3'; // Hash para a query de Reels do usuário
+
+                                    while (hasNextPage) {
+                                        const variables = { "user_id": userId, "first": 50, "after": nextMaxId };
+                                        const url = `https://www.instagram.com/graphql/query/?query_hash=${queryHash}&variables=${encodeURIComponent(JSON.stringify(variables))}`;
+                                        
+                                        const response = await fetch(url, { headers: { 'X-IG-App-ID': appID } });
+                                        if (!response.ok) throw new Error(`A resposta da rede não foi 'ok'. Status: ${response.status}`);
+                                        const data = await response.json();
+
+                                        const clipsData = data.data?.user?.edge_clips;
+                                        if (clipsData?.edges) {
+                                            clipsData.edges.forEach(({ node: item }) => {
+                                                reelsList.push({
+                                                    id: item.id,
+                                                    thumbnail: item.image_versions2.candidates[0].url,
+                                                    views: item.play_count || 0,
+                                                    likes: item.like_count || 0,
+                                                    comments: item.comment_count || 0,
+                                                    date: new Date(item.taken_at * 1000),
+                                                    url: `https://www.instagram.com/reel/${item.code}/`
+                                                });
+                                            });
+                                            statusText.innerText = `Encontrados ${reelsList.length} Reels...`;
+                                        }
+
+                                        hasNextPage = clipsData?.page_info?.has_next_page || false;
+                                        nextMaxId = clipsData?.page_info?.end_cursor || '';
+                                        if (hasNextPage) await new Promise(r => setTimeout(r, 300));
+                                    }
+
+                                    statusModal.remove();
+                                    abrirModalTabelaReels(reelsList);
+
+                                } catch (error) {
+                                    console.error("Erro na análise de Reels:", error);
+                                    statusText.innerText = `Erro: ${error.message}. Tente novamente.`;
+                                    setTimeout(() => statusModal.remove(), 3000);
+                                }
+                            }
+
+                            function abrirModalTabelaReels(reelsList) {
+                                const div = document.createElement("div");
+                                div.id = "reelsTableModal";
+                                div.className = "submenu-modal";
+                                div.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 900px; max-height: 90vh; border: 1px solid #ccc; border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;`;
+
+                                let sortConfig = { key: 'date', direction: 'descending' };
+
+                                const renderTable = () => {
+                                    const sortedList = [...reelsList].sort((a, b) => {
+                                        const valA = a[sortConfig.key];
+                                        const valB = b[sortConfig.key];
+                                        if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+                                        if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
+                                        return 0;
+                                    });
+
+                                    const getSortArrow = (key) => sortConfig.key === key ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '';
+
+                                    let tableHtml = `
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <h2>Análise de Desempenho dos Reels</h2>
+                                            <button id="fecharReelsTableBtn" style="background: red; color: white; border: none; border-radius: 5px; padding: 5px 10px; cursor: pointer;">Fechar</button>
+                                        </div>
+                                        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                                            <thead style="cursor: pointer;">
+                                                <tr style="text-align: left; border-bottom: 2px solid #dbdbdb;">
+                                                    <th style="padding: 8px;">Reel</th>
+                                                    <th style="padding: 8px; text-align: center;" data-sort-key="views">Visualizações ${getSortArrow('views')}</th>
+                                                    <th style="padding: 8px; text-align: center;" data-sort-key="likes">Curtidas ${getSortArrow('likes')}</th>
+                                                    <th style="padding: 8px; text-align: center;" data-sort-key="comments">Comentários ${getSortArrow('comments')}</th>
+                                                    <th style="padding: 8px; text-align: right;" data-sort-key="date">Data ${getSortArrow('date')}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>`;
+
+                                    sortedList.forEach(reel => {
+                                        tableHtml += `
+                                            <tr style="border-bottom: 1px solid #dbdbdb;">
+                                                <td style="padding: 8px; display:flex; align-items:center; gap:10px;">
+                                                    <a href="${reel.url}" target="_blank"><img src="${reel.thumbnail}" alt="Reel Thumbnail" style="width:50px; height:90px; object-fit:cover; border-radius:4px;"></a>
+                                                </td>
+                                                <td style="text-align: center; font-weight: 600;">${reel.views.toLocaleString('pt-BR')}</td>
+                                                <td style="text-align: center;">${reel.likes.toLocaleString('pt-BR')}</td>
+                                                <td style="text-align: center;">${reel.comments.toLocaleString('pt-BR')}</td>
+                                                <td style="text-align: right;">${reel.date.toLocaleDateString('pt-BR')}</td>
+                                            </tr>`;
+                                    });
+
+                                    tableHtml += `</tbody></table>`;
+                                    div.innerHTML = tableHtml;
+
+                                    document.querySelectorAll('#reelsTableModal th[data-sort-key]').forEach(th => {
+                                        th.onclick = () => {
+                                            const key = th.dataset.sortKey;
+                                            if (sortConfig.key === key) {
+                                                sortConfig.direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+                                            } else {
+                                                sortConfig = { key, direction: 'descending' };
+                                            }
+                                            renderTable();
+                                        };
+                                    });
+
+                                    document.getElementById("fecharReelsTableBtn").onclick = () => div.remove();
+                                };
+
+                                document.body.appendChild(div);
+                                renderTable();
+                            }
+
+                            function baixarReelAtual() {
+                                // Função auxiliar para verificar se um elemento está visível na tela
+                                const isElementVisible = (el) => {
+                                    if (!el) return false;
+                                    const rect = el.getBoundingClientRect();
+                                    const viewHeight = window.innerHeight || document.documentElement.clientHeight;
+                                    const viewWidth = window.innerWidth || document.documentElement.clientWidth;
+                                    // Considera visível se estiver dentro da viewport e tiver dimensões
+                                    return (
+                                        rect.top >= 0 &&
+                                        rect.left >= 0 &&
+                                        rect.bottom <= viewHeight &&
+                                        rect.right <= viewWidth &&
+                                        rect.width > 0 &&
+                                        rect.height > 0
+                                    );
+                                };
+
+                                // Encontra todos os vídeos na página e filtra pelo que está visível
+                                const videos = Array.from(document.querySelectorAll('video'));
+                                const visibleVideo = videos.find(isElementVisible);
+
+                                if (visibleVideo && visibleVideo.src) {
+                                    console.log("Vídeo do Reel encontrado:", visibleVideo.src);
+
+                                    // Tenta extrair o nome de usuário para o nome do arquivo
+                                    const reelContainer = visibleVideo.closest('article, div[role="dialog"]');
+                                    let username = 'reel';
+                                    if (reelContainer) {
+                                        const userLink = reelContainer.querySelector('header a[href^="/"]');
+                                        if (userLink) username = userLink.href.split('/')[1];
+                                    }
+                                    downloadMedia(visibleVideo.src, `reel_${username}_${Date.now()}.mp4`);
+                                } else {
+                                    alert('Nenhum vídeo de Reel visível encontrado. Abra o Reel que deseja baixar e tente novamente.');
+                                }
+                            }
+
                             async function handleActionOnSelected(selectedUsers, actionType) {
                                 if (selectedUsers.length === 0) {
                                     alert("Nenhum usuário selecionado.");
@@ -2266,7 +2610,7 @@
                                     mute: {
                                         buttonId: 'silenciarSeguindoBtn',
                                         text: 'Silenciar/Reativar',
-                                        func: (users, cb) => unmuteUsers(users, cb, true) // `true` para modo toggle
+                                        func: (users, cb) => unmuteUsers(users, cb, true) // Passa `true` para ativar o modo toggle
                                     },
                                     closeFriends: {
                                         buttonId: 'closeFriendsSeguindoBtn',
@@ -2868,10 +3212,21 @@
                 } // Esta chave fecha o if (window.location.href.includes("instagram.com"))
             }
 
-            // Aguarda o DOM estar pronto para iniciar o script
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', initScript);
-            } else {
-                setTimeout(initScript, 1000); // Fallback para garantir a execução
-            }
-        })();
+            // Lógica de inicialização mais robusta para SPAs como o Instagram
+            const observer = new MutationObserver((mutations, obs) => {
+                // Procura por um elemento principal que sempre existe no Instagram logado
+                const mainContainer = document.querySelector('main[role="main"], div[data-main-nav="true"]');
+                if (mainContainer) {
+                    console.log("Elemento principal do Instagram encontrado, iniciando o script.");
+                    initScript();
+                    obs.disconnect(); // Para de observar após a inicialização para economizar recursos
+                }
+            });
+
+            // Começa a observar o corpo do documento por mudanças
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+
+        })(); 

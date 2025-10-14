@@ -2611,17 +2611,19 @@
                                         buttonId: 'silenciarSeguindoBtn',
                                         text: 'Silenciar/Reativar',
                                         func: (users, cb) => unmuteUsers(users, cb, true) // Passa `true` para ativar o modo toggle
-                                    },
-                                    closeFriends: {
-                                        buttonId: 'closeFriendsSeguindoBtn',
-                                        text: 'Melhores Amigos',
-                                        func: (users, cb) => toggleListMembership(users, '/accounts/close_friends/', 'closeFriends', cb)
-                                    },
-                                    hideStory: {
-                                        buttonId: 'hideStorySeguindoBtn',
-                                        text: 'Ocultar Story',
-                                        func: (users, cb) => toggleListMembership(users, '/accounts/hide_story_and_live_from/', 'hiddenStory', cb)
-                                    }
+                                }, 
+                                closeFriends: { 
+                                    buttonId: 'closeFriendsSeguindoBtn', 
+                                    text: 'Melhores Amigos', 
+                                    // Nova função que age no perfil individual 
+                                    func: (users, cb) => performActionOnProfile(users, ['Adicionar à lista Amigos Próximos', 'Amigo Próximo'], cb) 
+                                }, 
+                                hideStory: { 
+                                    buttonId: 'hideStorySeguindoBtn', 
+                                    text: 'Ocultar Story', 
+                                    // Nova função que age no perfil individual 
+                                    func: (users, cb) => performActionOnProfile(users, ['Ocultar seu story', 'Reativar seu story'], cb) 
+                                } 
                                 };
 
                                 const config = actionConfig[actionType];
@@ -2639,6 +2641,82 @@
                                     document.getElementById("atualizarSeguindoBtn").click();
                                 });
                             }
+
+                        async function performActionOnProfile(users, menuTexts, callback) {
+                            const originalPath = window.location.pathname;
+                            let progressBar, progressFill, progressText;
+
+                            function updateProgressBar(current, total) {
+                                if (!progressBar) {
+                                    progressBar = document.createElement("div");
+                                    progressBar.id = "actionProgressBar";
+                                    progressBar.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);width:80%;height:30px;background:#ccc;z-index:2147483647;color:black;font-weight:bold;font-size:14px;text-align:center;line-height:30px;";
+                                    progressFill = document.createElement("div");
+                                    progressFill.style.cssText = "height:100%;width:0%;background:#4caf50;position:absolute;left:0;top:0;z-index:-1;";
+                                    progressText = document.createElement("div");
+                                    progressText.style.position = "relative";
+                                    progressBar.appendChild(progressFill);
+                                    progressBar.appendChild(progressText);
+                                    document.body.appendChild(progressBar);
+                                }
+                                const percent = Math.min((current / total) * 100, 100);
+                                progressFill.style.width = percent + "%";
+                                progressText.innerText = `Processando: ${current} de ${total}`;
+                            }
+
+                            for (let i = 0; i < users.length; i++) {
+                                const username = users[i];
+                                updateProgressBar(i + 1, users.length);
+
+                                // 1. Navegar para o perfil do usuário
+                                history.pushState(null, null, `/${username}/`);
+                                window.dispatchEvent(new Event("popstate"));
+                                await new Promise(resolve => setTimeout(resolve, 4000)); // Espera o perfil carregar
+
+                                // 2. Clicar no botão "Seguindo"
+                                const followingButton = Array.from(document.querySelectorAll('button, div[role="button"]')).find(el => ['Seguindo', 'Following'].includes(el.innerText));
+                                if (!followingButton) {
+                                    console.warn(`Botão 'Seguindo' não encontrado para ${username}. Pulando.`);
+                                    continue;
+                                }
+                                simulateClick(followingButton);
+                                await new Promise(resolve => setTimeout(resolve, 1500)); // Espera o menu dropdown aparecer
+
+                                // 3. Clicar na opção desejada (ex: "Adicionar aos melhores amigos")
+                                const actionOption = Array.from(document.querySelectorAll('div[role="button"], div[role="menuitem"]')).find(el => {
+                                    const span = el.querySelector('span');
+                                    // Procura por qualquer um dos textos fornecidos (para adicionar ou remover)
+                                    if (span) {
+                                        const innerText = span.innerText.trim();
+                                        return menuTexts.includes(innerText);
+                                    }
+                                    return false;
+                                });
+
+                                if (actionOption) {
+                                    simulateClick(actionOption);
+                                    console.log(`Ação '${actionOption.innerText}' executada para ${username}.`);
+                                } else {
+                                    console.warn(`Opção de ação não encontrada para ${username}. Textos procurados: ${menuTexts.join(', ')}`);
+                                    // Tenta fechar o menu se a opção não foi encontrada
+                                    simulateClick(followingButton);
+                                }
+                                await new Promise(resolve => setTimeout(resolve, 2000)); // Pausa antes do próximo
+                            }
+
+                            if (progressBar) progressBar.remove();
+
+                            // Retorna para a página original
+                            history.pushState(null, null, originalPath);
+                            window.dispatchEvent(new Event("popstate"));
+                            await new Promise(r => setTimeout(r, 1000));
+
+                            // Limpa os caches relevantes para forçar a recarga na próxima vez
+                            userListCache.closeFriends = null;
+                            userListCache.hiddenStory = null;
+
+                            if (callback) callback();
+                        }
 
                             async function toggleListMembership(users, pageUrl, cacheKey, callback) {
                                 const originalPath = window.location.pathname;

@@ -2621,8 +2621,8 @@
                                 hideStory: { 
                                     buttonId: 'hideStorySeguindoBtn', 
                                     text: 'Ocultar Story', 
-                                    // Nova função que age no perfil individual 
-                                    func: (users, cb) => performActionOnProfile(users, ['Ocultar seu story', 'Reativar seu story'], cb) 
+                                    // Revertido para o método original, que navega para a página de lista
+                                    func: (users, cb) => toggleListMembership(users, '/accounts/hide_story_and_live_from/', 'hiddenStory', cb)
                                 } 
                                 };
 

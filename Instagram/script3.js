@@ -212,6 +212,10 @@
                                 menu.style.display = menu.style.display === "flex" ? "none" : "flex";
                             });
 
+                            function closeMenu() {
+                                menu.style.display = 'none';
+                            }
+
                             // Functionality for buttons
                             let usernames = new Set();
                             let downloadStarted = false;
@@ -455,15 +459,18 @@
                             });
 
                             document.getElementById("seguindoBtn").addEventListener("click", () => {
+                                closeMenu();
                                 iniciarProcessoSeguindo();
                             });
 
                             document.getElementById("seguindoBtn").addEventListener("click", () => {
+                                closeMenu();
                                 iniciarProcessoSeguindo();
                             });
 
                             // --- NOVO MENU: AMIGOS PRÓXIMOS ---
             document.getElementById("closeFriendsBtn").addEventListener("click", () => {
+                closeMenu();
                 console.log("Botão Amigos Próximos clicado");
                 // Direcionar para a página de amigos próximos se não estiver lá
                 if (window.location.pathname !== "/accounts/close_friends/") {
@@ -483,6 +490,7 @@
 
             // --- NOVO MENU: OCULTAR STORY ---
                             document.getElementById("hideStoryBtn").addEventListener("click", () => {
+                closeMenu();
                 console.log("Botão Ocultar Story clicado");
                 // Direcionar para a página de ocultar story se não estiver lá
                 if (window.location.pathname !== "/accounts/hide_story_and_live_from/") {
@@ -501,6 +509,7 @@
             });
 
             document.getElementById("mutedAccountsBtn").addEventListener("click", () => {
+                closeMenu();
                 console.log("Botão Contas Silenciadas clicado");
                 if (window.location.pathname !== "/accounts/muted_accounts/") {
                     console.log("Navegando para /accounts/muted_accounts/");
@@ -516,6 +525,7 @@
 
             // --- NOVO MENU: REELS ---
             document.getElementById("reelsMenuBtn").addEventListener("click", () => {
+                closeMenu();
                 abrirModalReels();
             });
             document.getElementById("baixarStoryBtn").addEventListener("click", () => {

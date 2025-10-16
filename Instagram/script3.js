@@ -2103,6 +2103,7 @@
                                 const statusDiv = document.getElementById("statusSeguindo");
                                 const container = document.getElementById("tabelaSeguindoContainer");
                                 let seguindoList = [];
+                                const selectedUsers = new Set(); // Armazena todos os usuários selecionados entre as páginas
 
                             const fetchUserListAPISeguindo = async (userId, type, total) => {
                                 const userList = [];
@@ -2190,10 +2191,6 @@
                                     // Configuração para ordenação da tabela
                                     let sortConfig = { key: 'username', direction: 'ascending' };
 
-                                    const getSelectedUsers = () => {
-                                        return Array.from(document.querySelectorAll('#seguindoModal .user-checkbox:checked')).map(cb => cb.dataset.username);
-                                    };
-
                                     const renderList = (page) => {
                                         const startIndex = (page - 1) * itemsPerPage;
                                         const endIndex = startIndex + itemsPerPage;
@@ -2243,6 +2240,7 @@
                                         const paginatedUsers = sortedUsers.slice(startIndex, endIndex);
 
                                         paginatedUsers.forEach(({ username, photoUrl }) => {
+                                            const isChecked = selectedUsers.has(username);
                                             // Verifica os dados no cache global
                                             const isMuted = userListCache.muted ? (userListCache.muted.has(username) ? "Sim" : "Não") : "??";
                                             const isCloseFriend = userListCache.closeFriends ? (userListCache.closeFriends.has(username) ? "Sim" : "Não") : "??";
@@ -2265,7 +2263,7 @@
 
                                             tableHtml += `
                                                 <tr style="border-bottom: 1px solid #dbdbdb;">
-                                                    <td style="padding: 8px;"><input type="checkbox" class="user-checkbox" data-username="${username}" style="cursor: pointer;"></td>
+                                                    <td style="padding: 8px;"><input type="checkbox" class="user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
                                                     <td style="padding: 8px; display:flex; align-items:center; gap:10px;">
                                                         <img src="${photoUrl}" alt="${username}" style="width:40px; height:40px; border-radius:50%;">
                                                         <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600;">${username}</a>
@@ -2292,12 +2290,24 @@
                                         const nextBtn = document.getElementById("nextPageBtn");
                                         if (nextBtn) nextBtn.onclick = () => renderList(++currentPage);
                                         
+                                        // Adiciona eventos aos checkboxes individuais para atualizar o Set
+                                        document.querySelectorAll('#seguindoModal .user-checkbox').forEach(checkbox => {
+                                            checkbox.addEventListener('change', (e) => {
+                                                const username = e.target.dataset.username;
+                                                if (e.target.checked) {
+                                                    selectedUsers.add(username);
+                                                } else {
+                                                    selectedUsers.delete(username);
+                                                }
+                                            });
+                                        });
+
                                         // Adiciona evento para o checkbox "selecionar tudo"
                                         const selectAllCheckbox = document.getElementById('selectAllCheckbox');
                                         if (selectAllCheckbox) {
                                             selectAllCheckbox.addEventListener('change', (e) => {
                                                 const isChecked = e.target.checked;
-                                                document.querySelectorAll('#seguindoModal .user-checkbox').forEach(checkbox => {
+                                                document.querySelectorAll('#tabelaSeguindoContainer .user-checkbox').forEach(checkbox => {
                                                     checkbox.checked = isChecked;
                                                 });
                                             });
@@ -2323,9 +2333,9 @@
                                         });
                                     };
 
-                                    document.getElementById('silenciarSeguindoBtn').onclick = () => handleActionOnSelected(getSelectedUsers(), 'mute');
-                                    document.getElementById('closeFriendsSeguindoBtn').onclick = () => handleActionOnSelected(getSelectedUsers(), 'closeFriends');
-                                    document.getElementById('hideStorySeguindoBtn').onclick = () => handleActionOnSelected(getSelectedUsers(), 'hideStory');
+                                    document.getElementById('silenciarSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'mute');
+                                    document.getElementById('closeFriendsSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'closeFriends');
+                                    document.getElementById('hideStorySeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'hideStory');
 
                                     if (seguindoList.length > 0) renderList(currentPage);
                                 }

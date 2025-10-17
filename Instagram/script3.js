@@ -139,6 +139,27 @@
                                         color: #262626;
                                         border-bottom: 2px solid #262626;
                                     }
+                                    .modal-header {
+                                        display: flex;
+                                        justify-content: space-between;
+                                        align-items: center;
+                                        padding: 10px;
+                                        background-color: #f0f0f0;
+                                        border-bottom: 1px solid #dbdbdb;
+                                        cursor: move; /* Para arrastar a janela */
+                                        border-top-left-radius: 10px;
+                                        border-top-right-radius: 10px;
+                                    }
+                                    .dark-mode .modal-header {
+                                        background-color: #262626;
+                                        border-bottom: 1px solid #363636;
+                                    }
+                                    .modal-title { font-weight: bold; }
+                                    .modal-controls button {
+                                        background: none; border: none; font-size: 16px;
+                                        cursor: pointer; padding: 5px;
+                                        color: #8e8e8e;
+                                    }
                                 `;
                             }
 
@@ -232,6 +253,70 @@
                                 muted: null,       // Será um Set de usernames
                                 closeFriends: null,  // Será um Set de usernames
                                 hiddenStory: null    // Será um Set de usernames
+                            };
+
+                            // Helper para IndexedDB
+                            const dbHelper = {
+                                db: null,
+                                openDB: function() {
+                                    return new Promise((resolve, reject) => {
+                                        const request = indexedDB.open('InstagramToolsDB', 2);
+                                        request.onupgradeneeded = (event) => {
+                                            const db = event.target.result;
+                                            if (!db.objectStoreNames.contains('closeFriends')) {
+                                                db.createObjectStore('closeFriends', { keyPath: 'id', autoIncrement: true });
+                                            }
+                                            if (!db.objectStoreNames.contains('hiddenStory')) {
+                                                db.createObjectStore('hiddenStory', { keyPath: 'id', autoIncrement: true });
+                                            }
+                                            if (!db.objectStoreNames.contains('muted')) {
+                                                db.createObjectStore('muted', { keyPath: 'id', autoIncrement: true });
+                                            }
+                                        };
+                                        request.onsuccess = (event) => {
+                                            this.db = event.target.result;
+                                            resolve(this.db);
+                                        };
+                                        request.onerror = (event) => {
+                                            reject(event.target.error);
+                                        };
+                                    });
+                                },
+                                saveCache: async function(storeName, usernames) {
+                                    if (!this.db) await this.openDB();
+                                    const transaction = this.db.transaction([storeName], 'readwrite');
+                                    const store = transaction.objectStore(storeName);
+                                    // Clear existing data
+                                    await new Promise((resolve) => {
+                                        const clearRequest = store.clear();
+                                        clearRequest.onsuccess = () => resolve();
+                                        clearRequest.onerror = () => resolve(); // Continue even if clear fails
+                                    });
+                                    // Save new data
+                                    const usernamesArray = Array.from(usernames);
+                                    await new Promise((resolve, reject) => {
+                                        const addRequest = store.add({ usernames: usernamesArray });
+                                        addRequest.onsuccess = () => resolve();
+                                        addRequest.onerror = (event) => reject(event.target.error);
+                                    });
+                                },
+                                loadCache: async function(storeName) {
+                                    if (!this.db) await this.openDB();
+                                    const transaction = this.db.transaction([storeName], 'readonly');
+                                    const store = transaction.objectStore(storeName);
+                                    return new Promise((resolve) => {
+                                        const request = store.getAll();
+                                        request.onsuccess = () => {
+                                            const results = request.result;
+                                            if (results.length > 0) {
+                                                resolve(new Set(results[0].usernames));
+                                            } else {
+                                                resolve(null);
+                                            }
+                                        };
+                                        request.onerror = () => resolve(null);
+                                    });
+                                }
                             };
 
                             function extractUsernames() {
@@ -449,9 +534,8 @@
                             document
                                 .getElementById("bloqueadosBtn")
                                 .addEventListener("click", (e) => {
-                                    e.preventDefault();
-                                    history.pushState(null, null, "/accounts/blocked_accounts/");
-                                    window.dispatchEvent(new Event("popstate"));
+                                    closeMenu();
+                                    iniciarProcessoBloqueados();
                                 });
 
                             document.getElementById("naoSegueDeVoltaBtn").addEventListener("click", () => {
@@ -674,11 +758,13 @@
                 const initialStates = new Map(modalStates);
 
                 function renderPage(page) {
-                    let html = `<h2 style="color: black;">Amigos Próximos</h2>`;
+                    let html = `
+                        <div class="modal-header">
+                            <span class="modal-title">Amigos Próximos</span>
+                            <div class="modal-controls"><button id="closeFriendsMinimizarBtn" title="Minimizar">_</button><button id="closeFriendsFecharBtn" title="Fechar">X</button></div>
+                        </div>`;
                     html += `
-                        <div style="margin-bottom:10px;">
-                            <button id="closeFriendsMinimizarBtn" style="background:#f39c12;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Minimizar</button>
-                            <button id="closeFriendsFecharBtn" style="background:#e74c3c;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Fechar</button>
+                        <div style="padding: 15px;">
                             <button id="closeFriendsMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
                             <button id="closeFriendsDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
                             <button id="closeFriendsAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
@@ -789,8 +875,9 @@
                     searchInput.addEventListener("input", () => {
                         const filter = searchInput.value.toLowerCase();
                         const listItems = div.querySelectorAll("#closeFriendsList li");
-                        listItems.forEach(li => {
-                            const usernameSpan = li.children[2];
+                        listItems.forEach(li => { 
+                            // Seletor ajustado para ser mais específico
+                            const usernameSpan = li.querySelector('span[style*="cursor:pointer"]');
                             if (usernameSpan) {
                                 const text = usernameSpan.textContent.toLowerCase();
                                 li.style.display = text.includes(filter) ? "" : "none";
@@ -1059,11 +1146,13 @@
             let currentTab = 'ocultados'; // 'ocultados' ou 'amigos'
 
                 function renderPage(page) {
-                    let html = `<h2 style="color: black;">Ocultar Story</h2>`;
+                    let html = `
+                        <div class="modal-header">
+                            <span class="modal-title">Ocultar Story</span>
+                            <div class="modal-controls"><button id="hideStoryMinimizarBtn" title="Minimizar">_</button><button id="hideStoryFecharBtn" title="Fechar">X</button></div>
+                        </div>`;
                     html += `
-                        <div style="margin-bottom:10px;">
-                            <button id="hideStoryMinimizarBtn" style="background:#f39c12;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Minimizar</button>
-                            <button id="hideStoryFecharBtn" style="background:#e74c3c;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Fechar</button>
+                        <div style="padding: 15px;">
                             <button id="hideStoryMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
                             <button id="hideStoryDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
                             <button id="hideStoryAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
@@ -1332,10 +1421,11 @@
                         userElements.forEach(userElement => {
                             const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
                             const username = usernameSpan ? usernameSpan.innerText.trim() : '';
+                            const imgTag = userElement.querySelector('img');
 
-                            if (username && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
-                                const imgTag = userElement.querySelector('img');
-                                const photoUrl = imgTag ? imgTag.src : 'https://via.placeholder.com/32';
+                            // Adiciona o usuário apenas se tiver um nome válido, uma foto e ainda não estiver na lista
+                            if (username && imgTag && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
+                                const photoUrl = imgTag.src;
                                 users.set(username, { username, photoUrl });
                             }
                         });
@@ -1408,11 +1498,13 @@
                 `;
 
                 function renderPage(page) {
-                    let html = `<h2>Contas Silenciadas</h2>`;
+                    let html = `
+                        <div class="modal-header">
+                            <span class="modal-title">Contas Silenciadas</span>
+                            <div class="modal-controls"><button id="mutedMinimizarBtn" title="Minimizar">_</button><button id="mutedFecharBtn" title="Fechar">X</button></div>
+                        </div>`;
                     html += `
-                        <div style="margin-bottom:10px;">
-                            <button id="mutedMinimizarBtn" style="background:#f39c12;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Minimizar</button>
-                            <button id="mutedFecharBtn" style="background:#e74c3c;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Fechar</button>
+                        <div style="padding: 15px;">
                             <button id="mutedMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
                             <button id="mutedDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
                             <button id="mutedAplicarBtn" style="background:#8e44ad;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Reativar Som</button>
@@ -1481,8 +1573,10 @@
                     const searchInput = document.getElementById("mutedSearchInput");
                     searchInput.addEventListener("input", () => {
                         const filter = searchInput.value.toLowerCase();
-                        div.querySelectorAll("#mutedList li").forEach(li => {
-                            const text = li.querySelector('span').textContent.toLowerCase();
+                        div.querySelectorAll("#mutedList li").forEach(li => { 
+                            // Seletor ajustado para ser mais específico
+                            const usernameSpan = li.querySelector('span[style*="cursor:pointer"]');
+                            const text = usernameSpan ? usernameSpan.textContent.toLowerCase() : '';
                             li.style.display = text.includes(filter) ? "" : "none";
                         });
                     });
@@ -1665,6 +1759,304 @@
 
             let modalAbertoMuted = false;
                             // --- FIM DO MENU CONTAS SILENCIADAS ---
+
+                            // --- NOVO MENU: CONTAS BLOQUEADAS ---
+            function extractBlockedAccountsUsernames(doc = document) {
+                return new Promise((resolve) => {
+                    const users = new Map(); // Usar Map para evitar duplicados e manter a ordem
+                    let scrollInterval;
+                    let noNewUsersCount = 0;
+                    const maxIdleCount = 1; // Parar após 1 tentativa sem novos usuários (5 segundos)
+                    let initialTimeout;
+
+                    let cancelled = false;
+                    const { bar, update, closeButton } = createCancellableProgressBar();
+                    closeButton.onclick = () => {
+                        cancelled = true;
+                        bar.remove();
+                        finishExtraction();
+                    };
+                    update(0, 0, "Buscando e rolando a lista de contas bloqueadas...");
+
+                    function finishExtraction() {
+                        clearInterval(scrollInterval);
+                        clearTimeout(initialTimeout);
+                        if (bar) bar.remove();
+                        console.log(`Extração finalizada. Total de ${users.size} usuários encontrados.`);
+                        // Se foi cancelado, retorna uma lista vazia para não abrir o modal.
+                        resolve(cancelled ? [] : Array.from(users.values()));
+                    }
+
+                    function performScrollAndExtract() {
+                        const initialUserCount = users.size;
+
+                        // Seletor para os elementos que contêm o nome de usuário
+                        const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')).filter(el =>
+                            el.querySelector('span[data-bloks-name="bk.components.Text"]')
+                        );
+
+                        if (userElements.length === 0 && users.size === 0) {
+                            console.log("Nenhum usuário encontrado ainda, tentando novamente...");
+                            return; // Continua tentando se a lista estiver vazia
+                        }
+
+                        userElements.forEach(userElement => {
+                            const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
+                            const username = usernameSpan ? usernameSpan.innerText.trim() : '';
+
+                            if (username && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
+                                const imgTag = userElement.querySelector('img');
+                                const photoUrl = imgTag ? imgTag.src : 'https://via.placeholder.com/32';
+                                users.set(username, { username, photoUrl });
+                            }
+                        });
+
+                        update(users.size, users.size, `Encontrado(s) ${users.size} usuário(s)... Rolando...`);
+
+                        // Lógica de parada: se não encontrar novos usuários por um tempo, para.
+                        if (users.size === initialUserCount) {
+                            noNewUsersCount++;
+                        } else {
+                            noNewUsersCount = 0; // Reseta o contador se encontrar novos usuários
+                        }
+
+                        if (noNewUsersCount >= maxIdleCount) {
+                            console.log("Nenhum novo usuário encontrado após várias tentativas. Finalizando.");
+                            finishExtraction();
+                            return;
+                        }
+
+                        // Simula a rolagem da janela principal
+                        window.scrollTo(0, document.body.scrollHeight);
+                    }
+
+                    // Inicia o processo de rolagem e extração a cada 5 segundos
+                    scrollInterval = setInterval(performScrollAndExtract, 5000);
+
+                    // Adiciona um timeout inicial de 7 segundos. Se nenhum usuário for encontrado, finaliza.
+                    initialTimeout = setTimeout(() => {
+                        if (users.size === 0) {
+                            console.log("Timeout de 7 segundos atingido sem encontrar usuários. Finalizando.");
+                            finishExtraction();
+                        }
+                    }, 7000);
+                });
+            }
+
+            async function iniciarProcessoBloqueados() {
+                if (modalAbertoBlocked) return;
+                modalAbertoBlocked = true;
+
+                // Navegar para a página de contas bloqueadas
+                if (window.location.pathname !== "/accounts/blocked_accounts/") {
+                    history.pushState(null, null, "/accounts/blocked_accounts/");
+                    window.dispatchEvent(new Event("popstate"));
+                    await new Promise(resolve => setTimeout(resolve, 3000)); // Espera a página carregar
+                }
+
+                const users = await extractBlockedAccountsUsernames();
+
+                const modalStates = new Map();
+                users.forEach(({ username }) => modalStates.set(username, false)); // Inicia todos desmarcados
+
+                const itemsPerPage = 30;
+                let currentPage = 1;
+
+                const div = document.createElement("div");
+                div.id = "allBlockedAccountsDiv";
+                div.className = "submenu-modal";
+                div.style.cssText = `
+                    position: fixed;
+                    top: 80px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    width: 70vw;
+                    max-width: 700px;
+                    max-height: 85vh;
+                    overflow: auto;
+                    border: 2px solid #e74c3c;
+                    border-radius: 10px;
+                    z-index: 2147483647;
+                    padding: 20px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+                `;
+
+                function renderPage(page) {
+                    let html = `
+                        <div class="modal-header">
+                            <span class="modal-title">Contas Bloqueadas</span>
+                            <div class="modal-controls"><button id="blockedMinimizarBtn" title="Minimizar">_</button><button id="blockedFecharBtn" title="Fechar">X</button></div>
+                        </div>`;
+                    html += `
+                        <div style="padding: 15px;">
+                            <button id="blockedMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
+                            <button id="blockedDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
+                            <button id="blockedDesbloquearBtn" style="background:#2ecc71;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Desbloquear</button>
+                        </div>
+                        <div style="margin-bottom:15px;">
+                            <input type="text" id="blockedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                        </div>
+                        <ul id="blockedList" style='list-style:none;padding:0;max-height:40vh;overflow:auto;'>
+                    `;
+                    const startIndex = (page - 1) * itemsPerPage;
+                    const endIndex = Math.min(startIndex + itemsPerPage, users.length);
+                    const pageUsers = users.slice(startIndex, endIndex);
+
+                    pageUsers.forEach(({ username, photoUrl }, idx) => {
+                        const globalIdx = startIndex + idx;
+                        const isChecked = modalStates.get(username) || false;
+                        html += `
+                            <li style="padding:5px 0;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px;">
+                                <label class="custom-checkbox" for="blocked_cb_${globalIdx}" style="margin:0;">
+                                    <input type="checkbox" class="blockedCheckbox" id="blocked_cb_${globalIdx}" data-username="${username}" ${isChecked ? "checked" : ""}>
+                                    <span class="checkmark"></span>
+                                </label>
+                                <img src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
+                                <span style="cursor:pointer; color: black;">${username}</span>
+                            </li>
+                        `;
+                    });
+                    html += "</ul>";
+                    const totalPages = Math.ceil(users.length / itemsPerPage);
+                    html += `<div id="paginationControls" style="margin-top:20px; display:flex; justify-content:center; align-items:center; gap:10px;">`;
+                    if (totalPages > 1) {
+                        if (page > 1) html += `<button id="prevPageBtn">Anterior</button>`;
+                        html += `<span style="font-weight:bold;">Página ${page} de ${totalPages}</span>`;
+                        if (page < totalPages) html += `<button id="nextPageBtn">Próximo</button>`;
+                    }
+                    html += `</div>`;
+                    div.innerHTML = html;
+                    document.body.appendChild(div);
+
+                    document.getElementById("blockedFecharBtn").onclick = () => { div.remove(); modalAbertoBlocked = false; };
+                    document.getElementById("blockedMinimizarBtn").onclick = () => {
+                        const modal = document.getElementById('allBlockedAccountsDiv');
+                        const contentToToggle = [
+                            modal.querySelector('input[type="text"]'),
+                            modal.querySelector('ul'),
+                            modal.querySelector('#paginationControls')
+                        ].filter(Boolean);
+
+                        const btn = document.getElementById('blockedMinimizarBtn');
+                        const isMinimized = modal.dataset.minimized === 'true';
+
+                        contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+
+                        modal.dataset.minimized = !isMinimized;
+                        btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
+                        modal.style.maxHeight = isMinimized ? '85vh' : 'none';
+                    };
+
+                    document.getElementById("blockedMarcarTodosBtn").onclick = () => {
+                        document.querySelectorAll("#blockedList .blockedCheckbox").forEach(cb => { cb.checked = true; modalStates.set(cb.dataset.username, true); });
+                    };
+                    document.getElementById("blockedDesmarcarTodosBtn").onclick = () => {
+                        document.querySelectorAll("#blockedList .blockedCheckbox").forEach(cb => { cb.checked = false; modalStates.set(cb.dataset.username, false); });
+                    };
+
+                    const searchInput = document.getElementById("blockedSearchInput");
+                    searchInput.addEventListener("input", () => {
+                        const filter = searchInput.value.toLowerCase();
+                        // O seletor foi corrigido para pegar o span correto com o nome de usuário
+                        div.querySelectorAll("#blockedList li").forEach(li => {
+                            const usernameSpan = li.querySelector('span[style*="cursor:pointer"]');
+                            const text = usernameSpan ? usernameSpan.textContent.toLowerCase() : '';
+                            li.style.display = text.includes(filter) ? "" : "none";
+                        });
+                    });
+
+                    const prevBtn = document.getElementById("prevPageBtn");
+                    if (prevBtn) prevBtn.onclick = () => { currentPage--; renderPage(currentPage); };
+                    const nextBtn = document.getElementById("nextPageBtn");
+                    if (nextBtn) nextBtn.onclick = () => { currentPage++; renderPage(currentPage); };
+
+                    document.querySelectorAll(".blockedCheckbox").forEach(cb => {
+                        cb.addEventListener("change", () => modalStates.set(cb.dataset.username, cb.checked));
+                    });
+
+                    document.getElementById("blockedDesbloquearBtn").onclick = async () => {
+                        const usersToUnblock = Array.from(modalStates.entries())
+                            .filter(([_, checked]) => checked)
+                            .map(([username]) => username);
+
+                        if (usersToUnblock.length === 0) {
+                            alert("Nenhum usuário selecionado para desbloquear.");
+                            return;
+                        }
+
+                        const desbloquearBtn = document.getElementById("blockedDesbloquearBtn");
+                        desbloquearBtn.disabled = true;
+                        desbloquearBtn.textContent = "Processando...";
+
+                        await unblockUsers(usersToUnblock, () => {
+                            desbloquearBtn.disabled = false;
+                            desbloquearBtn.textContent = "Desbloquear";
+                            alert(`${usersToUnblock.length} usuário(s) tiveram o bloqueio removido.`);
+                            // Recarrega o modal para refletir as mudanças
+                            div.remove();
+                            modalAbertoBlocked = false;
+                            iniciarProcessoBloqueados();
+                        });
+                    };
+                }
+                renderPage(currentPage);
+            }
+
+            async function unblockUsers(usersToUnblock, onComplete) {
+                let cancelled = false;
+                const { bar, update, closeButton } = createCancellableProgressBar();
+                closeButton.onclick = () => {
+                    cancelled = true;
+                    bar.remove();
+                    alert("Processo de desbloqueio interrompido.");
+                };
+
+                // Garante que estamos na página de contas bloqueadas
+                if (window.location.pathname !== "/accounts/blocked_accounts/") {
+                    history.pushState(null, null, "/accounts/blocked_accounts/");
+                    window.dispatchEvent(new Event("popstate"));
+                    await new Promise(resolve => setTimeout(resolve, 3000)); // Espera a página carregar
+                }
+
+                for (let i = 0; i < usersToUnblock.length; i++) {
+                    if (cancelled) break;
+                    const username = usersToUnblock[i];
+                    update(i + 1, usersToUnblock.length, "Desbloqueando:");
+
+                    // 1. Encontrar o card do usuário na lista de bloqueados
+                    const userCard = Array.from(document.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]'))
+                        .find(el => el.querySelector('span')?.innerText.trim() === username);
+
+                    if (!userCard) {
+                        console.warn(`Usuário ${username} não encontrado na lista. Pulando.`);
+                        continue;
+                    }
+
+                    // 2. Encontrar e clicar no botão "Desbloquear" dentro do card do usuário
+                    const unblockButton = userCard.querySelector('div[aria-label="Desbloquear"]');
+                    if (!unblockButton) {
+                        console.warn(`Botão 'Desbloquear' não encontrado para ${username}. Pulando.`);
+                        continue;
+                    }
+                    simulateClick(unblockButton);
+                    await new Promise(resolve => setTimeout(resolve, 1500)); // Espera o modal de confirmação
+
+                    // 3. Encontrar e clicar no botão de confirmação final no modal
+                    const confirmButton = Array.from(document.querySelectorAll('button')).find(btn => btn.innerText.trim() === 'Desbloquear' || btn.innerText.trim() === 'Unblock');
+                    if (confirmButton) {
+                        simulateClick(confirmButton);
+                    } else {
+                        console.warn(`Botão de confirmação de desbloqueio não encontrado para ${username}.`);
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 2000)); // Pausa entre as ações
+                }
+
+                bar.remove();
+                if (onComplete) onComplete();
+            }
+
+            let modalAbertoBlocked = false;
+                            // --- FIM DO MENU CONTAS BLOQUEADAS ---
             
             function simulateClick(element, triggerChangeEvent = false) {
                  if (!element) return;
@@ -1991,10 +2383,13 @@
                                     border-radius: 10px; padding: 20px; z-index: 10001;
                                 `;
                                 statusModal.innerHTML = `
-                                    <h2>Automatizando Coleta de Dados...</h2>
-                                    <p>Por favor, aguarde. O script está navegando para buscar as informações necessárias.</p>
-                                    <ul style="list-style: none; padding: 0; margin-top: 20px;">
-                                        <li id="status-step-1" style="margin-bottom: 10px;"><span>⏳</span> Carregando lista de "Seguindo"...</li>
+                                    <div class="modal-header">
+                                        <span class="modal-title">Coletando Dados...</span>
+                                    </div>
+                                    <div style="padding: 15px;">
+                                        <p>Por favor, aguarde. O script está navegando para buscar as informações necessárias.</p>
+                                        <ul style="list-style: none; padding: 0; margin-top: 20px;">
+                                            <li id="status-step-1" style="margin-bottom: 10px;"><span>⏳</span> Carregando lista de "Seguindo"...</li>
                                     <li id="status-step-2" style="margin-bottom: 10px;"><span>⏳</span> Carregando cache de "Melhores Amigos"...</li>
                                     <li id="status-step-3" style="margin-bottom: 10px;"><span>⏳</span> Carregando cache de "Ocultar Stories"...</li>
                                     <li id="status-step-4" style="margin-bottom: 10px;"><span>⏳</span> Carregando cache de "Contas Silenciadas"...</li>
@@ -2061,15 +2456,16 @@
                                     border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
                                 `;
                                 div.innerHTML = ` 
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <h2>Seguindo</h2>
-                                        <button id="seguindoMinimizarBtn" style="background:#f39c12;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Minimizar</button>
-                                        <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end;">
-                                            <button id="atualizarSeguindoBtn" title="Atualizar Dados" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">🔄️</button>
+                                    <div class="modal-header">
+                                        <span class="modal-title">Gerenciador de "Seguindo"</span>
+                                        <div class="modal-controls"><button id="seguindoMinimizarBtn" title="Minimizar">_</button><button id="fecharSeguindoBtn" title="Fechar">X</button></div>
+                                    </div>
+                                    <div style="padding: 15px;">
+                                        <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; margin-bottom: 15px;">
+                                            <button id="atualizarSeguindoBtn" title="Atualizar Dados" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">🔄️ Atualizar</button>
                                             <button id="silenciarSeguindoBtn" style="background: #8e44ad; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Silenciar/Reativar</button>
                                             <button id="closeFriendsSeguindoBtn" style="background: #2ecc71; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Melhores Amigos</button>
                                             <button id="hideStorySeguindoBtn" style="background: #f39c12; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Ocultar Story</button>
-                                            <button id="fecharSeguindoBtn" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Fechar</button>
                                         </div>
                                     </div>
                                     <div style="margin: 20px 0;">
@@ -2090,7 +2486,7 @@
                                     const modal = document.getElementById('seguindoModal');
                                     const contentToToggle = [
                                         modal.querySelector('input[type="text"]').parentElement, // div da pesquisa
-                                        modal.querySelector('#statusSeguindo'),
+                                        modal.querySelector('#tabelaSeguindoContainer'),
                                         modal.querySelector('#tabelaSeguindoContainer')
                                     ].filter(Boolean);
 
@@ -2366,10 +2762,13 @@
                                     border-radius: 10px; padding: 20px; z-index: 10000;
                                 `;
                                 div.innerHTML = `
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                                        <h2>Menu de Reels</h2>
-                                        <button id="fecharReelsSubmenuBtn" style="background: red; color: white; border: none; border-radius: 5px; padding: 5px 10px; cursor: pointer;">Fechar</button>
+                                    <div class="modal-header">
+                                        <span class="modal-title">Menu de Reels</span>
+                                        <div class="modal-controls">
+                                            <button id="fecharReelsSubmenuBtn" title="Fechar">X</button>
+                                        </div>
                                     </div>
+                                    <div style="padding: 15px;">
                                     <div style="display: flex; flex-direction: column; gap: 10px;">
                                         <button id="analiseReelsBtn" class="menu-item-button">📊 Análise de Desempenho</button>
                                         <button id="baixarReelAtualBtn" class="menu-item-button">⬇️ Baixar Reel Atual</button>
@@ -2504,7 +2903,7 @@
                                 statusModal.id = "reelsAnalysisStatusModal";
                                 statusModal.className = "submenu-modal";
                                 statusModal.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 500px; border: 1px solid #ccc; border-radius: 10px; padding: 20px; z-index: 10001;`;
-                                statusModal.innerHTML = `<h2>Análise de Reels</h2><p id="reelsStatusText">Buscando informações do perfil...</p>`;
+                                statusModal.innerHTML = `<div class="modal-header"><span class="modal-title">Análise de Reels</span></div><div style="padding:15px;"><p id="reelsStatusText">Buscando informações do perfil...</p></div>`;
                                 document.body.appendChild(statusModal);
 
                                 const statusText = document.getElementById("reelsStatusText");
@@ -2583,10 +2982,13 @@
                                     const getSortArrow = (key) => sortConfig.key === key ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '';
 
                                     let tableHtml = `
-                                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                                            <h2>Análise de Desempenho dos Reels</h2>
-                                            <button id="fecharReelsTableBtn" style="background: red; color: white; border: none; border-radius: 5px; padding: 5px 10px; cursor: pointer;">Fechar</button>
+                                        <div class="modal-header">
+                                            <span class="modal-title">Análise de Desempenho dos Reels</span>
+                                            <div class="modal-controls">
+                                                <button id="fecharReelsTableBtn" title="Fechar">X</button>
+                                            </div>
                                         </div>
+                                        <div style="padding: 15px;">
                                         <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
                                             <thead style="cursor: pointer;">
                                                 <tr style="text-align: left; border-bottom: 2px solid #dbdbdb;">
@@ -2611,7 +3013,7 @@
                                                 <td style="text-align: right;">${reel.date.toLocaleDateString('pt-BR')}</td>
                                             </tr>`;
                                     });
-
+                                    tableHtml += `</tbody></table></div>`;
                                     tableHtml += `</tbody></table>`;
                                     div.innerHTML = tableHtml;
 

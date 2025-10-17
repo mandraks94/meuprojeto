@@ -539,6 +539,7 @@
                                 });
 
                             document.getElementById("naoSegueDeVoltaBtn").addEventListener("click", () => {
+                                closeMenu();
                                 iniciarProcessoNaoSegueDeVolta();
                             });
 
@@ -2188,9 +2189,12 @@
                                     overflow: auto;
                                 `;
                                 div.innerHTML = `
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <h2>Análise de Seguidores</h2>
-                                        <button id="fecharSubmenuBtn" style="background: red; color: white; border: none; border-radius: 5px; padding: 5px 10px; cursor: pointer;">Cancelar</button>
+                                    <div class="modal-header">
+                                        <span class="modal-title">Análise de Seguidores</span>
+                                        <div class="modal-controls">
+                                            <button id="naoSegueDeVoltaMinimizarBtn" title="Minimizar">_</button>
+                                            <button id="fecharSubmenuBtn" title="Fechar">X</button>
+                                        </div>
                                     </div>
                                     <div class="tab-container">
                                         <button class="tab-button active" data-tab="nao-segue">Não Segue de Volta</button>
@@ -2205,6 +2209,23 @@
                                     document.getElementById("progressBar")?.remove();
                                     div.remove();
                                 });
+
+                                document.getElementById("naoSegueDeVoltaMinimizarBtn").onclick = () => {
+                                    const modal = document.getElementById('naoSegueDeVoltaDiv');
+                                    const contentToToggle = [
+                                        modal.querySelector('.tab-container'),
+                                        modal.querySelector('#statusNaoSegue'),
+                                        modal.querySelector('#tabelaContainer')
+                                    ].filter(Boolean);
+
+                                    const btn = document.getElementById('naoSegueDeVoltaMinimizarBtn');
+                                    const isMinimized = modal.dataset.minimized === 'true';
+
+                                    contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+                                    modal.dataset.minimized = !isMinimized;
+                                    btn.textContent = isMinimized ? '_' : '□';
+                                    modal.style.maxHeight = isMinimized ? '90vh' : 'auto';
+                                };
 
                                 div.querySelectorAll('.tab-button').forEach(button => {
                                     button.addEventListener('click', (e) => handleTabClick(e.target.dataset.tab));

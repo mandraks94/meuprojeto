@@ -160,6 +160,21 @@
                                         cursor: pointer; padding: 5px;
                                         color: #8e8e8e;
                                     }
+                                    @keyframes rgb-border-animation {
+                                        0% { border-color: rgb(255, 0, 0); }
+                                        15% { border-color: rgb(255, 128, 0); }
+                                        30% { border-color: rgb(255, 255, 0); }
+                                        45% { border-color: rgb(0, 255, 0); }
+                                        60% { border-color: rgb(0, 128, 255); }
+                                        75% { border-color: rgb(128, 0, 255); }
+                                        90% { border-color: rgb(255, 0, 255); }
+                                        100% { border-color: rgb(255, 0, 0); }
+                                    }
+                                    .rgb-border-effect { 
+                                        border-style: solid !important;
+                                        border-width: 2px !important;
+                                        animation: rgb-border-animation 5s linear infinite; 
+                                    }
                                 `;
                             }
 
@@ -221,8 +236,8 @@
                                     <span>Baixar Story</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="darkModeBtn">🌙</button>
-                                    <span>Modo Escuro</span>
+                                    <button id="settingsBtn">⚙️</button>
+                                    <span>Configurações</span>
                                 </div>
                             `;
 
@@ -613,17 +628,11 @@
                 closeMenu();
                 abrirModalReels();
             });
-            document.getElementById("baixarStoryBtn").addEventListener("click", () => {
-                baixarStoryAtual();
-            });
+            document.getElementById("baixarStoryBtn").addEventListener("click", () => { baixarStoryAtual(); });
 
-            document.getElementById("darkModeBtn").addEventListener("click", () => {
-                isDarkMode = !isDarkMode;
-                if (isDarkMode) {
-                    document.body.classList.add('dark-mode');
-                } else {
-                    document.body.classList.remove('dark-mode');
-                }
+            document.getElementById("settingsBtn").addEventListener("click", () => {
+                closeMenu();
+                abrirModalConfiguracoes();
             });
 
             function extractCloseFriendsUsernames(doc = document) {
@@ -722,7 +731,7 @@
                     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
                 `;
 
-                const itemsPerPage = 30;
+                const itemsPerPage = loadSettings().itemsPerPage;
                 let currentPage = 1;
                 let currentTab = 'nao_selecionados'; // 'selecionados' or 'nao_selecionados'
 
@@ -1116,7 +1125,7 @@
                     }
                 });
                 const modalStates = new Map(officialStates);
-                const itemsPerPage = 30;
+            const itemsPerPage = loadSettings().itemsPerPage;
                 let currentPage = 1;
                 const div = document.createElement("div");
                 div.id = "allHideStoryDiv";
@@ -1476,7 +1485,7 @@
                 const modalStates = new Map();
                 users.forEach(({ username }) => modalStates.set(username, false)); // Inicia todos desmarcados
 
-                const itemsPerPage = 30;
+                const itemsPerPage = loadSettings().itemsPerPage;
                 let currentPage = 1;
 
                 const div = document.createElement("div");
@@ -1860,7 +1869,7 @@
                 const modalStates = new Map();
                 users.forEach(({ username }) => modalStates.set(username, false)); // Inicia todos desmarcados
 
-                const itemsPerPage = 30;
+                const itemsPerPage = loadSettings().itemsPerPage;
                 let currentPage = 1;
 
                 const div = document.createElement("div");
@@ -2613,7 +2622,7 @@
                                     statusDiv.innerText = `Total: ${seguindoList.length} perfis seguidos.`;
 
                                     let currentPage = 1; // Reinicia a paginação
-                                    const itemsPerPage = 20;
+                                    const itemsPerPage = loadSettings().itemsPerPage;
 
                                     // Configuração para ordenação da tabela
                                     let sortConfig = { key: 'username', direction: 'ascending' };
@@ -2768,6 +2777,182 @@
                                 }
                                 carregarSeguindo();
                             }
+
+                            // --- LÓGICA DE CONFIGURAÇÕES ---
+
+                            function loadSettings() {
+                                const defaults = {
+                                    darkMode: false,
+                                    rgbBorder: false,
+                                    language: 'pt-BR',
+                                    unfollowDelay: 5000,
+                                    itemsPerPage: 10
+                                };
+                                try {
+                                    const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
+                                    return { ...defaults, ...saved };
+                                } catch (e) {
+                                    return defaults;
+                                }
+                            }
+
+                            function saveSettings(newSettings) {
+                                const current = loadSettings();
+                                const updated = { ...current, ...newSettings };
+                                localStorage.setItem('instagramToolsSettings_v2', JSON.stringify(updated));
+                            }
+
+                            function applyInitialSettings() {
+                                const settings = loadSettings();
+                                toggleDarkMode(settings.darkMode);
+                                toggleRgbBorder(settings.rgbBorder);
+                            }
+
+                            function toggleDarkMode(enabled) {
+                                document.body.classList.toggle('dark-mode', enabled);
+                                const btn = document.getElementById("settingsDarkModeBtn");
+                                if (btn) btn.style.background = enabled ? '#4c5c75' : '';
+                            }
+
+                            function toggleRgbBorder(enabled) {
+                                // Adiciona ou remove a classe de todos os modais existentes e futuros
+                                const elements = document.querySelectorAll('.submenu-modal, .assistive-menu');
+                                elements.forEach(el => {
+                                    el.classList.toggle('rgb-border-effect', enabled);
+                                });
+                                const btn = document.getElementById("settingsRgbBorderBtn");
+                                if (btn) btn.style.background = enabled ? '#4c5c75' : '';
+                            }
+
+                            function abrirModalConfiguracoes() {
+                                if (document.getElementById("settingsModal")) return;
+
+                                const div = document.createElement("div");
+                                div.id = "settingsModal";
+                                div.className = "submenu-modal";
+                                div.style.cssText = `
+                                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                    width: 90%; max-width: 350px; border: 1px solid #ccc;
+                                    border-radius: 10px; z-index: 10001;
+                                `;
+                                if (loadSettings().rgbBorder) {
+                                    div.classList.add('rgb-border-effect');
+                                }
+
+                                const settings = loadSettings();
+
+                                div.innerHTML = `
+                                    <div class="modal-header">
+                                        <span class="modal-title">Configurações</span>
+                                        <div class="modal-controls">
+                                            <button id="fecharSettingsBtn" title="Fechar">X</button>
+                                        </div>
+                                    </div>
+                                    <div style="padding: 15px;">
+                                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                                            <button id="settingsDarkModeBtn" class="menu-item-button" style="background: ${settings.darkMode ? '#4c5c75' : ''};">🌙 Modo Escuro</button>
+                                            <button id="settingsRgbBorderBtn" class="menu-item-button" style="background: ${settings.rgbBorder ? '#4c5c75' : ''};">🌈 Borda RGB</button>
+                                            <button id="settingsParamsBtn" class="menu-item-button">🔧 Parâmetros</button>
+                                            <button id="settingsLangBtn" class="menu-item-button">🌐 Idioma</button>
+                                        </div>
+                                    </div>
+                                `;
+                                document.body.appendChild(div);
+
+                                document.getElementById("fecharSettingsBtn").onclick = () => div.remove();
+
+                                document.getElementById("settingsDarkModeBtn").onclick = () => {
+                                    const newSetting = !loadSettings().darkMode;
+                                    toggleDarkMode(newSetting);
+                                    saveSettings({ darkMode: newSetting });
+                                };
+
+                                document.getElementById("settingsRgbBorderBtn").onclick = () => {
+                                    const newSetting = !loadSettings().rgbBorder;
+                                    toggleRgbBorder(newSetting);
+                                    saveSettings({ rgbBorder: newSetting });
+                                };
+
+                                document.getElementById("settingsParamsBtn").onclick = () => {
+                                    div.remove(); // Fecha o modal de config para abrir o de parâmetros
+                                    abrirModalParametros();
+                                };
+
+                                document.getElementById("settingsLangBtn").onclick = () => {
+                                    // Apenas para exemplo, a lógica de idioma pode ser mais complexa
+                                    const currentLang = loadSettings().language;
+                                    const newLang = currentLang === 'pt-BR' ? 'en-US' : 'pt-BR';
+                                    saveSettings({ language: newLang });
+                                    alert(`Idioma alterado para ${newLang}. A tradução completa será aplicada no futuro.`);
+                                };
+                            }
+
+                            function abrirModalParametros() {
+                                if (document.getElementById("paramsModal")) return;
+
+                                const div = document.createElement("div");
+                                div.id = "paramsModal";
+                                div.className = "submenu-modal";
+                                div.style.cssText = `
+                                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                    width: 90%; max-width: 500px; border: 1px solid #ccc;
+                                    border-radius: 10px; z-index: 10001;
+                                `;
+                                if (loadSettings().rgbBorder) {
+                                    div.classList.add('rgb-border-effect');
+                                }
+
+                                const settings = loadSettings();
+
+                                div.innerHTML = `
+                                    <div class="modal-header">
+                                        <span class="modal-title">Parâmetros do Script</span>
+                                        <div class="modal-controls">
+                                            <button id="fecharParamsBtn" title="Fechar">X</button>
+                                        </div>
+                                    </div>
+                                    <div style="padding: 20px; display: flex; flex-direction: column; gap: 20px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <label for="unfollowDelayInput">Atraso para Unfollow (ms)</label>
+                                            <input type="number" id="unfollowDelayInput" value="${settings.unfollowDelay}" style="width: 80px;">
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <label for="itemsPerPageInput">Itens por Página nas Tabelas</label>
+                                            <input type="number" id="itemsPerPageInput" value="${settings.itemsPerPage}" style="width: 80px;">
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <label for="languageSelect">Idioma</label>
+                                            <select id="languageSelect">
+                                                <option value="pt-BR" ${settings.language === 'pt-BR' ? 'selected' : ''}>🇧🇷 Português</option>
+                                                <option value="en-US" ${settings.language === 'en-US' ? 'selected' : ''}>🇺🇸 English</option>
+                                            </select>
+                                        </div>
+                                        <button id="saveParamsBtn" style="background:#0095f6;color:white;border:none;padding:10px;border-radius:5px;cursor:pointer;">Salvar e Fechar</button>
+                                    </div>
+                                `;
+                                document.body.appendChild(div);
+
+                                document.getElementById("fecharParamsBtn").onclick = () => div.remove();
+                                document.getElementById("saveParamsBtn").onclick = () => {
+                                    const newSettings = {
+                                        unfollowDelay: parseInt(document.getElementById("unfollowDelayInput").value, 10),
+                                        itemsPerPage: parseInt(document.getElementById("itemsPerPageInput").value, 10),
+                                        language: document.getElementById("languageSelect").value
+                                    };
+                                    saveSettings(newSettings);
+                                    alert("Parâmetros salvos!");
+                                    div.remove();
+                                };
+                            }
+
+                            // Adiciona a classe RGB em novos modais
+                            const originalAppendChild = document.body.appendChild;
+                            document.body.appendChild = function(node) {
+                                if (node.classList && (node.classList.contains('submenu-modal') || node.classList.contains('assistive-menu')) && loadSettings().rgbBorder) {
+                                    node.classList.add('rgb-border-effect');
+                                }
+                                return originalAppendChild.apply(this, arguments);
+                            };
 
                             // --- LÓGICA PARA O MENU DE REELS ---
 
@@ -3292,7 +3477,7 @@
                                 const tbody = table.querySelector("tbody");
                                 if (!tbody) return;
 
-                                const itemsPerPage = 10; // Número de itens por página
+                                const itemsPerPage = loadSettings().itemsPerPage; // Número de itens por página
                                 const maxPageButtons = 5; // Número máximo de botões de página exibidos
                                 let currentPage = 1; // Página atual
 
@@ -3623,6 +3808,8 @@
                         window.addEventListener("popstate", () => {
                             setTimeout(() => {
                                 if (window.location.href.includes("instagram.com")) injectMenu();
+                                // Aplica as configurações após a navegação também
+                                if (document.getElementById("assistiveTouchMenu")) applyInitialSettings();
                             }, 500);
                         });
 
@@ -3776,7 +3963,9 @@
             // Começa a observar o corpo do documento por mudanças
             observer.observe(document.body, {
                 childList: true,
-                subtree: true
+                    subtree: true,
             });
+                dbHelper.openDB(); // Abre a conexão com o IndexedDB na inicialização
+                applyInitialSettings(); // Aplica as configurações salvas na inicialização
 
         })(); 

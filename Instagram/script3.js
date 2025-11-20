@@ -1039,71 +1039,76 @@
 
                             // --- NOVO MENU: OCULTAR STORY ---
             function extractHideStoryUsernames(doc = document) {
-                return new Promise((resolve) => {
-                    const maxAttempts = 20;
-                    let attempts = 0;
-
-                    function tryExtract() {
-                        attempts++;
-                        const users = [];
-                        // Select all elements with data-bloks-name="bk.components.Flexbox" that contain spans with data-bloks-name="bk.components.Text"
-                        const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')).filter(el =>
-                            el.querySelector('span[data-bloks-name="bk.components.Text"]')
-                        );
-
-                        if (userElements.length === 0) {
-                            console.log("No user elements found for hide story usernames, attempt", attempts);
-                            if (attempts < maxAttempts) {
-                                setTimeout(tryExtract, 500);
-                            } else {
-                                resolve(users);
-                            }
-                            return;
-                        }
-
-                        console.log("User elements found:", userElements.length);
-
-                        for (let i = 0; i < userElements.length; i++) {
-                            const userElement = userElements[i];
-                            let username = "";
-                            let photoUrl = "";
-                            const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
-                            if (usernameSpan) {
-                                username = usernameSpan.innerText.trim();
-                            } else {
-                                username = userElement.innerText.trim().split('\n')[0];
-                            }
-                            // Try to find an img tag or div with background-image for photo inside userElement
-                            const imgTag = userElement.querySelector('img');
-                            if (imgTag && imgTag.src) {
-                                photoUrl = imgTag.src;
-                            } else {
-                                // Try to find div with background-image style
-                                const bgDiv = userElement.querySelector('div[style*="background-image"]');
-                                if (bgDiv) {
-                                    const bgStyle = bgDiv.style.backgroundImage;
-                                    const match = bgStyle.match(/url\\(["']?(.*?)["']?\\)/);
-                                    if (match && match[1]) {
-                                        photoUrl = match[1];
-                                    }
-                                }
-                            }
-                            if (
-                                username.length > 0 &&
-                                !username.includes(" ") &&
-                                photoUrl && // Apenas adiciona se tiver foto
-                                !users.some(u => u.username === username) &&
-                                /^[a-zA-Z0-9_.]+$/.test(username)
-                            ) {
-                                users.push({ username, photoUrl });
-                            }
-                        }
-                        console.log("Extracted users:", users);
-                        resolve(users);
-                    }
-
-                    tryExtract();
-                });
+                 return new Promise((resolve) => {
+                     const users = new Map(); // Usar Map para evitar duplicados e manter a ordem
+                     let scrollInterval;
+                     let noNewUsersCount = 0;
+                     const maxIdleCount = 3; // Parar após 3 tentativas sem novos usuários (3 segundos)
+ 
+                     let cancelled = false;
+                     const { bar, update, closeButton } = createCancellableProgressBar();
+                     closeButton.onclick = () => {
+                         cancelled = true;
+                         bar.remove();
+                         finishExtraction();
+                     };
+                     update(0, 0, "Buscando e rolando a lista de usuários com story oculto...");
+ 
+                     function finishExtraction() {
+                         clearInterval(scrollInterval);
+                         if (bar) bar.remove();
+                         console.log(`Extração finalizada. Total de ${users.size} usuários encontrados.`);
+                         // Se foi cancelado, retorna uma lista vazia para não abrir o modal.
+                         resolve(cancelled ? [] : Array.from(users.values()));
+                     }
+ 
+                     function performScrollAndExtract() {
+                         const initialUserCount = users.size;
+ 
+                         // Seletor para os elementos que contêm o nome de usuário
+                         const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')).filter(el =>
+                             el.querySelector('span[data-bloks-name="bk.components.Text"]')
+                         );
+ 
+                         if (userElements.length === 0 && users.size === 0) {
+                             console.log("Nenhum usuário encontrado ainda, tentando novamente...");
+                             return; // Continua tentando se a lista estiver vazia
+                         }
+ 
+                         userElements.forEach(userElement => {
+                             const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
+                             const username = usernameSpan ? usernameSpan.innerText.trim() : '';
+                             const imgTag = userElement.querySelector('img');
+ 
+                             // Adiciona o usuário apenas se tiver um nome válido, uma foto e ainda não estiver na lista
+                             if (username && imgTag && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
+                                 const photoUrl = imgTag.src;
+                                 users.set(username, { username, photoUrl });
+                             }
+                         });
+ 
+                         update(users.size, users.size, `Encontrado(s) ${users.size} usuário(s)... Rolando...`);
+ 
+                         // Lógica de parada: se não encontrar novos usuários por um tempo, para.
+                         if (users.size === initialUserCount) {
+                             noNewUsersCount++;
+                         } else {
+                             noNewUsersCount = 0; // Reseta o contador se encontrar novos usuários
+                         }
+ 
+                         if (noNewUsersCount >= maxIdleCount) {
+                             console.log("Nenhum novo usuário encontrado após várias tentativas. Finalizando.");
+                             finishExtraction();
+                             return;
+                         }
+ 
+                         // Simula a rolagem da janela principal
+                         window.scrollTo(0, document.body.scrollHeight);
+                     }
+ 
+                     // Inicia o processo de rolagem e extração
+                     scrollInterval = setInterval(performScrollAndExtract, 1000); // Rola e extrai a cada 1 segundo
+                 });
             }
 
             async function abrirModalOcultarStory() {
@@ -1111,6 +1116,13 @@
                 modalAbertoStory = true;
 
                 const users = await extractHideStoryUsernames();
+
+                // Se a extração foi cancelada ou não encontrou usuários, não abre o modal.
+                if (users.length === 0) {
+                    modalAbertoStory = false; // Permite abrir novamente
+                    return;
+                }
+
                 const officialStates = new Map();
                 const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
                 flexboxes.forEach(flex => {

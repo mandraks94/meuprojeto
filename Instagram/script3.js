@@ -744,8 +744,11 @@
                         const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção'));
                         if (officialCheckboxContainer) {
                             const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"]');
-                            const bgColor = window.getComputedStyle(iconDiv).backgroundColor;
-                            const isChecked = (bgColor === "rgb(0, 149, 246)" || iconDiv.style.backgroundImage.includes('circle-check__filled'));
+                            const style = window.getComputedStyle(iconDiv);
+                            const bgColor = style.backgroundColor;
+                            const mask = style.maskImage || style.webkitMaskImage;
+                            const bgImg = style.backgroundImage;
+                            const isChecked = (bgColor === "rgb(0, 149, 246)" || bgColor === "rgb(74, 93, 249)" || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled')));
                             officialCheckboxStates.set(userText, isChecked);
                         }
                     }
@@ -1009,7 +1012,13 @@
                                 const customCheckbox = document.querySelector(`.closeFriendCheckbox[data-username="${userText}"]`);
                                 if (customCheckbox) {
                                     const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"]');
-                                    const isChecked = iconDiv && iconDiv.style.backgroundImage.includes('circle-check__filled');
+                                    let isChecked = false;
+                                    if (iconDiv) {
+                                        const style = window.getComputedStyle(iconDiv);
+                                        const mask = style.maskImage || style.webkitMaskImage;
+                                        const bgImg = style.backgroundImage;
+                                        isChecked = (style.backgroundColor === 'rgb(0, 149, 246)' || style.backgroundColor === 'rgb(74, 93, 249)' || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled')));
+                                    }
                                     if (customCheckbox.checked !== isChecked) {
                                         customCheckbox.checked = isChecked;
                                     }
@@ -1124,17 +1133,8 @@
                 }
 
                 const officialStates = new Map();
-                const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
-                flexboxes.forEach(flex => {
-                    const userText = flex.innerText && flex.innerText.trim().split('\n')[0];
-                    if (userText) {
-                        const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção'));
-                        if (officialCheckboxContainer) {
-                            const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"]');
-                            const isChecked = iconDiv && (window.getComputedStyle(iconDiv).backgroundColor === "rgb(0, 149, 246)" || iconDiv.style.backgroundImage.includes('circle-check__filled'));
-                            officialStates.set(userText, isChecked);
-                        }
-                    }
+                users.forEach(u => {
+                    officialStates.set(u.username, u.isChecked || false);
                 });
                 const modalStates = new Map(officialStates);
             const itemsPerPage = loadSettings().itemsPerPage;
@@ -1376,7 +1376,13 @@
                                 const customCheckbox = document.querySelector(`.hideStoryCheckbox[data-username="${userText}"]`);
                                 if (customCheckbox) {
                                     const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"]');
-                                    const isChecked = iconDiv && iconDiv.style.backgroundImage.includes('circle-check__filled');
+                                    let isChecked = false;
+                                    if (iconDiv) {
+                                        const style = window.getComputedStyle(iconDiv);
+                                        const mask = style.maskImage || style.webkitMaskImage;
+                                        const bgImg = style.backgroundImage;
+                                        isChecked = (style.backgroundColor === 'rgb(0, 149, 246)' || style.backgroundColor === 'rgb(74, 93, 249)' || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled')));
+                                    }
                                     if (customCheckbox.checked !== isChecked) {
                                         customCheckbox.checked = isChecked;
                                     }
@@ -1444,11 +1450,32 @@
                             const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
                             const username = usernameSpan ? usernameSpan.innerText.trim() : '';
                             const imgTag = userElement.querySelector('img');
+                            
+                            let isChecked = false;
+                            const checkboxContainer = userElement.querySelector('div[role="button"][tabindex="0"]');
+                            if (checkboxContainer) {
+                                const icon = checkboxContainer.querySelector('[data-bloks-name="ig.components.Icon"]');
+                                if (icon) {
+                                    const style = window.getComputedStyle(icon);
+                                    const bg = style.backgroundColor;
+                                    const mask = style.maskImage || style.webkitMaskImage;
+                                    const bgImg = style.backgroundImage;
+                                    if (bg === 'rgb(0, 149, 246)' || bg === 'rgb(74, 93, 249)' || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled'))) {
+                                        isChecked = true;
+                                    }
+                                }
+                            }
 
                             // Adiciona o usuário apenas se tiver um nome válido, uma foto e ainda não estiver na lista
                             if (username && imgTag && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
                                 const photoUrl = imgTag.src;
-                                users.set(username, { username, photoUrl });
+                                users.set(username, { username, photoUrl, isChecked });
+                            } else if (users.has(username)) {
+                                const u = users.get(username);
+                                if (!u.isChecked && isChecked) {
+                                    u.isChecked = true;
+                                    users.set(username, u);
+                                }
                             }
                         });
 
@@ -2926,11 +2953,11 @@
                                     <div style="padding: 20px; display: flex; flex-direction: column; gap: 20px;">
                                         <div style="display: flex; justify-content: space-between; align-items: center;">
                                             <label for="unfollowDelayInput">Atraso para Unfollow (ms)</label>
-                                            <input type="number" id="unfollowDelayInput" value="${settings.unfollowDelay}" style="width: 80px;">
+                                            <input type="number" id="unfollowDelayInput" value="${settings.unfollowDelay}" style="width: 80px; color: black;">
                                         </div>
                                         <div style="display: flex; justify-content: space-between; align-items: center;">
                                             <label for="itemsPerPageInput">Itens por Página nas Tabelas</label>
-                                            <input type="number" id="itemsPerPageInput" value="${settings.itemsPerPage}" style="width: 80px;">
+                                            <input type="number" id="itemsPerPageInput" value="${settings.itemsPerPage}" style="width: 80px; color: black;">
                                         </div>
                                         <div style="display: flex; justify-content: space-between; align-items: center;">
                                             <label for="languageSelect">Idioma</label>

@@ -275,7 +275,7 @@
                                 db: null,
                                 openDB: function() {
                                     return new Promise((resolve, reject) => {
-                                        const request = indexedDB.open('InstagramToolsDB', 2);
+                                        const request = indexedDB.open('InstagramToolsDB', 3);
                                         request.onupgradeneeded = (event) => {
                                             const db = event.target.result;
                                             if (!db.objectStoreNames.contains('closeFriends')) {
@@ -286,6 +286,9 @@
                                             }
                                             if (!db.objectStoreNames.contains('muted')) {
                                                 db.createObjectStore('muted', { keyPath: 'id', autoIncrement: true });
+                                            }
+                                            if (!db.objectStoreNames.contains('unfollowHistory')) {
+                                                db.createObjectStore('unfollowHistory', { keyPath: 'username' });
                                             }
                                         };
                                         request.onsuccess = (event) => {
@@ -330,6 +333,31 @@
                                             }
                                         };
                                         request.onerror = () => resolve(null);
+                                    });
+                                },
+                                saveUnfollowHistory: async function(userData) {
+                                    if (!this.db) await this.openDB();
+                                    const transaction = this.db.transaction(['unfollowHistory'], 'readwrite');
+                                    const store = transaction.objectStore('unfollowHistory');
+                                    return new Promise((resolve, reject) => {
+                                        // put() irá adicionar ou atualizar o registro
+                                        const request = store.put(userData);
+                                        request.onsuccess = () => resolve();
+                                        request.onerror = (event) => reject(event.target.error);
+                                    });
+                                },
+                                loadUnfollowHistory: async function() {
+                                    if (!this.db) await this.openDB();
+                                    const transaction = this.db.transaction(['unfollowHistory'], 'readonly');
+                                    const store = transaction.objectStore('unfollowHistory');
+                                    return new Promise((resolve) => {
+                                        const request = store.getAll();
+                                        request.onsuccess = () => {
+                                            // Ordena por data decrescente
+                                            const sorted = request.result.sort((a, b) => new Date(b.unfollowDate) - new Date(a.unfollowDate));
+                                            resolve(sorted);
+                                        };
+                                        request.onerror = () => resolve([]); // Retorna array vazio em caso de erro
                                     });
                                 }
                             };
@@ -2267,6 +2295,7 @@
                                     </div>
                                     <div class="tab-container">
                                         <button class="tab-button active" data-tab="nao-segue">Não Segue de Volta</button>
+                                        <button class="tab-button" data-tab="historico">Histórico</button>
                                     </div>
                                     <div id="statusNaoSegue" style="margin-top: 20px; font-weight: bold;"></div>
                                     <div id="tabelaContainer" style="display: block; margin-top: 15px;"></div>
@@ -2403,12 +2432,28 @@
                                                 <button id="unfollowBtn">Unfollow</button>
                                             </div>
                                         `;
-                                        preencherTabela(naoSegueDeVolta);
+                                        preencherTabela(naoSegueDeVolta, true, false);
                                         document.getElementById("selecionarTodosBtn").addEventListener("click", selecionarTodos);
                                         document.getElementById("desmarcarTodosBtn").addEventListener("click", desmarcarTodos);
                                         document.getElementById("unfollowBtn").addEventListener("click", unfollowSelecionados);
                                         }
 
+                                    } else if (tab === 'historico') {
+                                        statusDiv.innerText = "Carregando histórico de unfollow...";
+                                        const historicoData = await dbHelper.loadUnfollowHistory();
+                                        if (processoCancelado) return;
+
+                                        if (historicoData.length > 0) {
+                                            statusDiv.innerText = `Exibindo ${historicoData.length} registro(s) no histórico.`;
+                                            tabelaContainer.innerHTML = `
+                                                <table id="historicoTable" style="width: 100%; border-collapse: collapse; margin-top: 20px;"></table>
+                                                <div id="paginationControls" style="margin-top: 20px;"></div>
+                                            `;
+                                            preencherTabela(historicoData, false, true);
+                                        } else {
+                                            statusDiv.innerText = "Nenhum registro no histórico de unfollow.";
+                                            tabelaContainer.innerHTML = '';
+                                        }
                                     }
                                 }
 
@@ -3518,8 +3563,9 @@
                                 }
                             }
 
-                            function preencherTabela(userList, showCheckbox = true) {
-                                const table = document.getElementById("naoSegueDeVoltaTable");
+                            function preencherTabela(userList, showCheckbox = true, isHistory = false) {
+                                const tableId = isHistory ? "historicoTable" : "naoSegueDeVoltaTable";
+                                const table = document.getElementById(tableId);
                                 if (!table) return;
 
                                 table.innerHTML = `
@@ -3528,6 +3574,7 @@
                                             <th style="border: 1px solid #ccc; padding: 10px;">ID</th>
                                             <th style="border: 1px solid #ccc; padding: 10px;">Username</th>
                                             <th style="border: 1px solid #ccc; padding: 10px;">Foto</th>
+                                            ${isHistory ? '<th style="border: 1px solid #ccc; padding: 10px;">Data do Unfollow</th>' : ''}
                                             ${showCheckbox ? '<th style="border: 1px solid #ccc; padding: 10px;">Check</th>' : ''}
                                         </tr>
                                     </thead>
@@ -3546,7 +3593,11 @@
                                     const startIndex = (page - 1) * itemsPerPage;
                                     const endIndex = Math.min(startIndex + itemsPerPage, userList.length);
 
-                                    userList.slice(startIndex, endIndex).forEach((username, index) => {
+                                    userList.slice(startIndex, endIndex).forEach((userData, index) => {
+                                        const username = isHistory ? userData.username : userData;
+                                        const photoUrl = isHistory ? userData.photoUrl : null;
+                                        const unfollowDate = isHistory ? new Date(userData.unfollowDate).toLocaleString('pt-BR') : null;
+
                                         const tr = document.createElement("tr");
                                         tr.setAttribute('data-username', username);
                                         tr.innerHTML = `
@@ -3555,17 +3606,20 @@
                                                 <a href="https://www.instagram.com/${username}" target="_blank">${username}</a>
                                             </td>
                                             <td style="border: 1px solid #ccc; padding: 10px;">
-                                                <img id="img_${username}" src="https://via.placeholder.com/32" alt="${username}" style="width:32px; height:32px; border-radius:50%;">
+                                                <img id="img_${username}_${isHistory ? 'hist' : 'main'}" src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%;">
                                             </td>` +
+                                            (isHistory ? `<td style="border: 1px solid #ccc; padding: 10px;">${unfollowDate}</td>` : '') +
                                             (showCheckbox ? `<td style="border: 1px solid #ccc; padding: 10px;">
                                                 <input type="checkbox" class="unfollowCheckbox" data-username="${username}" />
                                             </td>` : '') + `
                                         `;
                                         tbody.appendChild(tr);
-                                        getProfilePic(username).then(url => {
-                                            const img = document.getElementById(`img_${username}`);
-                                            if (img) img.src = url;
-                                        });
+                                        if (!isHistory) {
+                                            getProfilePic(username).then(url => {
+                                                const img = document.getElementById(`img_${username}_main`);
+                                                if (img) img.src = url;
+                                            });
+                                        }
                                     });
 
                                     updatePaginationControls();
@@ -3704,6 +3758,8 @@
                                 window.dispatchEvent(new Event("popstate"));
 
                                 // Aguardar carregamento da página
+                                const unfollowDelay = loadSettings().unfollowDelay;
+
                                 setTimeout(() => {
                                     // Encontrar botão Seguindo (tentar vários seletores e textos alternativos)
                                     function getButtonByDescendantText(texts) {
@@ -3761,16 +3817,26 @@
                                             if (confirmBtn) {
                                                 confirmBtn.click();
                                                 console.log("Botão 'Deixar de seguir' clicado para " + username);
+
+                                                // Salvar no histórico do IndexedDB
+                                                getProfilePic(username).then(photoUrl => {
+                                                    dbHelper.saveUnfollowHistory({
+                                                        username: username,
+                                                        photoUrl: photoUrl,
+                                                        unfollowDate: new Date().toISOString()
+                                                    }).catch(err => console.error(`Falha ao salvar ${username} no histórico:`, err));
+                                                });
+
                                                 // Aguardar antes do próximo
                                                 setTimeout(() => {
                                                     console.log(`Avançando para o próximo usuário, índice: ${index + 1}`);
                                                     unfollowUsers(users, index + 1, callback);
-                                                }, 5000);
+                                                }, unfollowDelay);
                                                 // Remove the row after unfollow
                                                 setTimeout(() => {
                                                     const row = document.querySelector(`tr[data-username="${username}"]`);
                                                     if (row) row.remove();
-                                                }, 6000);
+                                                }, unfollowDelay + 1000);
                                             } else {
                                                 console.log(`Botão de confirmação não encontrado para ${username}, pulando para o próximo`);
                                                 alert(`Não conseguiu confirmar unfollow para ${username}`);

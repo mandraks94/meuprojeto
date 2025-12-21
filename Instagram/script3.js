@@ -1089,10 +1089,31 @@
                              const username = usernameSpan ? usernameSpan.innerText.trim() : '';
                              const imgTag = userElement.querySelector('img');
  
+                             let isChecked = false;
+                             const checkboxContainer = userElement.querySelector('div[role="button"][tabindex="0"]');
+                             if (checkboxContainer) {
+                                 const icon = checkboxContainer.querySelector('[data-bloks-name="ig.components.Icon"]');
+                                 if (icon) {
+                                     const style = window.getComputedStyle(icon);
+                                     const bg = style.backgroundColor;
+                                     const mask = style.maskImage || style.webkitMaskImage;
+                                     const bgImg = style.backgroundImage;
+                                     if (bg === 'rgb(0, 149, 246)' || bg === 'rgb(74, 93, 249)' || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled'))) {
+                                         isChecked = true;
+                                     }
+                                 }
+                             }
+ 
                              // Adiciona o usuário apenas se tiver um nome válido, uma foto e ainda não estiver na lista
                              if (username && imgTag && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
                                  const photoUrl = imgTag.src;
-                                 users.set(username, { username, photoUrl });
+                                 users.set(username, { username, photoUrl, isChecked });
+                             } else if (users.has(username)) {
+                                 const u = users.get(username);
+                                 if (!u.isChecked && isChecked) {
+                                     u.isChecked = true;
+                                     users.set(username, u);
+                                 }
                              }
                          });
  

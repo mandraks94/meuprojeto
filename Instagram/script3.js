@@ -211,6 +211,10 @@
                                     <span>Não segue de volta</span>
                                 </div>
                                 <div class="menu-item">
+                                    <button id="historicoUnfollowBtn">📜</button>
+                                    <span>Histórico de Unfollow</span>
+                                </div>
+                                <div class="menu-item">
                                     <button id="seguindoBtn">➡️</button>
                                     <span>Seguindo</span>
                                 </div>
@@ -584,6 +588,11 @@
                             document.getElementById("naoSegueDeVoltaBtn").addEventListener("click", () => {
                                 closeMenu();
                                 iniciarProcessoNaoSegueDeVolta();
+                            });
+
+                            document.getElementById("historicoUnfollowBtn").addEventListener("click", () => {
+                                closeMenu();
+                                abrirModalHistoricoUnfollow();
                             });
 
                             document.getElementById("seguindoBtn").addEventListener("click", () => {
@@ -2287,15 +2296,11 @@
                                 `;
                                 div.innerHTML = `
                                     <div class="modal-header">
-                                        <span class="modal-title">Análise de Seguidores</span>
+                                        <span class="modal-title">Análise de Seguidores (Não Seguem de Volta)</span>
                                         <div class="modal-controls">
                                             <button id="naoSegueDeVoltaMinimizarBtn" title="Minimizar">_</button>
                                             <button id="fecharSubmenuBtn" title="Fechar">X</button>
                                         </div>
-                                    </div>
-                                    <div class="tab-container">
-                                        <button class="tab-button active" data-tab="nao-segue">Não Segue de Volta</button>
-                                        <button class="tab-button" data-tab="historico">Histórico</button>
                                     </div>
                                     <div id="statusNaoSegue" style="margin-top: 20px; font-weight: bold;"></div>
                                     <div id="tabelaContainer" style="display: block; margin-top: 15px;"></div>
@@ -2324,10 +2329,6 @@
                                     btn.textContent = isMinimized ? '_' : '□';
                                     modal.style.maxHeight = isMinimized ? '90vh' : 'auto';
                                 };
-
-                                div.querySelectorAll('.tab-button').forEach(button => {
-                                    button.addEventListener('click', (e) => handleTabClick(e.target.dataset.tab));
-                                });
 
                                 const statusDiv = document.getElementById("statusNaoSegue");
 
@@ -2406,57 +2407,6 @@
                                     return processoCancelado ? null : userList;
                                 };
 
-                                async function handleTabClick(tab) {
-                                    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-                                    document.querySelector(`.tab-button[data-tab="${tab}"]`).classList.add('active');
-                                    const tabelaContainer = document.getElementById("tabelaContainer");
-                                    tabelaContainer.innerHTML = '';
-
-                                    // Se os dados ainda não foram carregados, mostra uma mensagem e aguarda.
-                                    if (!cachedData.seguidores || !cachedData.seguindo) {
-                                        statusDiv.innerText = "Aguarde, carregando dados iniciais...";
-                                        return;
-                                    }
-                                    const userId = cachedData.profileInfo.data.user.id;
-
-                                    if (tab === 'nao-segue') {
-                                        const naoSegueDeVolta = cachedData.naoSegueDeVolta;
-                                        statusDiv.innerText = `Análise concluída: ${naoSegueDeVolta.length} usuários não seguem você de volta.`;
-
-                                        if (naoSegueDeVolta.length > 0) {
-                                            tabelaContainer.innerHTML = `
-                                                <table id="naoSegueDeVoltaTable" style="width: 100%; border-collapse: collapse; margin-top: 20px;"></table>
-                                                <div style="margin-top: 20px;">
-                                                <button id="selecionarTodosBtn">Selecionar Todos</button>
-                                                <button id="desmarcarTodosBtn">Desmarcar Todos</button>
-                                                <button id="unfollowBtn">Unfollow</button>
-                                            </div>
-                                        `;
-                                        preencherTabela(naoSegueDeVolta, true, false);
-                                        document.getElementById("selecionarTodosBtn").addEventListener("click", selecionarTodos);
-                                        document.getElementById("desmarcarTodosBtn").addEventListener("click", desmarcarTodos);
-                                        document.getElementById("unfollowBtn").addEventListener("click", unfollowSelecionados);
-                                        }
-
-                                    } else if (tab === 'historico') {
-                                        statusDiv.innerText = "Carregando histórico de unfollow...";
-                                        const historicoData = await dbHelper.loadUnfollowHistory();
-                                        if (processoCancelado) return;
-
-                                        if (historicoData.length > 0) {
-                                            statusDiv.innerText = `Exibindo ${historicoData.length} registro(s) no histórico.`;
-                                            tabelaContainer.innerHTML = `
-                                                <table id="historicoTable" style="width: 100%; border-collapse: collapse; margin-top: 20px;"></table>
-                                                <div id="paginationControls" style="margin-top: 20px;"></div>
-                                            `;
-                                            preencherTabela(historicoData, false, true);
-                                        } else {
-                                            statusDiv.innerText = "Nenhum registro no histórico de unfollow.";
-                                            tabelaContainer.innerHTML = '';
-                                        }
-                                    }
-                                }
-
                                 // Função principal que carrega os dados UMA VEZ
                                 async function carregarDadosIniciais() {
                                     statusDiv.innerText = 'Buscando informações do perfil...';
@@ -2486,11 +2436,219 @@
                                     // Calcula e armazena em cache
                                     cachedData.naoSegueDeVolta = [...seguindo].filter(user => !seguidores.has(user));
 
-                                    // Finalmente, exibe a primeira aba com os dados já carregados
-                                    handleTabClick('nao-segue');
+                                    // Exibe a tabela de "não segue de volta"
+                                    const naoSegueDeVolta = cachedData.naoSegueDeVolta;
+                                    statusDiv.innerText = `Análise concluída: ${naoSegueDeVolta.length} usuários não seguem você de volta.`;
+
+                                    if (naoSegueDeVolta.length > 0) {
+                                        const tabelaContainer = document.getElementById("tabelaContainer");
+                                        tabelaContainer.innerHTML = `
+                                            <table id="naoSegueDeVoltaTable" style="width: 100%; border-collapse: collapse; margin-top: 20px;"></table>
+                                            <div style="margin-top: 20px;">
+                                                <button id="selecionarTodosBtn">Selecionar Todos</button>
+                                                <button id="desmarcarTodosBtn">Desmarcar Todos</button>
+                                                <button id="unfollowBtn">Unfollow</button>
+                                            </div>
+                                        `;
+                                        preencherTabela(naoSegueDeVolta, true, false);
+                                        document.getElementById("selecionarTodosBtn").addEventListener("click", selecionarTodos);
+                                        document.getElementById("desmarcarTodosBtn").addEventListener("click", desmarcarTodos);
+                                        document.getElementById("unfollowBtn").addEventListener("click", unfollowSelecionados);
+                                    }
+                                }
+
+                                // As funções de unfollow são movidas para cá para ter acesso ao escopo de `cachedData`, `statusDiv`, etc.
+                                function selecionarTodos() {
+                                    document.querySelectorAll(`#naoSegueDeVoltaTable .unfollowCheckbox`).forEach((checkbox) => {
+                                        checkbox.checked = true;
+                                    });
+                                }
+
+                                function desmarcarTodos() {
+                                    document.querySelectorAll(`#naoSegueDeVoltaTable .unfollowCheckbox`).forEach((checkbox) => {
+                                        checkbox.checked = false;
+                                    });
+                                }
+
+                                function unfollowSelecionados() {
+                                    if (isUnfollowing) {
+                                        alert("Processo de unfollow já em andamento.");
+                                        return;
+                                    }
+
+                                    const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(
+                                        (checkbox) => checkbox.dataset.username
+                                    );
+
+                                    if (selecionados.length === 0) {
+                                        alert("Nenhum usuário selecionado para Unfollow.");
+                                        return;
+                                    }
+
+                                    const unfollowBtn = document.getElementById("unfollowBtn");
+                                    unfollowBtn.disabled = true;
+                                    unfollowBtn.textContent = "Processando...";
+                                    isUnfollowing = true;
+
+                                    unfollowUsers(selecionados, 0, () => {
+                                        unfollowBtn.disabled = false;
+                                        unfollowBtn.textContent = "Unfollow";
+                                        isUnfollowing = false;
+                                    });
+                                }
+
+                                function unfollowUsers(users, index, callback) {
+                                    if (index >= users.length || processoCancelado) {
+                                        if (!processoCancelado) {
+                                            console.log("Todos os usuários processados. Unfollow concluído.");
+                                            alert("Unfollow concluído.");
+                                        }
+                                        if (callback) callback();
+                                        return;
+                                    }
+
+                                    const username = users[index];
+                                    statusDiv.innerText = `Deixando de seguir ${username} (${index + 1}/${users.length})...`;
+                                    history.pushState(null, null, `/${username}/`);
+                                    window.dispatchEvent(new Event("popstate"));
+
+                                    const unfollowDelay = loadSettings().unfollowDelay;
+
+                                    setTimeout(() => {
+                                        if (processoCancelado) { if (callback) callback(); return; }
+
+                                        // Seletores robustos para o botão "Seguindo"
+                                        let followBtn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(el => ['Seguindo', 'Following'].includes(el.innerText.trim()));
+
+                                        if (followBtn) {
+                                            followBtn.click();
+                                            setTimeout(() => {
+                                                if (processoCancelado) { if (callback) callback(); return; }
+
+                                                // Seletor robusto para o botão de confirmação
+                                                const confirmBtn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(btn => ['Deixar de seguir', 'Unfollow'].includes(btn.innerText.trim()));
+
+                                                if (confirmBtn) {
+                                                    confirmBtn.click();
+                                                    console.log(`Unfollow confirmado para ${username}`);
+
+                                                    // Salva no histórico
+                                                    getProfilePic(username).then(photoUrl => {
+                                                        dbHelper.saveUnfollowHistory({
+                                                            username: username,
+                                                            photoUrl: photoUrl,
+                                                            unfollowDate: new Date().toISOString()
+                                                        }).catch(err => console.error(`Falha ao salvar ${username} no histórico:`, err));
+                                                    });
+
+                                                    // Remove da lista de dados em cache
+                                                    if (cachedData.naoSegueDeVolta) {
+                                                        const userIndex = cachedData.naoSegueDeVolta.indexOf(username);
+                                                        if (userIndex > -1) {
+                                                            cachedData.naoSegueDeVolta.splice(userIndex, 1);
+                                                        }
+                                                    }
+
+                                                    // Remove a linha da tabela visível
+                                                    const row = document.querySelector(`#naoSegueDeVoltaTable tr[data-username="${username}"]`);
+                                                    if (row) row.remove();
+
+                                                    // Atualiza o texto de status
+                                                    if (document.querySelector('.tab-button[data-tab="nao-segue"].active')) {
+                                                        statusDiv.innerText = `Análise concluída: ${cachedData.naoSegueDeVolta.length} usuários não seguem você de volta.`;
+                                                    }
+
+                                                    // Processa o próximo usuário após o delay
+                                                    setTimeout(() => {
+                                                        unfollowUsers(users, index + 1, callback);
+                                                    }, unfollowDelay);
+
+                                                } else {
+                                                    console.log(`Botão de confirmação não encontrado para ${username}, pulando.`);
+                                                    alert(`Não foi possível confirmar o unfollow para ${username}. Pulando.`);
+                                                    unfollowUsers(users, index + 1, callback);
+                                                }
+                                            }, 2000); // Atraso para o modal de confirmação aparecer
+                                        } else {
+                                            console.log(`Botão 'Seguindo' não encontrado para ${username}, pulando.`);
+                                            alert(`Botão 'Seguindo' não encontrado para ${username}. Pulando.`);
+                                            unfollowUsers(users, index + 1, callback);
+                                        }
+                                    }, 4000); // Atraso para a página do perfil carregar
                                 }
 
                                 carregarDadosIniciais();
+                            }
+
+                            async function abrirModalHistoricoUnfollow() {
+                                if (document.getElementById("historicoUnfollowModal")) return;
+
+                                const div = document.createElement("div");
+                                div.id = "historicoUnfollowModal";
+                                div.className = "submenu-modal";
+                                div.style.cssText = `
+                                    position: fixed;
+                                    top: 50%;
+                                    left: 50%;
+                                    transform: translate(-50%, -50%);
+                                    width: 90%;
+                                    max-width: 800px;
+                                    max-height: 90vh;
+                                    border: 1px solid #ccc;
+                                    border-radius: 10px;
+                                    padding: 20px;
+                                    z-index: 10000;
+                                    overflow: auto;
+                                `;
+                                div.innerHTML = `
+                                    <div class="modal-header">
+                                        <span class="modal-title">Histórico de Unfollow</span>
+                                        <div class="modal-controls">
+                                            <button id="historicoMinimizarBtn" title="Minimizar">_</button>
+                                            <button id="fecharHistoricoBtn" title="Fechar">X</button>
+                                        </div>
+                                    </div>
+                                    <div id="statusHistorico" style="margin-top: 20px; font-weight: bold;">Carregando histórico...</div>
+                                    <div id="tabelaContainer" style="display: block; margin-top: 15px;"></div>
+                                `;
+                                document.body.appendChild(div);
+
+                                document.getElementById("fecharHistoricoBtn").addEventListener("click", () => {
+                                    div.remove();
+                                });
+
+                                document.getElementById("historicoMinimizarBtn").onclick = () => {
+                                    const modal = document.getElementById('historicoUnfollowModal');
+                                    const contentToToggle = [
+                                        modal.querySelector('#statusHistorico'),
+                                        modal.querySelector('#tabelaContainer')
+                                    ].filter(Boolean);
+
+                                    const btn = document.getElementById('historicoMinimizarBtn');
+                                    const isMinimized = modal.dataset.minimized === 'true';
+
+                                    contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+                                    modal.dataset.minimized = !isMinimized;
+                                    btn.textContent = isMinimized ? '_' : '□';
+                                    modal.style.maxHeight = isMinimized ? '90vh' : 'auto';
+                                };
+
+                                const statusDiv = document.getElementById("statusHistorico");
+                                const tabelaContainer = document.getElementById("tabelaContainer");
+
+                                const historicoData = await dbHelper.loadUnfollowHistory();
+
+                                if (historicoData.length > 0) {
+                                    statusDiv.innerText = `Exibindo ${historicoData.length} registro(s) no histórico.`;
+                                    tabelaContainer.innerHTML = `
+                                        <table id="historicoTable" style="width: 100%; border-collapse: collapse; margin-top: 20px;"></table>
+                                        <div id="paginationControls" style="margin-top: 20px;"></div>
+                                    `;
+                                    preencherTabela(historicoData, false, true);
+                                } else {
+                                    statusDiv.innerText = "Nenhum registro no histórico de unfollow.";
+                                    tabelaContainer.innerHTML = '';
+                                }
                             }
 
                             // --- LÓGICA PARA "SEGUINDO" ---

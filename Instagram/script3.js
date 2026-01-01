@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Instagram Tools_2
+// @name         Instagram Tools_3
 // @description  Adds download buttons to Instagram stories
 // @author       You
 // @version      1.0
@@ -12,6 +12,218 @@
             
             function initScript() {
                 if (window.location.href.includes("instagram.com")) {
+                    // Helper para IndexedDB
+                    const dbHelper = {
+                        db: null,
+                        openDB: function() {
+                            return new Promise((resolve, reject) => {
+                                const request = indexedDB.open('InstagramToolsDB', 3);
+                                request.onupgradeneeded = (event) => {
+                                    const db = event.target.result;
+                                    if (!db.objectStoreNames.contains('closeFriends')) {
+                                        db.createObjectStore('closeFriends', { keyPath: 'id', autoIncrement: true });
+                                    }
+                                    if (!db.objectStoreNames.contains('hiddenStory')) {
+                                        db.createObjectStore('hiddenStory', { keyPath: 'id', autoIncrement: true });
+                                    }
+                                    if (!db.objectStoreNames.contains('muted')) {
+                                        db.createObjectStore('muted', { keyPath: 'id', autoIncrement: true });
+                                    }
+                                    if (!db.objectStoreNames.contains('unfollowHistory')) {
+                                        db.createObjectStore('unfollowHistory', { keyPath: 'username' });
+                                    }
+                                };
+                                request.onsuccess = (event) => {
+                                    this.db = event.target.result;
+                                    resolve(this.db);
+                                };
+                                request.onerror = (event) => {
+                                    reject(event.target.error);
+                                };
+                            });
+                        },
+                        saveCache: async function(storeName, usernames) {
+                            if (!this.db) await this.openDB();
+                            const transaction = this.db.transaction([storeName], 'readwrite');
+                            const store = transaction.objectStore(storeName);
+                            // Clear existing data
+                            await new Promise((resolve) => {
+                                const clearRequest = store.clear();
+                                clearRequest.onsuccess = () => resolve();
+                                clearRequest.onerror = () => resolve(); // Continue even if clear fails
+                            });
+                            // Save new data
+                            const usernamesArray = Array.from(usernames);
+                            await new Promise((resolve, reject) => {
+                                const addRequest = store.add({ usernames: usernamesArray });
+                                addRequest.onsuccess = () => resolve();
+                                addRequest.onerror = (event) => reject(event.target.error);
+                            });
+                        },
+                        loadCache: async function(storeName) {
+                            if (!this.db) await this.openDB();
+                            const transaction = this.db.transaction([storeName], 'readonly');
+                            const store = transaction.objectStore(storeName);
+                            return new Promise((resolve) => {
+                                const request = store.getAll();
+                                request.onsuccess = () => {
+                                    const results = request.result;
+                                    if (results.length > 0) {
+                                        resolve(new Set(results[0].usernames));
+                                    } else {
+                                        resolve(null);
+                                    }
+                                };
+                                request.onerror = () => resolve(null);
+                            });
+                        },
+                        saveUnfollowHistory: async function(userData) {
+                            if (!this.db) await this.openDB();
+                            const transaction = this.db.transaction(['unfollowHistory'], 'readwrite');
+                            const store = transaction.objectStore('unfollowHistory');
+                            return new Promise((resolve, reject) => {
+                                // put() irá adicionar ou atualizar o registro
+                                const request = store.put(userData);
+                                request.onsuccess = () => resolve();
+                                request.onerror = (event) => reject(event.target.error);
+                            });
+                        },
+                        loadUnfollowHistory: async function() {
+                            if (!this.db) await this.openDB();
+                            const transaction = this.db.transaction(['unfollowHistory'], 'readonly');
+                            const store = transaction.objectStore('unfollowHistory');
+                            return new Promise((resolve) => {
+                                const request = store.getAll();
+                                request.onsuccess = () => {
+                                    // Ordena por data decrescente
+                                    const sorted = request.result.sort((a, b) => new Date(b.unfollowDate) - new Date(a.unfollowDate));
+                                    resolve(sorted);
+                                };
+                                request.onerror = () => resolve([]); // Retorna array vazio em caso de erro
+                            });
+                        }
+                    };
+
+                    // --- LÓGICA DE CONFIGURAÇÕES ---
+                    function loadSettings() {
+                        const defaults = {
+                            darkMode: false,
+                            rgbBorder: false,
+                            language: 'pt-BR',
+                            unfollowDelay: 5000,
+                            itemsPerPage: 10
+                        };
+                        try {
+                            const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
+                            return { ...defaults, ...saved };
+                        } catch (e) {
+                            return defaults;
+                        }
+                    }
+
+                    function saveSettings(newSettings) {
+                        const current = loadSettings();
+                        const updated = { ...current, ...newSettings };
+                        localStorage.setItem('instagramToolsSettings_v2', JSON.stringify(updated));
+                    }
+
+                    function toggleDarkMode(enabled) {
+                        document.body.classList.toggle('dark-mode', enabled);
+                        const btn = document.getElementById("settingsDarkModeBtn");
+                        if (btn) btn.style.background = enabled ? '#4c5c75' : '';
+                    }
+
+                    function toggleRgbBorder(enabled) {
+                        const elements = document.querySelectorAll('.submenu-modal, .assistive-menu');
+                        elements.forEach(el => {
+                            el.classList.toggle('rgb-border-effect', enabled);
+                        });
+                        const btn = document.getElementById("settingsRgbBorderBtn");
+                        if (btn) btn.style.background = enabled ? '#4c5c75' : '';
+                    }
+
+                    function applyInitialSettings() {
+                        const settings = loadSettings();
+                        toggleDarkMode(settings.darkMode);
+                        toggleRgbBorder(settings.rgbBorder);
+                    }
+
+                    // --- LÓGICA PARA ATALHOS ---
+                    function getShortcuts() {
+                        try {
+                            const saved = JSON.parse(localStorage.getItem('instagram_shortcuts_v2'));
+                            return Array.isArray(saved) ? saved : [];
+                        } catch (e) {
+                            return [];
+                        }
+                    }
+
+                    function saveShortcuts(shortcuts) {
+                        localStorage.setItem('instagram_shortcuts_v2', JSON.stringify(shortcuts));
+                    }
+
+                    function formatShortcutForDisplay(shortcut) {
+                        if (!shortcut || !shortcut.key) return '';
+                        const parts = [];
+                        if (shortcut.ctrlKey) parts.push('Ctrl');
+                        if (shortcut.altKey) parts.push('Alt');
+                        if (shortcut.shiftKey) parts.push('Shift');
+                        parts.push(shortcut.key.toUpperCase());
+                        return parts.join(' + ');
+                    }
+
+                    function executeXPathClick(xpath) {
+                        try {
+                            const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                            const element = result.singleNodeValue;
+                            if (element) {
+                                element.click();
+                                return true;
+                            }
+                            console.warn("Atalho: Nenhum elemento encontrado para o XPath:", xpath);
+                            return false;
+                        } catch (error) {
+                            console.error("Atalho: Erro ao executar o XPath:", xpath, error);
+                            return false;
+                        }
+                    }
+
+                    function initShortcutListener() {
+                        if (document.body.dataset.shortcutsInitialized) return; // Evita múltiplos listeners
+                        document.body.dataset.shortcutsInitialized = 'true';
+                        
+                        document.addEventListener('keydown', (event) => {
+                            // Ignora atalhos se um input, textarea ou contenteditable estiver focado
+                            if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable) {
+                                return;
+                            }
+
+                            // Ignora pressionamentos de apenas teclas modificadoras
+                            if (['Control', 'Alt', 'Shift', 'Meta'].includes(event.key)) {
+                                return;
+                            }
+
+                            const shortcuts = getShortcuts();
+                            const shortcut = shortcuts.find(s => 
+                                s.key.toLowerCase() === event.key.toLowerCase() &&
+                                !!s.ctrlKey === event.ctrlKey &&
+                                !!s.altKey === event.altKey &&
+                                !!s.shiftKey === event.shiftKey
+                            );
+
+                            if (shortcut) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                console.log(`Atalho '${formatShortcutForDisplay(shortcut)}' acionado.`);
+                                if (shortcut.xpath) {
+                                    executeXPathClick(shortcut.xpath);
+                                } else if (shortcut.link) {
+                                    window.location.href = shortcut.link;
+                                }
+                            }
+                        });
+                    }
+
                         function injectMenu() {
                             if (document.getElementById("assistiveTouchMenu")) return;
 
@@ -272,98 +484,6 @@
                                 muted: null,       // Será um Set de usernames
                                 closeFriends: null,  // Será um Set de usernames
                                 hiddenStory: null    // Será um Set de usernames
-                            };
-
-                            // Helper para IndexedDB
-                            const dbHelper = {
-                                db: null,
-                                openDB: function() {
-                                    return new Promise((resolve, reject) => {
-                                        const request = indexedDB.open('InstagramToolsDB', 3);
-                                        request.onupgradeneeded = (event) => {
-                                            const db = event.target.result;
-                                            if (!db.objectStoreNames.contains('closeFriends')) {
-                                                db.createObjectStore('closeFriends', { keyPath: 'id', autoIncrement: true });
-                                            }
-                                            if (!db.objectStoreNames.contains('hiddenStory')) {
-                                                db.createObjectStore('hiddenStory', { keyPath: 'id', autoIncrement: true });
-                                            }
-                                            if (!db.objectStoreNames.contains('muted')) {
-                                                db.createObjectStore('muted', { keyPath: 'id', autoIncrement: true });
-                                            }
-                                            if (!db.objectStoreNames.contains('unfollowHistory')) {
-                                                db.createObjectStore('unfollowHistory', { keyPath: 'username' });
-                                            }
-                                        };
-                                        request.onsuccess = (event) => {
-                                            this.db = event.target.result;
-                                            resolve(this.db);
-                                        };
-                                        request.onerror = (event) => {
-                                            reject(event.target.error);
-                                        };
-                                    });
-                                },
-                                saveCache: async function(storeName, usernames) {
-                                    if (!this.db) await this.openDB();
-                                    const transaction = this.db.transaction([storeName], 'readwrite');
-                                    const store = transaction.objectStore(storeName);
-                                    // Clear existing data
-                                    await new Promise((resolve) => {
-                                        const clearRequest = store.clear();
-                                        clearRequest.onsuccess = () => resolve();
-                                        clearRequest.onerror = () => resolve(); // Continue even if clear fails
-                                    });
-                                    // Save new data
-                                    const usernamesArray = Array.from(usernames);
-                                    await new Promise((resolve, reject) => {
-                                        const addRequest = store.add({ usernames: usernamesArray });
-                                        addRequest.onsuccess = () => resolve();
-                                        addRequest.onerror = (event) => reject(event.target.error);
-                                    });
-                                },
-                                loadCache: async function(storeName) {
-                                    if (!this.db) await this.openDB();
-                                    const transaction = this.db.transaction([storeName], 'readonly');
-                                    const store = transaction.objectStore(storeName);
-                                    return new Promise((resolve) => {
-                                        const request = store.getAll();
-                                        request.onsuccess = () => {
-                                            const results = request.result;
-                                            if (results.length > 0) {
-                                                resolve(new Set(results[0].usernames));
-                                            } else {
-                                                resolve(null);
-                                            }
-                                        };
-                                        request.onerror = () => resolve(null);
-                                    });
-                                },
-                                saveUnfollowHistory: async function(userData) {
-                                    if (!this.db) await this.openDB();
-                                    const transaction = this.db.transaction(['unfollowHistory'], 'readwrite');
-                                    const store = transaction.objectStore('unfollowHistory');
-                                    return new Promise((resolve, reject) => {
-                                        // put() irá adicionar ou atualizar o registro
-                                        const request = store.put(userData);
-                                        request.onsuccess = () => resolve();
-                                        request.onerror = (event) => reject(event.target.error);
-                                    });
-                                },
-                                loadUnfollowHistory: async function() {
-                                    if (!this.db) await this.openDB();
-                                    const transaction = this.db.transaction(['unfollowHistory'], 'readonly');
-                                    const store = transaction.objectStore('unfollowHistory');
-                                    return new Promise((resolve) => {
-                                        const request = store.getAll();
-                                        request.onsuccess = () => {
-                                            // Ordena por data decrescente
-                                            const sorted = request.result.sort((a, b) => new Date(b.unfollowDate) - new Date(a.unfollowDate));
-                                            resolve(sorted);
-                                        };
-                                        request.onerror = () => resolve([]); // Retorna array vazio em caso de erro
-                                    });
-                                }
                             };
 
                             function extractUsernames() {
@@ -3041,52 +3161,6 @@
                                 carregarSeguindo();
                             }
 
-                            // --- LÓGICA DE CONFIGURAÇÕES ---
-
-                            function loadSettings() {
-                                const defaults = {
-                                    darkMode: false,
-                                    rgbBorder: false,
-                                    language: 'pt-BR',
-                                    unfollowDelay: 5000,
-                                    itemsPerPage: 10
-                                };
-                                try {
-                                    const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
-                                    return { ...defaults, ...saved };
-                                } catch (e) {
-                                    return defaults;
-                                }
-                            }
-
-                            function saveSettings(newSettings) {
-                                const current = loadSettings();
-                                const updated = { ...current, ...newSettings };
-                                localStorage.setItem('instagramToolsSettings_v2', JSON.stringify(updated));
-                            }
-
-                            function applyInitialSettings() {
-                                const settings = loadSettings();
-                                toggleDarkMode(settings.darkMode);
-                                toggleRgbBorder(settings.rgbBorder);
-                            }
-
-                            function toggleDarkMode(enabled) {
-                                document.body.classList.toggle('dark-mode', enabled);
-                                const btn = document.getElementById("settingsDarkModeBtn");
-                                if (btn) btn.style.background = enabled ? '#4c5c75' : '';
-                            }
-
-                            function toggleRgbBorder(enabled) {
-                                // Adiciona ou remove a classe de todos os modais existentes e futuros
-                                const elements = document.querySelectorAll('.submenu-modal, .assistive-menu');
-                                elements.forEach(el => {
-                                    el.classList.toggle('rgb-border-effect', enabled);
-                                });
-                                const btn = document.getElementById("settingsRgbBorderBtn");
-                                if (btn) btn.style.background = enabled ? '#4c5c75' : '';
-                            }
-
                             function abrirModalConfiguracoes() {
                                 if (document.getElementById("settingsModal")) return;
 
@@ -3115,6 +3189,7 @@
                                         <div style="display: flex; flex-direction: column; gap: 10px;">
                                             <button id="settingsDarkModeBtn" class="menu-item-button" style="background: ${settings.darkMode ? '#4c5c75' : ''};">🌙 Modo Escuro</button>
                                             <button id="settingsRgbBorderBtn" class="menu-item-button" style="background: ${settings.rgbBorder ? '#4c5c75' : ''};">🌈 Borda RGB</button>
+                                            <button id="settingsShortcutsBtn" class="menu-item-button">⌨️ Atalhos</button>
                                             <button id="settingsParamsBtn" class="menu-item-button">🔧 Parâmetros</button>
                                             <button id="settingsLangBtn" class="menu-item-button">🌐 Idioma</button>
                                         </div>
@@ -3136,6 +3211,11 @@
                                     saveSettings({ rgbBorder: newSetting });
                                 };
 
+                                document.getElementById("settingsShortcutsBtn").onclick = () => {
+                                    div.remove();
+                                    abrirModalAtalhos();
+                                };
+
                                 document.getElementById("settingsParamsBtn").onclick = () => {
                                     div.remove(); // Fecha o modal de config para abrir o de parâmetros
                                     abrirModalParametros();
@@ -3147,6 +3227,177 @@
                                     const newLang = currentLang === 'pt-BR' ? 'en-US' : 'pt-BR';
                                     saveSettings({ language: newLang });
                                     alert(`Idioma alterado para ${newLang}. A tradução completa será aplicada no futuro.`);
+                                };
+                            }
+
+                            function renderShortcuts() {
+                                const list = document.getElementById('shortcuts-list');
+                                if (!list) return;
+
+                                const shortcuts = getShortcuts();
+                                list.innerHTML = '';
+
+                                if (shortcuts.length === 0) {
+                                    list.innerHTML = '<p style="color: #8e8e8e; text-align: center;">Nenhum atalho configurado.</p>';
+                                    return;
+                                }
+
+                                shortcuts.forEach((shortcut, index) => {
+                                    const item = document.createElement('div');
+                                    item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #efefef;';
+
+                                    const keyText = formatShortcutForDisplay(shortcut);
+                                    const actionText = shortcut.xpath ? `XPath: ${shortcut.xpath.substring(0, 25)}...` : `Link: ${shortcut.link.substring(0, 25)}...`;
+
+                                    item.innerHTML = `
+                                        <div>
+                                            <strong style="font-size: 16px;">${keyText}</strong>
+                                            <span style="font-size: 12px; color: #8e8e8e; margin-left: 10px;">${actionText}</span>
+                                        </div>
+                                        <button data-index="${index}" class="delete-shortcut-btn" style="background: #ed4956; color: white; border: none; border-radius: 5px; cursor: pointer; padding: 4px 8px;">Excluir</button>
+                                    `;
+                                    list.appendChild(item);
+                                });
+
+                                document.querySelectorAll('.delete-shortcut-btn').forEach(button => {
+                                    button.onclick = (e) => {
+                                        const indexToDelete = parseInt(e.target.dataset.index, 10);
+                                        let currentShortcuts = getShortcuts();
+                                        currentShortcuts.splice(indexToDelete, 1);
+                                        saveShortcuts(currentShortcuts);
+                                        renderShortcuts(); // Re-render a lista
+                                    };
+                                });
+                            }
+                            
+                            function abrirModalAtalhos() {
+                                if (document.getElementById("shortcutsModal")) return;
+
+                                const div = document.createElement("div");
+                                div.id = "shortcutsModal";
+                                div.className = "submenu-modal";
+                                div.style.cssText = `
+                                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                    width: 90%; max-width: 500px; border: 1px solid #ccc;
+                                    border-radius: 10px; z-index: 10001;
+                                `;
+                                if (loadSettings().rgbBorder) {
+                                    div.classList.add('rgb-border-effect');
+                                }
+
+                                div.innerHTML = `
+                                    <div class="modal-header">
+                                        <span class="modal-title">Configurar Atalhos</span>
+                                        <div class="modal-controls">
+                                            <button id="fecharShortcutsBtn" title="Fechar">X</button>
+                                        </div>
+                                    </div>
+                                    <div style="padding: 20px;">
+                                        <form id="shortcut-form" style="display: flex; flex-direction: column; gap: 15px;">
+                                            <input type="text" id="shortcut-key" placeholder="Clique aqui e pressione o atalho" required readonly style="padding: 8px; color: black; border: 1px solid #ccc; border-radius: 5px; cursor: pointer;">
+                                            <input type="text" id="shortcut-xpath" placeholder="Full XPath (opcional)" style="padding: 8px; color: black; border: 1px solid #ccc; border-radius: 5px;">
+                                            <input type="text" id="shortcut-link" placeholder="Link de Acesso (opcional)" style="padding: 8px; color: black; border: 1px solid #ccc; border-radius: 5px;">
+                                            <button type="submit" style="background:#0095f6;color:white;border:none;padding:10px;border-radius:5px;cursor:pointer;">Salvar Atalho</button>
+                                        </form>
+                                        <hr style="border: none; border-top: 1px solid #efefef; margin: 20px 0;">
+                                        <h3 style="margin-bottom: 10px; font-size: 16px;">Atalhos Salvos</h3>
+                                        <div id="shortcuts-list" style="max-height: 200px; overflow-y: auto;"></div>
+                                    </div>
+                                `;
+                                document.body.appendChild(div);
+
+                                renderShortcuts();
+
+                                const keyInput = document.getElementById('shortcut-key');
+                                let capturedShortcut = null;
+
+                                const handleShortcutKeyDown = (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+
+                                    // Ignora se for apenas uma tecla modificadora
+                                    if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
+                                        return;
+                                    }
+
+                                    capturedShortcut = {
+                                        key: e.key.toLowerCase(),
+                                        ctrlKey: e.ctrlKey,
+                                        altKey: e.altKey,
+                                        shiftKey: e.shiftKey,
+                                    };
+
+                                    keyInput.value = formatShortcutForDisplay(capturedShortcut);
+                                    document.removeEventListener('keydown', handleShortcutKeyDown, true);
+                                    keyInput.style.borderColor = '#ccc';
+                                    document.getElementById('shortcut-xpath').focus();
+                                };
+
+                                keyInput.addEventListener('focus', () => {
+                                    keyInput.value = 'Pressione o atalho...';
+                                    keyInput.style.borderColor = '#0095f6';
+                                    // Usa 'true' para capturar o evento antes de outros listeners
+                                    document.addEventListener('keydown', handleShortcutKeyDown, true);
+                                });
+
+                                keyInput.addEventListener('blur', () => {
+                                    keyInput.style.borderColor = '#ccc';
+                                    if (keyInput.value === 'Pressione o atalho...') {
+                                        keyInput.value = capturedShortcut ? formatShortcutForDisplay(capturedShortcut) : '';
+                                    }
+                                    document.removeEventListener('keydown', handleShortcutKeyDown, true);
+                                });
+
+                                document.getElementById("fecharShortcutsBtn").onclick = () => {
+                                    document.removeEventListener('keydown', handleShortcutKeyDown, true);
+                                    div.remove();
+                                };
+
+                                document.getElementById("shortcut-form").onsubmit = (e) => {
+                                    e.preventDefault();
+                                    const xpathInput = document.getElementById('shortcut-xpath');
+                                    const linkInput = document.getElementById('shortcut-link');
+                                    
+                                    const xpath = xpathInput.value.trim();
+                                    const link = linkInput.value.trim();
+
+                                    if (!capturedShortcut || !capturedShortcut.key) {
+                                        alert("Por favor, defina uma tecla de atalho válida.");
+                                        return;
+                                    }
+                                    if (!xpath && !link) {
+                                        alert("Você deve fornecer um XPath ou um Link.");
+                                        return;
+                                    }
+
+                                    const newShortcut = { ...capturedShortcut, xpath, link };
+                                    const shortcuts = getShortcuts();
+                                    
+                                    // Verifica se já existe um atalho com a mesma tecla
+                                    const existingIndex = shortcuts.findIndex(s => 
+                                        s.key.toLowerCase() === newShortcut.key.toLowerCase() &&
+                                        !!s.ctrlKey === newShortcut.ctrlKey &&
+                                        !!s.altKey === newShortcut.altKey &&
+                                        !!s.shiftKey === newShortcut.shiftKey
+                                    );
+                                    if (existingIndex > -1) {
+                                        if (confirm(`Já existe um atalho para '${formatShortcutForDisplay(newShortcut)}'. Deseja substituí-lo?`)) {
+                                            shortcuts[existingIndex] = newShortcut;
+                                        } else {
+                                            return;
+                                        }
+                                    } else {
+                                        shortcuts.push(newShortcut);
+                                    }
+
+                                    saveShortcuts(shortcuts);
+                                    renderShortcuts();
+
+                                    // Limpa o formulário
+                                    keyInput.value = '';
+                                    capturedShortcut = null;
+                                    xpathInput.value = '';
+                                    linkInput.value = '';
                                 };
                             }
 
@@ -4077,8 +4328,11 @@
 
                         // --- FIM DA LÓGICA DE DOWNLOAD DE STORIES ---
 
+                       dbHelper.openDB(); // Abre a conexão com o IndexedDB na inicialização
+                        applyInitialSettings(); // Aplica as configurações salvas na inicialização
                         addFeedDownloadButtons();
                         injectMenu();
+                        initShortcutListener();
 
                         // Re-inject menu on navigation
                         const push = history.pushState;
@@ -4249,7 +4503,5 @@
                 childList: true,
                     subtree: true,
             });
-                dbHelper.openDB(); // Abre a conexão com o IndexedDB na inicialização
-                applyInitialSettings(); // Aplica as configurações salvas na inicialização
 
         })(); 

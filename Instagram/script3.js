@@ -88,6 +88,20 @@
                                 request.onerror = (event) => reject(event.target.error);
                             });
                         },
+                        deleteUnfollowHistory: async function(usernames) {
+                            if (!this.db) await this.openDB();
+                            const transaction = this.db.transaction(['unfollowHistory'], 'readwrite');
+                            const store = transaction.objectStore('unfollowHistory');
+                            return new Promise((resolve) => {
+                                let count = 0;
+                                if (usernames.length === 0) resolve();
+                                usernames.forEach(u => {
+                                    const req = store.delete(u);
+                                    req.onsuccess = () => { count++; if(count === usernames.length) resolve(); };
+                                    req.onerror = () => { count++; if(count === usernames.length) resolve(); };
+                                });
+                            });
+                        },
                         loadUnfollowHistory: async function() {
                             if (!this.db) await this.openDB();
                             const transaction = this.db.transaction(['unfollowHistory'], 'readonly');
@@ -2568,12 +2582,14 @@
                                                 <button id="selecionarTodosBtn">Selecionar Todos</button>
                                                 <button id="desmarcarTodosBtn">Desmarcar Todos</button>
                                                 <button id="unfollowBtn">Unfollow</button>
+                                            <button id="bloquearBtn" style="margin-left: 10px; background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Bloquear</button>
                                             </div>
                                         `;
                                         preencherTabela(naoSegueDeVolta, true, false);
                                         document.getElementById("selecionarTodosBtn").addEventListener("click", selecionarTodos);
                                         document.getElementById("desmarcarTodosBtn").addEventListener("click", desmarcarTodos);
                                         document.getElementById("unfollowBtn").addEventListener("click", unfollowSelecionados);
+                                    document.getElementById("bloquearBtn").addEventListener("click", bloquearSelecionados);
                                     }
                                 }
 
@@ -2588,6 +2604,110 @@
                                     document.querySelectorAll(`#naoSegueDeVoltaTable .unfollowCheckbox`).forEach((checkbox) => {
                                         checkbox.checked = false;
                                     });
+                                }
+
+                                function bloquearSelecionados() {
+                                    const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(
+                                        (checkbox) => checkbox.dataset.username
+                                    );
+                                    if (selecionados.length === 0) {
+                                        alert("Nenhum usuário selecionado para Bloquear.");
+                                        return;
+                                    }
+                                    const btn = document.getElementById("bloquearBtn");
+                                    btn.disabled = true;
+                                    btn.textContent = "Processando...";
+                                    
+                                    blockUsers(selecionados, 0, () => {
+                                        btn.disabled = false;
+                                        btn.textContent = "Bloquear";
+                                    });
+                                }
+
+                                function blockUsers(users, index, callback) {
+                                    if (index >= users.length) {
+                                        alert("Bloqueio concluído.");
+                                        if (callback) callback();
+                                        return;
+                                    }
+                                    const username = users[index];
+                                    statusDiv.innerText = `Bloqueando ${username} (${index + 1}/${users.length})...`;
+                                    history.pushState(null, null, `/${username}/`);
+                                    window.dispatchEvent(new Event("popstate"));
+
+                                    setTimeout(() => {
+                                        // 1. Clicar nos 3 pontinhos (Opções)
+                                        const xpath1 = "/html/body/div[1]/div/div/div[2]/div/div/div[1]/div[2]/div[1]/section/main/div/div/header/div/section[2]/div/div[1]/div[2]/div";
+                                        let optionsClicked = executeXPathClick(xpath1);
+                                        
+                                        if (!optionsClicked) {
+                                            // Fallback: busca por SVG de opções se o XPath falhar
+                                            const svgs = document.querySelectorAll('svg[aria-label="Opções"], svg[aria-label="Options"]');
+                                            if (svgs.length > 0) {
+                                                let parent = svgs[0].closest('div[role="button"]') || svgs[0].parentNode;
+                                                if (parent) { parent.click(); optionsClicked = true; }
+                                            }
+                                        }
+
+                                        if (optionsClicked) {
+                                            setTimeout(() => {
+                                                // 2. Clicar em "Bloquear" no menu que abriu
+                                                let blockMenuClicked = false;
+                                                // Tenta XPaths comuns para o menu (div[5], div[6], etc)
+                                                const menuXpaths = [
+                                                    "/html/body/div[5]/div[1]/div/div[2]/div/div/div/div/div/button[1]",
+                                                    "/html/body/div[6]/div[1]/div/div[2]/div/div/div/div/div/button[1]",
+                                                    "/html/body/div[7]/div[1]/div/div[2]/div/div/div/div/div/button[1]"
+                                                ];
+                                                for (let xp of menuXpaths) {
+                                                    if (executeXPathClick(xp)) { blockMenuClicked = true; break; }
+                                                }
+
+                                                if (!blockMenuClicked) {
+                                                    // Fallback: Busca botão "Bloquear" no último dialog aberto
+                                                    const dialogs = document.querySelectorAll('div[role="dialog"]');
+                                                    if (dialogs.length > 0) {
+                                                        const lastDialog = dialogs[dialogs.length - 1];
+                                                        const btn = Array.from(lastDialog.querySelectorAll('button')).find(b => b.innerText.trim() === 'Bloquear' || b.innerText.trim() === 'Block');
+                                                        if (btn) { btn.click(); blockMenuClicked = true; }
+                                                    }
+                                                }
+
+                                                if (blockMenuClicked) {
+                                                    setTimeout(() => {
+                                                        // 3. Confirmar "Bloquear" no modal de confirmação
+                                                        let confirmClicked = false;
+                                                        // Tenta XPaths comuns para o modal de confirmação
+                                                        const confirmXpaths = [
+                                                            "/html/body/div[10]/div[1]/div/div[2]/div/div/div/div/div/div/div[2]/button[1]",
+                                                            "/html/body/div[9]/div[1]/div/div[2]/div/div/div/div/div/div/div[2]/button[1]",
+                                                            "/html/body/div[8]/div[1]/div/div[2]/div/div/div/div/div/div/div[2]/button[1]"
+                                                        ];
+                                                        for (let xp of confirmXpaths) {
+                                                            if (executeXPathClick(xp)) { confirmClicked = true; break; }
+                                                        }
+                                                        
+                                                        if (!confirmClicked) {
+                                                            // Fallback robusto: Busca botão "Bloquear" no último dialog (que deve ser o de confirmação)
+                                                            const dialogs = document.querySelectorAll('div[role="dialog"]');
+                                                            if (dialogs.length > 0) {
+                                                                const lastDialog = dialogs[dialogs.length - 1];
+                                                                const btn = Array.from(lastDialog.querySelectorAll('button')).find(b => b.innerText.trim() === 'Bloquear' || b.innerText.trim() === 'Block');
+                                                                if (btn) { btn.click(); confirmClicked = true; }
+                                                            }
+                                                        }
+                                                        setTimeout(() => blockUsers(users, index + 1, callback), 2000);
+                                                    }, 2000);
+                                                } else {
+                                                    console.warn("Botão Bloquear do menu não encontrado.");
+                                                    blockUsers(users, index + 1, callback);
+                                                }
+                                            }, 2000);
+                                        } else {
+                                            console.warn("Botão Opções (3 pontos) não encontrado.");
+                                            blockUsers(users, index + 1, callback);
+                                        }
+                                    }, 4000);
                                 }
 
                                 function unfollowSelecionados() {
@@ -2728,6 +2848,11 @@
                                             <button id="fecharHistoricoBtn" title="Fechar">X</button>
                                         </div>
                                     </div>
+                                    <div style="padding: 15px;">
+                                        <button id="histSelectAll" style="margin-right:5px; cursor:pointer;">Selecionar Todos</button>
+                                        <button id="histDeselectAll" style="margin-right:5px; cursor:pointer;">Desmarcar Todos</button>
+                                        <button id="histLimparBtn" style="background:#ed4956;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">Limpar</button>
+                                    </div>
                                     <div id="statusHistorico" style="margin-top: 20px; font-weight: bold;">Carregando histórico...</div>
                                     <div id="tabelaContainer" style="display: block; margin-top: 15px;"></div>
                                 `;
@@ -2764,7 +2889,19 @@
                                         <table id="historicoTable" style="width: 100%; border-collapse: collapse; margin-top: 20px;"></table>
                                         <div id="paginationControls" style="margin-top: 20px;"></div>
                                     `;
-                                    preencherTabela(historicoData, false, true);
+                                    preencherTabela(historicoData, true, true);
+                                    
+                                    document.getElementById("histSelectAll").onclick = () => selecionarTodos(null, "historicoTable");
+                                    document.getElementById("histDeselectAll").onclick = () => desmarcarTodos(null, "historicoTable");
+                                    document.getElementById("histLimparBtn").onclick = async () => {
+                                        const selected = Array.from(document.querySelectorAll("#historicoTable .unfollowCheckbox:checked")).map(cb => cb.dataset.username);
+                                        if(selected.length === 0) return alert("Selecione itens para limpar.");
+                                        if(confirm(`Deseja excluir ${selected.length} itens do histórico?`)) {
+                                            await dbHelper.deleteUnfollowHistory(selected);
+                                            div.remove();
+                                            abrirModalHistoricoUnfollow();
+                                        }
+                                    };
                                 } else {
                                     statusDiv.innerText = "Nenhum registro no histórico de unfollow.";
                                     tabelaContainer.innerHTML = '';

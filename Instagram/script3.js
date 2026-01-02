@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Instagram Tools_3
+// @name         Instagram Tools_4
 // @description  Adds download buttons to Instagram stories
 // @author       You
 // @version      1.0

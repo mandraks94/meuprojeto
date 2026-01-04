@@ -2978,7 +2978,7 @@
                                                     const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção'));
                                                     if (officialCheckboxContainer) {
                                                         const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"]');
-                                                        const isChecked = iconDiv && (window.getComputedStyle(iconDiv).backgroundColor === "rgb(0, 149, 246)" || iconDiv.style.backgroundImage.includes('circle-check__filled'));
+                                                        const isChecked = iconDiv && (window.getComputedStyle(iconDiv).backgroundColor === "rgb(74, 93, 249)" || iconDiv.style.backgroundImage.includes('circle-check__filled'));
                                                         officialStates.set(userText, isChecked);
                                                     }
                                                 }

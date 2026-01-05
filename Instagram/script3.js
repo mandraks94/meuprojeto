@@ -2583,13 +2583,15 @@
                                                 <button id="desmarcarTodosBtn">Desmarcar Todos</button>
                                                 <button id="unfollowBtn">Unfollow</button>
                                             <button id="bloquearBtn" style="margin-left: 10px; background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Bloquear</button>
+                                            <button id="downloadCsvBtn" style="margin-left: 10px; background-color: #2ecc71; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Baixar .csv</button>
                                             </div>
                                         `;
                                         preencherTabela(naoSegueDeVolta, true, false);
                                         document.getElementById("selecionarTodosBtn").addEventListener("click", selecionarTodos);
                                         document.getElementById("desmarcarTodosBtn").addEventListener("click", desmarcarTodos);
                                         document.getElementById("unfollowBtn").addEventListener("click", unfollowSelecionados);
-                                    document.getElementById("bloquearBtn").addEventListener("click", bloquearSelecionados);
+                                        document.getElementById("bloquearBtn").addEventListener("click", bloquearSelecionados);
+                                        document.getElementById("downloadCsvBtn").addEventListener("click", () => downloadNaoSegueDeVoltaCsv(naoSegueDeVolta));
                                     }
                                 }
 
@@ -2622,6 +2624,31 @@
                                         btn.disabled = false;
                                         btn.textContent = "Bloquear";
                                     });
+                                }
+
+                                function downloadNaoSegueDeVoltaCsv(users) {
+                                    if (!users || users.length === 0) {
+                                        alert("Nenhum usuário para baixar.");
+                                        return;
+                                    }
+
+                                    let csvContent = "ID,Username,Link do Perfil\n";
+
+                                    users.forEach((username, index) => {
+                                        const id = index + 1;
+                                        const link = `https://www.instagram.com/${username}/`;
+                                        csvContent += `${id},${username},${link}\n`;
+                                    });
+
+                                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                                    const url = URL.createObjectURL(blob);
+                                    const link = document.createElement("a");
+                                    link.setAttribute("href", url);
+                                    link.setAttribute("download", "nao_segue_de_volta.csv");
+                                    link.style.visibility = 'hidden';
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
                                 }
 
                                 function blockUsers(users, index, callback) {

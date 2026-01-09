@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Instagram Tools_4
+// @name         Instagram Tools__5
 // @description  Adds download buttons to Instagram stories
 // @author       You
 // @version      1.0
@@ -9,7 +9,7 @@
 
         (function() {
             'use strict';
-            
+
             function initScript() {
                 if (window.location.href.includes("instagram.com")) {
                     // Helper para IndexedDB
@@ -17,7 +17,7 @@
                         db: null,
                         openDB: function() {
                             return new Promise((resolve, reject) => {
-                                const request = indexedDB.open('InstagramToolsDB', 3);
+                                const request = indexedDB.open('InstagramToolsDB', 5);
                                 request.onupgradeneeded = (event) => {
                                     const db = event.target.result;
                                     if (!db.objectStoreNames.contains('closeFriends')) {
@@ -32,6 +32,16 @@
                                     if (!db.objectStoreNames.contains('unfollowHistory')) {
                                         db.createObjectStore('unfollowHistory', { keyPath: 'username' });
                                     }
+                                    // Recriar tabelas para garantir schema correto (correção do erro de keyPath)
+                                    if (db.objectStoreNames.contains('followers')) {
+                                        db.deleteObjectStore('followers');
+                                    }
+                                    db.createObjectStore('followers', { keyPath: 'id', autoIncrement: true });
+
+                                    if (db.objectStoreNames.contains('following')) {
+                                        db.deleteObjectStore('following');
+                                    }
+                                    db.createObjectStore('following', { keyPath: 'id', autoIncrement: true });
                                 };
                                 request.onsuccess = (event) => {
                                     this.db = event.target.result;
@@ -55,7 +65,7 @@
                             // Save new data
                             const usernamesArray = Array.from(usernames);
                             await new Promise((resolve, reject) => {
-                                const addRequest = store.add({ usernames: usernamesArray });
+                                const addRequest = store.put({ id: 1, usernames: usernamesArray });
                                 addRequest.onsuccess = () => resolve();
                                 addRequest.onerror = (event) => reject(event.target.error);
                             });
@@ -125,7 +135,9 @@
                             rgbBorder: false,
                             language: 'pt-BR',
                             unfollowDelay: 5000,
-                            itemsPerPage: 10
+                            requestDelay: 2000,
+                            itemsPerPage: 10,
+                            requestBatchSize: 50
                         };
                         try {
                             const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
@@ -205,7 +217,7 @@
                     function initShortcutListener() {
                         if (document.body.dataset.shortcutsInitialized) return; // Evita múltiplos listeners
                         document.body.dataset.shortcutsInitialized = 'true';
-                        
+
                         document.addEventListener('keydown', (event) => {
                             // Ignora atalhos se um input, textarea ou contenteditable estiver focado
                             if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable) {
@@ -218,7 +230,7 @@
                             }
 
                             const shortcuts = getShortcuts();
-                            const shortcut = shortcuts.find(s => 
+                            const shortcut = shortcuts.find(s =>
                                 s.key.toLowerCase() === event.key.toLowerCase() &&
                                 !!s.ctrlKey === event.ctrlKey &&
                                 !!s.altKey === event.altKey &&
@@ -396,10 +408,10 @@
                                         90% { border-color: rgb(255, 0, 255); }
                                         100% { border-color: rgb(255, 0, 0); }
                                     }
-                                    .rgb-border-effect { 
+                                    .rgb-border-effect {
                                         border-style: solid !important;
                                         border-width: 2px !important;
-                                        animation: rgb-border-animation 5s linear infinite; 
+                                        animation: rgb-border-animation 5s linear infinite;
                                     }
                                 `;
                             }
@@ -464,6 +476,10 @@
                                 <div class="menu-item">
                                     <button id="baixarStoryBtn">⬇️</button>
                                     <span>Baixar Story</span>
+                                </div>
+                                <div class="menu-item">
+                                    <button id="backupDbBtn">💾</button>
+                                    <span>Backup DB</span>
                                 </div>
                                 <div class="menu-item">
                                     <button id="settingsBtn">⚙️</button>
@@ -673,7 +689,7 @@
                                 const closeButton = document.createElement("button");
                                 closeButton.innerText = "Cancelar";
                                 closeButton.style.cssText = "background:red;color:white;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;";
-                                
+
                                 bar.appendChild(fill);
                                 bar.appendChild(text);
                                 bar.appendChild(closeButton);
@@ -800,6 +816,98 @@
                 abrirModalReels();
             });
             document.getElementById("baixarStoryBtn").addEventListener("click", () => { baixarStoryAtual(); });
+
+            document.getElementById("backupDbBtn").addEventListener("click", () => {
+                closeMenu();
+                abrirModalBackup();
+            });
+
+            async function abrirModalBackup() {
+                if (document.getElementById("backupModal")) return;
+
+                const pathParts = window.location.pathname.split('/').filter(Boolean);
+                const username = pathParts[0];
+                if (!username || (pathParts.length > 1 && !['followers', 'following'].includes(pathParts[1]))) {
+                    alert("Por favor, vá para a sua página de perfil para realizar o backup.");
+                    return;
+                }
+
+                const div = document.createElement("div");
+                div.id = "backupModal";
+                div.className = "submenu-modal";
+                div.style.cssText = `
+                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                    width: 90%; max-width: 400px; border: 1px solid #ccc;
+                    border-radius: 10px; padding: 20px; z-index: 10000;
+                `;
+                
+                let followersCount = 0;
+                let followingCount = 0;
+                try {
+                    const followersData = await dbHelper.loadCache('followers');
+                    if (followersData) followersCount = followersData.size;
+                    const followingData = await dbHelper.loadCache('following');
+                    if (followingData) followingCount = followingData.size;
+                } catch (e) { console.error(e); }
+
+                div.innerHTML = `
+                    <div class="modal-header">
+                        <span class="modal-title">Backup para IndexedDB</span>
+                        <div class="modal-controls"><button id="fecharBackupBtn" title="Fechar">X</button></div>
+                    </div>
+                    <div style="padding: 15px; display: flex; flex-direction: column; gap: 15px;">
+                        <div>
+                            <strong>Seguidores no DB:</strong> <span id="dbFollowersCount">${followersCount}</span>
+                            <button id="btnSaveFollowers" class="menu-item-button" style="width:100%; margin-top:5px; justify-content:center;">Salvar Seguidores</button>
+                        </div>
+                        <div>
+                            <strong>Seguindo no DB:</strong> <span id="dbFollowingCount">${followingCount}</span>
+                            <button id="btnSaveFollowing" class="menu-item-button" style="width:100%; margin-top:5px; justify-content:center;">Salvar Seguindo</button>
+                        </div>
+                        <div id="backupStatus" style="margin-top:10px; font-size:12px; color:gray; text-align:center;"></div>
+                    </div>
+                `;
+                document.body.appendChild(div);
+                document.getElementById("fecharBackupBtn").onclick = () => div.remove();
+
+                const updateStatus = (msg) => { const el = document.getElementById("backupStatus"); if(el) el.innerText = msg; };
+
+                const processBackup = async (type) => {
+                    const btn = type === 'followers' ? document.getElementById("btnSaveFollowers") : document.getElementById("btnSaveFollowing");
+                    if(btn) btn.disabled = true;
+                    updateStatus(`Iniciando backup de ${type === 'followers' ? 'seguidores' : 'seguindo'}...`);
+                    try {
+                        const appID = '936619743392459';
+                        const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
+                        const profileInfo = await profileInfoResponse.json();
+                        const userId = profileInfo.data?.user?.id;
+                        if (!userId) throw new Error("ID de usuário não encontrado.");
+                        const total = type === 'followers' ? profileInfo.data.user.edge_followed_by.count : profileInfo.data.user.edge_follow.count;
+                        const userList = new Set();
+                        let nextMaxId = '';
+                        let hasNextPage = true;
+                        const batchSize = loadSettings().requestBatchSize;
+                        const delay = loadSettings().requestDelay;
+                        while (hasNextPage) {
+                            if(!document.getElementById("backupModal")) return;
+                            updateStatus(`Baixando ${type === 'followers' ? 'seguidores' : 'seguindo'}: ${userList.size} / ${total}`);
+                            const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=${batchSize}&max_id=${nextMaxId}`, { headers: { 'X-IG-App-ID': appID } });
+                            const data = await response.json();
+                            data.users.forEach(u => userList.add(u.username));
+                            nextMaxId = data.next_max_id;
+                            hasNextPage = !!nextMaxId;
+                            if (hasNextPage) await new Promise(r => setTimeout(r, delay));
+                        }
+                        updateStatus(`Salvando ${userList.size} usuários no Banco de Dados...`);
+                        await dbHelper.saveCache(type === 'followers' ? 'followers' : 'following', userList);
+                        updateStatus(`Sucesso! ${userList.size} salvos.`);
+                        if (type === 'followers') document.getElementById("dbFollowersCount").innerText = userList.size;
+                        else document.getElementById("dbFollowingCount").innerText = userList.size;
+                    } catch (e) { console.error(e); updateStatus(`Erro: ${e.message}`); } finally { if(btn) btn.disabled = false; }
+                };
+                document.getElementById("btnSaveFollowers").onclick = () => processBackup('followers');
+                document.getElementById("btnSaveFollowing").onclick = () => processBackup('following');
+            }
 
             document.getElementById("settingsBtn").addEventListener("click", () => {
                 closeMenu();
@@ -1024,7 +1132,7 @@
                         const isMinimized = modal.dataset.minimized === 'true';
 
                         contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-                        
+
                         modal.dataset.minimized = !isMinimized;
                         btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
                         modal.style.maxHeight = isMinimized ? '85vh' : 'none';
@@ -1059,7 +1167,7 @@
                     searchInput.addEventListener("input", () => {
                         const filter = searchInput.value.toLowerCase();
                         const listItems = div.querySelectorAll("#closeFriendsList li");
-                        listItems.forEach(li => { 
+                        listItems.forEach(li => {
                             // Seletor ajustado para ser mais específico
                             const usernameSpan = li.querySelector('span[style*="cursor:pointer"]');
                             if (usernameSpan) {
@@ -1108,7 +1216,7 @@
                             return initialStates.get(username) !== checked;
                         });
                         if (changedUsers.length === 0) {
-                            alert("Nenhuma alteração para aplicar."); 
+                            alert("Nenhuma alteração para aplicar.");
                             isApplyingChanges = false;
                             return;
                         }
@@ -1164,7 +1272,7 @@
                             // Atualiza o estado inicial para o próximo "Aplicar"
                             initialStates.set(username, isChecked);
                         }
-                        
+
                         bar.remove();
                         isApplyingChanges = false;
                     };
@@ -1224,7 +1332,7 @@
                      let scrollInterval;
                      let noNewUsersCount = 0;
                      const maxIdleCount = 3; // Parar após 3 tentativas sem novos usuários (3 segundos)
- 
+
                      let cancelled = false;
                      const { bar, update, closeButton } = createCancellableProgressBar();
                      closeButton.onclick = () => {
@@ -1233,7 +1341,7 @@
                          finishExtraction();
                      };
                      update(0, 0, "Buscando e rolando a lista de usuários com story oculto...");
- 
+
                      function finishExtraction() {
                          clearInterval(scrollInterval);
                          if (bar) bar.remove();
@@ -1241,25 +1349,25 @@
                          // Se foi cancelado, retorna uma lista vazia para não abrir o modal.
                          resolve(cancelled ? [] : Array.from(users.values()));
                      }
- 
+
                      function performScrollAndExtract() {
                          const initialUserCount = users.size;
- 
+
                          // Seletor para os elementos que contêm o nome de usuário
                          const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')).filter(el =>
                              el.querySelector('span[data-bloks-name="bk.components.Text"]')
                          );
- 
+
                          if (userElements.length === 0 && users.size === 0) {
                              console.log("Nenhum usuário encontrado ainda, tentando novamente...");
                              return; // Continua tentando se a lista estiver vazia
                          }
- 
+
                          userElements.forEach(userElement => {
                              const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
                              const username = usernameSpan ? usernameSpan.innerText.trim() : '';
                              const imgTag = userElement.querySelector('img');
- 
+
                              let isChecked = false;
                              const checkboxContainer = userElement.querySelector('div[role="button"][tabindex="0"]');
                              if (checkboxContainer) {
@@ -1274,7 +1382,7 @@
                                      }
                                  }
                              }
- 
+
                              // Adiciona o usuário apenas se tiver um nome válido, uma foto e ainda não estiver na lista
                              if (username && imgTag && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
                                  const photoUrl = imgTag.src;
@@ -1287,26 +1395,26 @@
                                  }
                              }
                          });
- 
+
                          update(users.size, users.size, `Encontrado(s) ${users.size} usuário(s)... Rolando...`);
- 
+
                          // Lógica de parada: se não encontrar novos usuários por um tempo, para.
                          if (users.size === initialUserCount) {
                              noNewUsersCount++;
                          } else {
                              noNewUsersCount = 0; // Reseta o contador se encontrar novos usuários
                          }
- 
+
                          if (noNewUsersCount >= maxIdleCount) {
                              console.log("Nenhum novo usuário encontrado após várias tentativas. Finalizando.");
                              finishExtraction();
                              return;
                          }
- 
+
                          // Simula a rolagem da janela principal
                          window.scrollTo(0, document.body.scrollHeight);
                      }
- 
+
                      // Inicia o processo de rolagem e extração
                      scrollInterval = setInterval(performScrollAndExtract, 1000); // Rola e extrai a cada 1 segundo
                  });
@@ -1440,7 +1548,7 @@
                         const isMinimized = modal.dataset.minimized === 'true';
 
                         contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-                        
+
                         modal.dataset.minimized = !isMinimized;
                         btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
                         modal.style.maxHeight = isMinimized ? '85vh' : 'none';
@@ -1642,7 +1750,7 @@
                             const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
                             const username = usernameSpan ? usernameSpan.innerText.trim() : '';
                             const imgTag = userElement.querySelector('img');
-                            
+
                             let isChecked = false;
                             const checkboxContainer = userElement.querySelector('div[role="button"][tabindex="0"]');
                             if (checkboxContainer) {
@@ -1798,7 +1906,7 @@
                         const isMinimized = modal.dataset.minimized === 'true';
 
                         contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-                        
+
                         modal.dataset.minimized = !isMinimized;
                         btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
                         modal.style.maxHeight = isMinimized ? '85vh' : 'none';
@@ -1814,7 +1922,7 @@
                     const searchInput = document.getElementById("mutedSearchInput");
                     searchInput.addEventListener("input", () => {
                         const filter = searchInput.value.toLowerCase();
-                        div.querySelectorAll("#mutedList li").forEach(li => { 
+                        div.querySelectorAll("#mutedList li").forEach(li => {
                             // Seletor ajustado para ser mais específico
                             const usernameSpan = li.querySelector('span[style*="cursor:pointer"]');
                             const text = usernameSpan ? usernameSpan.textContent.toLowerCase() : '';
@@ -1896,8 +2004,8 @@
 
                     // 3. Clicar na opção "Silenciar"
                     // Seletor mais robusto, similar ao de unfollow, para encontrar a opção "Silenciar"
-                    const muteOption = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], div[role="menuitem"]')).find(el => 
-                        el.innerText.trim() === 'Silenciar' || 
+                    const muteOption = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], div[role="menuitem"]')).find(el =>
+                        el.innerText.trim() === 'Silenciar' ||
                         (el.querySelector('span') && el.querySelector('span').innerText.trim() === 'Silenciar')
                     );
                     if (!muteOption) {
@@ -1917,7 +2025,7 @@
                     for (const optionText of optionsToToggle) {
                         // Encontra o elemento de texto ("Publicações" ou "Stories") em toda a página
                         const textElement = Array.from(document.querySelectorAll('span, div')).find(el => el.innerText.trim() === optionText);
-                        
+
                         if (!textElement) {
                             console.log(`Elemento de texto para "${optionText}" não encontrado.`);
                             continue;
@@ -1936,7 +2044,7 @@
 
                                 if (toggleMode || isChecked === 'true') {
                                     console.log(`Tentando alterar o estado de "${optionText}".`);
-                                    
+
                                     // --- LÓGICA DE TESTE A/B ---
                                     if (optionText === 'Publicações' || optionText === 'Posts') {
                                         console.log(`Usando método 1 (clique no input) para "${optionText}".`);
@@ -2298,15 +2406,15 @@
 
             let modalAbertoBlocked = false;
                             // --- FIM DO MENU CONTAS BLOQUEADAS ---
-            
+
             function simulateClick(element, triggerChangeEvent = false) {
                  if (!element) return;
                  const dispatch = (event) => element.dispatchEvent(event);
-            
+
                  // Simula eventos de toque, mais confiáveis em mobile
                  dispatch(new TouchEvent('touchstart', { bubbles: true, cancelable: true, view: window }));
                  dispatch(new TouchEvent('touchend', { bubbles: true, cancelable: true, view: window }));
-            
+
                  // Mantém os eventos de mouse como fallback
                  dispatch(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
                  dispatch(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
@@ -2515,7 +2623,7 @@
 
                                     while (hasNextPage && !processoCancelado) {
                                         try {
-                                            const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=50&max_id=${nextMaxId}`, {
+                                            const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=${loadSettings().requestBatchSize}&max_id=${nextMaxId}`, {
                                                 headers: { 'X-IG-App-ID': appID }
                                             });
                                             if (!response.ok) throw new Error(`Erro na API: ${response.statusText}`);
@@ -2529,7 +2637,7 @@
                                             } else {
                                                 hasNextPage = false;
                                             }
-                                            await new Promise(r => setTimeout(r, 250)); // Pequena pausa para não sobrecarregar
+                                            await new Promise(r => setTimeout(r, loadSettings().requestDelay)); // Pausa configurável
                                         } catch (error) {
                                             console.error(`Erro ao buscar ${type}:`, error);
                                             alert(`Ocorreu um erro ao buscar a lista de ${type}. Tente novamente mais tarde.`);
@@ -2619,7 +2727,7 @@
                                     const btn = document.getElementById("bloquearBtn");
                                     btn.disabled = true;
                                     btn.textContent = "Processando...";
-                                    
+
                                     blockUsers(selecionados, 0, () => {
                                         btn.disabled = false;
                                         btn.textContent = "Bloquear";
@@ -2666,7 +2774,7 @@
                                         // 1. Clicar nos 3 pontinhos (Opções)
                                         const xpath1 = "/html/body/div[1]/div/div/div[2]/div/div/div[1]/div[2]/div[1]/section/main/div/div/header/div/section[2]/div/div[1]/div[2]/div";
                                         let optionsClicked = executeXPathClick(xpath1);
-                                        
+
                                         if (!optionsClicked) {
                                             // Fallback: busca por SVG de opções se o XPath falhar
                                             const svgs = document.querySelectorAll('svg[aria-label="Opções"], svg[aria-label="Options"]');
@@ -2713,7 +2821,7 @@
                                                         for (let xp of confirmXpaths) {
                                                             if (executeXPathClick(xp)) { confirmClicked = true; break; }
                                                         }
-                                                        
+
                                                         if (!confirmClicked) {
                                                             // Fallback robusto: Busca botão "Bloquear" no último dialog (que deve ser o de confirmação)
                                                             const dialogs = document.querySelectorAll('div[role="dialog"]');
@@ -2809,10 +2917,11 @@
                                                     });
 
                                                     // Remove da lista de dados em cache
-                                                    if (cachedData.naoSegueDeVolta) {
-                                                        const userIndex = cachedData.naoSegueDeVolta.indexOf(username);
+                                                    const currentList = getCurrentList();
+                                                    if (currentList) {
+                                                        const userIndex = currentList.indexOf(username);
                                                         if (userIndex > -1) {
-                                                            cachedData.naoSegueDeVolta.splice(userIndex, 1);
+                                                            currentList.splice(userIndex, 1);
                                                         }
                                                     }
 
@@ -2821,9 +2930,8 @@
                                                     if (row) row.remove();
 
                                                     // Atualiza o texto de status
-                                                    if (document.querySelector('.tab-button[data-tab="nao-segue"].active')) {
-                                                        statusDiv.innerText = `Análise concluída: ${cachedData.naoSegueDeVolta.length} usuários não seguem você de volta.`;
-                                                    }
+                                                    // O status é atualizado dinamicamente se chamarmos renderTab, mas para evitar reload completo, apenas atualizamos o texto se necessário
+                                                    // statusDiv.innerText = ... (Opcional, já que a linha some)
 
                                                     // Processa o próximo usuário após o delay
                                                     setTimeout(() => {
@@ -2917,7 +3025,7 @@
                                         <div id="paginationControls" style="margin-top: 20px;"></div>
                                     `;
                                     preencherTabela(historicoData, true, true);
-                                    
+
                                     document.getElementById("histSelectAll").onclick = () => selecionarTodos(null, "historicoTable");
                                     document.getElementById("histDeselectAll").onclick = () => desmarcarTodos(null, "historicoTable");
                                     document.getElementById("histLimparBtn").onclick = async () => {
@@ -3032,7 +3140,7 @@
                                     width: 90%; max-width: 800px; max-height: 90vh; border: 1px solid #ccc;
                                     border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
                                 `;
-                                div.innerHTML = ` 
+                                div.innerHTML = `
                                     <div class="modal-header">
                                         <span class="modal-title">Gerenciador de "Seguindo"</span>
                                         <div class="modal-controls"><button id="seguindoMinimizarBtn" title="Minimizar">_</button><button id="fecharSeguindoBtn" title="Fechar">X</button></div>
@@ -3115,13 +3223,13 @@
                                 };
 
                                 while (hasNextPage && !processoCancelado) {
-                                    const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=50&max_id=${nextMaxId}`, { headers: { 'X-IG-App-ID': appID } });
+                                    const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=${loadSettings().requestBatchSize}&max_id=${nextMaxId}`, { headers: { 'X-IG-App-ID': appID } });
                                     const data = await response.json();
                                     data.users.forEach(user => userList.push({ username: user.username, photoUrl: user.profile_pic_url }));
                                     updateLocalProgressBar(userList.length, total);
                                     hasNextPage = !!data.next_max_id;
                                     nextMaxId = data.next_max_id;
-                                    await new Promise(r => setTimeout(r, 250));
+                                    await new Promise(r => setTimeout(r, loadSettings().requestDelay));
                                 }
                                 if (bar) bar.remove();
                                 return processoCancelado ? null : userList;
@@ -3177,7 +3285,7 @@
                                     const renderList = (page) => {
                                         const startIndex = (page - 1) * itemsPerPage;
                                         const endIndex = startIndex + itemsPerPage;
-                                        
+
                                         // Filtra por pesquisa antes de ordenar e paginar
                                         const searchTerm = document.getElementById('seguindoSearchInput')?.value.toLowerCase() || '';
                                         let filteredUsers = seguindoList;
@@ -3272,7 +3380,7 @@
                                         if (prevBtn) prevBtn.onclick = () => renderList(--currentPage);
                                         const nextBtn = document.getElementById("nextPageBtn");
                                         if (nextBtn) nextBtn.onclick = () => renderList(++currentPage);
-                                        
+
                                         // Adiciona eventos aos checkboxes individuais para atualizar o Set
                                         document.querySelectorAll('#seguindoModal .user-checkbox').forEach(checkbox => {
                                             checkbox.addEventListener('change', (e) => {
@@ -3433,7 +3541,7 @@
                                     };
                                 });
                             }
-                            
+
                             function abrirModalAtalhos() {
                                 if (document.getElementById("shortcutsModal")) return;
 
@@ -3521,7 +3629,7 @@
                                     e.preventDefault();
                                     const xpathInput = document.getElementById('shortcut-xpath');
                                     const linkInput = document.getElementById('shortcut-link');
-                                    
+
                                     const xpath = xpathInput.value.trim();
                                     const link = linkInput.value.trim();
 
@@ -3536,9 +3644,9 @@
 
                                     const newShortcut = { ...capturedShortcut, xpath, link };
                                     const shortcuts = getShortcuts();
-                                    
+
                                     // Verifica se já existe um atalho com a mesma tecla
-                                    const existingIndex = shortcuts.findIndex(s => 
+                                    const existingIndex = shortcuts.findIndex(s =>
                                         s.key.toLowerCase() === newShortcut.key.toLowerCase() &&
                                         !!s.ctrlKey === newShortcut.ctrlKey &&
                                         !!s.altKey === newShortcut.altKey &&
@@ -3595,6 +3703,14 @@
                                             <input type="number" id="unfollowDelayInput" value="${settings.unfollowDelay}" style="width: 80px; color: black;">
                                         </div>
                                         <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <label for="requestDelayInput">Intervalo Requisições (ms)</label>
+                                            <input type="number" id="requestDelayInput" value="${settings.requestDelay}" style="width: 80px; color: black;">
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <label for="requestBatchSizeInput">Itens por Requisição (API)</label>
+                                            <input type="number" id="requestBatchSizeInput" value="${settings.requestBatchSize}" style="width: 80px; color: black;">
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
                                             <label for="itemsPerPageInput">Itens por Página nas Tabelas</label>
                                             <input type="number" id="itemsPerPageInput" value="${settings.itemsPerPage}" style="width: 80px; color: black;">
                                         </div>
@@ -3614,6 +3730,8 @@
                                 document.getElementById("saveParamsBtn").onclick = () => {
                                     const newSettings = {
                                         unfollowDelay: parseInt(document.getElementById("unfollowDelayInput").value, 10),
+                                        requestDelay: parseInt(document.getElementById("requestDelayInput").value, 10),
+                                        requestBatchSize: parseInt(document.getElementById("requestBatchSizeInput").value, 10),
                                         itemsPerPage: parseInt(document.getElementById("itemsPerPageInput").value, 10),
                                         language: document.getElementById("languageSelect").value
                                     };
@@ -3714,25 +3832,25 @@
 
                             function startReelsAutoScroll() {
                                 if (!isReelsScrolling) return;
- 
+
                                 // Encontra o vídeo que está visível na tela
                                 const visibleVideo = Array.from(document.querySelectorAll('video')).find(v => {
                                     const rect = v.getBoundingClientRect();
                                     return rect.top >= 0 && rect.bottom <= window.innerHeight && v.readyState > 2;
                                 });
- 
+
                                 // Se encontrou um vídeo e ele ainda não tem nosso listener
                                 if (visibleVideo && !visibleVideo.hasAttribute('data-reels-scroller')) {
                                     visibleVideo.setAttribute('data-reels-scroller', 'true');
- 
+
                                     const timeUpdateListener = () => {
                                         // Verifica se o vídeo está perto do fim (últimos 700ms)
                                         if (visibleVideo.duration - visibleVideo.currentTime <= 0.7) {
                                             console.log("Vídeo quase no fim, rolando para o próximo.");
-                                            
+
                                             // Remove o listener para não disparar múltiplas vezes
                                             visibleVideo.removeEventListener('timeupdate', timeUpdateListener);
- 
+
                                             // Lógica para encontrar o contêiner de rolagem dinamicamente
                                             let scrollableContainer = visibleVideo.parentElement;
                                             while (scrollableContainer) {
@@ -3760,7 +3878,7 @@
                                                     behavior: 'smooth'
                                                 });
                                             }
-  
+
                                             // Após a rolagem, chama a função novamente para encontrar o novo vídeo
                                             // e adicionar o listener a ele.
                                             setTimeout(startReelsAutoScroll, 2000); // Aguarda a animação de rolagem
@@ -3808,9 +3926,9 @@
                                     const queryHash = 'd4d88dc1500312af6f937f7b804c68c3'; // Hash para a query de Reels do usuário
 
                                     while (hasNextPage) {
-                                        const variables = { "user_id": userId, "first": 50, "after": nextMaxId };
+                                        const variables = { "user_id": userId, "first": loadSettings().requestBatchSize, "after": nextMaxId };
                                         const url = `https://www.instagram.com/graphql/query/?query_hash=${queryHash}&variables=${encodeURIComponent(JSON.stringify(variables))}`;
-                                        
+
                                         const response = await fetch(url, { headers: { 'X-IG-App-ID': appID } });
                                         if (!response.ok) throw new Error(`A resposta da rede não foi 'ok'. Status: ${response.status}`);
                                         const data = await response.json();
@@ -3833,7 +3951,7 @@
 
                                         hasNextPage = clipsData?.page_info?.has_next_page || false;
                                         nextMaxId = clipsData?.page_info?.end_cursor || '';
-                                        if (hasNextPage) await new Promise(r => setTimeout(r, 300));
+                                        if (hasNextPage) await new Promise(r => setTimeout(r, loadSettings().requestDelay));
                                     }
 
                                     statusModal.remove();
@@ -3969,16 +4087,16 @@
                                         buttonId: 'silenciarSeguindoBtn',
                                         text: 'Silenciar/Reativar',
                                         func: (users, cb) => unmuteUsers(users, cb, true) // Passa `true` para ativar o modo toggle
-                                }, 
-                                closeFriends: { 
-                                    buttonId: 'closeFriendsSeguindoBtn', 
-                                    text: 'Melhores Amigos', 
-                                    // Nova função que age no perfil individual 
-                                    func: (users, cb) => performActionOnProfile(users, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], cb) 
                                 },
-                                hideStory: { 
-                                    buttonId: 'hideStorySeguindoBtn', 
-                                    text: 'Ocultar Story', 
+                                closeFriends: {
+                                    buttonId: 'closeFriendsSeguindoBtn',
+                                    text: 'Melhores Amigos',
+                                    // Nova função que age no perfil individual
+                                    func: (users, cb) => performActionOnProfile(users, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], cb)
+                                },
+                                hideStory: {
+                                    buttonId: 'hideStorySeguindoBtn',
+                                    text: 'Ocultar Story',
                                     // Revertido para o método original que navega para a página de lista, conforme solicitado.
                                     func: (users, cb) => toggleListMembership(users, '/accounts/hide_story_and_live_from/', 'hiddenStory', cb)
                                 }
@@ -4036,7 +4154,7 @@
 
                                 // 3. Clicar na opção desejada (ex: "Adicionar aos melhores amigos")
                                  // Seletor aprimorado para encontrar o texto em qualquer lugar dentro do elemento clicável
-                                 const actionOption = Array.from(document.querySelectorAll('div[role="button"], div[role="menuitem"]')).find(el => 
+                                 const actionOption = Array.from(document.querySelectorAll('div[role="button"], div[role="menuitem"]')).find(el =>
                                      menuTexts.some(text => el.innerText.includes(text))
                                  );
 
@@ -4668,4 +4786,4 @@
                     subtree: true,
             });
 
-        })(); 
+        })();

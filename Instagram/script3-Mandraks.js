@@ -481,10 +481,6 @@
                                     <span>Não segue de volta</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="historicoUnfollowBtn">📜</button>
-                                    <span>Histórico de Unfollow</span>
-                                </div>
-                                <div class="menu-item">
                                     <button id="seguindoBtn">➡️</button>
                                     <span>Seguindo</span>
                                 </div>
@@ -766,11 +762,6 @@
                             document.getElementById("naoSegueDeVoltaBtn").addEventListener("click", () => {
                                 closeMenu();
                                 iniciarProcessoNaoSegueDeVolta();
-                            });
-
-                            document.getElementById("historicoUnfollowBtn").addEventListener("click", () => {
-                                closeMenu();
-                                iniciarProcessoNaoSegueDeVolta('tabHistorico');
                             });
 
                             document.getElementById("seguindoBtn").addEventListener("click", () => {

@@ -2521,6 +2521,9 @@
                                     profileInfo: null,
                                     userDetails: new Map()
                                 };
+                                
+                                // Variável compartilhada para as listas, acessível pelo unfollowUsers
+                                let lists = {};
 
                                 // Função para extrair lista de usuários via API (muito mais rápido)
                                 const fetchUserListAPI = async (userId, type, total) => {
@@ -2678,7 +2681,7 @@
                                     tabelaContainer.innerHTML = tabsHtml;
                                     
                                     // Referências para as listas (usando let para poder atualizar)
-                                    let lists = {
+                                    lists = {
                                         'tabNaoSegueDeVolta': listNaoSegueDeVolta,
                                         'tabNovosSeguidores': listNovosSeguidores,
                                         'tabNovosSeguindo': listNovosSeguindo,
@@ -2697,13 +2700,16 @@
 
                                         if (currentTabId === 'tabHistorico') {
                                             currentList = await dbHelper.loadUnfollowHistory();
+                                        } else {
+                                            currentList = lists[currentTabId];
                                         }
 
+                                        const tableId = currentTabId === 'tabHistorico' ? 'historicoTable' : 'naoSegueDeVoltaTable';
                                         const contentDiv = document.getElementById("tabContent");
                                         contentDiv.innerHTML = `
                                             <div style="margin-bottom: 10px;">
                                             </div>
-                                            <table id="naoSegueDeVoltaTable" style="width: 100%; border-collapse: collapse; margin-top: 20px;"></table>
+                                            <table id="${tableId}" style="width: 100%; border-collapse: collapse; margin-top: 20px;"></table>
                                             <div style="margin-top: 20px;">
                                                 <button id="selecionarTodosBtn">Selecionar Todos</button>
                                                 <button id="desmarcarTodosBtn">Desmarcar Todos</button>
@@ -2767,7 +2773,6 @@
                                     tabs.forEach(tabId => {
                                         document.getElementById(tabId).addEventListener('click', () => {
                                             currentTabId = tabId;
-                                            currentList = lists[tabId];
                                             renderCurrentTab();
                                         });
                                     });
@@ -3023,22 +3028,31 @@
                                                         }).catch(err => console.error(`Falha ao salvar ${username} no histórico:`, err));
                                                     });
 
-                                                    // Remove da lista de dados em cache
-                                                    if (cachedData.naoSegueDeVolta) {
-                                                        const userIndex = cachedData.naoSegueDeVolta.indexOf(username);
+                                                    // Remove da lista de "Não segue de volta" em memória
+                                                    const naoSegueList = lists['tabNaoSegueDeVolta'];
+                                                    if (naoSegueList) {
+                                                        const userIndex = naoSegueList.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
                                                         if (userIndex > -1) {
-                                                            cachedData.naoSegueDeVolta.splice(userIndex, 1);
+                                                            naoSegueList.splice(userIndex, 1);
                                                         }
+                                                        // Atualiza o contador da aba
+                                                        const countSpan = document.getElementById('countNaoSegue');
+                                                        if (countSpan) countSpan.innerText = naoSegueList.length;
+                                                    }
+
+                                                    // Atualiza o cache de 'following' no banco de dados para persistir a mudança
+                                                    const lowerUser = username.toLowerCase();
+                                                    if (cachedData.seguindo && cachedData.seguindo.has(lowerUser)) {
+                                                        cachedData.seguindo.delete(lowerUser);
+                                                        const newFollowingList = Array.from(cachedData.seguindo).map(u => 
+                                                            cachedData.userDetails.get(u) || { username: u, photoUrl: null }
+                                                        );
+                                                        dbHelper.saveCache('following', newFollowingList).catch(e => console.error("Erro ao atualizar cache following:", e));
                                                     }
 
                                                     // Remove a linha da tabela visível
                                                     const row = document.querySelector(`#naoSegueDeVoltaTable tr[data-username="${username}"]`);
                                                     if (row) row.remove();
-
-                                                    // Atualiza o texto de status
-                                                    if (document.querySelector('.tab-button[data-tab="nao-segue"].active')) {
-                                                        statusDiv.innerText = `Análise concluída: ${cachedData.naoSegueDeVolta.length} usuários não seguem você de volta.`;
-                                                    }
 
                                                     // Processa o próximo usuário após o delay
                                                     setTimeout(() => {
@@ -4408,7 +4422,12 @@
                                         const isObject = typeof userData === 'object' && userData !== null;
                                         const username = isObject ? userData.username : userData;
                                         const photoUrl = isObject ? userData.photoUrl : null;
-                                        const unfollowDate = isHistory ? new Date(userData.unfollowDate).toLocaleString('pt-BR') : null;
+                                        let unfollowDate = null;
+                                        if (isHistory) {
+                                            try {
+                                                unfollowDate = userData.unfollowDate ? new Date(userData.unfollowDate).toLocaleString('pt-BR') : 'Data desconhecida';
+                                            } catch (e) { unfollowDate = 'Data inválida'; }
+                                        }
 
                                         const tr = document.createElement("tr");
                                         tr.setAttribute('data-username', username);

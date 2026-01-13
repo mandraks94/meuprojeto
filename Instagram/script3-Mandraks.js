@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Instagram Tools_6
+// @name         Instagram Tools_7
 // @description  Adds download buttons to Instagram stories
 // @author       You
 // @version      1.0
@@ -284,44 +284,60 @@
 
                         function injectMenu() {
                             if (document.getElementById("assistiveTouchMenu")) return;
+                            if (document.getElementById("instagramToolsSidebarBtn")) return;
+
+                            // --- Funções auxiliares ---
+                            function findSidebarContainer() {
+                                const homeLink = document.querySelector('a[href="/"]');
+                                const exploreLink = document.querySelector('a[href="/explore/"]');
+                                if (homeLink && exploreLink) {
+                                    let parent = homeLink.parentElement;
+                                    while (parent) {
+                                        if (parent.contains(exploreLink)) return parent;
+                                        parent = parent.parentElement;
+                                    }
+                                }
+                                return document.querySelector('div.x78zum5.xaw8158.xh8yej3');
+                            }
+
+                            function findItemToClone(container, link) {
+                                if (!container || !link) return null;
+                                let element = link;
+                                while (element && element.parentElement) {
+                                    if (element.parentElement === container) return element;
+                                    element = element.parentElement;
+                                }
+                                return null;
+                            }
+                            
+                            // Tenta encontrar o container da sidebar oficial usando o seletor fornecido
+                            const sidebarContainer = findSidebarContainer();
+                            if (!sidebarContainer) return; // Aguarda o carregamento da sidebar
 
                             // Add dynamic styles
+                            if (!document.getElementById("dynamicMenuStyle")) {
                             const style = document.createElement("style");
                             style.id = "dynamicMenuStyle";
                             document.head.appendChild(style);
 
                             function updateColors() {
                                 style.innerHTML = `
-                                    .assistive-touch {
-                                        position: fixed;
-                                        bottom: 50%;
-                                        right: 20px;
-                                        transform: translateY(50%);
-                                        width: 60px;
-                                        height: 60px;
-                                        background-color: #0095f6;
-                                        border-radius: 50%;
-                                        display: flex;
-                                        align-items: center;
-                                        justify-content: center;
-                                        z-index: 9999;
-                                        cursor: pointer;
-                                        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-                                        transition: all 0.3s ease;
-                                    }
                                     .assistive-menu {
                                         position: fixed;
-                                        bottom: 50%;
-                                        right: 90px;
-                                        transform: translateY(50%);
+                                        top: 50%;
+                                        left: 50%;
+                                        transform: translate(-50%, -50%);
                                         display: none;
                                         flex-direction: column;
                                         gap: 10px;
-                                        z-index: 9998;
+                                        z-index: 2147483647;
                                         background: white;
-                                        padding: 10px;
+                                        padding: 20px;
                                         border-radius: 12px;
                                         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                                        width: 300px;
+                                        max-height: 80vh;
+                                        overflow-y: auto;
                                     }
                                     .menu-item {
                                         display: flex;
@@ -333,16 +349,17 @@
                                         height: 50px;
                                         border-radius: 50%;
                                         border: none;
-                                        background: #f8f9fa;
-                                        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                                        background: transparent;
                                         display: flex;
                                         align-items: center;
                                         justify-content: center;
                                         cursor: pointer;
                                         transition: background 0.2s;
+                                        color: inherit;
                                     }
                                     .menu-item button:hover {
-                                        background: #e9ecef;
+                                        background: rgba(0, 0, 0, 0.05);
+                                        border-radius: 8px;
                                     }
                                     .menu-item span {
                                         font-size: 14px;
@@ -358,9 +375,16 @@
                                     }
                                     .dark-mode .assistive-menu {
                                         background: black !important;
+                                        border: 1px solid #333;
                                     }
                                     .dark-mode .menu-item span {
                                         color: white !important;
+                                    }
+                                    .dark-mode .menu-item button {
+                                        color: white;
+                                    }
+                                    .dark-mode .menu-item button:hover {
+                                        background: rgba(255, 255, 255, 0.1);
                                     }
                                     .dark-mode #allCloseFriendsDiv {
                                         background: black;
@@ -449,74 +473,153 @@
                             }
 
                             updateColors();
-
-                            // Create main button
-                            const mainBtn = document.createElement("div");
-                            mainBtn.id = "assistiveTouchMenu";
-                            mainBtn.className = "assistive-touch";
-                            mainBtn.innerHTML = "⚙️";
+                            }
 
                             // Create menu
-                            const menu = document.createElement("div");
+                            let menu = document.querySelector('.assistive-menu');
+                            if (!menu) {
+                                menu = document.createElement("div");
                             menu.className = "assistive-menu";
                             menu.innerHTML = `
                                 <div class="menu-item">
-                                    <button id="curtidasBtn">❤️</button>
+                                    <button id="curtidasBtn"><svg aria-label="Curtidas" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M16.792 3.904A4.989 4.989 0 0 1 21.5 9.122c0 3.072-2.652 4.959-5.197 7.222-2.512 2.243-3.865 3.469-4.303 3.752-.477-.309-2.143-1.823-4.303-3.752C5.141 14.072 2.5 12.167 2.5 9.122a4.989 4.989 0 0 1 4.708-5.218 4.21 4.21 0 0 1 3.675 1.941c.843.118 3.377.135 4.234-.149a4.21 4.21 0 0 1 1.675-1.792z"></path></svg></button>
                                     <span>Curtidas</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="comentariosBtn">💬</button>
+                                    <button id="comentariosBtn"><svg aria-label="Comentários" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M20.656 17.008a9.993 9.993 0 1 0-3.59 3.615L22 22z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"></path></svg></button>
                                     <span>Comentários</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="bloqueadosBtn">⛔</button>
+                                    <button id="bloqueadosBtn"><svg aria-label="Bloqueados" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"></circle><line x1="4.93" y1="19.07" x2="19.07" y2="4.93" stroke="currentColor" stroke-width="2"></line></svg></button>
                                     <span>Bloqueados</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="mensagensBtn">✉️</button>
+                                    <button id="mensagensBtn"><svg aria-label="Mensagens" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><line fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2" x1="22" x2="9.218" y1="3" y2="10.083"></line><polygon fill="none" points="11.698 20.334 22 3.001 2 3.001 9.218 10.084 11.698 20.334" stroke="currentColor" stroke-linejoin="round" stroke-width="2"></polygon></svg></button>
                                     <span>Mensagens</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="naoSegueDeVoltaBtn">🔄</button>
+                                    <button id="naoSegueDeVoltaBtn"><svg aria-label="Não segue de volta" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8.009 8.009 0 0 1-8 8z"></path><path d="M15.5 11h-7a1 1 0 0 0 0 2h7a1 1 0 0 0 0-2z"></path></svg></button>
                                     <span>Não segue de volta</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="seguindoBtn">➡️</button>
+                                    <button id="seguindoBtn"><svg aria-label="Seguindo" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12.004 12.002c3.309 0 6-2.691 6-6s-2.691-6-6-6-6 2.691-6 6 2.691 6 6 6zm0-10c2.206 0 4 1.794 4 4s-1.794 4-4 4-4-1.794-4-4 1.794-4 4-4zm0 12c-2.67 0-8 1.337-8 4v2h16v-2c0-2.663-5.33-4-8-4zm-6 4c.22-.72 3.02-2 6-2s5.78 1.28 6 2H6.004z"></path></svg></button>
                                     <span>Seguindo</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="closeFriendsBtn">🌟</button>
+                                    <button id="closeFriendsBtn"><svg aria-label="Amigos Próximos" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" fill="none" r="10" stroke="currentColor" stroke-width="2"></circle><polygon points="12 16.63 7.85 19.33 9.15 14.48 5.24 11.24 10.19 10.96 12 6.38 13.81 10.96 18.76 11.24 14.85 14.48 16.15 19.33 12 16.63" fill="currentColor"></polygon></svg></button>
                                     <span>Amigos Próximos</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="hideStoryBtn">👁️‍🗨️</button>
+                                    <button id="hideStoryBtn"><svg aria-label="Ocultar Story" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill="none" stroke="currentColor" stroke-width="2"></path><line x1="2" y1="2" x2="22" y2="22" stroke="currentColor" stroke-width="2"></line></svg></button>
                                     <span>Ocultar Story</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="mutedAccountsBtn">🔇</button>
+                                    <button id="mutedAccountsBtn"><svg aria-label="Contas Silenciadas" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M11 5L6 9H2v6h4l5 4V5z" fill="none" stroke="currentColor" stroke-width="2"></path><line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2"></line><line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2"></line></svg></button>
                                     <span>Contas Silenciadas</span>
                                 </div>
 
                                 <div class="menu-item">
-                                    <button id="reelsMenuBtn">📹</button>
+                                    <button id="reelsMenuBtn"><svg aria-label="Reels" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12.87 1.51l-2.54 2.6-2.53-2.6a.86.86 0 0 0-.61-.25c-.23 0-.45.09-.61.25l-2.54 2.6-2.53-2.6A.86.86 0 0 0 .9 1.26c-.23 0-.45.09-.61.25L.1 1.7a.88.88 0 0 0 0 1.23l2.54 2.6-2.53 2.6a.88.88 0 0 0 0 1.23l.19.19c.16.16.38.25.61.25.23 0 .45-.09.61-.25l2.54-2.6 2.53 2.6c.16.16.38.25.61.25.23 0 .45-.09.61-.25l2.54-2.6 2.53 2.6c.16.16.38.25.61.25.23 0 .45-.09.61-.25l.19-.19a.88.88 0 0 0 0-1.23l-2.53-2.6 2.53-2.6a.88.88 0 0 0 0-1.23l-.19-.19a.86.86 0 0 0-.61-.25z" fill="currentColor"></path><rect height="16" rx="3" ry="3" width="18" x="3" y="7" fill="none" stroke="currentColor" stroke-width="2"></rect></svg></button>
                                     <span>Menu de Reels</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="baixarStoryBtn">⬇️</button>
+                                    <button id="baixarStoryBtn"><svg aria-label="Baixar Story" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"></path></svg></button>
                                     <span>Baixar Story</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="settingsBtn">⚙️</button>
+                                    <button id="settingsBtn"><svg aria-label="Configurações" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" fill="none" r="3" stroke="currentColor" stroke-width="2"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.09 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"></path></svg></button>
                                     <span>Configurações</span>
                                 </div>
                             `;
 
-                            document.body.appendChild(mainBtn);
                             document.body.appendChild(menu);
+                            }
 
-                            mainBtn.addEventListener("click", () => {
-                                menu.style.display = menu.style.display === "flex" ? "none" : "flex";
-                            });
+                            // Fechar submenu ao clicar fora (Comportamento nativo)
+                            if (!document.body.dataset.menuClickListenerAttached) {
+                                document.addEventListener('click', (e) => {
+                                    const menu = document.querySelector('.assistive-menu');
+                                    const btn = document.getElementById('instagramToolsSidebarBtn');
+                                    if (menu && menu.style.display === 'flex') {
+                                        // Se o clique não foi no menu nem no botão que o abre
+                                        if (!menu.contains(e.target) && (!btn || !btn.contains(e.target))) {
+                                            menu.style.display = 'none';
+                                        }
+                                    }
+                                });
+                                document.body.dataset.menuClickListenerAttached = 'true';
+                            }
+
+                            const homeLink = sidebarContainer.querySelector('a[href="/"]');
+                            const itemToClone = findItemToClone(sidebarContainer, homeLink);
+
+
+                            if (itemToClone) {
+                                const newItem = itemToClone.cloneNode(true);
+                                const link = newItem.querySelector('a');
+                                if (link) {
+                                    link.id = "instagramToolsSidebarBtn";
+                                    link.href = "#";
+                                    link.removeAttribute('aria-label');
+                                    
+                                    // Substitui o ícone original pelo ícone de engrenagem
+                                    const svg = link.querySelector('svg');
+                                    if (svg) {
+                                        // SVG de Engrenagem estilo Instagram
+                                        const newSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                                        newSvg.setAttribute("aria-label", "Ferramentas");
+                                        newSvg.setAttribute("class", "x1lliihq x1n2onr6 x5n08af");
+                                        newSvg.setAttribute("fill", "currentColor");
+                                        newSvg.setAttribute("height", "24");
+                                        newSvg.setAttribute("role", "img");
+                                        newSvg.setAttribute("viewBox", "0 0 24 24");
+                                        newSvg.setAttribute("width", "24");
+                                        newSvg.innerHTML = '<circle cx="12" cy="12" fill="none" r="3" stroke="currentColor" stroke-width="2"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.09 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"></path>';
+                                        svg.replaceWith(newSvg);
+                                    }
+
+                                    // Adiciona o texto "IG Tools" (para visualização PC)
+                                    // Procura por elementos de texto dentro do link clonado de forma mais abrangente
+                                    const allDescendants = link.querySelectorAll('*');
+                                    allDescendants.forEach(el => {
+                                        // Verifica se é um elemento folha (sem filhos tags)
+                                        if (el.children.length === 0 && el.textContent.trim().length > 0) {
+                                            // Ignora se estiver dentro de um SVG ou for o próprio SVG
+                                            if (el.closest('svg')) return;
+                                            
+                                            const text = el.textContent.trim();
+                                            // Ignora números (notificações) e textos muito curtos
+                                            if (isNaN(parseInt(text)) && text.length > 1) {
+                                                el.textContent = "IG Tools";
+                                            }
+                                        }
+                                    });
+
+                                    link.addEventListener("click", (e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        
+                                        // Lógica de posicionamento inteligente (PC vs Mobile)
+                                        const isDesktop = window.innerWidth >= 1024;
+                                        if (isDesktop) {
+                                            const sidebar = findSidebarContainer();
+                                            const rect = sidebar ? sidebar.getBoundingClientRect() : { right: 72 };
+                                            menu.style.left = (rect.right + 15) + 'px';
+                                            menu.style.bottom = '20px';
+                                            menu.style.top = 'auto';
+                                            menu.style.transform = 'none';
+                                        } else {
+                                            menu.style.left = '50%';
+                                            menu.style.top = '50%';
+                                            menu.style.bottom = 'auto';
+                                            menu.style.transform = 'translate(-50%, -50%)';
+                                        }
+                                        
+                                        menu.style.display = menu.style.display === "flex" ? "none" : "flex";
+                                    });
+                                }
+                                sidebarContainer.appendChild(newItem);
+                            }
 
                             function closeMenu() {
                                 menu.style.display = 'none';
@@ -2431,6 +2534,48 @@
                                 // 3. Se não encontrar nenhum dos dois
                                 alert('Nenhuma imagem ou vídeo de story encontrado para baixar.');
                             }
+
+                            // --- BOTÃO FLUTUANTE AUTOMÁTICO PARA STORIES ---
+                            function injectStoryFloatingButton() {
+                                if (window.location.href.includes('/stories/')) {
+                                    if (!document.getElementById("storyFloatingDownloadBtn")) {
+                                        const btn = document.createElement("button");
+                                        btn.id = "storyFloatingDownloadBtn";
+                                        btn.innerHTML = "⬇️";
+                                        btn.title = "Baixar Story Atual";
+                                        btn.style.cssText = `
+                                            position: fixed;
+                                            top: 20px;
+                                            left: 20px;
+                                            z-index: 2147483647;
+                                            background: rgba(255, 255, 255, 0.2);
+                                            color: white;
+                                            border: 1px solid rgba(255, 255, 255, 0.5);
+                                            border-radius: 50%;
+                                            width: 45px;
+                                            height: 45px;
+                                            font-size: 20px;
+                                            cursor: pointer;
+                                            display: flex;
+                                            align-items: center;
+                                            justify-content: center;
+                                            backdrop-filter: blur(4px);
+                                            transition: all 0.3s ease;
+                                        `;
+                                        btn.onmouseover = () => { btn.style.background = "rgba(255, 255, 255, 0.4)"; btn.style.transform = "scale(1.1)"; };
+                                        btn.onmouseout = () => { btn.style.background = "rgba(255, 255, 255, 0.2)"; btn.style.transform = "scale(1)"; };
+                                        btn.onclick = (e) => {
+                                            e.stopPropagation();
+                                            baixarStoryAtual();
+                                        };
+                                        document.body.appendChild(btn);
+                                    }
+                                } else {
+                                    const btn = document.getElementById("storyFloatingDownloadBtn");
+                                    if (btn) btn.remove();
+                                }
+                            }
+                            setInterval(injectStoryFloatingButton, 1000);
 
                             // --- LÓGICA UNIFICADA PARA "NÃO SEGUE DE VOLTA" ---
                             async function iniciarProcessoNaoSegueDeVolta(initialTab = 'tabNaoSegueDeVolta') {

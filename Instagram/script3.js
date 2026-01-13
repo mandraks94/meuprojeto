@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Instagram Tools__5
+// @name         Instagram Tools_6
 // @description  Adds download buttons to Instagram stories
 // @author       You
 // @version      1.0
@@ -9,7 +9,7 @@
 
         (function() {
             'use strict';
-
+            
             function initScript() {
                 if (window.location.href.includes("instagram.com")) {
                     // Helper para IndexedDB
@@ -17,7 +17,7 @@
                         db: null,
                         openDB: function() {
                             return new Promise((resolve, reject) => {
-                                const request = indexedDB.open('InstagramToolsDB', 5);
+                                const request = indexedDB.open('InstagramToolsDB', 6);
                                 request.onupgradeneeded = (event) => {
                                     const db = event.target.result;
                                     if (!db.objectStoreNames.contains('closeFriends')) {
@@ -32,16 +32,21 @@
                                     if (!db.objectStoreNames.contains('unfollowHistory')) {
                                         db.createObjectStore('unfollowHistory', { keyPath: 'username' });
                                     }
-                                    // Recriar tabelas para garantir schema correto (correção do erro de keyPath)
-                                    if (db.objectStoreNames.contains('followers')) {
-                                        db.deleteObjectStore('followers');
+                                    if (!db.objectStoreNames.contains('followers')) {
+                                        db.createObjectStore('followers', { keyPath: 'id', autoIncrement: true });
                                     }
-                                    db.createObjectStore('followers', { keyPath: 'id', autoIncrement: true });
-
-                                    if (db.objectStoreNames.contains('following')) {
-                                        db.deleteObjectStore('following');
+                                    if (!db.objectStoreNames.contains('following')) {
+                                        db.createObjectStore('following', { keyPath: 'id', autoIncrement: true });
                                     }
-                                    db.createObjectStore('following', { keyPath: 'id', autoIncrement: true });
+                                    if (!db.objectStoreNames.contains('followers')) {
+                                        db.createObjectStore('followers', { keyPath: 'id', autoIncrement: true });
+                                    }
+                                    if (!db.objectStoreNames.contains('following')) {
+                                        db.createObjectStore('following', { keyPath: 'id', autoIncrement: true });
+                                    }
+                                    if (!db.objectStoreNames.contains('exceptions')) {
+                                        db.createObjectStore('exceptions', { keyPath: 'username' });
+                                    }
                                 };
                                 request.onsuccess = (event) => {
                                     this.db = event.target.result;
@@ -52,7 +57,7 @@
                                 };
                             });
                         },
-                        saveCache: async function(storeName, usernames) {
+                        saveCache: async function(storeName, data) {
                             if (!this.db) await this.openDB();
                             const transaction = this.db.transaction([storeName], 'readwrite');
                             const store = transaction.objectStore(storeName);
@@ -63,9 +68,14 @@
                                 clearRequest.onerror = () => resolve(); // Continue even if clear fails
                             });
                             // Save new data
-                            const usernamesArray = Array.from(usernames);
+                            const dataArray = Array.from(data);
+                            // Verifica se é uma lista de objetos ou strings
+                            const isObject = dataArray.length > 0 && typeof dataArray[0] === 'object';
+                            const record = { id: 1, usernames: isObject ? dataArray.map(u => u.username) : dataArray };
+                            if (isObject) record.users = dataArray; // Salva os detalhes completos se disponíveis
+
                             await new Promise((resolve, reject) => {
-                                const addRequest = store.put({ id: 1, usernames: usernamesArray });
+                                const addRequest = store.put(record);
                                 addRequest.onsuccess = () => resolve();
                                 addRequest.onerror = (event) => reject(event.target.error);
                             });
@@ -79,7 +89,12 @@
                                 request.onsuccess = () => {
                                     const results = request.result;
                                     if (results.length > 0) {
-                                        resolve(new Set(results[0].usernames));
+                                        const res = results[0];
+                                        const set = new Set(res.usernames);
+                                        if (res.users) {
+                                            set.details = new Map(res.users.map(u => [u.username, u]));
+                                        }
+                                        resolve(set);
                                     } else {
                                         resolve(null);
                                     }
@@ -125,6 +140,22 @@
                                 };
                                 request.onerror = () => resolve([]); // Retorna array vazio em caso de erro
                             });
+                        },
+                        saveException: async function(username) {
+                            if (!this.db) await this.openDB();
+                            const tx = this.db.transaction(['exceptions'], 'readwrite');
+                            const store = tx.objectStore('exceptions');
+                            store.put({ username: username });
+                        },
+                        loadExceptions: async function() {
+                            if (!this.db) await this.openDB();
+                            const tx = this.db.transaction(['exceptions'], 'readonly');
+                            const store = tx.objectStore('exceptions');
+                            return new Promise(resolve => {
+                                const req = store.getAll();
+                                req.onsuccess = () => resolve(new Set(req.result.map(i => i.username)));
+                                req.onerror = () => resolve(new Set());
+                            });
                         }
                     };
 
@@ -135,9 +166,10 @@
                             rgbBorder: false,
                             language: 'pt-BR',
                             unfollowDelay: 5000,
-                            requestDelay: 2000,
                             itemsPerPage: 10,
-                            requestBatchSize: 50
+                            requestDelay: 250,
+                            requestBatchSize: 50,
+                            maxRequests: 0
                         };
                         try {
                             const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
@@ -217,7 +249,7 @@
                     function initShortcutListener() {
                         if (document.body.dataset.shortcutsInitialized) return; // Evita múltiplos listeners
                         document.body.dataset.shortcutsInitialized = 'true';
-
+                        
                         document.addEventListener('keydown', (event) => {
                             // Ignora atalhos se um input, textarea ou contenteditable estiver focado
                             if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable) {
@@ -230,7 +262,7 @@
                             }
 
                             const shortcuts = getShortcuts();
-                            const shortcut = shortcuts.find(s =>
+                            const shortcut = shortcuts.find(s => 
                                 s.key.toLowerCase() === event.key.toLowerCase() &&
                                 !!s.ctrlKey === event.ctrlKey &&
                                 !!s.altKey === event.altKey &&
@@ -408,10 +440,10 @@
                                         90% { border-color: rgb(255, 0, 255); }
                                         100% { border-color: rgb(255, 0, 0); }
                                     }
-                                    .rgb-border-effect {
+                                    .rgb-border-effect { 
                                         border-style: solid !important;
                                         border-width: 2px !important;
-                                        animation: rgb-border-animation 5s linear infinite;
+                                        animation: rgb-border-animation 5s linear infinite; 
                                     }
                                 `;
                             }
@@ -449,10 +481,6 @@
                                     <span>Não segue de volta</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="historicoUnfollowBtn">📜</button>
-                                    <span>Histórico de Unfollow</span>
-                                </div>
-                                <div class="menu-item">
                                     <button id="seguindoBtn">➡️</button>
                                     <span>Seguindo</span>
                                 </div>
@@ -476,10 +504,6 @@
                                 <div class="menu-item">
                                     <button id="baixarStoryBtn">⬇️</button>
                                     <span>Baixar Story</span>
-                                </div>
-                                <div class="menu-item">
-                                    <button id="backupDbBtn">💾</button>
-                                    <span>Backup DB</span>
                                 </div>
                                 <div class="menu-item">
                                     <button id="settingsBtn">⚙️</button>
@@ -689,7 +713,7 @@
                                 const closeButton = document.createElement("button");
                                 closeButton.innerText = "Cancelar";
                                 closeButton.style.cssText = "background:red;color:white;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;";
-
+                                
                                 bar.appendChild(fill);
                                 bar.appendChild(text);
                                 bar.appendChild(closeButton);
@@ -738,11 +762,6 @@
                             document.getElementById("naoSegueDeVoltaBtn").addEventListener("click", () => {
                                 closeMenu();
                                 iniciarProcessoNaoSegueDeVolta();
-                            });
-
-                            document.getElementById("historicoUnfollowBtn").addEventListener("click", () => {
-                                closeMenu();
-                                abrirModalHistoricoUnfollow();
                             });
 
                             document.getElementById("seguindoBtn").addEventListener("click", () => {
@@ -816,98 +835,6 @@
                 abrirModalReels();
             });
             document.getElementById("baixarStoryBtn").addEventListener("click", () => { baixarStoryAtual(); });
-
-            document.getElementById("backupDbBtn").addEventListener("click", () => {
-                closeMenu();
-                abrirModalBackup();
-            });
-
-            async function abrirModalBackup() {
-                if (document.getElementById("backupModal")) return;
-
-                const pathParts = window.location.pathname.split('/').filter(Boolean);
-                const username = pathParts[0];
-                if (!username || (pathParts.length > 1 && !['followers', 'following'].includes(pathParts[1]))) {
-                    alert("Por favor, vá para a sua página de perfil para realizar o backup.");
-                    return;
-                }
-
-                const div = document.createElement("div");
-                div.id = "backupModal";
-                div.className = "submenu-modal";
-                div.style.cssText = `
-                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                    width: 90%; max-width: 400px; border: 1px solid #ccc;
-                    border-radius: 10px; padding: 20px; z-index: 10000;
-                `;
-                
-                let followersCount = 0;
-                let followingCount = 0;
-                try {
-                    const followersData = await dbHelper.loadCache('followers');
-                    if (followersData) followersCount = followersData.size;
-                    const followingData = await dbHelper.loadCache('following');
-                    if (followingData) followingCount = followingData.size;
-                } catch (e) { console.error(e); }
-
-                div.innerHTML = `
-                    <div class="modal-header">
-                        <span class="modal-title">Backup para IndexedDB</span>
-                        <div class="modal-controls"><button id="fecharBackupBtn" title="Fechar">X</button></div>
-                    </div>
-                    <div style="padding: 15px; display: flex; flex-direction: column; gap: 15px;">
-                        <div>
-                            <strong>Seguidores no DB:</strong> <span id="dbFollowersCount">${followersCount}</span>
-                            <button id="btnSaveFollowers" class="menu-item-button" style="width:100%; margin-top:5px; justify-content:center;">Salvar Seguidores</button>
-                        </div>
-                        <div>
-                            <strong>Seguindo no DB:</strong> <span id="dbFollowingCount">${followingCount}</span>
-                            <button id="btnSaveFollowing" class="menu-item-button" style="width:100%; margin-top:5px; justify-content:center;">Salvar Seguindo</button>
-                        </div>
-                        <div id="backupStatus" style="margin-top:10px; font-size:12px; color:gray; text-align:center;"></div>
-                    </div>
-                `;
-                document.body.appendChild(div);
-                document.getElementById("fecharBackupBtn").onclick = () => div.remove();
-
-                const updateStatus = (msg) => { const el = document.getElementById("backupStatus"); if(el) el.innerText = msg; };
-
-                const processBackup = async (type) => {
-                    const btn = type === 'followers' ? document.getElementById("btnSaveFollowers") : document.getElementById("btnSaveFollowing");
-                    if(btn) btn.disabled = true;
-                    updateStatus(`Iniciando backup de ${type === 'followers' ? 'seguidores' : 'seguindo'}...`);
-                    try {
-                        const appID = '936619743392459';
-                        const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
-                        const profileInfo = await profileInfoResponse.json();
-                        const userId = profileInfo.data?.user?.id;
-                        if (!userId) throw new Error("ID de usuário não encontrado.");
-                        const total = type === 'followers' ? profileInfo.data.user.edge_followed_by.count : profileInfo.data.user.edge_follow.count;
-                        const userList = new Set();
-                        let nextMaxId = '';
-                        let hasNextPage = true;
-                        const batchSize = loadSettings().requestBatchSize;
-                        const delay = loadSettings().requestDelay;
-                        while (hasNextPage) {
-                            if(!document.getElementById("backupModal")) return;
-                            updateStatus(`Baixando ${type === 'followers' ? 'seguidores' : 'seguindo'}: ${userList.size} / ${total}`);
-                            const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=${batchSize}&max_id=${nextMaxId}`, { headers: { 'X-IG-App-ID': appID } });
-                            const data = await response.json();
-                            data.users.forEach(u => userList.add(u.username));
-                            nextMaxId = data.next_max_id;
-                            hasNextPage = !!nextMaxId;
-                            if (hasNextPage) await new Promise(r => setTimeout(r, delay));
-                        }
-                        updateStatus(`Salvando ${userList.size} usuários no Banco de Dados...`);
-                        await dbHelper.saveCache(type === 'followers' ? 'followers' : 'following', userList);
-                        updateStatus(`Sucesso! ${userList.size} salvos.`);
-                        if (type === 'followers') document.getElementById("dbFollowersCount").innerText = userList.size;
-                        else document.getElementById("dbFollowingCount").innerText = userList.size;
-                    } catch (e) { console.error(e); updateStatus(`Erro: ${e.message}`); } finally { if(btn) btn.disabled = false; }
-                };
-                document.getElementById("btnSaveFollowers").onclick = () => processBackup('followers');
-                document.getElementById("btnSaveFollowing").onclick = () => processBackup('following');
-            }
 
             document.getElementById("settingsBtn").addEventListener("click", () => {
                 closeMenu();
@@ -1132,7 +1059,7 @@
                         const isMinimized = modal.dataset.minimized === 'true';
 
                         contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-
+                        
                         modal.dataset.minimized = !isMinimized;
                         btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
                         modal.style.maxHeight = isMinimized ? '85vh' : 'none';
@@ -1167,7 +1094,7 @@
                     searchInput.addEventListener("input", () => {
                         const filter = searchInput.value.toLowerCase();
                         const listItems = div.querySelectorAll("#closeFriendsList li");
-                        listItems.forEach(li => {
+                        listItems.forEach(li => { 
                             // Seletor ajustado para ser mais específico
                             const usernameSpan = li.querySelector('span[style*="cursor:pointer"]');
                             if (usernameSpan) {
@@ -1216,7 +1143,7 @@
                             return initialStates.get(username) !== checked;
                         });
                         if (changedUsers.length === 0) {
-                            alert("Nenhuma alteração para aplicar.");
+                            alert("Nenhuma alteração para aplicar."); 
                             isApplyingChanges = false;
                             return;
                         }
@@ -1272,7 +1199,7 @@
                             // Atualiza o estado inicial para o próximo "Aplicar"
                             initialStates.set(username, isChecked);
                         }
-
+                        
                         bar.remove();
                         isApplyingChanges = false;
                     };
@@ -1332,7 +1259,7 @@
                      let scrollInterval;
                      let noNewUsersCount = 0;
                      const maxIdleCount = 3; // Parar após 3 tentativas sem novos usuários (3 segundos)
-
+ 
                      let cancelled = false;
                      const { bar, update, closeButton } = createCancellableProgressBar();
                      closeButton.onclick = () => {
@@ -1341,7 +1268,7 @@
                          finishExtraction();
                      };
                      update(0, 0, "Buscando e rolando a lista de usuários com story oculto...");
-
+ 
                      function finishExtraction() {
                          clearInterval(scrollInterval);
                          if (bar) bar.remove();
@@ -1349,25 +1276,25 @@
                          // Se foi cancelado, retorna uma lista vazia para não abrir o modal.
                          resolve(cancelled ? [] : Array.from(users.values()));
                      }
-
+ 
                      function performScrollAndExtract() {
                          const initialUserCount = users.size;
-
+ 
                          // Seletor para os elementos que contêm o nome de usuário
                          const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')).filter(el =>
                              el.querySelector('span[data-bloks-name="bk.components.Text"]')
                          );
-
+ 
                          if (userElements.length === 0 && users.size === 0) {
                              console.log("Nenhum usuário encontrado ainda, tentando novamente...");
                              return; // Continua tentando se a lista estiver vazia
                          }
-
+ 
                          userElements.forEach(userElement => {
                              const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
                              const username = usernameSpan ? usernameSpan.innerText.trim() : '';
                              const imgTag = userElement.querySelector('img');
-
+ 
                              let isChecked = false;
                              const checkboxContainer = userElement.querySelector('div[role="button"][tabindex="0"]');
                              if (checkboxContainer) {
@@ -1382,7 +1309,7 @@
                                      }
                                  }
                              }
-
+ 
                              // Adiciona o usuário apenas se tiver um nome válido, uma foto e ainda não estiver na lista
                              if (username && imgTag && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
                                  const photoUrl = imgTag.src;
@@ -1395,26 +1322,26 @@
                                  }
                              }
                          });
-
+ 
                          update(users.size, users.size, `Encontrado(s) ${users.size} usuário(s)... Rolando...`);
-
+ 
                          // Lógica de parada: se não encontrar novos usuários por um tempo, para.
                          if (users.size === initialUserCount) {
                              noNewUsersCount++;
                          } else {
                              noNewUsersCount = 0; // Reseta o contador se encontrar novos usuários
                          }
-
+ 
                          if (noNewUsersCount >= maxIdleCount) {
                              console.log("Nenhum novo usuário encontrado após várias tentativas. Finalizando.");
                              finishExtraction();
                              return;
                          }
-
+ 
                          // Simula a rolagem da janela principal
                          window.scrollTo(0, document.body.scrollHeight);
                      }
-
+ 
                      // Inicia o processo de rolagem e extração
                      scrollInterval = setInterval(performScrollAndExtract, 1000); // Rola e extrai a cada 1 segundo
                  });
@@ -1548,7 +1475,7 @@
                         const isMinimized = modal.dataset.minimized === 'true';
 
                         contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-
+                        
                         modal.dataset.minimized = !isMinimized;
                         btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
                         modal.style.maxHeight = isMinimized ? '85vh' : 'none';
@@ -1750,7 +1677,7 @@
                             const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
                             const username = usernameSpan ? usernameSpan.innerText.trim() : '';
                             const imgTag = userElement.querySelector('img');
-
+                            
                             let isChecked = false;
                             const checkboxContainer = userElement.querySelector('div[role="button"][tabindex="0"]');
                             if (checkboxContainer) {
@@ -1906,7 +1833,7 @@
                         const isMinimized = modal.dataset.minimized === 'true';
 
                         contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-
+                        
                         modal.dataset.minimized = !isMinimized;
                         btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
                         modal.style.maxHeight = isMinimized ? '85vh' : 'none';
@@ -1922,7 +1849,7 @@
                     const searchInput = document.getElementById("mutedSearchInput");
                     searchInput.addEventListener("input", () => {
                         const filter = searchInput.value.toLowerCase();
-                        div.querySelectorAll("#mutedList li").forEach(li => {
+                        div.querySelectorAll("#mutedList li").forEach(li => { 
                             // Seletor ajustado para ser mais específico
                             const usernameSpan = li.querySelector('span[style*="cursor:pointer"]');
                             const text = usernameSpan ? usernameSpan.textContent.toLowerCase() : '';
@@ -2004,8 +1931,8 @@
 
                     // 3. Clicar na opção "Silenciar"
                     // Seletor mais robusto, similar ao de unfollow, para encontrar a opção "Silenciar"
-                    const muteOption = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], div[role="menuitem"]')).find(el =>
-                        el.innerText.trim() === 'Silenciar' ||
+                    const muteOption = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], div[role="menuitem"]')).find(el => 
+                        el.innerText.trim() === 'Silenciar' || 
                         (el.querySelector('span') && el.querySelector('span').innerText.trim() === 'Silenciar')
                     );
                     if (!muteOption) {
@@ -2025,7 +1952,7 @@
                     for (const optionText of optionsToToggle) {
                         // Encontra o elemento de texto ("Publicações" ou "Stories") em toda a página
                         const textElement = Array.from(document.querySelectorAll('span, div')).find(el => el.innerText.trim() === optionText);
-
+                        
                         if (!textElement) {
                             console.log(`Elemento de texto para "${optionText}" não encontrado.`);
                             continue;
@@ -2044,7 +1971,7 @@
 
                                 if (toggleMode || isChecked === 'true') {
                                     console.log(`Tentando alterar o estado de "${optionText}".`);
-
+                                    
                                     // --- LÓGICA DE TESTE A/B ---
                                     if (optionText === 'Publicações' || optionText === 'Posts') {
                                         console.log(`Usando método 1 (clique no input) para "${optionText}".`);
@@ -2406,15 +2333,15 @@
 
             let modalAbertoBlocked = false;
                             // --- FIM DO MENU CONTAS BLOQUEADAS ---
-
+            
             function simulateClick(element, triggerChangeEvent = false) {
                  if (!element) return;
                  const dispatch = (event) => element.dispatchEvent(event);
-
+            
                  // Simula eventos de toque, mais confiáveis em mobile
                  dispatch(new TouchEvent('touchstart', { bubbles: true, cancelable: true, view: window }));
                  dispatch(new TouchEvent('touchend', { bubbles: true, cancelable: true, view: window }));
-
+            
                  // Mantém os eventos de mouse como fallback
                  dispatch(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
                  dispatch(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
@@ -2506,7 +2433,7 @@
                             }
 
                             // --- LÓGICA UNIFICADA PARA "NÃO SEGUE DE VOLTA" ---
-                            async function iniciarProcessoNaoSegueDeVolta() {
+                            async function iniciarProcessoNaoSegueDeVolta(initialTab = 'tabNaoSegueDeVolta') {
                                 const pathParts = window.location.pathname.split('/').filter(Boolean);
                                 if (document.getElementById("naoSegueDeVoltaDiv")) return; // Evita abrir múltiplos modais
                                 const username = pathParts[0];
@@ -2581,8 +2508,13 @@
                                     naoSegueDeVolta: null,
                                     novosSeguidores: null,
                                     unfollows: null,
-                                    profileInfo: null
+                                    exceptions: null,
+                                    profileInfo: null,
+                                    userDetails: new Map()
                                 };
+                                
+                                // Variável compartilhada para as listas, acessível pelo unfollowUsers
+                                let lists = {};
 
                                 // Função para extrair lista de usuários via API (muito mais rápido)
                                 const fetchUserListAPI = async (userId, type, total) => {
@@ -2621,15 +2553,25 @@
                                     };
                                     // --- Fim da lógica da Barra de Progresso ---
 
-                                    while (hasNextPage && !processoCancelado) {
+                                    let hasError = false;
+                                    while (hasNextPage && !processoCancelado && !hasError) {
                                         try {
-                                            const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=${loadSettings().requestBatchSize}&max_id=${nextMaxId}`, {
+                                            const batchSize = loadSettings().requestBatchSize || 50;
+                                            const delay = loadSettings().requestDelay || 250;
+                                            const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=${batchSize}&max_id=${nextMaxId}`, {
                                                 headers: { 'X-IG-App-ID': appID }
                                             });
-                                            if (!response.ok) throw new Error(`Erro na API: ${response.statusText}`);
+                                            if (!response.ok) throw new Error(`Erro na API: ${response.status} - ${response.statusText}`);
                                             const data = await response.json();
 
-                                            data.users.forEach(user => userList.add(user.username));
+                                            data.users.forEach(user => {
+                                                const lowerUsername = user.username.toLowerCase();
+                                                userList.add(lowerUsername);
+                                                cachedData.userDetails.set(lowerUsername, {
+                                                    username: user.username,
+                                                    photoUrl: user.profile_pic_url
+                                                });
+                                            });
                                             updateLocalProgressBar(userList.size, total, `Extraindo ${type}:`);
 
                                             if (data.next_max_id) {
@@ -2637,70 +2579,254 @@
                                             } else {
                                                 hasNextPage = false;
                                             }
-                                            await new Promise(r => setTimeout(r, loadSettings().requestDelay)); // Pausa configurável
+                                            await new Promise(r => setTimeout(r, delay)); // Pausa configurável
                                         } catch (error) {
                                             console.error(`Erro ao buscar ${type}:`, error);
-                                            alert(`Ocorreu um erro ao buscar a lista de ${type}. Tente novamente mais tarde.`);
+                                            alert(`Ocorreu um erro ao buscar a lista de ${type}: ${error.message}.\n\nIsso geralmente ocorre por muitas requisições (Erro 429). Tente aumentar o 'Intervalo Requisições' nas configurações ou aguarde alguns minutos.`);
+                                            hasError = true;
                                             hasNextPage = false; // Interrompe em caso de erro
                                         }
                                     }
                                     let progressBarElement = document.getElementById("progressBar");
                                     if (progressBarElement) progressBarElement.remove();
+                                    if (hasError) return null;
                                     return processoCancelado ? null : userList;
                                 };
 
                                 // Função principal que carrega os dados UMA VEZ
                                 async function carregarDadosIniciais() {
-                                    statusDiv.innerText = 'Buscando informações do perfil...';
-                                    const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
-                                    if (processoCancelado) return;
-                                    const profileInfo = await profileInfoResponse.json();
-                                    const userId = profileInfo.data?.user?.id;
-                                    if (!userId) { alert('Não foi possível obter o ID do usuário.'); div.remove(); return; }
-                                    cachedData.profileInfo = profileInfo;
+                                    statusDiv.innerText = 'Carregando dados do Banco de Dados (IndexedDB)...';
+                                    
+                                    // 1. Carrega dados do DB (Sem requisições API)
+                                    let dbFollowers = await dbHelper.loadCache('followers');
+                                    let dbFollowing = await dbHelper.loadCache('following');
+                                    let dbExceptions = await dbHelper.loadExceptions();
 
-                                    const totalFollowing = profileInfo.data.user.edge_follow.count;
-                                    const totalFollowers = profileInfo.data.user.edge_followed_by.count;
+                                    // Função para normalizar Sets e popular detalhes
+                                    const normalizeAndCache = (set) => {
+                                        const newSet = new Set();
+                                        if (set) {
+                                            set.forEach(u => {
+                                                if(u) newSet.add(u.toLowerCase());
+                                            });
+                                            if (set.details) {
+                                                set.details.forEach((val, key) => cachedData.userDetails.set(key.toLowerCase(), val));
+                                            }
+                                        }
+                                        return newSet;
+                                    };
 
-                                    // Busca "seguindo"
-                                    const seguindo = await fetchUserListAPI(userId, 'following', totalFollowing);
-                                    if (processoCancelado || !seguindo) return;
-                                    cachedData.seguindo = seguindo;
-                                    statusDiv.innerText = `Encontrados ${seguindo.size} usuários que você segue. Buscando seguidores...`;
+                                    dbFollowers = normalizeAndCache(dbFollowers);
+                                    dbFollowing = normalizeAndCache(dbFollowing);
+                                    cachedData.exceptions = dbExceptions || new Set();
 
-                                    // Busca "seguidores"
-                                    const seguidores = await fetchUserListAPI(userId, 'followers', totalFollowers);
-                                    if (processoCancelado || !seguidores) return;
-                                    cachedData.seguidores = seguidores;
-                                    statusDiv.innerText = `Encontrados ${seguidores.size} seguidores. Comparando...`;
-                                    await new Promise(r => setTimeout(r, 500));
+                                    cachedData.seguidores = dbFollowers;
+                                    cachedData.seguindo = dbFollowing;
 
-                                    // Calcula e armazena em cache
-                                    cachedData.naoSegueDeVolta = [...seguindo].filter(user => !seguidores.has(user));
+                                    // 2. Calcula listas baseadas no DB
+                                    // Filtra quem não segue de volta E quem não está na lista de exceções (corrigidos)
+                                    cachedData.naoSegueDeVolta = [...dbFollowing].filter(user => !dbFollowers.has(user) && !cachedData.exceptions.has(user));
+                                    
+                                    // Tenta buscar info básica do perfil (leve) apenas para ter o ID caso o usuário queira atualizar
+                                    try {
+                                        const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
+                                        if (profileInfoResponse.ok) {
+                                            cachedData.profileInfo = await profileInfoResponse.json();
+                                        }
+                                    } catch (e) {
+                                        console.log("Não foi possível buscar info do perfil (modo offline/cache).");
+                                    }
 
-                                    // Exibe a tabela de "não segue de volta"
-                                    const naoSegueDeVolta = cachedData.naoSegueDeVolta;
-                                    statusDiv.innerText = `Análise concluída: ${naoSegueDeVolta.length} usuários não seguem você de volta.`;
+                                    // Calcula listas
+                                    const toObjects = (names) => names.map(name => cachedData.userDetails.get(name) || { username: name, photoUrl: null });
 
-                                    if (naoSegueDeVolta.length > 0) {
-                                        const tabelaContainer = document.getElementById("tabelaContainer");
-                                        tabelaContainer.innerHTML = `
-                                            <table id="naoSegueDeVoltaTable" style="width: 100%; border-collapse: collapse; margin-top: 20px;"></table>
+                                    // Listas iniciais (Novos estarão vazios até atualizar)
+                                    let listNaoSegueDeVolta = toObjects(cachedData.naoSegueDeVolta);
+                                    let listNovosSeguidores = []; 
+                                    let listNovosSeguindo = [];
+                                    let listNaoSigoDeVolta = toObjects([...dbFollowers].filter(u => !dbFollowing.has(u)));
+                                    let listHistorico = []; // Será carregado sob demanda
+
+                                    const totalFollowers = cachedData.profileInfo ? cachedData.profileInfo.data.user.edge_followed_by.count : 'N/A';
+                                    const totalFollowing = cachedData.profileInfo ? cachedData.profileInfo.data.user.edge_follow.count : 'N/A';
+
+                                    statusDiv.innerText = `Dados carregados do cache. Seguidores: ${dbFollowers.size} (Oficial: ${totalFollowers}) | Seguindo: ${dbFollowing.size} (Oficial: ${totalFollowing})`;
+
+                                    const tabelaContainer = document.getElementById("tabelaContainer");
+                                    
+                                    // Adiciona abas
+                                    const tabsHtml = `
+                                        <div style="margin-bottom: 15px;">
+                                            <button id="btnUpdateApi" style="background: #0095f6; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar Dados (Baixar e Salvar no DB)</button>
+                                        </div>
+                                        <div class="tab-container">
+                                            <button id="tabNaoSegueDeVolta" class="tab-button active">Não Segue de Volta (<span id="countNaoSegue">${listNaoSegueDeVolta.length}</span>)</button>
+                                            <button id="tabNovosSeguidores" class="tab-button">Novos Seguidores (<span id="countNovosSeguidores">${listNovosSeguidores.length}</span>)</button>
+                                            <button id="tabNovosSeguindo" class="tab-button">Novos Seguindo (<span id="countNovosSeguindo">${listNovosSeguindo.length}</span>)</button>
+                                            <button id="tabNaoSigoDeVolta" class="tab-button">Não Sigo de Volta (<span id="countNaoSigo">${listNaoSigoDeVolta.length}</span>)</button>
+                                            <button id="tabHistorico" class="tab-button">Histórico</button>
+                                        </div>
+                                        <div id="tabContent"></div>
+                                    `;
+                                    
+                                    tabelaContainer.innerHTML = tabsHtml;
+                                    
+                                    // Referências para as listas (usando let para poder atualizar)
+                                    lists = {
+                                        'tabNaoSegueDeVolta': listNaoSegueDeVolta,
+                                        'tabNovosSeguidores': listNovosSeguidores,
+                                        'tabNovosSeguindo': listNovosSeguindo,
+                                        'tabNaoSigoDeVolta': listNaoSigoDeVolta,
+                                        'tabHistorico': listHistorico
+                                    };
+                                    
+                                    let currentTabId = initialTab;
+                                    let currentList = lists[currentTabId];
+
+                                    async function renderCurrentTab() {
+                                        // Atualiza classe active
+                                        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                                        const activeBtn = document.getElementById(currentTabId);
+                                        if(activeBtn) activeBtn.classList.add('active');
+
+                                        if (currentTabId === 'tabHistorico') {
+                                            currentList = await dbHelper.loadUnfollowHistory();
+                                        } else {
+                                            currentList = lists[currentTabId];
+                                        }
+
+                                        const tableId = currentTabId === 'tabHistorico' ? 'historicoTable' : 'naoSegueDeVoltaTable';
+                                        const contentDiv = document.getElementById("tabContent");
+                                        contentDiv.innerHTML = `
+                                            <div style="margin-bottom: 10px;">
+                                            </div>
+                                            <table id="${tableId}" style="width: 100%; border-collapse: collapse; margin-top: 20px;"></table>
                                             <div style="margin-top: 20px;">
                                                 <button id="selecionarTodosBtn">Selecionar Todos</button>
                                                 <button id="desmarcarTodosBtn">Desmarcar Todos</button>
-                                                <button id="unfollowBtn">Unfollow</button>
-                                            <button id="bloquearBtn" style="margin-left: 10px; background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Bloquear</button>
-                                            <button id="downloadCsvBtn" style="margin-left: 10px; background-color: #2ecc71; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Baixar .csv</button>
+                                                ${currentTabId === 'tabNaoSegueDeVolta' ? `
+                                                    <button id="unfollowBtn">Unfollow</button>
+                                                    <button id="bloquearBtn" style="margin-left: 10px; background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Bloquear</button>
+                                                    <button id="corrigirBtn" style="margin-left: 10px; background-color: #f39c12; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;" title="Remove usuários selecionados desta lista permanentemente">Corrigir (Já Sigo)</button>
+                                                ` : ''}
+                                                ${currentTabId === 'tabNaoSigoDeVolta' ? `<button id="followBackBtn" style="background:#0095f6;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">Seguir de Volta (Em breve)</button>` : ''}
+                                                ${currentTabId === 'tabHistorico' ? `<button id="limparHistoricoBtn" style="background:#e74c3c;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">Limpar Selecionados</button>` : ''}
                                             </div>
                                         `;
-                                        preencherTabela(naoSegueDeVolta, true, false);
-                                        document.getElementById("selecionarTodosBtn").addEventListener("click", selecionarTodos);
-                                        document.getElementById("desmarcarTodosBtn").addEventListener("click", desmarcarTodos);
-                                        document.getElementById("unfollowBtn").addEventListener("click", unfollowSelecionados);
-                                        document.getElementById("bloquearBtn").addEventListener("click", bloquearSelecionados);
-                                        document.getElementById("downloadCsvBtn").addEventListener("click", () => downloadNaoSegueDeVoltaCsv(naoSegueDeVolta));
+                                        
+                                        preencherTabela(currentList, true, currentTabId === 'tabHistorico');
+                                        
+                                        document.getElementById("selecionarTodosBtn").onclick = selecionarTodos;
+                                        document.getElementById("desmarcarTodosBtn").onclick = desmarcarTodos;
+                                        
+                                        if (document.getElementById("unfollowBtn")) {
+                                            document.getElementById("unfollowBtn").onclick = unfollowSelecionados;
+                                        }
+                                        if (document.getElementById("bloquearBtn")) {
+                                            document.getElementById("bloquearBtn").onclick = bloquearSelecionados;
+                                        }
+                                        if (document.getElementById("corrigirBtn")) {
+                                            document.getElementById("corrigirBtn").onclick = async () => {
+                                                const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(cb => cb.dataset.username);
+                                                if (selecionados.length === 0) return alert("Selecione os usuários que você já segue para corrigir.");
+                                                
+                                                if (confirm(`Marcar ${selecionados.length} usuários como 'Já Sigo'? Eles não aparecerão mais nesta lista.`)) {
+                                                    for (const u of selecionados) {
+                                                        await dbHelper.saveException(u);
+                                                        cachedData.exceptions.add(u);
+                                                    }
+                                                    // Recalcula a lista
+                                                    cachedData.naoSegueDeVolta = [...cachedData.seguindo].filter(user => !cachedData.seguidores.has(user) && !cachedData.exceptions.has(user));
+                                                    lists['tabNaoSegueDeVolta'] = toObjects(cachedData.naoSegueDeVolta);
+                                                    currentList = lists['tabNaoSegueDeVolta'];
+                                                    document.getElementById('countNaoSegue').innerText = currentList.length;
+                                                    renderCurrentTab();
+                                                }
+                                            };
+                                        }
+                                        if (document.getElementById("limparHistoricoBtn")) {
+                                            document.getElementById("limparHistoricoBtn").onclick = async () => {
+                                                const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(cb => cb.dataset.username);
+                                                if (selecionados.length === 0) return alert("Selecione itens para limpar.");
+                                                if(confirm(`Excluir ${selecionados.length} itens do histórico?`)) {
+                                                    await dbHelper.deleteUnfollowHistory(selecionados);
+                                                    renderCurrentTab();
+                                                }
+                                            };
+                                        }
                                     }
+
+                                    renderCurrentTab();
+
+                                    // Event listeners para as abas
+                                    const tabs = ['tabNaoSegueDeVolta', 'tabNovosSeguidores', 'tabNovosSeguindo', 'tabNaoSigoDeVolta', 'tabHistorico'];
+
+                                    tabs.forEach(tabId => {
+                                        document.getElementById(tabId).addEventListener('click', () => {
+                                            currentTabId = tabId;
+                                            renderCurrentTab();
+                                        });
+                                    });
+
+                                    // Lógica do Botão Atualizar
+                                    document.getElementById("btnUpdateApi").onclick = async () => {
+                                        if (!cachedData.profileInfo) {
+                                            statusDiv.innerText = "Buscando ID do usuário...";
+                                            const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
+                                            if (profileInfoResponse.ok) {
+                                                cachedData.profileInfo = await profileInfoResponse.json();
+                                            } else {
+                                                alert("Erro ao obter ID do usuário. Tente novamente mais tarde.");
+                                                return;
+                                            }
+                                        }
+                                        
+                                        const userId = cachedData.profileInfo.data.user.id;
+                                        const totalFollowing = cachedData.profileInfo.data.user.edge_follow.count;
+                                        const totalFollowers = cachedData.profileInfo.data.user.edge_followed_by.count;
+
+                                        // 1. Baixar Seguindo
+                                        const apiFollowing = await fetchUserListAPI(userId, 'following', totalFollowing);
+                                        if (processoCancelado || !apiFollowing) return;
+                                        
+                                        // 2. Baixar Seguidores
+                                        const apiFollowers = await fetchUserListAPI(userId, 'followers', totalFollowers);
+                                        if (processoCancelado || !apiFollowers) return;
+
+                                        statusDiv.innerText = "Calculando diferenças e salvando no Banco de Dados...";
+
+                                        // 3. Calcular Novos (Comparando API vs DB Antigo)
+                                        const novosSeguidoresSet = [...apiFollowers].filter(u => !cachedData.seguidores.has(u));
+                                        const novosSeguindoSet = [...apiFollowing].filter(u => !cachedData.seguindo.has(u));
+
+                                        // 4. Salvar no DB (Substitui o antigo pelo novo da API)
+                                        // Prepara objetos completos para salvar (com foto)
+                                        const followersToSave = [...apiFollowers].map(u => cachedData.userDetails.get(u) || { username: u, photoUrl: null });
+                                        const followingToSave = [...apiFollowing].map(u => cachedData.userDetails.get(u) || { username: u, photoUrl: null });
+
+                                        await dbHelper.saveCache('followers', followersToSave);
+                                        await dbHelper.saveCache('following', followingToSave);
+
+                                        // 5. Atualizar Cache em Memória e Listas
+                                        cachedData.seguidores = apiFollowers;
+                                        cachedData.seguindo = apiFollowing;
+                                        cachedData.naoSegueDeVolta = [...apiFollowing].filter(user => !apiFollowers.has(user) && !cachedData.exceptions.has(user));
+
+                                        lists['tabNaoSegueDeVolta'] = toObjects(cachedData.naoSegueDeVolta);
+                                        lists['tabNovosSeguidores'] = toObjects(novosSeguidoresSet);
+                                        lists['tabNovosSeguindo'] = toObjects(novosSeguindoSet);
+                                        lists['tabNaoSigoDeVolta'] = toObjects([...apiFollowers].filter(u => !apiFollowing.has(u)));
+
+                                        // Atualizar Contadores
+                                        document.getElementById('countNaoSegue').innerText = lists['tabNaoSegueDeVolta'].length;
+                                        document.getElementById('countNovosSeguidores').innerText = lists['tabNovosSeguidores'].length;
+                                        document.getElementById('countNovosSeguindo').innerText = lists['tabNovosSeguindo'].length;
+                                        document.getElementById('countNaoSigo').innerText = lists['tabNaoSigoDeVolta'].length;
+
+                                        statusDiv.innerText = "Dados atualizados e salvos no IndexDB com sucesso!";
+                                        currentList = lists[currentTabId];
+                                        renderCurrentTab();
+                                    };
                                 }
 
                                 // As funções de unfollow são movidas para cá para ter acesso ao escopo de `cachedData`, `statusDiv`, etc.
@@ -2727,36 +2853,11 @@
                                     const btn = document.getElementById("bloquearBtn");
                                     btn.disabled = true;
                                     btn.textContent = "Processando...";
-
+                                    
                                     blockUsers(selecionados, 0, () => {
                                         btn.disabled = false;
                                         btn.textContent = "Bloquear";
                                     });
-                                }
-
-                                function downloadNaoSegueDeVoltaCsv(users) {
-                                    if (!users || users.length === 0) {
-                                        alert("Nenhum usuário para baixar.");
-                                        return;
-                                    }
-
-                                    let csvContent = "ID,Username,Link do Perfil\n";
-
-                                    users.forEach((username, index) => {
-                                        const id = index + 1;
-                                        const link = `https://www.instagram.com/${username}/`;
-                                        csvContent += `${id},${username},${link}\n`;
-                                    });
-
-                                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                                    const url = URL.createObjectURL(blob);
-                                    const link = document.createElement("a");
-                                    link.setAttribute("href", url);
-                                    link.setAttribute("download", "nao_segue_de_volta.csv");
-                                    link.style.visibility = 'hidden';
-                                    document.body.appendChild(link);
-                                    link.click();
-                                    document.body.removeChild(link);
                                 }
 
                                 function blockUsers(users, index, callback) {
@@ -2774,7 +2875,7 @@
                                         // 1. Clicar nos 3 pontinhos (Opções)
                                         const xpath1 = "/html/body/div[1]/div/div/div[2]/div/div/div[1]/div[2]/div[1]/section/main/div/div/header/div/section[2]/div/div[1]/div[2]/div";
                                         let optionsClicked = executeXPathClick(xpath1);
-
+                                        
                                         if (!optionsClicked) {
                                             // Fallback: busca por SVG de opções se o XPath falhar
                                             const svgs = document.querySelectorAll('svg[aria-label="Opções"], svg[aria-label="Options"]');
@@ -2821,7 +2922,7 @@
                                                         for (let xp of confirmXpaths) {
                                                             if (executeXPathClick(xp)) { confirmClicked = true; break; }
                                                         }
-
+                                                        
                                                         if (!confirmClicked) {
                                                             // Fallback robusto: Busca botão "Bloquear" no último dialog (que deve ser o de confirmação)
                                                             const dialogs = document.querySelectorAll('div[role="dialog"]');
@@ -2869,6 +2970,8 @@
                                         unfollowBtn.disabled = false;
                                         unfollowBtn.textContent = "Unfollow";
                                         isUnfollowing = false;
+                                        const tabHistorico = document.getElementById('tabHistorico');
+                                        if (tabHistorico) tabHistorico.click();
                                     });
                                 }
 
@@ -2916,22 +3019,31 @@
                                                         }).catch(err => console.error(`Falha ao salvar ${username} no histórico:`, err));
                                                     });
 
-                                                    // Remove da lista de dados em cache
-                                                    const currentList = getCurrentList();
-                                                    if (currentList) {
-                                                        const userIndex = currentList.indexOf(username);
+                                                    // Remove da lista de "Não segue de volta" em memória
+                                                    const naoSegueList = lists['tabNaoSegueDeVolta'];
+                                                    if (naoSegueList) {
+                                                        const userIndex = naoSegueList.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
                                                         if (userIndex > -1) {
-                                                            currentList.splice(userIndex, 1);
+                                                            naoSegueList.splice(userIndex, 1);
                                                         }
+                                                        // Atualiza o contador da aba
+                                                        const countSpan = document.getElementById('countNaoSegue');
+                                                        if (countSpan) countSpan.innerText = naoSegueList.length;
+                                                    }
+
+                                                    // Atualiza o cache de 'following' no banco de dados para persistir a mudança
+                                                    const lowerUser = username.toLowerCase();
+                                                    if (cachedData.seguindo && cachedData.seguindo.has(lowerUser)) {
+                                                        cachedData.seguindo.delete(lowerUser);
+                                                        const newFollowingList = Array.from(cachedData.seguindo).map(u => 
+                                                            cachedData.userDetails.get(u) || { username: u, photoUrl: null }
+                                                        );
+                                                        dbHelper.saveCache('following', newFollowingList).catch(e => console.error("Erro ao atualizar cache following:", e));
                                                     }
 
                                                     // Remove a linha da tabela visível
                                                     const row = document.querySelector(`#naoSegueDeVoltaTable tr[data-username="${username}"]`);
                                                     if (row) row.remove();
-
-                                                    // Atualiza o texto de status
-                                                    // O status é atualizado dinamicamente se chamarmos renderTab, mas para evitar reload completo, apenas atualizamos o texto se necessário
-                                                    // statusDiv.innerText = ... (Opcional, já que a linha some)
 
                                                     // Processa o próximo usuário após o delay
                                                     setTimeout(() => {
@@ -2953,94 +3065,6 @@
                                 }
 
                                 carregarDadosIniciais();
-                            }
-
-                            async function abrirModalHistoricoUnfollow() {
-                                if (document.getElementById("historicoUnfollowModal")) return;
-
-                                const div = document.createElement("div");
-                                div.id = "historicoUnfollowModal";
-                                div.className = "submenu-modal";
-                                div.style.cssText = `
-                                    position: fixed;
-                                    top: 50%;
-                                    left: 50%;
-                                    transform: translate(-50%, -50%);
-                                    width: 90%;
-                                    max-width: 800px;
-                                    max-height: 90vh;
-                                    border: 1px solid #ccc;
-                                    border-radius: 10px;
-                                    padding: 20px;
-                                    z-index: 10000;
-                                    overflow: auto;
-                                `;
-                                div.innerHTML = `
-                                    <div class="modal-header">
-                                        <span class="modal-title">Histórico de Unfollow</span>
-                                        <div class="modal-controls">
-                                            <button id="historicoMinimizarBtn" title="Minimizar">_</button>
-                                            <button id="fecharHistoricoBtn" title="Fechar">X</button>
-                                        </div>
-                                    </div>
-                                    <div style="padding: 15px;">
-                                        <button id="histSelectAll" style="margin-right:5px; cursor:pointer;">Selecionar Todos</button>
-                                        <button id="histDeselectAll" style="margin-right:5px; cursor:pointer;">Desmarcar Todos</button>
-                                        <button id="histLimparBtn" style="background:#ed4956;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">Limpar</button>
-                                    </div>
-                                    <div id="statusHistorico" style="margin-top: 20px; font-weight: bold;">Carregando histórico...</div>
-                                    <div id="tabelaContainer" style="display: block; margin-top: 15px;"></div>
-                                `;
-                                document.body.appendChild(div);
-
-                                document.getElementById("fecharHistoricoBtn").addEventListener("click", () => {
-                                    div.remove();
-                                });
-
-                                document.getElementById("historicoMinimizarBtn").onclick = () => {
-                                    const modal = document.getElementById('historicoUnfollowModal');
-                                    const contentToToggle = [
-                                        modal.querySelector('#statusHistorico'),
-                                        modal.querySelector('#tabelaContainer')
-                                    ].filter(Boolean);
-
-                                    const btn = document.getElementById('historicoMinimizarBtn');
-                                    const isMinimized = modal.dataset.minimized === 'true';
-
-                                    contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-                                    modal.dataset.minimized = !isMinimized;
-                                    btn.textContent = isMinimized ? '_' : '□';
-                                    modal.style.maxHeight = isMinimized ? '90vh' : 'auto';
-                                };
-
-                                const statusDiv = document.getElementById("statusHistorico");
-                                const tabelaContainer = document.getElementById("tabelaContainer");
-
-                                const historicoData = await dbHelper.loadUnfollowHistory();
-
-                                if (historicoData.length > 0) {
-                                    statusDiv.innerText = `Exibindo ${historicoData.length} registro(s) no histórico.`;
-                                    tabelaContainer.innerHTML = `
-                                        <table id="historicoTable" style="width: 100%; border-collapse: collapse; margin-top: 20px;"></table>
-                                        <div id="paginationControls" style="margin-top: 20px;"></div>
-                                    `;
-                                    preencherTabela(historicoData, true, true);
-
-                                    document.getElementById("histSelectAll").onclick = () => selecionarTodos(null, "historicoTable");
-                                    document.getElementById("histDeselectAll").onclick = () => desmarcarTodos(null, "historicoTable");
-                                    document.getElementById("histLimparBtn").onclick = async () => {
-                                        const selected = Array.from(document.querySelectorAll("#historicoTable .unfollowCheckbox:checked")).map(cb => cb.dataset.username);
-                                        if(selected.length === 0) return alert("Selecione itens para limpar.");
-                                        if(confirm(`Deseja excluir ${selected.length} itens do histórico?`)) {
-                                            await dbHelper.deleteUnfollowHistory(selected);
-                                            div.remove();
-                                            abrirModalHistoricoUnfollow();
-                                        }
-                                    };
-                                } else {
-                                    statusDiv.innerText = "Nenhum registro no histórico de unfollow.";
-                                    tabelaContainer.innerHTML = '';
-                                }
                             }
 
                             // --- LÓGICA PARA "SEGUINDO" ---
@@ -3140,7 +3164,7 @@
                                     width: 90%; max-width: 800px; max-height: 90vh; border: 1px solid #ccc;
                                     border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
                                 `;
-                                div.innerHTML = `
+                                div.innerHTML = ` 
                                     <div class="modal-header">
                                         <span class="modal-title">Gerenciador de "Seguindo"</span>
                                         <div class="modal-controls"><button id="seguindoMinimizarBtn" title="Minimizar">_</button><button id="fecharSeguindoBtn" title="Fechar">X</button></div>
@@ -3223,13 +3247,13 @@
                                 };
 
                                 while (hasNextPage && !processoCancelado) {
-                                    const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=${loadSettings().requestBatchSize}&max_id=${nextMaxId}`, { headers: { 'X-IG-App-ID': appID } });
+                                    const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=50&max_id=${nextMaxId}`, { headers: { 'X-IG-App-ID': appID } });
                                     const data = await response.json();
                                     data.users.forEach(user => userList.push({ username: user.username, photoUrl: user.profile_pic_url }));
                                     updateLocalProgressBar(userList.length, total);
                                     hasNextPage = !!data.next_max_id;
                                     nextMaxId = data.next_max_id;
-                                    await new Promise(r => setTimeout(r, loadSettings().requestDelay));
+                                    await new Promise(r => setTimeout(r, 250));
                                 }
                                 if (bar) bar.remove();
                                 return processoCancelado ? null : userList;
@@ -3285,7 +3309,7 @@
                                     const renderList = (page) => {
                                         const startIndex = (page - 1) * itemsPerPage;
                                         const endIndex = startIndex + itemsPerPage;
-
+                                        
                                         // Filtra por pesquisa antes de ordenar e paginar
                                         const searchTerm = document.getElementById('seguindoSearchInput')?.value.toLowerCase() || '';
                                         let filteredUsers = seguindoList;
@@ -3380,7 +3404,7 @@
                                         if (prevBtn) prevBtn.onclick = () => renderList(--currentPage);
                                         const nextBtn = document.getElementById("nextPageBtn");
                                         if (nextBtn) nextBtn.onclick = () => renderList(++currentPage);
-
+                                        
                                         // Adiciona eventos aos checkboxes individuais para atualizar o Set
                                         document.querySelectorAll('#seguindoModal .user-checkbox').forEach(checkbox => {
                                             checkbox.addEventListener('change', (e) => {
@@ -3541,7 +3565,7 @@
                                     };
                                 });
                             }
-
+                            
                             function abrirModalAtalhos() {
                                 if (document.getElementById("shortcutsModal")) return;
 
@@ -3629,7 +3653,7 @@
                                     e.preventDefault();
                                     const xpathInput = document.getElementById('shortcut-xpath');
                                     const linkInput = document.getElementById('shortcut-link');
-
+                                    
                                     const xpath = xpathInput.value.trim();
                                     const link = linkInput.value.trim();
 
@@ -3644,9 +3668,9 @@
 
                                     const newShortcut = { ...capturedShortcut, xpath, link };
                                     const shortcuts = getShortcuts();
-
+                                    
                                     // Verifica se já existe um atalho com a mesma tecla
-                                    const existingIndex = shortcuts.findIndex(s =>
+                                    const existingIndex = shortcuts.findIndex(s => 
                                         s.key.toLowerCase() === newShortcut.key.toLowerCase() &&
                                         !!s.ctrlKey === newShortcut.ctrlKey &&
                                         !!s.altKey === newShortcut.altKey &&
@@ -3682,7 +3706,7 @@
                                 div.style.cssText = `
                                     position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
                                     width: 90%; max-width: 500px; border: 1px solid #ccc;
-                                    border-radius: 10px; z-index: 10001;
+                                    border-radius: 10px; z-index: 10001; max-height: 90vh; overflow-y: auto;
                                 `;
                                 if (loadSettings().rgbBorder) {
                                     div.classList.add('rgb-border-effect');
@@ -3697,18 +3721,22 @@
                                             <button id="fecharParamsBtn" title="Fechar">X</button>
                                         </div>
                                     </div>
-                                    <div style="padding: 20px; display: flex; flex-direction: column; gap: 20px;">
+                                    <div style="padding: 20px; display: flex; flex-direction: column; gap: 15px;">
                                         <div style="display: flex; justify-content: space-between; align-items: center;">
                                             <label for="unfollowDelayInput">Atraso para Unfollow (ms)</label>
                                             <input type="number" id="unfollowDelayInput" value="${settings.unfollowDelay}" style="width: 80px; color: black;">
                                         </div>
                                         <div style="display: flex; justify-content: space-between; align-items: center;">
                                             <label for="requestDelayInput">Intervalo Requisições (ms)</label>
-                                            <input type="number" id="requestDelayInput" value="${settings.requestDelay}" style="width: 80px; color: black;">
+                                            <input type="number" id="requestDelayInput" value="${settings.requestDelay || 250}" style="width: 80px; color: black;">
                                         </div>
                                         <div style="display: flex; justify-content: space-between; align-items: center;">
                                             <label for="requestBatchSizeInput">Itens por Requisição (API)</label>
-                                            <input type="number" id="requestBatchSizeInput" value="${settings.requestBatchSize}" style="width: 80px; color: black;">
+                                            <input type="number" id="requestBatchSizeInput" value="${settings.requestBatchSize || 50}" style="width: 80px; color: black;">
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <label for="maxRequestsInput" title="0 para ilimitado">Limite Total de Requisições</label>
+                                            <input type="number" id="maxRequestsInput" value="${settings.maxRequests || 0}" style="width: 80px; color: black;">
                                         </div>
                                         <div style="display: flex; justify-content: space-between; align-items: center;">
                                             <label for="itemsPerPageInput">Itens por Página nas Tabelas</label>
@@ -3716,15 +3744,44 @@
                                         </div>
                                         <div style="display: flex; justify-content: space-between; align-items: center;">
                                             <label for="languageSelect">Idioma</label>
-                                            <select id="languageSelect">
+                                            <select id="languageSelect" style="width: 120px; color: black;">
                                                 <option value="pt-BR" ${settings.language === 'pt-BR' ? 'selected' : ''}>🇧🇷 Português</option>
                                                 <option value="en-US" ${settings.language === 'en-US' ? 'selected' : ''}>🇺🇸 English</option>
                                             </select>
                                         </div>
+                                        
+                                        <hr style="border: 1px solid #eee; width: 100%;">
+                                        
+                                        <h3 style="margin: 0; font-size: 16px;">Gerenciamento de Banco de Dados (IndexedDB)</h3>
+                                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                                            <select id="dbStoreSelect" style="padding: 5px; color: black;">
+                                                <option value="">Carregando tabelas...</option>
+                                            </select>
+                                            <div style="display: flex; gap: 10px;">
+                                                <button id="btnExportDB" style="flex: 1; background: #2ecc71; color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer;">Baixar .csv</button>
+                                                <button id="btnClearDB" style="flex: 1; background: #e74c3c; color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer;">Limpar Tabela</button>
+                                            </div>
+                                        </div>
+
+                                        <hr style="border: 1px solid #eee; width: 100%;">
+
                                         <button id="saveParamsBtn" style="background:#0095f6;color:white;border:none;padding:10px;border-radius:5px;cursor:pointer;">Salvar e Fechar</button>
                                     </div>
                                 `;
                                 document.body.appendChild(div);
+
+                                // Popula o Select com as tabelas do DB
+                                dbHelper.openDB().then(db => {
+                                    const select = document.getElementById('dbStoreSelect');
+                                    select.innerHTML = '<option value="">Selecione uma tabela...</option>';
+                                    const storeNames = Array.from(db.objectStoreNames);
+                                    storeNames.forEach(name => {
+                                        const option = document.createElement('option');
+                                        option.value = name;
+                                        option.innerText = name;
+                                        select.appendChild(option);
+                                    });
+                                });
 
                                 document.getElementById("fecharParamsBtn").onclick = () => div.remove();
                                 document.getElementById("saveParamsBtn").onclick = () => {
@@ -3732,12 +3789,76 @@
                                         unfollowDelay: parseInt(document.getElementById("unfollowDelayInput").value, 10),
                                         requestDelay: parseInt(document.getElementById("requestDelayInput").value, 10),
                                         requestBatchSize: parseInt(document.getElementById("requestBatchSizeInput").value, 10),
+                                        maxRequests: parseInt(document.getElementById("maxRequestsInput").value, 10),
                                         itemsPerPage: parseInt(document.getElementById("itemsPerPageInput").value, 10),
                                         language: document.getElementById("languageSelect").value
                                     };
                                     saveSettings(newSettings);
                                     alert("Parâmetros salvos!");
                                     div.remove();
+                                };
+
+                                document.getElementById("btnClearDB").onclick = async () => {
+                                    const storeName = document.getElementById('dbStoreSelect').value;
+                                    if (!storeName) return alert("Selecione uma tabela.");
+                                    if (confirm(`Tem certeza que deseja limpar a tabela '${storeName}'? Isso não pode ser desfeito.`)) {
+                                        const db = await dbHelper.openDB();
+                                        const tx = db.transaction([storeName], 'readwrite');
+                                        tx.objectStore(storeName).clear();
+                                        alert(`Tabela '${storeName}' limpa com sucesso.`);
+                                    }
+                                };
+
+                                document.getElementById("btnExportDB").onclick = async () => {
+                                    const storeName = document.getElementById('dbStoreSelect').value;
+                                    if (!storeName) return alert("Selecione uma tabela.");
+                                    
+                                    const db = await dbHelper.openDB();
+                                    const tx = db.transaction([storeName], 'readonly');
+                                    const store = tx.objectStore(storeName);
+                                    const req = store.getAll();
+                                    
+                                    req.onsuccess = () => {
+                                        const result = req.result;
+                                        if (!result || result.length === 0) return alert("Tabela vazia.");
+
+                                        let dataToExport = [];
+                                        
+                                        // Lógica para extrair dados dependendo do formato da tabela
+                                        if (result.length === 1 && result[0].usernames && Array.isArray(result[0].usernames)) {
+                                            // Formato de cache (followers, following)
+                                            if (result[0].users) {
+                                                dataToExport = result[0].users; // Objetos completos
+                                            } else {
+                                                dataToExport = result[0].usernames.map(u => ({ username: u }));
+                                            }
+                                        } else {
+                                            // Formato de histórico ou exceções
+                                            dataToExport = result;
+                                        }
+
+                                        if (dataToExport.length === 0) return alert("Dados não formatáveis ou vazios.");
+
+                                        // Gerar CSV
+                                        const keys = Object.keys(dataToExport[0]);
+                                        const csvContent = [
+                                            keys.join(','), // Cabeçalho
+                                            ...dataToExport.map(row => keys.map(k => {
+                                                let val = row[k];
+                                                if (typeof val === 'string') val = `"${val}"`; // Aspas para strings
+                                                return val;
+                                            }).join(','))
+                                        ].join('\n');
+
+                                        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                                        const url = URL.createObjectURL(blob);
+                                        const link = document.createElement("a");
+                                        link.setAttribute("href", url);
+                                        link.setAttribute("download", `${storeName}_backup.csv`);
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                    };
                                 };
                             }
 
@@ -3832,25 +3953,25 @@
 
                             function startReelsAutoScroll() {
                                 if (!isReelsScrolling) return;
-
+ 
                                 // Encontra o vídeo que está visível na tela
                                 const visibleVideo = Array.from(document.querySelectorAll('video')).find(v => {
                                     const rect = v.getBoundingClientRect();
                                     return rect.top >= 0 && rect.bottom <= window.innerHeight && v.readyState > 2;
                                 });
-
+ 
                                 // Se encontrou um vídeo e ele ainda não tem nosso listener
                                 if (visibleVideo && !visibleVideo.hasAttribute('data-reels-scroller')) {
                                     visibleVideo.setAttribute('data-reels-scroller', 'true');
-
+ 
                                     const timeUpdateListener = () => {
                                         // Verifica se o vídeo está perto do fim (últimos 700ms)
                                         if (visibleVideo.duration - visibleVideo.currentTime <= 0.7) {
                                             console.log("Vídeo quase no fim, rolando para o próximo.");
-
+                                            
                                             // Remove o listener para não disparar múltiplas vezes
                                             visibleVideo.removeEventListener('timeupdate', timeUpdateListener);
-
+ 
                                             // Lógica para encontrar o contêiner de rolagem dinamicamente
                                             let scrollableContainer = visibleVideo.parentElement;
                                             while (scrollableContainer) {
@@ -3878,7 +3999,7 @@
                                                     behavior: 'smooth'
                                                 });
                                             }
-
+  
                                             // Após a rolagem, chama a função novamente para encontrar o novo vídeo
                                             // e adicionar o listener a ele.
                                             setTimeout(startReelsAutoScroll, 2000); // Aguarda a animação de rolagem
@@ -3926,9 +4047,9 @@
                                     const queryHash = 'd4d88dc1500312af6f937f7b804c68c3'; // Hash para a query de Reels do usuário
 
                                     while (hasNextPage) {
-                                        const variables = { "user_id": userId, "first": loadSettings().requestBatchSize, "after": nextMaxId };
+                                        const variables = { "user_id": userId, "first": 50, "after": nextMaxId };
                                         const url = `https://www.instagram.com/graphql/query/?query_hash=${queryHash}&variables=${encodeURIComponent(JSON.stringify(variables))}`;
-
+                                        
                                         const response = await fetch(url, { headers: { 'X-IG-App-ID': appID } });
                                         if (!response.ok) throw new Error(`A resposta da rede não foi 'ok'. Status: ${response.status}`);
                                         const data = await response.json();
@@ -3951,7 +4072,7 @@
 
                                         hasNextPage = clipsData?.page_info?.has_next_page || false;
                                         nextMaxId = clipsData?.page_info?.end_cursor || '';
-                                        if (hasNextPage) await new Promise(r => setTimeout(r, loadSettings().requestDelay));
+                                        if (hasNextPage) await new Promise(r => setTimeout(r, 300));
                                     }
 
                                     statusModal.remove();
@@ -4087,16 +4208,16 @@
                                         buttonId: 'silenciarSeguindoBtn',
                                         text: 'Silenciar/Reativar',
                                         func: (users, cb) => unmuteUsers(users, cb, true) // Passa `true` para ativar o modo toggle
+                                }, 
+                                closeFriends: { 
+                                    buttonId: 'closeFriendsSeguindoBtn', 
+                                    text: 'Melhores Amigos', 
+                                    // Nova função que age no perfil individual 
+                                    func: (users, cb) => performActionOnProfile(users, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], cb) 
                                 },
-                                closeFriends: {
-                                    buttonId: 'closeFriendsSeguindoBtn',
-                                    text: 'Melhores Amigos',
-                                    // Nova função que age no perfil individual
-                                    func: (users, cb) => performActionOnProfile(users, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], cb)
-                                },
-                                hideStory: {
-                                    buttonId: 'hideStorySeguindoBtn',
-                                    text: 'Ocultar Story',
+                                hideStory: { 
+                                    buttonId: 'hideStorySeguindoBtn', 
+                                    text: 'Ocultar Story', 
                                     // Revertido para o método original que navega para a página de lista, conforme solicitado.
                                     func: (users, cb) => toggleListMembership(users, '/accounts/hide_story_and_live_from/', 'hiddenStory', cb)
                                 }
@@ -4154,7 +4275,7 @@
 
                                 // 3. Clicar na opção desejada (ex: "Adicionar aos melhores amigos")
                                  // Seletor aprimorado para encontrar o texto em qualquer lugar dentro do elemento clicável
-                                 const actionOption = Array.from(document.querySelectorAll('div[role="button"], div[role="menuitem"]')).find(el =>
+                                 const actionOption = Array.from(document.querySelectorAll('div[role="button"], div[role="menuitem"]')).find(el => 
                                      menuTexts.some(text => el.innerText.includes(text))
                                  );
 
@@ -4246,10 +4367,14 @@
                                             'X-IG-App-ID': '936619743392459'
                                         }
                                     });
-                                    const data = await response.json();
-                                    return data.data.user.profile_pic_url || 'https://via.placeholder.com/32';
+                                    const contentType = response.headers.get("content-type");
+                                    if (response.ok && contentType && contentType.includes("application/json")) {
+                                        const data = await response.json();
+                                        return data.data?.user?.profile_pic_url || 'https://via.placeholder.com/32';
+                                    }
+                                    return 'https://via.placeholder.com/32';
                                 } catch (error) {
-                                    console.error(`Erro ao buscar foto para ${username}:`, error);
+                                    // console.warn(`Erro ao buscar foto para ${username}:`, error);
                                     return 'https://via.placeholder.com/32';
                                 }
                             }
@@ -4285,9 +4410,15 @@
                                     const endIndex = Math.min(startIndex + itemsPerPage, userList.length);
 
                                     userList.slice(startIndex, endIndex).forEach((userData, index) => {
-                                        const username = isHistory ? userData.username : userData;
-                                        const photoUrl = isHistory ? userData.photoUrl : null;
-                                        const unfollowDate = isHistory ? new Date(userData.unfollowDate).toLocaleString('pt-BR') : null;
+                                        const isObject = typeof userData === 'object' && userData !== null;
+                                        const username = isObject ? userData.username : userData;
+                                        const photoUrl = isObject ? userData.photoUrl : null;
+                                        let unfollowDate = null;
+                                        if (isHistory) {
+                                            try {
+                                                unfollowDate = userData.unfollowDate ? new Date(userData.unfollowDate).toLocaleString('pt-BR') : 'Data desconhecida';
+                                            } catch (e) { unfollowDate = 'Data inválida'; }
+                                        }
 
                                         const tr = document.createElement("tr");
                                         tr.setAttribute('data-username', username);
@@ -4297,7 +4428,7 @@
                                                 <a href="https://www.instagram.com/${username}" target="_blank">${username}</a>
                                             </td>
                                             <td style="border: 1px solid #ccc; padding: 10px;">
-                                                <img id="img_${username}_${isHistory ? 'hist' : 'main'}" src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%;">
+                                                <img id="img_${username}_${isHistory ? 'hist' : 'main'}" src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%;" onerror="this.onerror=null;this.src='https://via.placeholder.com/32';">
                                             </td>` +
                                             (isHistory ? `<td style="border: 1px solid #ccc; padding: 10px;">${unfollowDate}</td>` : '') +
                                             (showCheckbox ? `<td style="border: 1px solid #ccc; padding: 10px;">
@@ -4305,12 +4436,13 @@
                                             </td>` : '') + `
                                         `;
                                         tbody.appendChild(tr);
-                                        if (!isHistory) {
-                                            getProfilePic(username).then(url => {
-                                                const img = document.getElementById(`img_${username}_main`);
-                                                if (img) img.src = url;
-                                            });
-                                        }
+                                        // Comentado para evitar erro 429 (Too Many Requests) ao renderizar a tabela
+                                        // if (!isHistory && !photoUrl) {
+                                        //     getProfilePic(username).then(url => {
+                                        //         const img = document.getElementById(`img_${username}_main`);
+                                        //         if (img) img.src = url;
+                                        //     });
+                                        // }
                                     });
 
                                     updatePaginationControls();
@@ -4786,4 +4918,4 @@
                     subtree: true,
             });
 
-        })();
+        })(); 

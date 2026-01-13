@@ -4910,6 +4910,11 @@
                             }, 500);
                         });
 
+                        // Garante que o menu seja injetado periodicamente caso o DOM mude (SPA)
+                        setInterval(() => {
+                            if (window.location.href.includes("instagram.com")) injectMenu();
+                        }, 1000);
+
                     // --- DOWNLOAD DE MÍDIA DO FEED E REELS ---
                     function addFeedDownloadButtons() {
                         const observer = new MutationObserver(mutations => {

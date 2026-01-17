@@ -517,6 +517,10 @@
                                     <button id="mutedAccountsBtn"><svg aria-label="Contas Silenciadas" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M11 5L6 9H2v6h4l5 4V5z" fill="none" stroke="currentColor" stroke-width="2"></path><line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2"></line><line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2"></line></svg></button>
                                     <span>Contas Silenciadas</span>
                                 </div>
+                                <div class="menu-item">
+                                    <button id="interacoesBtn"><svg aria-label="Interações" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"></path></svg></button>
+                                    <span>Interações</span>
+                                </div>
 
                                 <div class="menu-item">
                                     <button id="reelsMenuBtn"><svg aria-label="Reels" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12.87 1.51l-2.54 2.6-2.53-2.6a.86.86 0 0 0-.61-.25c-.23 0-.45.09-.61.25l-2.54 2.6-2.53-2.6A.86.86 0 0 0 .9 1.26c-.23 0-.45.09-.61.25L.1 1.7a.88.88 0 0 0 0 1.23l2.54 2.6-2.53 2.6a.88.88 0 0 0 0 1.23l.19.19c.16.16.38.25.61.25.23 0 .45-.09.61-.25l2.54-2.6 2.53 2.6c.16.16.38.25.61.25.23 0 .45-.09.61-.25l2.54-2.6 2.53 2.6c.16.16.38.25.61.25.23 0 .45-.09.61-.25l.19-.19a.88.88 0 0 0 0-1.23l-2.53-2.6 2.53-2.6a.88.88 0 0 0 0-1.23l-.19-.19a.86.86 0 0 0-.61-.25z" fill="currentColor"></path><rect height="16" rx="3" ry="3" width="18" x="3" y="7" fill="none" stroke="currentColor" stroke-width="2"></rect></svg></button>
@@ -931,6 +935,11 @@
                     abrirModalContasSilenciadas();
                 }
             });
+
+                                document.getElementById("interacoesBtn").addEventListener("click", () => {
+                                    closeMenu();
+                                    abrirModalInteracoes();
+                                });
 
             // --- NOVO MENU: REELS ---
             document.getElementById("reelsMenuBtn").addEventListener("click", () => {
@@ -4303,6 +4312,333 @@
                                 document.body.appendChild(div);
                                 renderTable();
                             }
+
+                        function abrirModalInteracoes() {
+                            if (document.getElementById("interacoesModal")) return;
+
+                            // Helper para pegar cookie
+                            const getCookie = (name) => {
+                                const value = `; ${document.cookie}`;
+                                const parts = value.split(`; ${name}=`);
+                                if (parts.length === 2) return parts.pop().split(';').shift();
+                            };
+
+                            const div = document.createElement("div");
+                            div.id = "interacoesModal";
+                            div.className = "submenu-modal";
+                            div.style.cssText = `
+                                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                width: 90%; max-width: 600px; max-height: 90vh; border: 1px solid #ccc;
+                                border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
+                            `;
+                            
+                            div.innerHTML = `
+                                <div class="modal-header">
+                                    <span class="modal-title">Verificar Interações</span>
+                                    <div class="modal-controls">
+                                        <button id="fecharInteracoesBtn" title="Fechar">X</button>
+                                    </div>
+                                </div>
+                                <div class="tab-container" style="margin-top: 10px; padding: 0 15px;">
+                                    <button id="tabEuCurti" class="tab-button active" style="flex: 1;">Eu curti</button>
+                                    <button id="tabCurtiuMeu" class="tab-button" style="flex: 1;">Curtiu meu perfil</button>
+                                </div>
+                                <div style="padding: 15px;">
+                                    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                                        <input type="text" id="interacoesUsernameInput" placeholder="Digite o username..." style="flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                                        <button id="verificarInteracoesBtn" style="background: #0095f6; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Verificar</button>
+                                    </div>
+                                    <div id="interacoesUserProfile" style="display: none; flex-direction: column; align-items: center; margin-bottom: 20px;">
+                                        <img id="interacoesUserPic" src="" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; border: 1px solid #dbdbdb;">
+                                        <span id="interacoesUserNameDisplay" style="font-weight: bold; font-size: 16px; color: black;"></span>
+                                    </div>
+                                    <div id="interacoesResultados" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px;">
+                                        <!-- Cards serão inseridos aqui -->
+                                    </div>
+                                    <div id="interacoesDetalhes" style="margin-top: 20px; display: none;">
+                                        <h3 id="detalhesTitulo" style="margin-bottom: 10px; color: black;"></h3>
+                                        <button id="voltarCardsBtn" style="margin-bottom: 10px; padding: 5px 10px; cursor: pointer;">Voltar</button>
+                                        <div id="detalhesLista" style="max-height: 300px; overflow-y: auto; color: black;"></div>
+                                    </div>
+                                </div>
+                            `;
+                            document.body.appendChild(div);
+
+                            document.getElementById("fecharInteracoesBtn").onclick = () => div.remove();
+
+                            let currentTab = 'euCurti';
+                            let dataEuCurti = null;
+                            let dataCurtiuMeu = null;
+
+                            const updateView = () => {
+                                const container = document.getElementById("interacoesResultados");
+                                document.getElementById("interacoesDetalhes").style.display = "none";
+                                document.getElementById("interacoesResultados").style.display = "grid";
+                                container.innerHTML = '';
+
+                                const data = currentTab === 'euCurti' ? dataEuCurti : dataCurtiuMeu;
+                                if (data) {
+                                    renderizarCardsInteracoes(data);
+                                }
+                            };
+                            
+                            document.getElementById("tabEuCurti").onclick = () => {
+                                currentTab = 'euCurti';
+                                document.getElementById("tabEuCurti").classList.add("active");
+                                document.getElementById("tabCurtiuMeu").classList.remove("active");
+                                updateView();
+                            };
+                            document.getElementById("tabCurtiuMeu").onclick = () => {
+                                currentTab = 'curtiuMeu';
+                                document.getElementById("tabCurtiuMeu").classList.add("active");
+                                document.getElementById("tabEuCurti").classList.remove("active");
+                                updateView();
+                            };
+
+                            document.getElementById("verificarInteracoesBtn").onclick = async () => {
+                                const username = document.getElementById("interacoesUsernameInput").value.trim();
+                                if (!username) return alert("Digite um username.");
+                                
+                                const btn = document.getElementById("verificarInteracoesBtn");
+                                btn.disabled = true;
+                                btn.textContent = "Verificando...";
+                                
+                                const resultadosDiv = document.getElementById("interacoesResultados");
+                                const profileDiv = document.getElementById("interacoesUserProfile");
+
+                                resultadosDiv.innerHTML = '<p style="color:black;">Carregando interações...</p>';
+                                document.getElementById("interacoesDetalhes").style.display = "none";
+                                profileDiv.style.display = "none";
+
+                                // Buscar foto de perfil
+                                let photoUrl = 'https://via.placeholder.com/80';
+                                try {
+                                    const response = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, {
+                                        headers: { 'X-IG-App-ID': '936619743392459' }
+                                    });
+                                    if (response.ok) {
+                                        const data = await response.json();
+                                        photoUrl = data.data?.user?.profile_pic_url || photoUrl;
+                                    }
+                                } catch (e) {
+                                    console.error("Erro ao buscar foto de perfil:", e);
+                                }
+
+                                document.getElementById("interacoesUserPic").src = photoUrl;
+                                document.getElementById("interacoesUserNameDisplay").innerText = username;
+                                profileDiv.style.display = "flex";
+
+                                const headers = { 'X-IG-App-ID': '936619743392459' };
+                                const myId = getCookie('ds_user_id');
+                                
+                                try {
+                                    // Obter ID do usuário
+                                    let targetUserId = '';
+                                    const profileRes = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers });
+                                    if (profileRes.ok) {
+                                        const profileData = await profileRes.json();
+                                        targetUserId = profileData.data.user.id;
+                                    } else {
+                                        throw new Error("Não foi possível obter o ID do usuário.");
+                                    }
+
+                                    if (currentTab === 'euCurti') {
+                                        // --- ABA 1: O QUE EU CURTI DELE ---
+                                        resultadosDiv.innerHTML = '<p style="color:black;">Analisando posts e destaques...</p>';
+                                        
+                                        const likedPosts = [];
+                                        const likedStories = [];
+                                        
+                                        // 1. Posts
+                                        let nextMaxId = null;
+                                        let hasNext = true;
+                                        let processedCount = 0;
+                                        const MAX_POSTS = 500; 
+
+                                        while (hasNext && processedCount < MAX_POSTS) {
+                                            let url = `https://www.instagram.com/api/v1/feed/user/${targetUserId}/?count=33`;
+                                            if (nextMaxId) url += `&max_id=${nextMaxId}`;
+                                            
+                                            const feedRes = await fetch(url, { headers });
+                                            if (!feedRes.ok) break;
+                                            
+                                            const feedData = await feedRes.json();
+                                            const items = feedData.items || [];
+                                            
+                                            for (const item of items) {
+                                                if (item.has_liked) {
+                                                    let thumb = item.image_versions2?.candidates?.[0]?.url || item.carousel_media?.[0]?.image_versions2?.candidates?.[0]?.url || '';
+                                                    likedPosts.push({ type: 'Post', url: `https://www.instagram.com/p/${item.code}/`, thumb: thumb });
+                                                }
+                                            }
+                                            
+                                            processedCount += items.length;
+                                            resultadosDiv.innerHTML = `<p style="color:black;">Analisando posts... (${processedCount} verificados)</p>`;
+                                            
+                                            nextMaxId = feedData.next_max_id;
+                                            if (!feedData.more_available || !nextMaxId) hasNext = false;
+                                            await new Promise(r => setTimeout(r, 300));
+                                        }
+
+                                        // 2. Destaques (Stories)
+                                        resultadosDiv.innerHTML = `<p style="color:black;">Analisando destaques...</p>`;
+                                        try {
+                                            const trayRes = await fetch(`https://www.instagram.com/api/v1/highlights/${targetUserId}/highlights_tray/`, { headers });
+                                            if (trayRes.ok) {
+                                                const trayData = await trayRes.json();
+                                                const tray = trayData.tray || [];
+                                                const reelIds = tray.map(t => t.id);
+                                                
+                                                if (reelIds.length > 0) {
+                                                    let url = `https://www.instagram.com/api/v1/feed/reels_media/?`;
+                                                    reelIds.forEach(id => url += `reel_ids=${id}&`);
+                                                    const mediaRes = await fetch(url, { headers });
+                                                    if (mediaRes.ok) {
+                                                        const mediaData = await mediaRes.json();
+                                                        for (const reelId in mediaData.reels) {
+                                                            const items = mediaData.reels[reelId].items || [];
+                                                            for (const item of items) {
+                                                                if (item.has_liked) {
+                                                                    let thumb = item.image_versions2?.candidates?.[0]?.url || item.video_versions?.[0]?.url || '';
+                                                                    likedStories.push({ type: 'Story (Destaque)', url: `https://www.instagram.com/stories/highlights/${reelId}/`, thumb: thumb });
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } catch (e) { console.error("Erro destaques", e); }
+
+                                        const dadosReais = { 
+                                            fotosCurtidas: { count: likedPosts.length, items: likedPosts },
+                                            storiesCurtidos: { count: likedStories.length, items: likedStories },
+                                            comentarios: { count: 0, items: [] },
+                                            enquetes: { count: 0, items: [] }
+                                        };
+                                        dataEuCurti = dadosReais;
+                                        renderizarCardsInteracoes(dadosReais);
+
+                                    } else {
+                                        // --- ABA 2: O QUE ELE CURTIU MEU ---
+                                        if (!myId) throw new Error("Não foi possível identificar seu usuário logado.");
+                                        resultadosDiv.innerHTML = '<p style="color:black;">Verificando quem curtiu seus posts (limitado aos últimos 50 posts)...</p>';
+                                        
+                                        const likedMyPosts = [];
+                                        let nextMaxId = null;
+                                        let hasNext = true;
+                                        let processedCount = 0;
+                                        const MAX_MY_POSTS = 50; // Limite para evitar muitas requisições de likers
+
+                                        while (hasNext && processedCount < MAX_MY_POSTS) {
+                                            let url = `https://www.instagram.com/api/v1/feed/user/${myId}/?count=12`;
+                                            if (nextMaxId) url += `&max_id=${nextMaxId}`;
+                                            
+                                            const feedRes = await fetch(url, { headers });
+                                            if (!feedRes.ok) break;
+                                            const feedData = await feedRes.json();
+                                            const items = feedData.items || [];
+                                            
+                                            for (const item of items) {
+                                                // Verifica likers de cada post
+                                                try {
+                                                    const likersRes = await fetch(`https://www.instagram.com/api/v1/media/${item.id}/likers/`, { headers });
+                                                    if (likersRes.ok) {
+                                                        const likersData = await likersRes.json();
+                                                        const users = likersData.users || [];
+                                                        if (users.some(u => String(u.pk) === String(targetUserId))) {
+                                                            let thumb = item.image_versions2?.candidates?.[0]?.url || item.carousel_media?.[0]?.image_versions2?.candidates?.[0]?.url || '';
+                                                            likedMyPosts.push({ type: 'Post', url: `https://www.instagram.com/p/${item.code}/`, thumb: thumb });
+                                                        }
+                                                    }
+                                                } catch (e) { console.error(e); }
+                                                
+                                                processedCount++;
+                                                resultadosDiv.innerHTML = `<p style="color:black;">Verificando meus posts... (${processedCount} analisados, ${likedMyPosts.length} encontrados)</p>`;
+                                                await new Promise(r => setTimeout(r, 500)); // Delay importante
+                                            }
+                                            
+                                            nextMaxId = feedData.next_max_id;
+                                            if (!feedData.more_available || !nextMaxId) hasNext = false;
+                                        }
+
+                                        const dadosReais = { 
+                                            fotosCurtidas: { count: likedMyPosts.length, items: likedMyPosts },
+                                            storiesCurtidos: { count: 0, items: [] }, // Difícil verificar stories antigos
+                                            comentarios: { count: 0, items: [] },
+                                            enquetes: { count: 0, items: [] }
+                                        };
+                                        dataCurtiuMeu = dadosReais;
+                                        renderizarCardsInteracoes(dadosReais);
+                                    }
+
+                                } catch (e) {
+                                    console.error(e);
+                                    resultadosDiv.innerHTML = `<p style="color:red;">Erro ao buscar dados: ${e.message}</p>`;
+                                } finally { btn.disabled = false; btn.textContent = "Verificar"; }
+                            };
+                        }
+
+                        function renderizarCardsInteracoes(dados) {
+                            const container = document.getElementById("interacoesResultados");
+                            container.innerHTML = '';
+                            
+                            const mapLabels = {
+                                fotosCurtidas: 'Fotos Curtidas',
+                                storiesCurtidos: 'Stories Curtidos',
+                                comentarios: 'Comentários',
+                                enquetes: 'Enquetes'
+                            };
+
+                            for (const [key, data] of Object.entries(dados)) {
+                                const card = document.createElement("div");
+                                card.style.cssText = `
+                                    border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; 
+                                    text-align: center; cursor: pointer; background: #f8f9fa; transition: transform 0.2s;
+                                `;
+                                card.innerHTML = `
+                                    <div style="font-size: 24px; font-weight: bold; color: #0095f6;">${data.count}</div>
+                                    <div style="font-size: 14px; color: #8e8e8e;">${mapLabels[key] || key}</div>
+                                `;
+                                card.onmouseover = () => card.style.transform = "scale(1.05)";
+                                card.onmouseout = () => card.style.transform = "scale(1)";
+                                card.onclick = () => mostrarDetalhesInteracao(mapLabels[key] || key, data.items);
+                                container.appendChild(card);
+                            }
+                        }
+
+                        function mostrarDetalhesInteracao(titulo, itens) {
+                            document.getElementById("interacoesResultados").style.display = "none";
+                            const detalhesDiv = document.getElementById("interacoesDetalhes");
+                            detalhesDiv.style.display = "block";
+                            document.getElementById("detalhesTitulo").innerText = titulo;
+                            
+                            const lista = document.getElementById("detalhesLista");
+                            lista.innerHTML = '';
+                            
+                            if (itens.length === 0) {
+                                lista.innerHTML = '<p>Nenhum item encontrado.</p>';
+                            } else {
+                                const grid = document.createElement("div");
+                                grid.style.cssText = "display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px;";
+                                itens.forEach(item => {
+                                    const div = document.createElement("div");
+                                    div.style.cssText = "aspect-ratio: 1; overflow: hidden; border-radius: 5px; border: 1px solid #dbdbdb; cursor: pointer; position: relative;";
+                                    if (item.thumb) {
+                                        div.innerHTML = `<img src="${item.thumb}" style="width: 100%; height: 100%; object-fit: cover;">`;
+                                        div.onclick = () => window.open(item.url, '_blank');
+                                    } else {
+                                        div.innerText = item.type;
+                                    }
+                                    grid.appendChild(div);
+                                });
+                                lista.appendChild(grid);
+                            }
+
+                            document.getElementById("voltarCardsBtn").onclick = () => {
+                                detalhesDiv.style.display = "none";
+                                document.getElementById("interacoesResultados").style.display = "grid";
+                            };
+                        }
 
                             function baixarReelAtual() {
                                 // Função auxiliar para verificar se um elemento está visível na tela

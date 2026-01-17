@@ -4468,7 +4468,7 @@
                                             for (const item of items) {
                                                 if (item.has_liked) {
                                                     let thumb = item.image_versions2?.candidates?.[0]?.url || item.carousel_media?.[0]?.image_versions2?.candidates?.[0]?.url || '';
-                                                    likedPosts.push({ type: 'Post', url: `https://www.instagram.com/p/${item.code}/`, thumb: thumb });
+                                                    likedPosts.push({ type: 'Post', url: `https://www.instagram.com/p/${item.code}/`, thumb: thumb, id: item.id });
                                                 }
                                             }
                                             
@@ -4500,7 +4500,8 @@
                                                             for (const item of items) {
                                                                 if (item.has_liked) {
                                                                     let thumb = item.image_versions2?.candidates?.[0]?.url || item.video_versions?.[0]?.url || '';
-                                                                    likedStories.push({ type: 'Story (Destaque)', url: `https://www.instagram.com/stories/highlights/${reelId}/`, thumb: thumb });
+                                                                    const cleanReelId = reelId.replace(/^highlight:/, '');
+                                                                    likedStories.push({ type: 'Story (Destaque)', url: `https://www.instagram.com/stories/highlights/${cleanReelId}/?story_media_id=${item.id}`, thumb: thumb, id: item.id });
                                                                 }
                                                             }
                                                         }
@@ -4521,13 +4522,14 @@
                                     } else {
                                         // --- ABA 2: O QUE ELE CURTIU MEU ---
                                         if (!myId) throw new Error("Não foi possível identificar seu usuário logado.");
-                                        resultadosDiv.innerHTML = '<p style="color:black;">Verificando quem curtiu seus posts (limitado aos últimos 50 posts)...</p>';
+                                        resultadosDiv.innerHTML = '<p style="color:black;">Verificando quem curtiu seus posts (limitado aos últimos 100 posts)...</p>';
                                         
                                         const likedMyPosts = [];
+                                        const likedMyStories = [];
                                         let nextMaxId = null;
                                         let hasNext = true;
                                         let processedCount = 0;
-                                        const MAX_MY_POSTS = 50; // Limite para evitar muitas requisições de likers
+                                        const MAX_MY_POSTS = 100; // Limite aumentado
 
                                         while (hasNext && processedCount < MAX_MY_POSTS) {
                                             let url = `https://www.instagram.com/api/v1/feed/user/${myId}/?count=12`;
@@ -4538,32 +4540,120 @@
                                             const feedData = await feedRes.json();
                                             const items = feedData.items || [];
                                             
-                                            for (const item of items) {
-                                                // Verifica likers de cada post
+                                            const likersQueryHash = 'd5d763b1e2acf209d62d22d184488e57';
+
+                                            const getShortcodeFromId = (id) => {
                                                 try {
-                                                    const likersRes = await fetch(`https://www.instagram.com/api/v1/media/${item.id}/likers/`, { headers });
-                                                    if (likersRes.ok) {
-                                                        const likersData = await likersRes.json();
-                                                        const users = likersData.users || [];
-                                                        if (users.some(u => String(u.pk) === String(targetUserId))) {
-                                                            let thumb = item.image_versions2?.candidates?.[0]?.url || item.carousel_media?.[0]?.image_versions2?.candidates?.[0]?.url || '';
-                                                            likedMyPosts.push({ type: 'Post', url: `https://www.instagram.com/p/${item.code}/`, thumb: thumb });
+                                                    let bigId = BigInt(id.toString().split('_')[0]);
+                                                    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+                                                    let shortcode = '';
+                                                    while (bigId > 0n) {
+                                                        const remainder = bigId % 64n;
+                                                        shortcode = alphabet[Number(remainder)] + shortcode;
+                                                        bigId = bigId / 64n;
+                                                    }
+                                                    return shortcode;
+                                                } catch (e) { return null; }
+                                            };
+
+                                            for (const item of items) {
+                                                if (processedCount >= MAX_MY_POSTS) break;
+                                                try {
+                                                    let foundLiker = false;
+                                                    let likersNextPage = null;
+                                                    let likersHasNext = true;
+
+                                                    let shortcode = item.code;
+                                                    // Se o shortcode for inválido (muito longo), tenta gerar pelo ID
+                                                    if (!shortcode || shortcode.length > 20) {
+                                                        shortcode = getShortcodeFromId(item.pk);
+                                                        // Se a conversão falhar ou quisermos garantir, tentamos buscar info oficial
+                                                        if (!shortcode) {
+                                                            try {
+                                                                const mediaId = item.pk.toString().split('_')[0];
+                                                                const infoRes = await fetch(`https://www.instagram.com/api/v1/media/${mediaId}/info/`, { headers });
+                                                                if (infoRes.ok) {
+                                                                    const info = await infoRes.json();
+                                                                    shortcode = info.items?.[0]?.code;
+                                                                }
+                                                            } catch (e) {}
                                                         }
                                                     }
-                                                } catch (e) { console.error(e); }
-                                                
+                                                    if (!shortcode) continue;
+
+                                                    while (likersHasNext && !foundLiker) {
+                                                        const variables = { "shortcode": shortcode, "include_likers": true, "first": 50 };
+                                                        if (likersNextPage) variables.after = likersNextPage;
+                                                        
+                                                        const gqlUrl = `https://www.instagram.com/graphql/query/?query_hash=${likersQueryHash}&variables=${encodeURIComponent(JSON.stringify(variables))}`;
+                                                        
+                                                        const likersRes = await fetch(gqlUrl, { headers });
+                                                        if (likersRes.ok) {
+                                                            const contentType = likersRes.headers.get("content-type");
+                                                            if (contentType && contentType.includes("application/json")) {
+                                                                const likersData = await likersRes.json();
+                                                                const edges = likersData.data?.shortcode_media?.edge_liked_by?.edges || [];
+                                                                
+                                                                if (edges.some(edge => String(edge.node.id) === String(targetUserId))) {
+                                                                    let thumb = item.image_versions2?.candidates?.[0]?.url || item.carousel_media?.[0]?.image_versions2?.candidates?.[0]?.url || '';
+                                                                    likedMyPosts.push({ type: 'Post', url: `https://www.instagram.com/p/${item.code}/`, thumb: thumb });
+                                                                    foundLiker = true;
+                                                                }
+                                                                
+                                                                const pageInfo = likersData.data?.shortcode_media?.edge_liked_by?.page_info;
+                                                                likersHasNext = pageInfo?.has_next_page || false;
+                                                                likersNextPage = pageInfo?.end_cursor || null;
+                                                            } else {
+                                                                // Resposta não é JSON (provavelmente HTML de erro ou login), para a paginação deste post
+                                                                likersHasNext = false;
+                                                            }
+                                                        } else {
+                                                            // Ignora erros 400/403 silenciosamente para não poluir o console com posts inválidos (ads, etc)
+                                                            likersHasNext = false; // Stop paginating for this post on error
+                                                        }
+                                                        if (likersHasNext && !foundLiker) await new Promise(r => setTimeout(r, 500));
+                                                    }
+                                                } catch (e) { console.error("Error fetching likers via GQL:", e); }
+
                                                 processedCount++;
-                                                resultadosDiv.innerHTML = `<p style="color:black;">Verificando meus posts... (${processedCount} analisados, ${likedMyPosts.length} encontrados)</p>`;
-                                                await new Promise(r => setTimeout(r, 500)); // Delay importante
+                                                resultadosDiv.innerHTML = `<p style="color:black;">Verificando meus posts... (${processedCount}/${MAX_MY_POSTS} analisados, ${likedMyPosts.length} encontrados)</p>`;
+                                                await new Promise(r => setTimeout(r, 500)); // Delay between checking different posts
                                             }
+                                            if (processedCount >= MAX_MY_POSTS) hasNext = false;
                                             
                                             nextMaxId = feedData.next_max_id;
                                             if (!feedData.more_available || !nextMaxId) hasNext = false;
                                         }
 
+                                        // 2. Stories Ativos (Curtiu Meu)
+                                        resultadosDiv.innerHTML = `<p style="color:black;">Verificando stories ativos...</p>`;
+                                        try {
+                                            const reelsRes = await fetch(`https://www.instagram.com/api/v1/feed/reels_media/?reel_ids=${myId}`, { headers });
+                                            if (reelsRes.ok) {
+                                                const reelsData = await reelsRes.json();
+                                                const myReel = reelsData.reels[myId];
+                                                if (myReel && myReel.items) {
+                                                    for (const item of myReel.items) {
+                                                        const viewersRes = await fetch(`https://www.instagram.com/api/v1/media/${item.id}/list_reel_media_viewer/`, { headers });
+                                                        if (viewersRes.ok) {
+                                                            const viewersData = await viewersRes.json();
+                                                            const users = viewersData.users || [];
+                                                            const targetUserViewer = users.find(u => String(u.pk) === String(targetUserId));
+                                                            if (targetUserViewer && targetUserViewer.has_liked) {
+                                                                let thumb = item.image_versions2?.candidates?.[0]?.url || item.video_versions?.[0]?.url || '';
+                                                                let sUser = item.user ? item.user.username : 'me';
+                                                                likedMyStories.push({ type: 'Story', url: `https://www.instagram.com/stories/${sUser}/${item.id}/`, thumb: thumb });
+                                                            }
+                                                        }
+                                                        await new Promise(r => setTimeout(r, 300));
+                                                    }
+                                                }
+                                            }
+                                        } catch (e) { console.error("Erro stories curtiu meu", e); }
+
                                         const dadosReais = { 
                                             fotosCurtidas: { count: likedMyPosts.length, items: likedMyPosts },
-                                            storiesCurtidos: { count: 0, items: [] }, // Difícil verificar stories antigos
+                                            storiesCurtidos: { count: likedMyStories.length, items: likedMyStories },
                                             comentarios: { count: 0, items: [] },
                                             enquetes: { count: 0, items: [] }
                                         };
@@ -4576,7 +4666,6 @@
                                     resultadosDiv.innerHTML = `<p style="color:red;">Erro ao buscar dados: ${e.message}</p>`;
                                 } finally { btn.disabled = false; btn.textContent = "Verificar"; }
                             };
-                        }
 
                         function renderizarCardsInteracoes(dados) {
                             const container = document.getElementById("interacoesResultados");
@@ -4623,12 +4712,35 @@
                                 itens.forEach(item => {
                                     const div = document.createElement("div");
                                     div.style.cssText = "aspect-ratio: 1; overflow: hidden; border-radius: 5px; border: 1px solid #dbdbdb; cursor: pointer; position: relative;";
+                                    
+                                    const contentDiv = document.createElement("div");
+                                    contentDiv.style.cssText = "width: 100%; height: 100%;";
+
                                     if (item.thumb) {
-                                        div.innerHTML = `<img src="${item.thumb}" style="width: 100%; height: 100%; object-fit: cover;">`;
-                                        div.onclick = () => window.open(item.url, '_blank');
+                                        contentDiv.innerHTML = `<img src="${item.thumb}" style="width: 100%; height: 100%; object-fit: cover;">`;
+                                        contentDiv.onclick = () => window.open(item.url, '_blank');
                                     } else {
-                                        div.innerText = item.type;
+                                        contentDiv.innerText = item.type;
                                     }
+                                    div.appendChild(contentDiv);
+
+                                    if (currentTab === 'euCurti' && item.id) {
+                                        const unlikeBtn = document.createElement("button");
+                                        unlikeBtn.innerHTML = "💔";
+                                        unlikeBtn.title = "Descurtir";
+                                        unlikeBtn.style.cssText = "position: absolute; bottom: 5px; right: 5px; width: 30px; height: 30px; border-radius: 50%; border: none; background: rgba(0,0,0,0.7); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; z-index: 10;";
+                                        unlikeBtn.onclick = async (e) => {
+                                            e.stopPropagation();
+                                            if (confirm("Tem certeza que deseja descurtir?")) {
+                                                const success = await unlikeMedia(item.id, item.type);
+                                                if (success) {
+                                                    div.remove();
+                                                }
+                                            }
+                                        };
+                                        div.appendChild(unlikeBtn);
+                                    }
+
                                     grid.appendChild(div);
                                 });
                                 lista.appendChild(grid);
@@ -4639,6 +4751,47 @@
                                 document.getElementById("interacoesResultados").style.display = "grid";
                             };
                         }
+
+                        async function unlikeMedia(mediaId, type) {
+                            try {
+                                const csrf = getCookie('csrftoken');
+                                if (!csrf) {
+                                    alert("Erro: Token CSRF não encontrado. Recarregue a página.");
+                                    return false;
+                                }
+
+                                let url, body;
+                                if (type && (type.includes('Story') || type.includes('Destaque'))) {
+                                    url = `https://www.instagram.com/api/v1/story_interactions/unlike_story_like/`;
+                                    body = `media_id=${mediaId}`;
+                                } else {
+                                    url = `https://www.instagram.com/api/v1/web/likes/${mediaId}/unlike/`;
+                                    body = '';
+                                }
+
+                                const response = await fetch(url, {
+                                    method: 'POST',
+                                    headers: {
+                                        'X-IG-App-ID': '936619743392459',
+                                        'X-CSRFToken': csrf,
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                        'X-ASBD-ID': '129477',
+                                        'X-Instagram-AJAX': '1',
+                                        'Content-Type': 'application/x-www-form-urlencoded'
+                                    },
+                                    body: body
+                                });
+                                if (response.ok) return true;
+                                console.error("Falha ao descurtir:", await response.text());
+                                alert("Falha ao descurtir.");
+                                return false;
+                            } catch (e) {
+                                console.error(e);
+                                alert("Erro ao descurtir.");
+                                return false;
+                            }
+                        }
+                    }
 
                             function baixarReelAtual() {
                                 // Função auxiliar para verificar se um elemento está visível na tela

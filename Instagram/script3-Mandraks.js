@@ -531,6 +531,10 @@
                                     <span>Baixar Story</span>
                                 </div>
                                 <div class="menu-item">
+                                    <button id="engajamentoBtn"><svg aria-label="Engajamento" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"></path></svg></button>
+                                    <span>Engajamento</span>
+                                </div>
+                                <div class="menu-item">
                                     <button id="settingsBtn"><svg aria-label="Configurações" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" fill="none" r="3" stroke="currentColor" stroke-width="2"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.09 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"></path></svg></button>
                                     <span>Configurações</span>
                                 </div>
@@ -951,6 +955,11 @@
             document.getElementById("settingsBtn").addEventListener("click", () => {
                 closeMenu();
                 abrirModalConfiguracoes();
+            });
+
+            document.getElementById("engajamentoBtn").addEventListener("click", () => {
+                closeMenu();
+                abrirModalEngajamento();
             });
 
             function extractCloseFriendsUsernames(doc = document) {
@@ -4311,6 +4320,305 @@
 
                                 document.body.appendChild(div);
                                 renderTable();
+                            }
+
+                            // --- LÓGICA PARA O MENU DE ENGAJAMENTO ---
+
+                            async function abrirModalEngajamento() {
+                                if (document.getElementById("engajamentoModal")) return;
+
+                                const div = document.createElement("div");
+                                div.id = "engajamentoModal";
+                                div.className = "submenu-modal";
+                                div.style.cssText = `
+                                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                    width: 90%; max-width: 900px; max-height: 90vh; border: 1px solid #ccc;
+                                    border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
+                                `;
+                                
+                                const infoIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: -2px;"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>`;
+
+                                div.innerHTML = `
+                                    <style>
+                                        .info-tooltip { position: relative; display: inline-block; cursor: help; margin-left: 5px; color: #8e8e8e; }
+                                        .info-tooltip .tooltip-text { visibility: hidden; width: 200px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 10; bottom: 135%; left: 50%; margin-left: -100px; opacity: 0; transition: opacity 0.3s; font-size: 11px; font-weight: normal; line-height: 1.4; box-shadow: 0 2px 10px rgba(0,0,0,0.2); pointer-events: none; }
+                                        .info-tooltip .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #333 transparent transparent transparent; }
+                                        .info-tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
+                                    </style>
+                                    <div class="modal-header">
+                                        <span class="modal-title">Dashboard de Engajamento</span>
+                                        <div class="modal-controls">
+                                            <button id="fecharEngajamentoBtn" title="Fechar">X</button>
+                                        </div>
+                                    </div>
+                                    <div style="padding: 15px;">
+                                        <div id="engajamentoLoading" style="text-align: center; padding: 20px;">Carregando dados e gráficos...</div>
+                                        <div id="engajamentoContent" style="display: none;">
+                                            <!-- Cards de Resumo -->
+                                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                                                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #dbdbdb;">
+                                                    <h3 style="margin: 0; font-size: 14px; color: #666;">
+                                                        Taxa de Engajamento
+                                                        <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Cálculo: ((Likes + Comentários) / Total Posts) / Seguidores * 100.</span></div>
+                                                    </h3>
+                                                    <p id="engRateVal" style="margin: 5px 0; font-size: 24px; font-weight: bold; color: #0095f6;">-</p>
+                                                </div>
+                                                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #dbdbdb;">
+                                                    <h3 style="margin: 0; font-size: 14px; color: #666;">
+                                                        Média de Likes
+                                                        <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Média simples de curtidas nos últimos posts analisados.</span></div>
+                                                    </h3>
+                                                    <p id="avgLikesVal" style="margin: 5px 0; font-size: 24px; font-weight: bold; color: #e74c3c;">-</p>
+                                                </div>
+                                                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #dbdbdb;">
+                                                    <h3 style="margin: 0; font-size: 14px; color: #666;">
+                                                        Média de Comentários
+                                                        <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Média simples de comentários nos últimos posts analisados.</span></div>
+                                                    </h3>
+                                                    <p id="avgCommentsVal" style="margin: 5px 0; font-size: 24px; font-weight: bold; color: #2ecc71;">-</p>
+                                                </div>
+                                                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #dbdbdb;">
+                                                    <h3 style="margin: 0; font-size: 14px; color: #666;">
+                                                        Melhor Horário
+                                                        <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Horário do dia com maior volume acumulado de interações.</span></div>
+                                                    </h3>
+                                                    <p id="bestTimeVal" style="margin: 5px 0; font-size: 24px; font-weight: bold; color: #f39c12;">-</p>
+                                                </div>
+                                            </div>
+
+                                            <!-- Gráficos -->
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                                                <div style="background: white; padding: 10px; border: 1px solid #eee; border-radius: 8px;">
+                                                    <h4 style="text-align: center; margin-bottom: 10px;">Desempenho dos Últimos Posts</h4>
+                                                    <div id="postsChartContainer" style="height: 200px; width: 100%;"></div>
+                                                </div>
+                                                <div style="background: white; padding: 10px; border: 1px solid #eee; border-radius: 8px;">
+                                                    <h4 style="text-align: center; margin-bottom: 10px;">Atividade por Hora</h4>
+                                                    <div id="hoursChartContainer" style="height: 200px; width: 100%;"></div>
+                                                </div>
+                                            </div>
+
+                                            <!-- IA Section -->
+                                            <div style="border-top: 1px solid #eee; padding-top: 20px;">
+                                                <h3>🔍 Análise de Conteúdo (IA)</h3>
+                                                <p style="font-size: 12px; color: #666;">Classificação de imagens usando IA (Simulação/Placeholder).</p>
+                                                <button id="analyzeImagesBtn" style="background: #8e44ad; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">Analisar Últimos Posts</button>
+                                                <div id="aiResults" style="margin-top: 10px; display: flex; gap: 10px; overflow-x: auto;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                                document.body.appendChild(div);
+                                document.getElementById("fecharEngajamentoBtn").onclick = () => div.remove();
+
+                                try {
+                                    
+                                    // Buscar dados do perfil
+                                    const pathParts = window.location.pathname.split('/').filter(Boolean);
+                                    const username = pathParts[0];
+                                    const appID = '936619743392459';
+                                    
+                                    const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
+                                    const profileInfo = await profileInfoResponse.json();
+                                    const userId = profileInfo.data?.user?.id;
+                                    const followersCount = profileInfo.data?.user?.edge_followed_by?.count || 1;
+
+                                    // Buscar posts (últimos 50)
+                                    const queryHash = '69cba40317214236af40e7efa697781d'; // Hash comum para feed de usuário
+                                    // Fallback para API v1 se GraphQL falhar ou for complexo
+                                    const feedUrl = `https://www.instagram.com/api/v1/feed/user/${userId}/?count=50`;
+                                    const feedRes = await fetch(feedUrl, { headers: { 'X-IG-App-ID': appID } });
+                                    const feedData = await feedRes.json();
+                                    const items = feedData.items || [];
+
+                                    // Processar dados
+                                    let totalLikes = 0;
+                                    let totalComments = 0;
+                                    const postsData = [];
+                                    const hoursActivity = new Array(24).fill(0);
+
+                                    items.forEach(item => {
+                                        const likes = item.like_count || 0;
+                                        const comments = item.comment_count || 0;
+                                        const timestamp = item.taken_at; // Unix timestamp
+                                        const date = new Date(timestamp * 1000);
+                                        const hour = date.getHours();
+
+                                        totalLikes += likes;
+                                        totalComments += comments;
+                                        hoursActivity[hour] += (likes + comments); // Peso por engajamento
+
+                                        postsData.push({
+                                            id: item.id,
+                                            code: item.code,
+                                            likes: likes,
+                                            comments: comments,
+                                            date: date.toLocaleDateString(),
+                                            url: item.image_versions2?.candidates?.[0]?.url || ''
+                                        });
+                                    });
+
+                                    // Calcular médias
+                                    const avgLikes = items.length ? (totalLikes / items.length).toFixed(0) : 0;
+                                    const avgComments = items.length ? (totalComments / items.length).toFixed(0) : 0;
+                                    const engRate = items.length ? (((totalLikes + totalComments) / items.length) / followersCount * 100).toFixed(2) : 0;
+                                    
+                                    // Melhor horário
+                                    const maxActivity = Math.max(...hoursActivity);
+                                    const bestHour = hoursActivity.indexOf(maxActivity);
+
+                                    // Atualizar UI
+                                    document.getElementById("engRateVal").innerText = `${engRate}%`;
+                                    document.getElementById("avgLikesVal").innerText = avgLikes;
+                                    document.getElementById("avgCommentsVal").innerText = avgComments;
+                                    document.getElementById("bestTimeVal").innerText = `${bestHour}:00 - ${bestHour + 1}:00`;
+
+                                    document.getElementById("engajamentoLoading").style.display = "none";
+                                    document.getElementById("engajamentoContent").style.display = "block";
+
+                                    // Renderizar Gráficos
+                                    // Substituição do Chart.js por gráficos SVG/HTML simples para evitar CSP
+                                    const recentPosts = postsData.slice(0, 10).reverse();
+                                    renderSimpleBarChart(
+                                        'postsChartContainer', 
+                                        recentPosts.map(p => p.date.split('/').slice(0,2).join('/')), // dd/mm
+                                        recentPosts.map(p => p.likes),
+                                        recentPosts.map(p => p.comments),
+                                        'Likes', 'Comentários'
+                                    );
+
+                                    renderSimpleLineChart(
+                                        'hoursChartContainer',
+                                        Array.from({length: 24}, (_, i) => `${i}h`),
+                                        hoursActivity,
+                                        'Atividade'
+                                    );
+
+                                    // Lógica de IA (Simulada)
+                                    document.getElementById("analyzeImagesBtn").onclick = () => {
+                                        const aiContainer = document.getElementById("aiResults");
+                                        aiContainer.innerHTML = '<p>Analisando...</p>';
+                                        
+                                        // Simulação de chamada de API (Google Vision / Clarifai exigiria chave privada)
+                                        setTimeout(() => {
+                                            aiContainer.innerHTML = '';
+                                            const samplePosts = postsData.slice(0, 5);
+                                            
+                                            // Categorias fictícias para demonstração
+                                            const categories = ['Paisagem', 'Selfie', 'Comida', 'Evento', 'Meme'];
+                                            
+                                            samplePosts.forEach(post => {
+                                                if (!post.url) return;
+                                                const randomCat = categories[Math.floor(Math.random() * categories.length)];
+                                                const confidence = (Math.random() * (0.99 - 0.70) + 0.70).toFixed(2);
+                                                
+                                                const card = document.createElement('div');
+                                                card.style.cssText = "min-width: 120px; border: 1px solid #eee; border-radius: 5px; padding: 5px; text-align: center;";
+                                                card.innerHTML = `
+                                                    <img src="${post.url}" style="width: 100px; height: 100px; object-fit: cover; border-radius: 4px;">
+                                                    <div style="font-weight: bold; font-size: 12px; margin-top: 5px;">${randomCat}</div>
+                                                    <div style="font-size: 10px; color: #666;">${confidence * 100}%</div>
+                                                `;
+                                                aiContainer.appendChild(card);
+                                            });
+                                            
+                                            const note = document.createElement('p');
+                                            note.style.cssText = "font-size: 10px; color: red; width: 100%; margin-top: 10px;";
+                                            note.innerText = "Nota: Para classificação real, é necessário integrar uma API Key do Google Vision ou Clarifai no código.";
+                                            aiContainer.appendChild(note);
+                                            
+                                        }, 1500);
+                                    };
+
+                                } catch (error) {
+                                    console.error("Erro no dashboard:", error);
+                                    document.getElementById("engajamentoLoading").innerText = "Erro ao carregar dados. Certifique-se de estar logado e na página de perfil.";
+                                }
+                            }
+
+                            // Funções auxiliares para gráficos sem bibliotecas externas (Bypass CSP)
+                            function renderSimpleBarChart(containerId, labels, data1, data2, label1, label2) {
+                                const container = document.getElementById(containerId);
+                                if (!container) return;
+                                container.innerHTML = '';
+                                const maxVal = Math.max(...data1, ...data2, 1);
+                                
+                                const chart = document.createElement('div');
+                                chart.style.cssText = "display: flex; align-items: flex-end; height: 100%; width: 100%; gap: 5px; padding-bottom: 20px; box-sizing: border-box;";
+                                
+                                labels.forEach((lbl, i) => {
+                                    const v1 = data1[i] || 0;
+                                    const v2 = data2[i] || 0;
+                                    const h1 = Math.max((v1 / maxVal) * 80, 1);
+                                    const h2 = Math.max((v2 / maxVal) * 80, 1);
+                                    
+                                    const group = document.createElement('div');
+                                    group.style.cssText = "flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%;";
+                                    
+                                    const bars = document.createElement('div');
+                                    bars.style.cssText = "display: flex; align-items: flex-end; gap: 2px; height: 100%; width: 100%; justify-content: center;";
+                                    
+                                    const b1 = document.createElement('div');
+                                    b1.style.cssText = `width: 40%; background: #e74c3c; height: ${h1}%; border-radius: 2px 2px 0 0;`;
+                                    b1.title = `${label1}: ${v1}`;
+                                    
+                                    const b2 = document.createElement('div');
+                                    b2.style.cssText = `width: 40%; background: #2ecc71; height: ${h2}%; border-radius: 2px 2px 0 0;`;
+                                    b2.title = `${label2}: ${v2}`;
+                                    
+                                    bars.appendChild(b1);
+                                    bars.appendChild(b2);
+                                    
+                                    const txt = document.createElement('div');
+                                    txt.innerText = lbl;
+                                    txt.style.cssText = "font-size: 9px; color: #666; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;";
+                                    
+                                    group.appendChild(bars);
+                                    group.appendChild(txt);
+                                    chart.appendChild(group);
+                                });
+                                container.appendChild(chart);
+                            }
+
+                            function renderSimpleLineChart(containerId, labels, data, labelName) {
+                                const container = document.getElementById(containerId);
+                                if (!container) return;
+                                container.innerHTML = '';
+                                const maxVal = Math.max(...data, 1);
+                                const h = container.clientHeight || 200;
+                                const w = container.clientWidth || 400;
+                                const step = w / (labels.length - 1 || 1);
+                                
+                                const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                                svg.setAttribute("width", "100%");
+                                svg.setAttribute("height", "100%");
+                                svg.style.overflow = "visible";
+                                
+                                let points = "";
+                                data.forEach((val, i) => {
+                                    const x = i * step;
+                                    const y = h - ((val / maxVal) * (h - 20)) - 20; // Padding bottom
+                                    points += `${x},${y} `;
+                                    
+                                    if (i % 4 === 0) { // Labels espaçados
+                                        const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                                        txt.setAttribute("x", x);
+                                        txt.setAttribute("y", h);
+                                        txt.setAttribute("font-size", "10");
+                                        txt.setAttribute("fill", "#666");
+                                        txt.setAttribute("text-anchor", "middle");
+                                        txt.textContent = labels[i];
+                                        svg.appendChild(txt);
+                                    }
+                                });
+                                
+                                const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+                                polyline.setAttribute("points", points);
+                                polyline.setAttribute("fill", "none");
+                                polyline.setAttribute("stroke", "#0095f6");
+                                polyline.setAttribute("stroke-width", "2");
+                                svg.appendChild(polyline);
+                                container.appendChild(svg);
                             }
 
                         function abrirModalInteracoes() {

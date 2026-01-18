@@ -4339,18 +4339,18 @@
                                         <button id="fecharInteracoesBtn" title="Fechar">X</button>
                                     </div>
                                 </div>
-                                <div class="tab-container" style="margin-top: 10px; padding: 0 15px;">
-                                    <button id="tabEuCurti" class="tab-button active" style="flex: 1;">Eu curti</button>
-                                    <button id="tabCurtiuMeu" class="tab-button" style="flex: 1;">Curtiu meu perfil</button>
-                                </div>
                                 <div style="padding: 15px;">
                                     <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                                        <input type="text" id="interacoesUsernameInput" placeholder="Digite o username..." style="flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                                        <div style="flex: 1; position: relative;">
+                                            <input type="text" id="interacoesUsernameInput" placeholder="Digite o username..." style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: black; box-sizing: border-box;" autocomplete="off">
+                                            <div id="interacoesSuggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ccc; border-top: none; border-radius: 0 0 5px 5px; max-height: 200px; overflow-y: auto; z-index: 1001; display: none; color: black; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+                                        </div>
                                         <button id="verificarInteracoesBtn" style="background: #0095f6; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Verificar</button>
                                     </div>
                                     <div id="interacoesUserProfile" style="display: none; flex-direction: column; align-items: center; margin-bottom: 20px;">
                                         <img id="interacoesUserPic" src="" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; border: 1px solid #dbdbdb;">
                                         <span id="interacoesUserNameDisplay" style="font-weight: bold; font-size: 16px; color: black;"></span>
+                                        <span id="interacoesUserBioDisplay" style="font-size: 14px; color: #666; text-align: center; margin-top: 5px; max-width: 80%;"></span>
                                     </div>
                                     <div id="interacoesResultados" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px;">
                                         <!-- Cards serão inseridos aqui -->
@@ -4366,34 +4366,55 @@
 
                             document.getElementById("fecharInteracoesBtn").onclick = () => div.remove();
 
-                            let currentTab = 'euCurti';
-                            let dataEuCurti = null;
-                            let dataCurtiuMeu = null;
+                            // Lógica de Autocomplete
+                            const inputUsername = document.getElementById("interacoesUsernameInput");
+                            const suggestionsDiv = document.getElementById("interacoesSuggestions");
+                            let followingList = [];
 
-                            const updateView = () => {
-                                const container = document.getElementById("interacoesResultados");
-                                document.getElementById("interacoesDetalhes").style.display = "none";
-                                document.getElementById("interacoesResultados").style.display = "grid";
-                                container.innerHTML = '';
-
-                                const data = currentTab === 'euCurti' ? dataEuCurti : dataCurtiuMeu;
-                                if (data) {
-                                    renderizarCardsInteracoes(data);
+                            // Carrega a lista de seguindo do cache
+                            dbHelper.loadCache('following').then(set => {
+                                if (set) {
+                                    followingList = Array.from(set);
                                 }
-                            };
-                            
-                            document.getElementById("tabEuCurti").onclick = () => {
-                                currentTab = 'euCurti';
-                                document.getElementById("tabEuCurti").classList.add("active");
-                                document.getElementById("tabCurtiuMeu").classList.remove("active");
-                                updateView();
-                            };
-                            document.getElementById("tabCurtiuMeu").onclick = () => {
-                                currentTab = 'curtiuMeu';
-                                document.getElementById("tabCurtiuMeu").classList.add("active");
-                                document.getElementById("tabEuCurti").classList.remove("active");
-                                updateView();
-                            };
+                            });
+
+                            inputUsername.addEventListener('input', () => {
+                                const val = inputUsername.value.toLowerCase();
+                                suggestionsDiv.innerHTML = '';
+                                if (!val) {
+                                    suggestionsDiv.style.display = 'none';
+                                    return;
+                                }
+
+                                const matches = followingList.filter(u => u.toLowerCase().includes(val)).slice(0, 10);
+
+                                if (matches.length > 0) {
+                                    matches.forEach(u => {
+                                        const item = document.createElement('div');
+                                        item.style.cssText = 'padding: 10px; cursor: pointer; border-bottom: 1px solid #eee;';
+                                        item.innerText = u;
+                                        item.onmouseover = () => item.style.background = '#f0f0f0';
+                                        item.onmouseout = () => item.style.background = 'white';
+                                        item.onclick = () => {
+                                            inputUsername.value = u;
+                                            suggestionsDiv.style.display = 'none';
+                                        };
+                                        suggestionsDiv.appendChild(item);
+                                    });
+                                    suggestionsDiv.style.display = 'block';
+                                } else {
+                                    suggestionsDiv.style.display = 'none';
+                                }
+                            });
+
+                            // Fechar sugestões ao clicar fora
+                            document.addEventListener('click', (e) => {
+                                if (e.target !== inputUsername && e.target !== suggestionsDiv) {
+                                    suggestionsDiv.style.display = 'none';
+                                }
+                            });
+
+                            let dataEuCurti = null;
 
                             document.getElementById("verificarInteracoesBtn").onclick = async () => {
                                 const username = document.getElementById("interacoesUsernameInput").value.trim();
@@ -4412,6 +4433,7 @@
 
                                 // Buscar foto de perfil
                                 let photoUrl = 'https://via.placeholder.com/80';
+                                let bio = '';
                                 try {
                                     const response = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, {
                                         headers: { 'X-IG-App-ID': '936619743392459' }
@@ -4419,6 +4441,7 @@
                                     if (response.ok) {
                                         const data = await response.json();
                                         photoUrl = data.data?.user?.profile_pic_url || photoUrl;
+                                        bio = data.data?.user?.biography || '';
                                     }
                                 } catch (e) {
                                     console.error("Erro ao buscar foto de perfil:", e);
@@ -4426,6 +4449,7 @@
 
                                 document.getElementById("interacoesUserPic").src = photoUrl;
                                 document.getElementById("interacoesUserNameDisplay").innerText = username;
+                                document.getElementById("interacoesUserBioDisplay").innerText = bio;
                                 profileDiv.style.display = "flex";
 
                                 const headers = { 'X-IG-App-ID': '936619743392459' };
@@ -4442,8 +4466,7 @@
                                         throw new Error("Não foi possível obter o ID do usuário.");
                                     }
 
-                                    if (currentTab === 'euCurti') {
-                                        // --- ABA 1: O QUE EU CURTI DELE ---
+                                    // --- O QUE EU CURTI DELE ---
                                         resultadosDiv.innerHTML = '<p style="color:black;">Analisando posts e destaques...</p>';
                                         
                                         const likedPosts = [];
@@ -4519,148 +4542,6 @@
                                         dataEuCurti = dadosReais;
                                         renderizarCardsInteracoes(dadosReais);
 
-                                    } else {
-                                        // --- ABA 2: O QUE ELE CURTIU MEU ---
-                                        if (!myId) throw new Error("Não foi possível identificar seu usuário logado.");
-                                        resultadosDiv.innerHTML = '<p style="color:black;">Verificando quem curtiu seus posts (limitado aos últimos 100 posts)...</p>';
-                                        
-                                        const likedMyPosts = [];
-                                        const likedMyStories = [];
-                                        let nextMaxId = null;
-                                        let hasNext = true;
-                                        let processedCount = 0;
-                                        const MAX_MY_POSTS = 100; // Limite aumentado
-
-                                        while (hasNext && processedCount < MAX_MY_POSTS) {
-                                            let url = `https://www.instagram.com/api/v1/feed/user/${myId}/?count=12`;
-                                            if (nextMaxId) url += `&max_id=${nextMaxId}`;
-                                            
-                                            const feedRes = await fetch(url, { headers });
-                                            if (!feedRes.ok) break;
-                                            const feedData = await feedRes.json();
-                                            const items = feedData.items || [];
-                                            
-                                            const likersQueryHash = 'd5d763b1e2acf209d62d22d184488e57';
-
-                                            const getShortcodeFromId = (id) => {
-                                                try {
-                                                    let bigId = BigInt(id.toString().split('_')[0]);
-                                                    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-                                                    let shortcode = '';
-                                                    while (bigId > 0n) {
-                                                        const remainder = bigId % 64n;
-                                                        shortcode = alphabet[Number(remainder)] + shortcode;
-                                                        bigId = bigId / 64n;
-                                                    }
-                                                    return shortcode;
-                                                } catch (e) { return null; }
-                                            };
-
-                                            for (const item of items) {
-                                                if (processedCount >= MAX_MY_POSTS) break;
-                                                try {
-                                                    let foundLiker = false;
-                                                    let likersNextPage = null;
-                                                    let likersHasNext = true;
-
-                                                    let shortcode = item.code;
-                                                    // Se o shortcode for inválido (muito longo), tenta gerar pelo ID
-                                                    if (!shortcode || shortcode.length > 20) {
-                                                        shortcode = getShortcodeFromId(item.pk);
-                                                        // Se a conversão falhar ou quisermos garantir, tentamos buscar info oficial
-                                                        if (!shortcode) {
-                                                            try {
-                                                                const mediaId = item.pk.toString().split('_')[0];
-                                                                const infoRes = await fetch(`https://www.instagram.com/api/v1/media/${mediaId}/info/`, { headers });
-                                                                if (infoRes.ok) {
-                                                                    const info = await infoRes.json();
-                                                                    shortcode = info.items?.[0]?.code;
-                                                                }
-                                                            } catch (e) {}
-                                                        }
-                                                    }
-                                                    if (!shortcode) continue;
-
-                                                    while (likersHasNext && !foundLiker) {
-                                                        const variables = { "shortcode": shortcode, "include_likers": true, "first": 50 };
-                                                        if (likersNextPage) variables.after = likersNextPage;
-                                                        
-                                                        const gqlUrl = `https://www.instagram.com/graphql/query/?query_hash=${likersQueryHash}&variables=${encodeURIComponent(JSON.stringify(variables))}`;
-                                                        
-                                                        const likersRes = await fetch(gqlUrl, { headers });
-                                                        if (likersRes.ok) {
-                                                            const contentType = likersRes.headers.get("content-type");
-                                                            if (contentType && contentType.includes("application/json")) {
-                                                                const likersData = await likersRes.json();
-                                                                const edges = likersData.data?.shortcode_media?.edge_liked_by?.edges || [];
-                                                                
-                                                                if (edges.some(edge => String(edge.node.id) === String(targetUserId))) {
-                                                                    let thumb = item.image_versions2?.candidates?.[0]?.url || item.carousel_media?.[0]?.image_versions2?.candidates?.[0]?.url || '';
-                                                                    likedMyPosts.push({ type: 'Post', url: `https://www.instagram.com/p/${item.code}/`, thumb: thumb });
-                                                                    foundLiker = true;
-                                                                }
-                                                                
-                                                                const pageInfo = likersData.data?.shortcode_media?.edge_liked_by?.page_info;
-                                                                likersHasNext = pageInfo?.has_next_page || false;
-                                                                likersNextPage = pageInfo?.end_cursor || null;
-                                                            } else {
-                                                                // Resposta não é JSON (provavelmente HTML de erro ou login), para a paginação deste post
-                                                                likersHasNext = false;
-                                                            }
-                                                        } else {
-                                                            // Ignora erros 400/403 silenciosamente para não poluir o console com posts inválidos (ads, etc)
-                                                            likersHasNext = false; // Stop paginating for this post on error
-                                                        }
-                                                        if (likersHasNext && !foundLiker) await new Promise(r => setTimeout(r, 500));
-                                                    }
-                                                } catch (e) { console.error("Error fetching likers via GQL:", e); }
-
-                                                processedCount++;
-                                                resultadosDiv.innerHTML = `<p style="color:black;">Verificando meus posts... (${processedCount}/${MAX_MY_POSTS} analisados, ${likedMyPosts.length} encontrados)</p>`;
-                                                await new Promise(r => setTimeout(r, 500)); // Delay between checking different posts
-                                            }
-                                            if (processedCount >= MAX_MY_POSTS) hasNext = false;
-                                            
-                                            nextMaxId = feedData.next_max_id;
-                                            if (!feedData.more_available || !nextMaxId) hasNext = false;
-                                        }
-
-                                        // 2. Stories Ativos (Curtiu Meu)
-                                        resultadosDiv.innerHTML = `<p style="color:black;">Verificando stories ativos...</p>`;
-                                        try {
-                                            const reelsRes = await fetch(`https://www.instagram.com/api/v1/feed/reels_media/?reel_ids=${myId}`, { headers });
-                                            if (reelsRes.ok) {
-                                                const reelsData = await reelsRes.json();
-                                                const myReel = reelsData.reels[myId];
-                                                if (myReel && myReel.items) {
-                                                    for (const item of myReel.items) {
-                                                        const viewersRes = await fetch(`https://www.instagram.com/api/v1/media/${item.id}/list_reel_media_viewer/`, { headers });
-                                                        if (viewersRes.ok) {
-                                                            const viewersData = await viewersRes.json();
-                                                            const users = viewersData.users || [];
-                                                            const targetUserViewer = users.find(u => String(u.pk) === String(targetUserId));
-                                                            if (targetUserViewer && targetUserViewer.has_liked) {
-                                                                let thumb = item.image_versions2?.candidates?.[0]?.url || item.video_versions?.[0]?.url || '';
-                                                                let sUser = item.user ? item.user.username : 'me';
-                                                                likedMyStories.push({ type: 'Story', url: `https://www.instagram.com/stories/${sUser}/${item.id}/`, thumb: thumb });
-                                                            }
-                                                        }
-                                                        await new Promise(r => setTimeout(r, 300));
-                                                    }
-                                                }
-                                            }
-                                        } catch (e) { console.error("Erro stories curtiu meu", e); }
-
-                                        const dadosReais = { 
-                                            fotosCurtidas: { count: likedMyPosts.length, items: likedMyPosts },
-                                            storiesCurtidos: { count: likedMyStories.length, items: likedMyStories },
-                                            comentarios: { count: 0, items: [] },
-                                            enquetes: { count: 0, items: [] }
-                                        };
-                                        dataCurtiuMeu = dadosReais;
-                                        renderizarCardsInteracoes(dadosReais);
-                                    }
-
                                 } catch (e) {
                                     console.error(e);
                                     resultadosDiv.innerHTML = `<p style="color:red;">Erro ao buscar dados: ${e.message}</p>`;
@@ -4724,7 +4605,7 @@
                                     }
                                     div.appendChild(contentDiv);
 
-                                    if (currentTab === 'euCurti' && item.id) {
+                                    if (item.id) {
                                         const unlikeBtn = document.createElement("button");
                                         unlikeBtn.innerHTML = "💔";
                                         unlikeBtn.title = "Descurtir";

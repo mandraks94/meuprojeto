@@ -12,6 +12,8 @@
             
             function initScript() {
                 if (window.location.href.includes("instagram.com")) {
+                    const infoIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: text-bottom; margin-left: 5px;"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>`;
+
                     // Helper para IndexedDB
                     const dbHelper = {
                         db: null,
@@ -469,6 +471,10 @@
                                         border-width: 2px !important;
                                         animation: rgb-border-animation 5s linear infinite; 
                                     }
+                                    .info-tooltip { position: relative; display: inline-block; cursor: help; color: #8e8e8e; vertical-align: middle; }
+                                    .info-tooltip .tooltip-text { visibility: hidden; width: 220px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100000; bottom: 135%; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; font-size: 12px; font-weight: normal; line-height: 1.4; box-shadow: 0 2px 10px rgba(0,0,0,0.2); pointer-events: none; }
+                                    .info-tooltip .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #333 transparent transparent transparent; }
+                                    .info-tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
                                 `;
                             }
 
@@ -1100,7 +1106,10 @@
                 function renderPage(page) {
                     let html = `
                         <div class="modal-header">
-                            <span class="modal-title">Amigos Próximos</span>
+                            <span class="modal-title">
+                                Amigos Próximos
+                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie sua lista de Melhores Amigos. Selecione quem pode ver seus stories exclusivos (círculo verde).</span></div>
+                            </span>
                             <div class="modal-controls"><button id="closeFriendsMinimizarBtn" title="Minimizar">_</button><button id="closeFriendsFecharBtn" title="Fechar">X</button></div>
                         </div>`;
                     html += `
@@ -1518,7 +1527,10 @@
                 function renderPage(page) {
                     let html = `
                         <div class="modal-header">
-                            <span class="modal-title">Ocultar Story</span>
+                            <span class="modal-title">
+                                Ocultar Story
+                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Selecione usuários para ocultar seus stories e lives. Eles não saberão que foram ocultados.</span></div>
+                            </span>
                             <div class="modal-controls"><button id="hideStoryMinimizarBtn" title="Minimizar">_</button><button id="hideStoryFecharBtn" title="Fechar">X</button></div>
                         </div>`;
                     html += `
@@ -1897,7 +1909,10 @@
                 function renderPage(page) {
                     let html = `
                         <div class="modal-header">
-                            <span class="modal-title">Contas Silenciadas</span>
+                            <span class="modal-title">
+                                Contas Silenciadas
+                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie contas que você silenciou (Stories ou Posts). Você pode reativar o som aqui.</span></div>
+                            </span>
                             <div class="modal-controls"><button id="mutedMinimizarBtn" title="Minimizar">_</button><button id="mutedFecharBtn" title="Fechar">X</button></div>
                         </div>`;
                     html += `
@@ -2281,7 +2296,10 @@
                 function renderPage(page) {
                     let html = `
                         <div class="modal-header">
-                            <span class="modal-title">Contas Bloqueadas</span>
+                            <span class="modal-title">
+                                Contas Bloqueadas
+                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Lista de usuários que você bloqueou. Você pode desbloqueá-los em massa aqui.</span></div>
+                            </span>
                             <div class="modal-controls"><button id="blockedMinimizarBtn" title="Minimizar">_</button><button id="blockedFecharBtn" title="Fechar">X</button></div>
                         </div>`;
                     html += `
@@ -2628,7 +2646,10 @@
                                 `;
                                 div.innerHTML = `
                                     <div class="modal-header">
-                                        <span class="modal-title">Análise de Seguidores (Não Seguem de Volta)</span>
+                                        <span class="modal-title">
+                                            Análise de Seguidores
+                                            <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Veja quem você segue mas não te segue de volta. Também mostra novos seguidores e histórico de unfollows.</span></div>
+                                        </span>
                                         <div class="modal-controls">
                                             <button id="naoSegueDeVoltaMinimizarBtn" title="Minimizar">_</button>
                                             <button id="fecharSubmenuBtn" title="Fechar">X</button>
@@ -3329,7 +3350,10 @@
                                 `;
                                 div.innerHTML = ` 
                                     <div class="modal-header">
-                                        <span class="modal-title">Gerenciador de "Seguindo"</span>
+                                        <span class="modal-title">
+                                            Gerenciador de "Seguindo"
+                                            <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie quem você segue. Filtre por quem é Melhor Amigo, Silenciado ou tem Story Oculto.</span></div>
+                                        </span>
                                         <div class="modal-controls"><button id="seguindoMinimizarBtn" title="Minimizar">_</button><button id="fecharSeguindoBtn" title="Fechar">X</button></div>
                                     </div>
                                     <div style="padding: 15px;">
@@ -3639,7 +3663,10 @@
 
                                 div.innerHTML = `
                                     <div class="modal-header">
-                                        <span class="modal-title">Configurações</span>
+                                        <span class="modal-title">
+                                            Configurações
+                                            <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Ajuste a aparência, atalhos e parâmetros de funcionamento do script.</span></div>
+                                        </span>
                                         <div class="modal-controls">
                                             <button id="fecharSettingsBtn" title="Fechar">X</button>
                                         </div>
@@ -3746,7 +3773,10 @@
 
                                 div.innerHTML = `
                                     <div class="modal-header">
-                                        <span class="modal-title">Configurar Atalhos</span>
+                                        <span class="modal-title">
+                                            Configurar Atalhos
+                                            <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Crie atalhos de teclado para ações rápidas ou navegação.</span></div>
+                                        </span>
                                         <div class="modal-controls">
                                             <button id="fecharShortcutsBtn" title="Fechar">X</button>
                                         </div>
@@ -3879,7 +3909,10 @@
 
                                 div.innerHTML = `
                                     <div class="modal-header">
-                                        <span class="modal-title">Parâmetros do Script</span>
+                                        <span class="modal-title">
+                                            Parâmetros do Script
+                                            <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Ajuste delays e limites para evitar bloqueios do Instagram.</span></div>
+                                        </span>
                                         <div class="modal-controls">
                                             <button id="fecharParamsBtn" title="Fechar">X</button>
                                         </div>
@@ -4049,7 +4082,10 @@
                                 `;
                                 div.innerHTML = `
                                     <div class="modal-header">
-                                        <span class="modal-title">Menu de Reels</span>
+                                        <span class="modal-title">
+                                            Menu de Reels
+                                            <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Ferramentas para Reels: Download, Análise de Desempenho e Rolagem Automática.</span></div>
+                                        </span>
                                         <div class="modal-controls">
                                             <button id="fecharReelsSubmenuBtn" title="Fechar">X</button>
                                         </div>
@@ -4269,7 +4305,10 @@
 
                                     let tableHtml = `
                                         <div class="modal-header">
-                                            <span class="modal-title">Análise de Desempenho dos Reels</span>
+                                            <span class="modal-title">
+                                                Análise de Desempenho dos Reels
+                                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Tabela com métricas de visualizações, curtidas e comentários dos seus Reels.</span></div>
+                                            </span>
                                             <div class="modal-controls">
                                                 <button id="fecharReelsTableBtn" title="Fechar">X</button>
                                             </div>
@@ -4335,8 +4374,6 @@
                                     width: 90%; max-width: 900px; max-height: 90vh; border: 1px solid #ccc;
                                     border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
                                 `;
-                                
-                                const infoIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: -2px;"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>`;
 
                                 div.innerHTML = `
                                     <style>
@@ -4400,7 +4437,10 @@
 
                                             <!-- IA Section -->
                                             <div style="border-top: 1px solid #eee; padding-top: 20px;">
-                                                <h3>🔍 Análise de Conteúdo (IA)</h3>
+                                                <h3>
+                                                    🔍 Análise de Conteúdo (IA)
+                                                    <div class="info-tooltip">${infoIcon}<span class="tooltip-text">A porcentagem indica o nível de confiança da IA na classificação da imagem.</span></div>
+                                                </h3>
                                                 <p style="font-size: 12px; color: #666;">Classificação de imagens usando IA (Simulação/Placeholder).</p>
                                                 <button id="analyzeImagesBtn" style="background: #8e44ad; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">Analisar Últimos Posts</button>
                                                 <div id="aiResults" style="margin-top: 10px; display: flex; gap: 10px; overflow-x: auto;"></div>
@@ -4517,7 +4557,7 @@
                                                 card.innerHTML = `
                                                     <img src="${post.url}" style="width: 100px; height: 100px; object-fit: cover; border-radius: 4px;">
                                                     <div style="font-weight: bold; font-size: 12px; margin-top: 5px;">${randomCat}</div>
-                                                    <div style="font-size: 10px; color: #666;">${confidence * 100}%</div>
+                                                    <div style="font-size: 10px; color: #666;">Confiança: ${parseInt(confidence * 100)}%</div>
                                                 `;
                                                 aiContainer.appendChild(card);
                                             });
@@ -4642,7 +4682,10 @@
                             
                             div.innerHTML = `
                                 <div class="modal-header">
-                                    <span class="modal-title">Verificar Interações</span>
+                                    <span class="modal-title">
+                                        Verificar Interações
+                                        <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Verifique o que você curtiu de um usuário específico (Posts e Stories).</span></div>
+                                    </span>
                                     <div class="modal-controls">
                                         <button id="fecharInteracoesBtn" title="Fechar">X</button>
                                     </div>

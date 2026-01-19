@@ -9,7 +9,7 @@
 
         (function() {
             'use strict';
-            
+
             function initScript() {
                 if (window.location.href.includes("instagram.com")) {
                     const infoIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: text-bottom; margin-left: 5px;"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>`;
@@ -265,7 +265,7 @@
                     function initShortcutListener() {
                         if (document.body.dataset.shortcutsInitialized) return; // Evita múltiplos listeners
                         document.body.dataset.shortcutsInitialized = 'true';
-                        
+
                         document.addEventListener('keydown', (event) => {
                             // Ignora atalhos se um input, textarea ou contenteditable estiver focado
                             if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable) {
@@ -278,7 +278,7 @@
                             }
 
                             const shortcuts = getShortcuts();
-                            const shortcut = shortcuts.find(s => 
+                            const shortcut = shortcuts.find(s =>
                                 s.key.toLowerCase() === event.key.toLowerCase() &&
                                 !!s.ctrlKey === event.ctrlKey &&
                                 !!s.altKey === event.altKey &&
@@ -325,7 +325,7 @@
                                 }
                                 return null;
                             }
-                            
+
                             // Tenta encontrar o container da sidebar oficial usando o seletor fornecido
                             const sidebarContainer = findSidebarContainer();
                             if (!sidebarContainer) return; // Aguarda o carregamento da sidebar
@@ -480,19 +480,14 @@
                                         90% { border-color: rgb(255, 0, 255); }
                                         100% { border-color: rgb(255, 0, 0); }
                                     }
-                                    .rgb-border-effect { 
+                                    .rgb-border-effect {
                                         border-style: solid !important;
                                         border-width: 2px !important;
-                                        animation: rgb-border-animation 5s linear infinite; 
+                                        animation: rgb-border-animation 5s linear infinite;
                                     }
                                     .info-tooltip { position: relative; display: inline-block; cursor: help; color: #8e8e8e; vertical-align: middle; }
-<<<<<<< HEAD
                                     .info-tooltip .tooltip-text { visibility: hidden; width: 220px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100000; top: 100%; margin-top: 10px; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; font-size: 12px; font-weight: normal; line-height: 1.4; box-shadow: 0 2px 10px rgba(0,0,0,0.2); pointer-events: none; }
                                     .info-tooltip .tooltip-text::after { content: ""; position: absolute; bottom: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: transparent transparent #333 transparent; }
-=======
-                                    .info-tooltip .tooltip-text { visibility: hidden; width: 220px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100000; bottom: 135%; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; font-size: 12px; font-weight: normal; line-height: 1.4; box-shadow: 0 2px 10px rgba(0,0,0,0.2); pointer-events: none; }
-                                    .info-tooltip .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #333 transparent transparent transparent; }
->>>>>>> 58fd092e6c653019a9bbd47fea1e1be71ec6394c
                                     .info-tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
                                 `;
                             }
@@ -508,7 +503,6 @@
                             menu.innerHTML = `
                                 <div class="menu-item">
                                     <button id="curtidasBtn"><svg aria-label="Curtidas" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M16.792 3.904A4.989 4.989 0 0 1 21.5 9.122c0 3.072-2.652 4.959-5.197 7.222-2.512 2.243-3.865 3.469-4.303 3.752-.477-.309-2.143-1.823-4.303-3.752C5.141 14.072 2.5 12.167 2.5 9.122a4.989 4.989 0 0 1 4.708-5.218 4.21 4.21 0 0 1 3.675 1.941c.843.118 3.377.135 4.234-.149a4.21 4.21 0 0 1 1.675-1.792z"></path></svg></button>
-<<<<<<< HEAD
                                     <span>${getText('likes')}</span>
                                 </div>
                                 <div class="menu-item">
@@ -546,50 +540,10 @@
                                 <div class="menu-item">
                                     <button id="interacoesBtn"><svg aria-label="Interações" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"></path></svg></button>
                                     <span>${getText('interactions')}</span>
-=======
-                                    <span>Curtidas</span>
-                                </div>
-                                <div class="menu-item">
-                                    <button id="comentariosBtn"><svg aria-label="Comentários" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M20.656 17.008a9.993 9.993 0 1 0-3.59 3.615L22 22z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"></path></svg></button>
-                                    <span>Comentários</span>
-                                </div>
-                                <div class="menu-item">
-                                    <button id="bloqueadosBtn"><svg aria-label="Bloqueados" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"></circle><line x1="4.93" y1="19.07" x2="19.07" y2="4.93" stroke="currentColor" stroke-width="2"></line></svg></button>
-                                    <span>Bloqueados</span>
-                                </div>
-                                <div class="menu-item">
-                                    <button id="mensagensBtn"><svg aria-label="Mensagens" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><line fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2" x1="22" x2="9.218" y1="3" y2="10.083"></line><polygon fill="none" points="11.698 20.334 22 3.001 2 3.001 9.218 10.084 11.698 20.334" stroke="currentColor" stroke-linejoin="round" stroke-width="2"></polygon></svg></button>
-                                    <span>Mensagens</span>
-                                </div>
-                                <div class="menu-item">
-                                    <button id="naoSegueDeVoltaBtn"><svg aria-label="Não segue de volta" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8.009 8.009 0 0 1-8 8z"></path><path d="M15.5 11h-7a1 1 0 0 0 0 2h7a1 1 0 0 0 0-2z"></path></svg></button>
-                                    <span>Não segue de volta</span>
-                                </div>
-                                <div class="menu-item">
-                                    <button id="seguindoBtn"><svg aria-label="Seguindo" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12.004 12.002c3.309 0 6-2.691 6-6s-2.691-6-6-6-6 2.691-6 6 2.691 6 6 6zm0-10c2.206 0 4 1.794 4 4s-1.794 4-4 4-4-1.794-4-4 1.794-4 4-4zm0 12c-2.67 0-8 1.337-8 4v2h16v-2c0-2.663-5.33-4-8-4zm-6 4c.22-.72 3.02-2 6-2s5.78 1.28 6 2H6.004z"></path></svg></button>
-                                    <span>Seguindo</span>
-                                </div>
-                                <div class="menu-item">
-                                    <button id="closeFriendsBtn"><svg aria-label="Amigos Próximos" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" fill="none" r="10" stroke="currentColor" stroke-width="2"></circle><polygon points="12 16.63 7.85 19.33 9.15 14.48 5.24 11.24 10.19 10.96 12 6.38 13.81 10.96 18.76 11.24 14.85 14.48 16.15 19.33 12 16.63" fill="currentColor"></polygon></svg></button>
-                                    <span>Amigos Próximos</span>
-                                </div>
-                                <div class="menu-item">
-                                    <button id="hideStoryBtn"><svg aria-label="Ocultar Story" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill="none" stroke="currentColor" stroke-width="2"></path><line x1="2" y1="2" x2="22" y2="22" stroke="currentColor" stroke-width="2"></line></svg></button>
-                                    <span>Ocultar Story</span>
-                                </div>
-                                <div class="menu-item">
-                                    <button id="mutedAccountsBtn"><svg aria-label="Contas Silenciadas" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M11 5L6 9H2v6h4l5 4V5z" fill="none" stroke="currentColor" stroke-width="2"></path><line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2"></line><line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2"></line></svg></button>
-                                    <span>Contas Silenciadas</span>
->>>>>>> 58fd092e6c653019a9bbd47fea1e1be71ec6394c
-                                </div>
-                                <div class="menu-item">
-                                    <button id="interacoesBtn"><svg aria-label="Interações" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"></path></svg></button>
-                                    <span>Interações</span>
                                 </div>
 
                                 <div class="menu-item">
                                     <button id="reelsMenuBtn"><svg aria-label="Reels" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12.87 1.51l-2.54 2.6-2.53-2.6a.86.86 0 0 0-.61-.25c-.23 0-.45.09-.61.25l-2.54 2.6-2.53-2.6A.86.86 0 0 0 .9 1.26c-.23 0-.45.09-.61.25L.1 1.7a.88.88 0 0 0 0 1.23l2.54 2.6-2.53 2.6a.88.88 0 0 0 0 1.23l.19.19c.16.16.38.25.61.25.23 0 .45-.09.61-.25l2.54-2.6 2.53 2.6c.16.16.38.25.61.25.23 0 .45-.09.61-.25l2.54-2.6 2.53 2.6c.16.16.38.25.61.25.23 0 .45-.09.61-.25l.19-.19a.88.88 0 0 0 0-1.23l-2.53-2.6 2.53-2.6a.88.88 0 0 0 0-1.23l-.19-.19a.86.86 0 0 0-.61-.25z" fill="currentColor"></path><rect height="16" rx="3" ry="3" width="18" x="3" y="7" fill="none" stroke="currentColor" stroke-width="2"></rect></svg></button>
-<<<<<<< HEAD
                                     <span>${getText('reelsMenu')}</span>
                                 </div>
                                 <div class="menu-item">
@@ -603,21 +557,6 @@
                                 <div class="menu-item">
                                     <button id="settingsBtn"><svg aria-label="Configurações" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" fill="none" r="3" stroke="currentColor" stroke-width="2"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.09 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"></path></svg></button>
                                     <span>${getText('settings')}</span>
-=======
-                                    <span>Menu de Reels</span>
-                                </div>
-                                <div class="menu-item">
-                                    <button id="baixarStoryBtn"><svg aria-label="Baixar Story" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"></path></svg></button>
-                                    <span>Baixar Story</span>
-                                </div>
-                                <div class="menu-item">
-                                    <button id="engajamentoBtn"><svg aria-label="Engajamento" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"></path></svg></button>
-                                    <span>Engajamento</span>
-                                </div>
-                                <div class="menu-item">
-                                    <button id="settingsBtn"><svg aria-label="Configurações" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" fill="none" r="3" stroke="currentColor" stroke-width="2"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.09 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"></path></svg></button>
-                                    <span>Configurações</span>
->>>>>>> 58fd092e6c653019a9bbd47fea1e1be71ec6394c
                                 </div>
                             `;
 
@@ -650,7 +589,7 @@
                                     link.id = "instagramToolsSidebarBtn";
                                     link.href = "#";
                                     link.removeAttribute('aria-label');
-                                    
+
                                     // Substitui o ícone original pelo ícone de engrenagem
                                     const svg = link.querySelector('svg');
                                     if (svg) {
@@ -675,7 +614,7 @@
                                         if (el.children.length === 0 && el.textContent.trim().length > 0) {
                                             // Ignora se estiver dentro de um SVG ou for o próprio SVG
                                             if (el.closest('svg')) return;
-                                            
+
                                             const text = el.textContent.trim();
                                             // Ignora números (notificações) e textos muito curtos
                                             if (isNaN(parseInt(text)) && text.length > 1) {
@@ -687,7 +626,7 @@
                                     link.addEventListener("click", (e) => {
                                         e.preventDefault();
                                         e.stopPropagation();
-                                        
+
                                         // Lógica de posicionamento inteligente (PC vs Mobile)
                                         const isDesktop = window.innerWidth >= 1024;
                                         if (isDesktop) {
@@ -703,7 +642,7 @@
                                             menu.style.bottom = 'auto';
                                             menu.style.transform = 'translate(-50%, -50%)';
                                         }
-                                        
+
                                         menu.style.display = menu.style.display === "flex" ? "none" : "flex";
                                     });
                                 }
@@ -905,7 +844,7 @@
                                 const closeButton = document.createElement("button");
                                 closeButton.innerText = "Cancelar";
                                 closeButton.style.cssText = "background:red;color:white;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;";
-                                
+
                                 bar.appendChild(fill);
                                 bar.appendChild(text);
                                 bar.appendChild(closeButton);
@@ -1264,7 +1203,7 @@
                         const isMinimized = modal.dataset.minimized === 'true';
 
                         contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-                        
+
                         modal.dataset.minimized = !isMinimized;
                         btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
                         modal.style.maxHeight = isMinimized ? '85vh' : 'none';
@@ -1299,7 +1238,7 @@
                     searchInput.addEventListener("input", () => {
                         const filter = searchInput.value.toLowerCase();
                         const listItems = div.querySelectorAll("#closeFriendsList li");
-                        listItems.forEach(li => { 
+                        listItems.forEach(li => {
                             // Seletor ajustado para ser mais específico
                             const usernameSpan = li.querySelector('span[style*="cursor:pointer"]');
                             if (usernameSpan) {
@@ -1348,7 +1287,7 @@
                             return initialStates.get(username) !== checked;
                         });
                         if (changedUsers.length === 0) {
-                            alert("Nenhuma alteração para aplicar."); 
+                            alert("Nenhuma alteração para aplicar.");
                             isApplyingChanges = false;
                             return;
                         }
@@ -1404,7 +1343,7 @@
                             // Atualiza o estado inicial para o próximo "Aplicar"
                             initialStates.set(username, isChecked);
                         }
-                        
+
                         bar.remove();
                         isApplyingChanges = false;
                     };
@@ -1464,7 +1403,7 @@
                      let scrollInterval;
                      let noNewUsersCount = 0;
                      const maxIdleCount = 3; // Parar após 3 tentativas sem novos usuários (3 segundos)
- 
+
                      let cancelled = false;
                      const { bar, update, closeButton } = createCancellableProgressBar();
                      closeButton.onclick = () => {
@@ -1473,7 +1412,7 @@
                          finishExtraction();
                      };
                      update(0, 0, "Buscando e rolando a lista de usuários com story oculto...");
- 
+
                      function finishExtraction() {
                          clearInterval(scrollInterval);
                          if (bar) bar.remove();
@@ -1481,25 +1420,25 @@
                          // Se foi cancelado, retorna uma lista vazia para não abrir o modal.
                          resolve(cancelled ? [] : Array.from(users.values()));
                      }
- 
+
                      function performScrollAndExtract() {
                          const initialUserCount = users.size;
- 
+
                          // Seletor para os elementos que contêm o nome de usuário
                          const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')).filter(el =>
                              el.querySelector('span[data-bloks-name="bk.components.Text"]')
                          );
- 
+
                          if (userElements.length === 0 && users.size === 0) {
                              console.log("Nenhum usuário encontrado ainda, tentando novamente...");
                              return; // Continua tentando se a lista estiver vazia
                          }
- 
+
                          userElements.forEach(userElement => {
                              const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
                              const username = usernameSpan ? usernameSpan.innerText.trim() : '';
                              const imgTag = userElement.querySelector('img');
- 
+
                              let isChecked = false;
                              const checkboxContainer = userElement.querySelector('div[role="button"][tabindex="0"]');
                              if (checkboxContainer) {
@@ -1514,7 +1453,7 @@
                                      }
                                  }
                              }
- 
+
                              // Adiciona o usuário apenas se tiver um nome válido, uma foto e ainda não estiver na lista
                              if (username && imgTag && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
                                  const photoUrl = imgTag.src;
@@ -1527,26 +1466,26 @@
                                  }
                              }
                          });
- 
+
                          update(users.size, users.size, `Encontrado(s) ${users.size} usuário(s)... Rolando...`);
- 
+
                          // Lógica de parada: se não encontrar novos usuários por um tempo, para.
                          if (users.size === initialUserCount) {
                              noNewUsersCount++;
                          } else {
                              noNewUsersCount = 0; // Reseta o contador se encontrar novos usuários
                          }
- 
+
                          if (noNewUsersCount >= maxIdleCount) {
                              console.log("Nenhum novo usuário encontrado após várias tentativas. Finalizando.");
                              finishExtraction();
                              return;
                          }
- 
+
                          // Simula a rolagem da janela principal
                          window.scrollTo(0, document.body.scrollHeight);
                      }
- 
+
                      // Inicia o processo de rolagem e extração
                      scrollInterval = setInterval(performScrollAndExtract, 1000); // Rola e extrai a cada 1 segundo
                  });
@@ -1683,7 +1622,7 @@
                         const isMinimized = modal.dataset.minimized === 'true';
 
                         contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-                        
+
                         modal.dataset.minimized = !isMinimized;
                         btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
                         modal.style.maxHeight = isMinimized ? '85vh' : 'none';
@@ -1885,7 +1824,7 @@
                             const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
                             const username = usernameSpan ? usernameSpan.innerText.trim() : '';
                             const imgTag = userElement.querySelector('img');
-                            
+
                             let isChecked = false;
                             const checkboxContainer = userElement.querySelector('div[role="button"][tabindex="0"]');
                             if (checkboxContainer) {
@@ -2044,7 +1983,7 @@
                         const isMinimized = modal.dataset.minimized === 'true';
 
                         contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-                        
+
                         modal.dataset.minimized = !isMinimized;
                         btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
                         modal.style.maxHeight = isMinimized ? '85vh' : 'none';
@@ -2060,7 +1999,7 @@
                     const searchInput = document.getElementById("mutedSearchInput");
                     searchInput.addEventListener("input", () => {
                         const filter = searchInput.value.toLowerCase();
-                        div.querySelectorAll("#mutedList li").forEach(li => { 
+                        div.querySelectorAll("#mutedList li").forEach(li => {
                             // Seletor ajustado para ser mais específico
                             const usernameSpan = li.querySelector('span[style*="cursor:pointer"]');
                             const text = usernameSpan ? usernameSpan.textContent.toLowerCase() : '';
@@ -2142,8 +2081,8 @@
 
                     // 3. Clicar na opção "Silenciar"
                     // Seletor mais robusto, similar ao de unfollow, para encontrar a opção "Silenciar"
-                    const muteOption = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], div[role="menuitem"]')).find(el => 
-                        el.innerText.trim() === 'Silenciar' || 
+                    const muteOption = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], div[role="menuitem"]')).find(el =>
+                        el.innerText.trim() === 'Silenciar' ||
                         (el.querySelector('span') && el.querySelector('span').innerText.trim() === 'Silenciar')
                     );
                     if (!muteOption) {
@@ -2163,7 +2102,7 @@
                     for (const optionText of optionsToToggle) {
                         // Encontra o elemento de texto ("Publicações" ou "Stories") em toda a página
                         const textElement = Array.from(document.querySelectorAll('span, div')).find(el => el.innerText.trim() === optionText);
-                        
+
                         if (!textElement) {
                             console.log(`Elemento de texto para "${optionText}" não encontrado.`);
                             continue;
@@ -2182,7 +2121,7 @@
 
                                 if (toggleMode || isChecked === 'true') {
                                     console.log(`Tentando alterar o estado de "${optionText}".`);
-                                    
+
                                     // --- LÓGICA DE TESTE A/B ---
                                     if (optionText === 'Publicações' || optionText === 'Posts') {
                                         console.log(`Usando método 1 (clique no input) para "${optionText}".`);
@@ -2547,15 +2486,15 @@
 
             let modalAbertoBlocked = false;
                             // --- FIM DO MENU CONTAS BLOQUEADAS ---
-            
+
             function simulateClick(element, triggerChangeEvent = false) {
                  if (!element) return;
                  const dispatch = (event) => element.dispatchEvent(event);
-            
+
                  // Simula eventos de toque, mais confiáveis em mobile
                  dispatch(new TouchEvent('touchstart', { bubbles: true, cancelable: true, view: window }));
                  dispatch(new TouchEvent('touchend', { bubbles: true, cancelable: true, view: window }));
-            
+
                  // Mantém os eventos de mouse como fallback
                  dispatch(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
                  dispatch(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
@@ -2767,15 +2706,12 @@
                                     naoSegueDeVolta: null,
                                     novosSeguidores: null,
                                     unfollows: null,
-<<<<<<< HEAD
                                     seguidoresPerdidos: null,
-=======
->>>>>>> 58fd092e6c653019a9bbd47fea1e1be71ec6394c
                                     exceptions: null,
                                     profileInfo: null,
                                     userDetails: new Map()
                                 };
-                                
+
                                 // Variável compartilhada para as listas, acessível pelo unfollowUsers
                                 let lists = {};
 
@@ -2859,7 +2795,7 @@
                                 // Função principal que carrega os dados UMA VEZ
                                 async function carregarDadosIniciais() {
                                     statusDiv.innerText = 'Carregando dados do Banco de Dados (IndexedDB)...';
-                                    
+
                                     // 1. Carrega dados do DB (Sem requisições API)
                                     let dbFollowers = await dbHelper.loadCache('followers');
                                     let dbFollowing = await dbHelper.loadCache('following');
@@ -2889,7 +2825,7 @@
                                     // 2. Calcula listas baseadas no DB
                                     // Filtra quem não segue de volta E quem não está na lista de exceções (corrigidos)
                                     cachedData.naoSegueDeVolta = [...dbFollowing].filter(user => !dbFollowers.has(user) && !cachedData.exceptions.has(user));
-                                    
+
                                     // Tenta buscar info básica do perfil (leve) apenas para ter o ID caso o usuário queira atualizar
                                     try {
                                         const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
@@ -2905,12 +2841,9 @@
 
                                     // Listas iniciais (Novos estarão vazios até atualizar)
                                     let listNaoSegueDeVolta = toObjects(cachedData.naoSegueDeVolta);
-                                    let listNovosSeguidores = []; 
+                                    let listNovosSeguidores = [];
                                     let listNovosSeguindo = [];
-<<<<<<< HEAD
                                     let listSeguidoresPerdidos = [];
-=======
->>>>>>> 58fd092e6c653019a9bbd47fea1e1be71ec6394c
                                     let listNaoSigoDeVolta = toObjects([...dbFollowers].filter(u => !dbFollowing.has(u)));
                                     let listHistorico = []; // Será carregado sob demanda
 
@@ -2920,7 +2853,7 @@
                                     statusDiv.innerText = `Dados carregados do cache. Seguidores: ${dbFollowers.size} (Oficial: ${totalFollowers}) | Seguindo: ${dbFollowing.size} (Oficial: ${totalFollowing})`;
 
                                     const tabelaContainer = document.getElementById("tabelaContainer");
-                                    
+
                                     // Adiciona abas
                                     const tabsHtml = `
                                         <div style="margin-bottom: 15px;">
@@ -2930,31 +2863,25 @@
                                             <button id="tabNaoSegueDeVolta" class="tab-button active">Não Segue de Volta (<span id="countNaoSegue">${listNaoSegueDeVolta.length}</span>)</button>
                                             <button id="tabNovosSeguidores" class="tab-button">Novos Seguidores (<span id="countNovosSeguidores">${listNovosSeguidores.length}</span>)</button>
                                             <button id="tabNovosSeguindo" class="tab-button">Novos Seguindo (<span id="countNovosSeguindo">${listNovosSeguindo.length}</span>)</button>
-<<<<<<< HEAD
                                             <button id="tabSeguidoresPerdidos" class="tab-button">Seguidores Perdidos (<span id="countSeguidoresPerdidos">${listSeguidoresPerdidos.length}</span>)</button>
-=======
->>>>>>> 58fd092e6c653019a9bbd47fea1e1be71ec6394c
                                             <button id="tabNaoSigoDeVolta" class="tab-button">Não Sigo de Volta (<span id="countNaoSigo">${listNaoSigoDeVolta.length}</span>)</button>
                                             <button id="tabHistorico" class="tab-button">Histórico</button>
                                         </div>
                                         <div id="tabContent"></div>
                                     `;
-                                    
+
                                     tabelaContainer.innerHTML = tabsHtml;
-                                    
+
                                     // Referências para as listas (usando let para poder atualizar)
                                     lists = {
                                         'tabNaoSegueDeVolta': listNaoSegueDeVolta,
                                         'tabNovosSeguidores': listNovosSeguidores,
                                         'tabNovosSeguindo': listNovosSeguindo,
-<<<<<<< HEAD
                                         'tabSeguidoresPerdidos': listSeguidoresPerdidos,
-=======
->>>>>>> 58fd092e6c653019a9bbd47fea1e1be71ec6394c
                                         'tabNaoSigoDeVolta': listNaoSigoDeVolta,
                                         'tabHistorico': listHistorico
                                     };
-                                    
+
                                     let currentTabId = initialTab;
                                     let currentList = lists[currentTabId];
 
@@ -2979,28 +2906,21 @@
                                             <div style="margin-top: 20px;">
                                                 <button id="selecionarTodosBtn">Selecionar Todos</button>
                                                 <button id="desmarcarTodosBtn">Desmarcar Todos</button>
-<<<<<<< HEAD
                                                 ${(currentTabId === 'tabNaoSegueDeVolta' || currentTabId === 'tabSeguidoresPerdidos') ? `
                                                     <button id="unfollowBtn">Unfollow</button>
                                                     <button id="bloquearBtn" style="margin-left: 10px; background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Bloquear</button>
                                                     ${currentTabId === 'tabNaoSegueDeVolta' ? `<button id="corrigirBtn" style="margin-left: 10px; background-color: #f39c12; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;" title="Remove usuários selecionados desta lista permanentemente">Corrigir (Já Sigo)</button>` : ''}
-=======
-                                                ${currentTabId === 'tabNaoSegueDeVolta' ? `
-                                                    <button id="unfollowBtn">Unfollow</button>
-                                                    <button id="bloquearBtn" style="margin-left: 10px; background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Bloquear</button>
-                                                    <button id="corrigirBtn" style="margin-left: 10px; background-color: #f39c12; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;" title="Remove usuários selecionados desta lista permanentemente">Corrigir (Já Sigo)</button>
->>>>>>> 58fd092e6c653019a9bbd47fea1e1be71ec6394c
                                                 ` : ''}
                                                 ${currentTabId === 'tabNaoSigoDeVolta' ? `<button id="followBackBtn" style="background:#0095f6;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">Seguir de Volta (Em breve)</button>` : ''}
                                                 ${currentTabId === 'tabHistorico' ? `<button id="limparHistoricoBtn" style="background:#e74c3c;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">Limpar Selecionados</button>` : ''}
                                             </div>
                                         `;
-                                        
+
                                         preencherTabela(currentList, true, currentTabId === 'tabHistorico');
-                                        
+
                                         document.getElementById("selecionarTodosBtn").onclick = selecionarTodos;
                                         document.getElementById("desmarcarTodosBtn").onclick = desmarcarTodos;
-                                        
+
                                         if (document.getElementById("unfollowBtn")) {
                                             document.getElementById("unfollowBtn").onclick = unfollowSelecionados;
                                         }
@@ -3011,7 +2931,7 @@
                                             document.getElementById("corrigirBtn").onclick = async () => {
                                                 const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(cb => cb.dataset.username);
                                                 if (selecionados.length === 0) return alert("Selecione os usuários que você já segue para corrigir.");
-                                                
+
                                                 if (confirm(`Marcar ${selecionados.length} usuários como 'Já Sigo'? Eles não aparecerão mais nesta lista.`)) {
                                                     for (const u of selecionados) {
                                                         await dbHelper.saveException(u);
@@ -3041,11 +2961,7 @@
                                     renderCurrentTab();
 
                                     // Event listeners para as abas
-<<<<<<< HEAD
                                     const tabs = ['tabNaoSegueDeVolta', 'tabNovosSeguidores', 'tabNovosSeguindo', 'tabSeguidoresPerdidos', 'tabNaoSigoDeVolta', 'tabHistorico'];
-=======
-                                    const tabs = ['tabNaoSegueDeVolta', 'tabNovosSeguidores', 'tabNovosSeguindo', 'tabNaoSigoDeVolta', 'tabHistorico'];
->>>>>>> 58fd092e6c653019a9bbd47fea1e1be71ec6394c
 
                                     tabs.forEach(tabId => {
                                         document.getElementById(tabId).addEventListener('click', () => {
@@ -3066,7 +2982,7 @@
                                                 return;
                                             }
                                         }
-                                        
+
                                         const userId = cachedData.profileInfo.data.user.id;
                                         const totalFollowing = cachedData.profileInfo.data.user.edge_follow.count;
                                         const totalFollowers = cachedData.profileInfo.data.user.edge_followed_by.count;
@@ -3074,7 +2990,7 @@
                                         // 1. Baixar Seguindo
                                         const apiFollowing = await fetchUserListAPI(userId, 'following', totalFollowing);
                                         if (processoCancelado || !apiFollowing) return;
-                                        
+
                                         // 2. Baixar Seguidores
                                         const apiFollowers = await fetchUserListAPI(userId, 'followers', totalFollowers);
                                         if (processoCancelado || !apiFollowers) return;
@@ -3084,10 +3000,7 @@
                                         // 3. Calcular Novos (Comparando API vs DB Antigo)
                                         const novosSeguidoresSet = [...apiFollowers].filter(u => !cachedData.seguidores.has(u));
                                         const novosSeguindoSet = [...apiFollowing].filter(u => !cachedData.seguindo.has(u));
-<<<<<<< HEAD
                                         const seguidoresPerdidosSet = [...cachedData.seguidores].filter(u => !apiFollowers.has(u));
-=======
->>>>>>> 58fd092e6c653019a9bbd47fea1e1be71ec6394c
 
                                         // 4. Salvar no DB (Substitui o antigo pelo novo da API)
                                         // Prepara objetos completos para salvar (com foto)
@@ -3105,20 +3018,14 @@
                                         lists['tabNaoSegueDeVolta'] = toObjects(cachedData.naoSegueDeVolta);
                                         lists['tabNovosSeguidores'] = toObjects(novosSeguidoresSet);
                                         lists['tabNovosSeguindo'] = toObjects(novosSeguindoSet);
-<<<<<<< HEAD
                                         lists['tabSeguidoresPerdidos'] = toObjects(seguidoresPerdidosSet);
-=======
->>>>>>> 58fd092e6c653019a9bbd47fea1e1be71ec6394c
                                         lists['tabNaoSigoDeVolta'] = toObjects([...apiFollowers].filter(u => !apiFollowing.has(u)));
 
                                         // Atualizar Contadores
                                         document.getElementById('countNaoSegue').innerText = lists['tabNaoSegueDeVolta'].length;
                                         document.getElementById('countNovosSeguidores').innerText = lists['tabNovosSeguidores'].length;
                                         document.getElementById('countNovosSeguindo').innerText = lists['tabNovosSeguindo'].length;
-<<<<<<< HEAD
                                         document.getElementById('countSeguidoresPerdidos').innerText = lists['tabSeguidoresPerdidos'].length;
-=======
->>>>>>> 58fd092e6c653019a9bbd47fea1e1be71ec6394c
                                         document.getElementById('countNaoSigo').innerText = lists['tabNaoSigoDeVolta'].length;
 
                                         statusDiv.innerText = "Dados atualizados e salvos no IndexDB com sucesso!";
@@ -3151,7 +3058,7 @@
                                     const btn = document.getElementById("bloquearBtn");
                                     btn.disabled = true;
                                     btn.textContent = "Processando...";
-                                    
+
                                     blockUsers(selecionados, 0, () => {
                                         btn.disabled = false;
                                         btn.textContent = "Bloquear";
@@ -3173,7 +3080,7 @@
                                         // 1. Clicar nos 3 pontinhos (Opções)
                                         const xpath1 = "/html/body/div[1]/div/div/div[2]/div/div/div[1]/div[2]/div[1]/section/main/div/div/header/div/section[2]/div/div[1]/div[2]/div";
                                         let optionsClicked = executeXPathClick(xpath1);
-                                        
+
                                         if (!optionsClicked) {
                                             // Fallback: busca por SVG de opções se o XPath falhar
                                             const svgs = document.querySelectorAll('svg[aria-label="Opções"], svg[aria-label="Options"]');
@@ -3220,7 +3127,7 @@
                                                         for (let xp of confirmXpaths) {
                                                             if (executeXPathClick(xp)) { confirmClicked = true; break; }
                                                         }
-                                                        
+
                                                         if (!confirmClicked) {
                                                             // Fallback robusto: Busca botão "Bloquear" no último dialog (que deve ser o de confirmação)
                                                             const dialogs = document.querySelectorAll('div[role="dialog"]');
@@ -3333,7 +3240,7 @@
                                                     const lowerUser = username.toLowerCase();
                                                     if (cachedData.seguindo && cachedData.seguindo.has(lowerUser)) {
                                                         cachedData.seguindo.delete(lowerUser);
-                                                        const newFollowingList = Array.from(cachedData.seguindo).map(u => 
+                                                        const newFollowingList = Array.from(cachedData.seguindo).map(u =>
                                                             cachedData.userDetails.get(u) || { username: u, photoUrl: null }
                                                         );
                                                         dbHelper.saveCache('following', newFollowingList).catch(e => console.error("Erro ao atualizar cache following:", e));
@@ -3462,7 +3369,7 @@
                                     width: 90%; max-width: 800px; max-height: 90vh; border: 1px solid #ccc;
                                     border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
                                 `;
-                                div.innerHTML = ` 
+                                div.innerHTML = `
                                     <div class="modal-header">
                                         <span class="modal-title">
                                             Gerenciador de "Seguindo"
@@ -3610,7 +3517,7 @@
                                     const renderList = (page) => {
                                         const startIndex = (page - 1) * itemsPerPage;
                                         const endIndex = startIndex + itemsPerPage;
-                                        
+
                                         // Filtra por pesquisa antes de ordenar e paginar
                                         const searchTerm = document.getElementById('seguindoSearchInput')?.value.toLowerCase() || '';
                                         let filteredUsers = seguindoList;
@@ -3705,7 +3612,7 @@
                                         if (prevBtn) prevBtn.onclick = () => renderList(--currentPage);
                                         const nextBtn = document.getElementById("nextPageBtn");
                                         if (nextBtn) nextBtn.onclick = () => renderList(++currentPage);
-                                        
+
                                         // Adiciona eventos aos checkboxes individuais para atualizar o Set
                                         document.querySelectorAll('#seguindoModal .user-checkbox').forEach(checkbox => {
                                             checkbox.addEventListener('change', (e) => {
@@ -3778,11 +3685,7 @@
                                 div.innerHTML = `
                                     <div class="modal-header">
                                         <span class="modal-title">
-<<<<<<< HEAD
                                             ${getText('settings')}
-=======
-                                            Configurações
->>>>>>> 58fd092e6c653019a9bbd47fea1e1be71ec6394c
                                             <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Ajuste a aparência, atalhos e parâmetros de funcionamento do script.</span></div>
                                         </span>
                                         <div class="modal-controls">
@@ -3844,7 +3747,7 @@
                                 if (loadSettings().rgbBorder) {
                                     div.classList.add('rgb-border-effect');
                                 }
-                                
+
                                 const languages = [
                                     { code: 'pt-BR', name: '🇧🇷 Português' },
                                     { code: 'en-US', name: '🇺🇸 English' },
@@ -3905,7 +3808,7 @@
                                     };
                                 });
                             }
-                            
+
                             function abrirModalAtalhos() {
                                 if (document.getElementById("shortcutsModal")) return;
 
@@ -3996,7 +3899,7 @@
                                     e.preventDefault();
                                     const xpathInput = document.getElementById('shortcut-xpath');
                                     const linkInput = document.getElementById('shortcut-link');
-                                    
+
                                     const xpath = xpathInput.value.trim();
                                     const link = linkInput.value.trim();
 
@@ -4011,9 +3914,9 @@
 
                                     const newShortcut = { ...capturedShortcut, xpath, link };
                                     const shortcuts = getShortcuts();
-                                    
+
                                     // Verifica se já existe um atalho com a mesma tecla
-                                    const existingIndex = shortcuts.findIndex(s => 
+                                    const existingIndex = shortcuts.findIndex(s =>
                                         s.key.toLowerCase() === newShortcut.key.toLowerCase() &&
                                         !!s.ctrlKey === newShortcut.ctrlKey &&
                                         !!s.altKey === newShortcut.altKey &&
@@ -4095,9 +3998,9 @@
                                                 <option value="en-US" ${settings.language === 'en-US' ? 'selected' : ''}>🇺🇸 English</option>
                                             </select>
                                         </div>
-                                        
+
                                         <hr style="border: 1px solid #eee; width: 100%;">
-                                        
+
                                         <h3 style="margin: 0; font-size: 16px;">Gerenciamento de Banco de Dados (IndexedDB)</h3>
                                         <div style="display: flex; flex-direction: column; gap: 10px;">
                                             <select id="dbStoreSelect" style="padding: 5px; color: black;">
@@ -4158,18 +4061,18 @@
                                 document.getElementById("btnExportDB").onclick = async () => {
                                     const storeName = document.getElementById('dbStoreSelect').value;
                                     if (!storeName) return alert("Selecione uma tabela.");
-                                    
+
                                     const db = await dbHelper.openDB();
                                     const tx = db.transaction([storeName], 'readonly');
                                     const store = tx.objectStore(storeName);
                                     const req = store.getAll();
-                                    
+
                                     req.onsuccess = () => {
                                         const result = req.result;
                                         if (!result || result.length === 0) return alert("Tabela vazia.");
 
                                         let dataToExport = [];
-                                        
+
                                         // Lógica para extrair dados dependendo do formato da tabela
                                         if (result.length === 1 && result[0].usernames && Array.isArray(result[0].usernames)) {
                                             // Formato de cache (followers, following)
@@ -4302,25 +4205,25 @@
 
                             function startReelsAutoScroll() {
                                 if (!isReelsScrolling) return;
- 
+
                                 // Encontra o vídeo que está visível na tela
                                 const visibleVideo = Array.from(document.querySelectorAll('video')).find(v => {
                                     const rect = v.getBoundingClientRect();
                                     return rect.top >= 0 && rect.bottom <= window.innerHeight && v.readyState > 2;
                                 });
- 
+
                                 // Se encontrou um vídeo e ele ainda não tem nosso listener
                                 if (visibleVideo && !visibleVideo.hasAttribute('data-reels-scroller')) {
                                     visibleVideo.setAttribute('data-reels-scroller', 'true');
- 
+
                                     const timeUpdateListener = () => {
                                         // Verifica se o vídeo está perto do fim (últimos 700ms)
                                         if (visibleVideo.duration - visibleVideo.currentTime <= 0.7) {
                                             console.log("Vídeo quase no fim, rolando para o próximo.");
-                                            
+
                                             // Remove o listener para não disparar múltiplas vezes
                                             visibleVideo.removeEventListener('timeupdate', timeUpdateListener);
- 
+
                                             // Lógica para encontrar o contêiner de rolagem dinamicamente
                                             let scrollableContainer = visibleVideo.parentElement;
                                             while (scrollableContainer) {
@@ -4348,7 +4251,7 @@
                                                     behavior: 'smooth'
                                                 });
                                             }
-  
+
                                             // Após a rolagem, chama a função novamente para encontrar o novo vídeo
                                             // e adicionar o listener a ele.
                                             setTimeout(startReelsAutoScroll, 2000); // Aguarda a animação de rolagem
@@ -4398,7 +4301,7 @@
                                     while (hasNextPage) {
                                         const variables = { "user_id": userId, "first": 50, "after": nextMaxId };
                                         const url = `https://www.instagram.com/graphql/query/?query_hash=${queryHash}&variables=${encodeURIComponent(JSON.stringify(variables))}`;
-                                        
+
                                         const response = await fetch(url, { headers: { 'X-IG-App-ID': appID } });
                                         if (!response.ok) throw new Error(`A resposta da rede não foi 'ok'. Status: ${response.status}`);
                                         const data = await response.json();
@@ -4528,13 +4431,8 @@
                                 div.innerHTML = `
                                     <style>
                                         .info-tooltip { position: relative; display: inline-block; cursor: help; margin-left: 5px; color: #8e8e8e; }
-<<<<<<< HEAD
                                         .info-tooltip .tooltip-text { visibility: hidden; width: 200px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 10; top: 100%; margin-top: 10px; left: 50%; margin-left: -100px; opacity: 0; transition: opacity 0.3s; font-size: 11px; font-weight: normal; line-height: 1.4; box-shadow: 0 2px 10px rgba(0,0,0,0.2); pointer-events: none; }
                                         .info-tooltip .tooltip-text::after { content: ""; position: absolute; bottom: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: transparent transparent #333 transparent; }
-=======
-                                        .info-tooltip .tooltip-text { visibility: hidden; width: 200px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 10; bottom: 135%; left: 50%; margin-left: -100px; opacity: 0; transition: opacity 0.3s; font-size: 11px; font-weight: normal; line-height: 1.4; box-shadow: 0 2px 10px rgba(0,0,0,0.2); pointer-events: none; }
-                                        .info-tooltip .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #333 transparent transparent transparent; }
->>>>>>> 58fd092e6c653019a9bbd47fea1e1be71ec6394c
                                         .info-tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
                                     </style>
                                     <div class="modal-header">
@@ -4607,12 +4505,12 @@
                                 document.getElementById("fecharEngajamentoBtn").onclick = () => div.remove();
 
                                 try {
-                                    
+
                                     // Buscar dados do perfil
                                     const pathParts = window.location.pathname.split('/').filter(Boolean);
                                     const username = pathParts[0];
                                     const appID = '936619743392459';
-                                    
+
                                     const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
                                     const profileInfo = await profileInfoResponse.json();
                                     const userId = profileInfo.data?.user?.id;
@@ -4657,7 +4555,7 @@
                                     const avgLikes = items.length ? (totalLikes / items.length).toFixed(0) : 0;
                                     const avgComments = items.length ? (totalComments / items.length).toFixed(0) : 0;
                                     const engRate = items.length ? (((totalLikes + totalComments) / items.length) / followersCount * 100).toFixed(2) : 0;
-                                    
+
                                     // Melhor horário
                                     const maxActivity = Math.max(...hoursActivity);
                                     const bestHour = hoursActivity.indexOf(maxActivity);
@@ -4675,7 +4573,7 @@
                                     // Substituição do Chart.js por gráficos SVG/HTML simples para evitar CSP
                                     const recentPosts = postsData.slice(0, 10).reverse();
                                     renderSimpleBarChart(
-                                        'postsChartContainer', 
+                                        'postsChartContainer',
                                         recentPosts.map(p => p.date.split('/').slice(0,2).join('/')), // dd/mm
                                         recentPosts.map(p => p.likes),
                                         recentPosts.map(p => p.comments),
@@ -4693,20 +4591,20 @@
                                     document.getElementById("analyzeImagesBtn").onclick = () => {
                                         const aiContainer = document.getElementById("aiResults");
                                         aiContainer.innerHTML = '<p>Analisando...</p>';
-                                        
+
                                         // Simulação de chamada de API (Google Vision / Clarifai exigiria chave privada)
                                         setTimeout(() => {
                                             aiContainer.innerHTML = '';
                                             const samplePosts = postsData.slice(0, 5);
-                                            
+
                                             // Categorias fictícias para demonstração
                                             const categories = ['Paisagem', 'Selfie', 'Comida', 'Evento', 'Meme'];
-                                            
+
                                             samplePosts.forEach(post => {
                                                 if (!post.url) return;
                                                 const randomCat = categories[Math.floor(Math.random() * categories.length)];
                                                 const confidence = (Math.random() * (0.99 - 0.70) + 0.70).toFixed(2);
-                                                
+
                                                 const card = document.createElement('div');
                                                 card.style.cssText = "min-width: 120px; border: 1px solid #eee; border-radius: 5px; padding: 5px; text-align: center;";
                                                 card.innerHTML = `
@@ -4716,12 +4614,12 @@
                                                 `;
                                                 aiContainer.appendChild(card);
                                             });
-                                            
+
                                             const note = document.createElement('p');
                                             note.style.cssText = "font-size: 10px; color: red; width: 100%; margin-top: 10px;";
                                             note.innerText = "Nota: Para classificação real, é necessário integrar uma API Key do Google Vision ou Clarifai no código.";
                                             aiContainer.appendChild(note);
-                                            
+
                                         }, 1500);
                                     };
 
@@ -4737,37 +4635,37 @@
                                 if (!container) return;
                                 container.innerHTML = '';
                                 const maxVal = Math.max(...data1, ...data2, 1);
-                                
+
                                 const chart = document.createElement('div');
                                 chart.style.cssText = "display: flex; align-items: flex-end; height: 100%; width: 100%; gap: 5px; padding-bottom: 20px; box-sizing: border-box;";
-                                
+
                                 labels.forEach((lbl, i) => {
                                     const v1 = data1[i] || 0;
                                     const v2 = data2[i] || 0;
                                     const h1 = Math.max((v1 / maxVal) * 80, 1);
                                     const h2 = Math.max((v2 / maxVal) * 80, 1);
-                                    
+
                                     const group = document.createElement('div');
                                     group.style.cssText = "flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%;";
-                                    
+
                                     const bars = document.createElement('div');
                                     bars.style.cssText = "display: flex; align-items: flex-end; gap: 2px; height: 100%; width: 100%; justify-content: center;";
-                                    
+
                                     const b1 = document.createElement('div');
                                     b1.style.cssText = `width: 40%; background: #e74c3c; height: ${h1}%; border-radius: 2px 2px 0 0;`;
                                     b1.title = `${label1}: ${v1}`;
-                                    
+
                                     const b2 = document.createElement('div');
                                     b2.style.cssText = `width: 40%; background: #2ecc71; height: ${h2}%; border-radius: 2px 2px 0 0;`;
                                     b2.title = `${label2}: ${v2}`;
-                                    
+
                                     bars.appendChild(b1);
                                     bars.appendChild(b2);
-                                    
+
                                     const txt = document.createElement('div');
                                     txt.innerText = lbl;
                                     txt.style.cssText = "font-size: 9px; color: #666; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;";
-                                    
+
                                     group.appendChild(bars);
                                     group.appendChild(txt);
                                     chart.appendChild(group);
@@ -4783,18 +4681,18 @@
                                 const h = container.clientHeight || 200;
                                 const w = container.clientWidth || 400;
                                 const step = w / (labels.length - 1 || 1);
-                                
+
                                 const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
                                 svg.setAttribute("width", "100%");
                                 svg.setAttribute("height", "100%");
                                 svg.style.overflow = "visible";
-                                
+
                                 let points = "";
                                 data.forEach((val, i) => {
                                     const x = i * step;
                                     const y = h - ((val / maxVal) * (h - 20)) - 20; // Padding bottom
                                     points += `${x},${y} `;
-                                    
+
                                     if (i % 4 === 0) { // Labels espaçados
                                         const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
                                         txt.setAttribute("x", x);
@@ -4806,7 +4704,7 @@
                                         svg.appendChild(txt);
                                     }
                                 });
-                                
+
                                 const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
                                 polyline.setAttribute("points", points);
                                 polyline.setAttribute("fill", "none");
@@ -4834,7 +4732,7 @@
                                 width: 90%; max-width: 600px; max-height: 90vh; border: 1px solid #ccc;
                                 border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
                             `;
-                            
+
                             div.innerHTML = `
                                 <div class="modal-header">
                                     <span class="modal-title">
@@ -4925,11 +4823,11 @@
                             document.getElementById("verificarInteracoesBtn").onclick = async () => {
                                 const username = document.getElementById("interacoesUsernameInput").value.trim();
                                 if (!username) return alert("Digite um username.");
-                                
+
                                 const btn = document.getElementById("verificarInteracoesBtn");
                                 btn.disabled = true;
                                 btn.textContent = "Verificando...";
-                                
+
                                 const resultadosDiv = document.getElementById("interacoesResultados");
                                 const profileDiv = document.getElementById("interacoesUserProfile");
 
@@ -4960,7 +4858,7 @@
 
                                 const headers = { 'X-IG-App-ID': '936619743392459' };
                                 const myId = getCookie('ds_user_id');
-                                
+
                                 try {
                                     // Obter ID do usuário
                                     let targetUserId = '';
@@ -4974,36 +4872,36 @@
 
                                     // --- O QUE EU CURTI DELE ---
                                         resultadosDiv.innerHTML = '<p style="color:black;">Analisando posts e destaques...</p>';
-                                        
+
                                         const likedPosts = [];
                                         const likedStories = [];
-                                        
+
                                         // 1. Posts
                                         let nextMaxId = null;
                                         let hasNext = true;
                                         let processedCount = 0;
-                                        const MAX_POSTS = 500; 
+                                        const MAX_POSTS = 500;
 
                                         while (hasNext && processedCount < MAX_POSTS) {
                                             let url = `https://www.instagram.com/api/v1/feed/user/${targetUserId}/?count=33`;
                                             if (nextMaxId) url += `&max_id=${nextMaxId}`;
-                                            
+
                                             const feedRes = await fetch(url, { headers });
                                             if (!feedRes.ok) break;
-                                            
+
                                             const feedData = await feedRes.json();
                                             const items = feedData.items || [];
-                                            
+
                                             for (const item of items) {
                                                 if (item.has_liked) {
                                                     let thumb = item.image_versions2?.candidates?.[0]?.url || item.carousel_media?.[0]?.image_versions2?.candidates?.[0]?.url || '';
                                                     likedPosts.push({ type: 'Post', url: `https://www.instagram.com/p/${item.code}/`, thumb: thumb, id: item.id });
                                                 }
                                             }
-                                            
+
                                             processedCount += items.length;
                                             resultadosDiv.innerHTML = `<p style="color:black;">Analisando posts... (${processedCount} verificados)</p>`;
-                                            
+
                                             nextMaxId = feedData.next_max_id;
                                             if (!feedData.more_available || !nextMaxId) hasNext = false;
                                             await new Promise(r => setTimeout(r, 300));
@@ -5017,7 +4915,7 @@
                                                 const trayData = await trayRes.json();
                                                 const tray = trayData.tray || [];
                                                 const reelIds = tray.map(t => t.id);
-                                                
+
                                                 if (reelIds.length > 0) {
                                                     let url = `https://www.instagram.com/api/v1/feed/reels_media/?`;
                                                     reelIds.forEach(id => url += `reel_ids=${id}&`);
@@ -5039,7 +4937,7 @@
                                             }
                                         } catch (e) { console.error("Erro destaques", e); }
 
-                                        const dadosReais = { 
+                                        const dadosReais = {
                                             fotosCurtidas: { count: likedPosts.length, items: likedPosts },
                                             storiesCurtidos: { count: likedStories.length, items: likedStories },
                                             comentarios: { count: 0, items: [] },
@@ -5057,7 +4955,7 @@
                         function renderizarCardsInteracoes(dados) {
                             const container = document.getElementById("interacoesResultados");
                             container.innerHTML = '';
-                            
+
                             const mapLabels = {
                                 fotosCurtidas: 'Fotos Curtidas',
                                 storiesCurtidos: 'Stories Curtidos',
@@ -5068,7 +4966,7 @@
                             for (const [key, data] of Object.entries(dados)) {
                                 const card = document.createElement("div");
                                 card.style.cssText = `
-                                    border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; 
+                                    border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px;
                                     text-align: center; cursor: pointer; background: #f8f9fa; transition: transform 0.2s;
                                 `;
                                 card.innerHTML = `
@@ -5087,10 +4985,10 @@
                             const detalhesDiv = document.getElementById("interacoesDetalhes");
                             detalhesDiv.style.display = "block";
                             document.getElementById("detalhesTitulo").innerText = titulo;
-                            
+
                             const lista = document.getElementById("detalhesLista");
                             lista.innerHTML = '';
-                            
+
                             if (itens.length === 0) {
                                 lista.innerHTML = '<p>Nenhum item encontrado.</p>';
                             } else {
@@ -5099,7 +4997,7 @@
                                 itens.forEach(item => {
                                     const div = document.createElement("div");
                                     div.style.cssText = "aspect-ratio: 1; overflow: hidden; border-radius: 5px; border: 1px solid #dbdbdb; cursor: pointer; position: relative;";
-                                    
+
                                     const contentDiv = document.createElement("div");
                                     contentDiv.style.cssText = "width: 100%; height: 100%;";
 
@@ -5229,16 +5127,16 @@
                                         buttonId: 'silenciarSeguindoBtn',
                                         text: 'Silenciar/Reativar',
                                         func: (users, cb) => unmuteUsers(users, cb, true) // Passa `true` para ativar o modo toggle
-                                }, 
-                                closeFriends: { 
-                                    buttonId: 'closeFriendsSeguindoBtn', 
-                                    text: 'Melhores Amigos', 
-                                    // Nova função que age no perfil individual 
-                                    func: (users, cb) => performActionOnProfile(users, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], cb) 
                                 },
-                                hideStory: { 
-                                    buttonId: 'hideStorySeguindoBtn', 
-                                    text: 'Ocultar Story', 
+                                closeFriends: {
+                                    buttonId: 'closeFriendsSeguindoBtn',
+                                    text: 'Melhores Amigos',
+                                    // Nova função que age no perfil individual
+                                    func: (users, cb) => performActionOnProfile(users, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], cb)
+                                },
+                                hideStory: {
+                                    buttonId: 'hideStorySeguindoBtn',
+                                    text: 'Ocultar Story',
                                     // Revertido para o método original que navega para a página de lista, conforme solicitado.
                                     func: (users, cb) => toggleListMembership(users, '/accounts/hide_story_and_live_from/', 'hiddenStory', cb)
                                 }
@@ -5296,7 +5194,7 @@
 
                                 // 3. Clicar na opção desejada (ex: "Adicionar aos melhores amigos")
                                  // Seletor aprimorado para encontrar o texto em qualquer lugar dentro do elemento clicável
-                                 const actionOption = Array.from(document.querySelectorAll('div[role="button"], div[role="menuitem"]')).find(el => 
+                                 const actionOption = Array.from(document.querySelectorAll('div[role="button"], div[role="menuitem"]')).find(el =>
                                      menuTexts.some(text => el.innerText.includes(text))
                                  );
 
@@ -5944,4 +5842,4 @@
                     subtree: true,
             });
 
-        })(); 
+        })();

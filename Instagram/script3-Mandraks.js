@@ -3818,20 +3818,12 @@
                                     </div>
                                     <div style="padding: 15px;">
                                         <div style="display: flex; flex-direction: column; gap: 10px;">
-<<<<<<< HEAD
-                                            <button id="settingsDarkModeBtn" class="menu-item-button" style="background: ${settings.darkMode ? '#4c5c75' : ''};">🌙 Modo Escuro</button>
-                                            <button id="settingsRgbBorderBtn" class="menu-item-button" style="background: ${settings.rgbBorder ? '#4c5c75' : ''};">🌈 Borda RGB</button>
-                                            <button id="settingsVoiceBtn" class="menu-item-button">🎙️ Comandos de Voz</button>
-                                            <button id="settingsShortcutsBtn" class="menu-item-button">⌨️ Atalhos</button>
-                                            <button id="settingsParamsBtn" class="menu-item-button">🔧 Parâmetros</button>
-                                            <button id="settingsLangBtn" class="menu-item-button">🌐 Idioma</button>
-=======
                                             <button id="settingsDarkModeBtn" class="menu-item-button" style="background: ${settings.darkMode ? '#4c5c75' : ''};">🌙 ${getText('darkMode')}</button>
                                             <button id="settingsRgbBorderBtn" class="menu-item-button" style="background: ${settings.rgbBorder ? '#4c5c75' : ''};">🌈 ${getText('rgbBorder')}</button>
+                                            <button id="settingsVoiceBtn" class="menu-item-button">🎙️ Comandos de Voz</button>
                                             <button id="settingsShortcutsBtn" class="menu-item-button">⌨️ ${getText('shortcuts')}</button>
                                             <button id="settingsParamsBtn" class="menu-item-button">🔧 ${getText('parameters')}</button>
                                             <button id="settingsLangBtn" class="menu-item-button">🌐 ${getText('language')}</button>
->>>>>>> 7ed91515adc9e5bbc1ccde8503e365868427af03
                                         </div>
                                     </div>
                                 `;

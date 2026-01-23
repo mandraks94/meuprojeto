@@ -3946,7 +3946,7 @@
                                     };
                                 });
                             }
-<<<<<<< HEAD
+
                             
                             function abrirModalComandosVoz() {
                                 if (document.getElementById("voiceCommandsModal")) return;
@@ -4146,9 +4146,8 @@
                                     renderList();
                                     formDiv.style.display = 'none';
                                 };
-                            }
-=======
->>>>>>> 7ed91515adc9e5bbc1ccde8503e365868427af03
+                       }
+
 
                             function abrirModalAtalhos() {
                                 if (document.getElementById("shortcutsModal")) return;

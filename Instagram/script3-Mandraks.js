@@ -791,6 +791,7 @@
                             // Cache global para listas de usuários, para evitar buscas repetidas
                             const userListCache = {
                                 muted: null,       // Será um Set de usernames
+                                mutedDetails: new Map(), // Map username -> status string
                                 closeFriends: null,  // Será um Set de usernames
                                 hiddenStory: null    // Será um Set de usernames
                             };
@@ -1903,6 +1904,29 @@
                 renderPage(currentPage);
             }
 
+            function showUnmuteOptionsModal(onConfirm) {
+                const div = document.createElement("div");
+                div.className = "submenu-modal";
+                div.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; padding: 20px; border: 1px solid #ccc; border-radius: 10px; z-index: 2147483648; text-align: center; background: white; color: black;`;
+                if (loadSettings().rgbBorder) div.classList.add('rgb-border-effect');
+                
+                div.innerHTML = `
+                    <h3 style="margin-top:0;">O que deseja reativar?</h3>
+                    <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+                        <button id="optStories" style="padding: 10px; cursor: pointer; background: #f0f0f0; border: 1px solid #ccc; border-radius: 5px; color: black;">Stories</button>
+                        <button id="optPosts" style="padding: 10px; cursor: pointer; background: #f0f0f0; border: 1px solid #ccc; border-radius: 5px; color: black;">Publicações</button>
+                        <button id="optAll" style="padding: 10px; cursor: pointer; background: #0095f6; color: white; border: none; border-radius: 5px;">Ambos</button>
+                        <button id="optCancel" style="padding: 10px; cursor: pointer; background: #e74c3c; color: white; border: none; border-radius: 5px;">Cancelar</button>
+                    </div>
+                `;
+                document.body.appendChild(div);
+                const close = () => div.remove();
+                document.getElementById('optStories').onclick = () => { close(); onConfirm('stories'); };
+                document.getElementById('optPosts').onclick = () => { close(); onConfirm('posts'); };
+                document.getElementById('optAll').onclick = () => { close(); onConfirm('all'); };
+                document.getElementById('optCancel').onclick = close;
+            }
+
             let modalAbertoStory = false;
                             // --- FIM DO MENU OCULTAR STORY ---
 
@@ -1967,7 +1991,14 @@
                             // Adiciona o usuário apenas se tiver um nome válido, uma foto e ainda não estiver na lista
                             if (username && imgTag && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
                                 const photoUrl = imgTag.src;
-                                users.set(username, { username, photoUrl, isChecked });
+                                
+                                // Tenta extrair o status do texto do elemento
+                                let status = "Silenciado";
+                                const textLines = userElement.innerText.split('\n');
+                                const statusLine = textLines.find(l => l.toLowerCase().includes('silenciou') || l.toLowerCase().includes('muted'));
+                                if (statusLine) status = statusLine;
+
+                                users.set(username, { username, photoUrl, isChecked, status });
                             } else if (users.has(username)) {
                                 const u = users.get(username);
                                 if (!u.isChecked && isChecked) {
@@ -2017,6 +2048,7 @@
 
                 // Armazena a lista no cache global
                 userListCache.muted = new Set(users.map(u => u.username));
+                userListCache.mutedDetails = new Map(users.map(u => [u.username, u.status]));
                 console.log(`Cache atualizado com ${userListCache.muted.size} contas silenciadas.`);
 
                 const modalStates = new Map();
@@ -2068,9 +2100,24 @@
                     const endIndex = Math.min(startIndex + itemsPerPage, users.length);
                     const pageUsers = users.slice(startIndex, endIndex);
 
-                    pageUsers.forEach(({ username, photoUrl }, idx) => {
+                    pageUsers.forEach(({ username, photoUrl, status }, idx) => {
                         const globalIdx = startIndex + idx;
                         const isChecked = modalStates.get(username) || false;
+
+                        // --- Lógica de Status Silenciado ---
+                        let mutedDetailText = '';
+                        const detail = status || '';
+                        if (detail.toLowerCase().includes('stories') && (detail.toLowerCase().includes('publicações') || detail.toLowerCase().includes('posts'))) {
+                            mutedDetailText = '(Stories e Publicações)';
+                        } else if (detail.toLowerCase().includes('stories')) {
+                            mutedDetailText = '(Stories)';
+                        } else if (detail.toLowerCase().includes('publicações') || detail.toLowerCase().includes('posts')) {
+                            mutedDetailText = '(Publicações)';
+                        } else if (detail) { // Fallback
+                            mutedDetailText = `(${detail})`;
+                        }
+                        // --- Fim da Lógica ---
+
                         html += `
                             <li style="padding:5px 0;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px;">
                                 <label class="custom-checkbox" for="muted_cb_${globalIdx}" style="margin:0;">
@@ -2078,7 +2125,7 @@
                                     <span class="checkmark"></span>
                                 </label>
                                 <img src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
-                                <span style="cursor:pointer; color: black;">${username}</span>
+                                <div style="display:flex; flex-direction:column;"><span style="cursor:pointer; color: black; font-weight:bold;">${username}</span>${mutedDetailText ? `<span style="font-size:11px; color:gray;">${mutedDetailText}</span>` : ''}</div>
                             </li>
                         `;
                     });
@@ -2154,21 +2201,23 @@
                         aplicarBtn.disabled = true;
                         aplicarBtn.textContent = "Processando...";
 
-                        await unmuteUsers(usersToUnmute, () => {
-                            aplicarBtn.disabled = false;
-                            aplicarBtn.textContent = "Reativar Som";
-                            alert(`${usersToUnmute.length} usuário(s) tiveram o som reativado.`);
-                            // Recarrega o modal para refletir as mudanças
-                            div.remove();
-                            modalAbertoMuted = false;
-                            abrirModalContasSilenciadas();
+                        showUnmuteOptionsModal(async (targetType) => {
+                            await unmuteUsers(usersToUnmute, () => {
+                                aplicarBtn.disabled = false;
+                                aplicarBtn.textContent = "Reativar Som";
+                                alert(`${usersToUnmute.length} usuário(s) processados.`);
+                                // Recarrega o modal para refletir as mudanças
+                                div.remove();
+                                modalAbertoMuted = false;
+                                abrirModalContasSilenciadas();
+                            }, false, targetType);
                         });
                     };
                 }
                 renderPage(currentPage);
             }
 
-            async function unmuteUsers(usersToUnmute, callback, toggleMode = false) {
+            async function unmuteUsers(usersToUnmute, callback, toggleMode = false, targetType = 'all') {
                 let cancelled = false;
                 const { bar, update, closeButton } = createCancellableProgressBar();
                 closeButton.onclick = () => {
@@ -2220,7 +2269,10 @@
 
                     // 4. Desativar os toggles de "Publicações" e "Stories"
                     console.log('Procurando opções "Publicações" e "Stories" para alterar o estado...');
-                    const optionsToToggle = ['Publicações', 'Posts', 'Stories'];
+                    let optionsToToggle = [];
+                    if (targetType === 'posts' || targetType === 'all') optionsToToggle.push('Publicações', 'Posts');
+                    if (targetType === 'stories' || targetType === 'all') optionsToToggle.push('Stories');
+
                     let togglesClicked = 0;
 
                     for (const optionText of optionsToToggle) {
@@ -3457,6 +3509,7 @@
                                         const users = await extractorFn();
                                         if (url.includes('muted_accounts')) {
                                             userListCache[cacheKey] = new Set(users.map(u => u.username));
+                                            userListCache.mutedDetails = new Map(users.map(u => [u.username, u.status]));
                                         } else {
                                             const officialStates = new Map();
                                             const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
@@ -3689,7 +3742,21 @@
                                         paginatedUsers.forEach(({ username, photoUrl }) => {
                                             const isChecked = selectedUsers.has(username);
                                             // Verifica os dados no cache global
-                                            const isMuted = userListCache.muted ? (userListCache.muted.has(username) ? "Sim" : "Não") : "??";
+                                            const isMutedSimple = userListCache.muted ? (userListCache.muted.has(username) ? "Sim" : "Não") : "??";
+                                            let mutedDetailText = '';
+                                            if (isMutedSimple === "Sim") {
+                                                const detail = userListCache.mutedDetails.get(username) || '';
+                                                if (detail.toLowerCase().includes('stories') && (detail.toLowerCase().includes('publicações') || detail.toLowerCase().includes('posts'))) {
+                                                    mutedDetailText = '(Stories e Publicações)';
+                                                } else if (detail.toLowerCase().includes('stories')) {
+                                                    mutedDetailText = '(Stories)';
+                                                } else if (detail.toLowerCase().includes('publicações') || detail.toLowerCase().includes('posts')) {
+                                                    mutedDetailText = '(Publicações)';
+                                                } else if (detail) { // Fallback
+                                                    mutedDetailText = `(${detail})`;
+                                                }
+                                            }
+
                                             const isCloseFriend = userListCache.closeFriends ? (userListCache.closeFriends.has(username) ? "Sim" : "Não") : "??";
                                             const isStoryHidden = userListCache.hiddenStory ? (userListCache.hiddenStory.has(username) ? "Sim" : "Não") : "??";
 
@@ -3713,9 +3780,12 @@
                                                     <td style="padding: 8px;"><input type="checkbox" class="user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
                                                     <td style="padding: 8px; display:flex; align-items:center; gap:10px;">
                                                         <img src="${photoUrl}" alt="${username}" style="width:40px; height:40px; border-radius:50%;">
-                                                        <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600;">${username}</a>
+                                                        <div style="display:flex; flex-direction:column;">
+                                                            <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600;">${username}</a>
+                                                            ${mutedDetailText ? `<span style="font-size:11px; color:gray;">${mutedDetailText}</span>` : ''}
+                                                        </div>
                                                     </td>
-                                                    <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isMuted, 'muted')}">${isMuted}</span></td>
+                                                    <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isMutedSimple, 'muted')}">${isMutedSimple}</span></td>
                                                     <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isCloseFriend, 'closeFriend')}">${isCloseFriend}</span></td>
                                                     <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isStoryHidden, 'storyHidden')}">${isStoryHidden}</span></td>
                                                 </tr>
@@ -5458,7 +5528,11 @@
                                     mute: {
                                         buttonId: 'silenciarSeguindoBtn',
                                         text: 'Silenciar/Reativar',
-                                        func: (users, cb) => unmuteUsers(users, cb, true) // Passa `true` para ativar o modo toggle
+                                        func: (users, cb) => {
+                                            showUnmuteOptionsModal((targetType) => {
+                                                unmuteUsers(users, cb, true, targetType); // Passa `true` para ativar o modo toggle
+                                            });
+                                        }
                                 },
                                 closeFriends: {
                                     buttonId: 'closeFriendsSeguindoBtn',

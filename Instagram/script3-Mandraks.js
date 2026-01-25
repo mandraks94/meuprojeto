@@ -3574,10 +3574,18 @@
                                             <button id="hideStorySeguindoBtn" style="background: #f39c12; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Ocultar Story</button>
                                         </div>
                                     </div>
-                                    <div style="margin: 20px 0;">
-                                        <input type="text" id="seguindoSearchInput" placeholder="Pesquisar na lista de seguindo..." style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                                    <div style="margin: 0 20px 20px 20px; display: flex; gap: 10px;">
+                                        <input type="text" id="seguindoSearchInput" placeholder="Pesquisar na lista de seguindo..." style="flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                                        <select id="seguindoFilterSelect" style="padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: black; width: 200px;">
+                                            <option value="all">Todos</option>
+                                            <option value="muted_stories">Silenciado (Stories)</option>
+                                            <option value="muted_posts">Silenciado (Publicações)</option>
+                                            <option value="muted_all">Silenciado (Ambos)</option>
+                                            <option value="close_friends">Melhores Amigos</option>
+                                            <option value="hidden_stories">Ocultar Stories</option>
+                                        </select>
                                     </div>
-                                    <div id="statusSeguindo" style="margin-top: 20px; font-weight: bold;"></div>
+                                    <div id="statusSeguindo" style="margin-top: 20px; font-weight: bold; padding: 0 20px;"></div>
                                     <div id="tabelaSeguindoContainer" style="display: block; margin-top: 15px;"></div>
                                 `;
                                 document.body.appendChild(div);
@@ -3709,9 +3717,35 @@
 
                                         // Filtra por pesquisa antes de ordenar e paginar
                                         const searchTerm = document.getElementById('seguindoSearchInput')?.value.toLowerCase() || '';
+                                        const filterValue = document.getElementById('seguindoFilterSelect')?.value || 'all';
+                                        
                                         let filteredUsers = seguindoList;
+                                        
                                         if (searchTerm) {
                                             filteredUsers = seguindoList.filter(user => user.username.toLowerCase().includes(searchTerm));
+                                        }
+
+                                        if (filterValue !== 'all') {
+                                            filteredUsers = filteredUsers.filter(user => {
+                                                const username = user.username;
+                                                if (filterValue === 'close_friends') {
+                                                    return userListCache.closeFriends && userListCache.closeFriends.has(username);
+                                                }
+                                                if (filterValue === 'hidden_stories') {
+                                                    return userListCache.hiddenStory && userListCache.hiddenStory.has(username);
+                                                }
+                                                if (userListCache.muted && userListCache.muted.has(username)) {
+                                                    const detail = userListCache.mutedDetails.get(username) || '';
+                                                    const dLower = detail.toLowerCase();
+                                                    const isStories = dLower.includes('stories') || dLower.includes('story');
+                                                    const isPosts = dLower.includes('publicações') || dLower.includes('posts');
+                                                    
+                                                    if (filterValue === 'muted_all') return isStories && isPosts;
+                                                    if (filterValue === 'muted_stories') return isStories && !isPosts;
+                                                    if (filterValue === 'muted_posts') return isPosts && !isStories;
+                                                }
+                                                return false;
+                                            });
                                         }
                                         let tableHtml = `
                                             <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
@@ -3839,6 +3873,12 @@
                                                 const isChecked = e.target.checked;
                                                 document.querySelectorAll('#tabelaSeguindoContainer .user-checkbox').forEach(checkbox => {
                                                     checkbox.checked = isChecked;
+                                                    const username = checkbox.dataset.username;
+                                                    if (isChecked) {
+                                                        selectedUsers.add(username);
+                                                    } else {
+                                                        selectedUsers.delete(username);
+                                                    }
                                                 });
                                             });
                                         }
@@ -3847,6 +3887,12 @@
                                         const searchInput = document.getElementById("seguindoSearchInput");
                                         searchInput.oninput = () => {
                                             renderList(1); // Volta para a primeira página ao pesquisar
+                                        };
+
+                                        // Evento para o filtro
+                                        const filterSelect = document.getElementById("seguindoFilterSelect");
+                                        filterSelect.onchange = () => {
+                                            renderList(1);
                                         };
 
                                         // Adiciona eventos de clique para ordenação nos cabeçalhos

@@ -1994,9 +1994,20 @@
                                 
                                 // Tenta extrair o status do texto do elemento
                                 let status = "Silenciado";
-                                const textLines = userElement.innerText.split('\n');
-                                const statusLine = textLines.find(l => l.toLowerCase().includes('silenciou') || l.toLowerCase().includes('muted'));
-                                if (statusLine) status = statusLine;
+                                
+                                // Procura especificamente pelo span de status
+                                const spans = Array.from(userElement.querySelectorAll('span[data-bloks-name="bk.components.Text"]'));
+                                const statusSpan = spans.find(s => {
+                                    const t = s.innerText.toLowerCase();
+                                    return (t.includes('silenci') || t.includes('muted')) && t !== username.toLowerCase();
+                                });
+
+                                if (statusSpan) status = statusSpan.innerText.trim();
+                                else {
+                                    const textLines = userElement.innerText.split('\n');
+                                    const statusLine = textLines.find(l => l.toLowerCase().includes('silenci') || l.toLowerCase().includes('muted'));
+                                    if (statusLine) status = statusLine;
+                                }
 
                                 users.set(username, { username, photoUrl, isChecked, status });
                             } else if (users.has(username)) {
@@ -2107,11 +2118,12 @@
                         // --- Lógica de Status Silenciado ---
                         let mutedDetailText = '';
                         const detail = status || '';
-                        if (detail.toLowerCase().includes('stories') && (detail.toLowerCase().includes('publicações') || detail.toLowerCase().includes('posts'))) {
+                        const dLower = detail.toLowerCase();
+                        if ((dLower.includes('stories') || dLower.includes('story')) && (dLower.includes('publicações') || dLower.includes('posts'))) {
                             mutedDetailText = '(Stories e Publicações)';
-                        } else if (detail.toLowerCase().includes('stories')) {
+                        } else if (dLower.includes('stories') || dLower.includes('story')) {
                             mutedDetailText = '(Stories)';
-                        } else if (detail.toLowerCase().includes('publicações') || detail.toLowerCase().includes('posts')) {
+                        } else if (dLower.includes('publicações') || dLower.includes('posts')) {
                             mutedDetailText = '(Publicações)';
                         } else if (detail) { // Fallback
                             mutedDetailText = `(${detail})`;
@@ -3746,11 +3758,12 @@
                                             let mutedDetailText = '';
                                             if (isMutedSimple === "Sim") {
                                                 const detail = userListCache.mutedDetails.get(username) || '';
-                                                if (detail.toLowerCase().includes('stories') && (detail.toLowerCase().includes('publicações') || detail.toLowerCase().includes('posts'))) {
+                                                const dLower = detail.toLowerCase();
+                                                if ((dLower.includes('stories') || dLower.includes('story')) && (dLower.includes('publicações') || dLower.includes('posts'))) {
                                                     mutedDetailText = '(Stories e Publicações)';
-                                                } else if (detail.toLowerCase().includes('stories')) {
+                                                } else if (dLower.includes('stories') || dLower.includes('story')) {
                                                     mutedDetailText = '(Stories)';
-                                                } else if (detail.toLowerCase().includes('publicações') || detail.toLowerCase().includes('posts')) {
+                                                } else if (dLower.includes('publicações') || dLower.includes('posts')) {
                                                     mutedDetailText = '(Publicações)';
                                                 } else if (detail) { // Fallback
                                                     mutedDetailText = `(${detail})`;

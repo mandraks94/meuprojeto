@@ -158,6 +158,16 @@
                                 req.onsuccess = () => resolve(new Set(req.result.map(i => i.username)));
                                 req.onerror = () => resolve(new Set());
                             });
+                        },
+                        clearCache: async function(storeName) {
+                            if (!this.db) await this.openDB();
+                            const transaction = this.db.transaction([storeName], 'readwrite');
+                            const store = transaction.objectStore(storeName);
+                            return new Promise((resolve) => {
+                                const req = store.clear();
+                                req.onsuccess = () => resolve();
+                                req.onerror = () => resolve();
+                            });
                         }
                     };
 
@@ -3033,7 +3043,7 @@
                                     let listNovosSeguindo = [];
                                     let listSeguidoresPerdidos = [];
                                     let listNaoSigoDeVolta = toObjects([...dbFollowers].filter(u => !dbFollowing.has(u)));
-                                    let listHistorico = []; // Será carregado sob demanda
+                                    let listHistorico = await dbHelper.loadUnfollowHistory();
 
                                     const totalFollowers = cachedData.profileInfo ? cachedData.profileInfo.data.user.edge_followed_by.count : 'N/A';
                                     const totalFollowing = cachedData.profileInfo ? cachedData.profileInfo.data.user.edge_follow.count : 'N/A';
@@ -3047,13 +3057,31 @@
                                         <div style="margin-bottom: 15px;">
                                             <button id="btnUpdateApi" style="background: #0095f6; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar Dados (Baixar e Salvar no DB)</button>
                                         </div>
-                                        <div class="tab-container">
-                                            <button id="tabNaoSegueDeVolta" class="tab-button active">Não Segue de Volta (<span id="countNaoSegue">${listNaoSegueDeVolta.length}</span>)</button>
-                                            <button id="tabNovosSeguidores" class="tab-button">Novos Seguidores (<span id="countNovosSeguidores">${listNovosSeguidores.length}</span>)</button>
-                                            <button id="tabNovosSeguindo" class="tab-button">Novos Seguindo (<span id="countNovosSeguindo">${listNovosSeguindo.length}</span>)</button>
-                                            <button id="tabSeguidoresPerdidos" class="tab-button">Seguidores Perdidos (<span id="countSeguidoresPerdidos">${listSeguidoresPerdidos.length}</span>)</button>
-                                            <button id="tabNaoSigoDeVolta" class="tab-button">Não Sigo de Volta (<span id="countNaoSigo">${listNaoSigoDeVolta.length}</span>)</button>
-                                            <button id="tabHistorico" class="tab-button">Histórico</button>
+                                        <div class="cards-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px;">
+                                            <div id="tabNaoSegueDeVolta" class="card-tab active" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Não Segue de Volta</div>
+                                                <div id="countNaoSegue" style="font-size: 20px; font-weight: bold; color: #e74c3c;">${listNaoSegueDeVolta.length}</div>
+                                            </div>
+                                            <div id="tabNovosSeguidores" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Novos Seguidores</div>
+                                                <div id="countNovosSeguidores" style="font-size: 20px; font-weight: bold; color: #2ecc71;">${listNovosSeguidores.length}</div>
+                                            </div>
+                                            <div id="tabNovosSeguindo" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Novos Seguindo</div>
+                                                <div id="countNovosSeguindo" style="font-size: 20px; font-weight: bold; color: #0095f6;">${listNovosSeguindo.length}</div>
+                                            </div>
+                                            <div id="tabSeguidoresPerdidos" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Seguidores Perdidos</div>
+                                                <div id="countSeguidoresPerdidos" style="font-size: 20px; font-weight: bold; color: #e74c3c;">${listSeguidoresPerdidos.length}</div>
+                                            </div>
+                                            <div id="tabNaoSigoDeVolta" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Não Sigo de Volta</div>
+                                                <div id="countNaoSigo" style="font-size: 20px; font-weight: bold; color: #f39c12;">${listNaoSigoDeVolta.length}</div>
+                                            </div>
+                                            <div id="tabHistorico" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Histórico</div>
+                                                <div id="countHistorico" style="font-size: 20px; font-weight: bold; color: #333;">${listHistorico.length}</div>
+                                            </div>
                                         </div>
                                         <div id="tabContent"></div>
                                     `;
@@ -3070,14 +3098,27 @@
                                         'tabHistorico': listHistorico
                                     };
 
-                                    let currentTabId = initialTab;
+                                    let currentTabId = null;
                                     let currentList = lists[currentTabId];
 
                                     async function renderCurrentTab() {
                                         // Atualiza classe active
-                                        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                                        document.querySelectorAll('.card-tab').forEach(b => {
+                                            b.style.borderColor = '#dbdbdb';
+                                            b.style.background = '#f8f9fa';
+                                        });
+
+                                        const contentDiv = document.getElementById("tabContent");
+                                        if (!currentTabId) {
+                                            contentDiv.innerHTML = '';
+                                            return;
+                                        }
+
                                         const activeBtn = document.getElementById(currentTabId);
-                                        if(activeBtn) activeBtn.classList.add('active');
+                                        if(activeBtn) {
+                                            activeBtn.style.borderColor = '#0095f6';
+                                            activeBtn.style.background = '#e8f0fe';
+                                        }
 
                                         if (currentTabId === 'tabHistorico') {
                                             currentList = await dbHelper.loadUnfollowHistory();
@@ -3086,7 +3127,6 @@
                                         }
 
                                         const tableId = currentTabId === 'tabHistorico' ? 'historicoTable' : 'naoSegueDeVoltaTable';
-                                        const contentDiv = document.getElementById("tabContent");
                                         contentDiv.innerHTML = `
                                             <div style="margin-bottom: 10px;">
                                             </div>
@@ -3461,7 +3501,7 @@
                             }
 
                             // --- LÓGICA PARA "SEGUINDO" ---
-                            async function iniciarProcessoSeguindo() {
+                            async function iniciarProcessoSeguindo(forceUpdate = false) {
                                 if (document.getElementById("seguindoModal")) return;
                                 if (document.getElementById("automationStatusModal")) return;
 
@@ -3509,17 +3549,42 @@
 
                                 // Função para navegar, extrair e retornar
                                 const fetchAndCache = async (url, extractorFn, cacheKey, step) => {
-                                    if (userListCache[cacheKey] !== null) {
+                                    if (!forceUpdate && userListCache[cacheKey] !== null) {
                                         updateStatus(step, true, '(Já em cache)');
                                         return true;
                                     }
+                                    
+                                    // Tenta carregar do IndexedDB primeiro
+                                    if (!forceUpdate) {
+                                        try {
+                                            const dbData = await dbHelper.loadCache(cacheKey);
+                                            if (dbData && dbData.size > 0) {
+                                                userListCache[cacheKey] = dbData;
+                                                // Recupera detalhes extras se existirem (ex: status do silenciamento)
+                                                if (cacheKey === 'muted' && dbData.details) {
+                                                    userListCache.mutedDetails = new Map();
+                                                    dbData.details.forEach((u, username) => {
+                                                        userListCache.mutedDetails.set(username, u.status);
+                                                    });
+                                                }
+                                                updateStatus(step, true, '(Do Banco de Dados)');
+                                                return true;
+                                            }
+                                        } catch (e) {
+                                            console.warn(`Erro ao carregar ${cacheKey} do DB:`, e);
+                                        }
+                                    }
+
                                     try {
                                         history.pushState(null, null, url);
                                         window.dispatchEvent(new Event("popstate"));
                                         await new Promise(r => setTimeout(r, 3000)); // Espera a página carregar
 
                                         const users = await extractorFn();
+                                        let filteredUsersToSave = [];
+
                                         if (url.includes('muted_accounts')) {
+                                            filteredUsersToSave = users;
                                             userListCache[cacheKey] = new Set(users.map(u => u.username));
                                             userListCache.mutedDetails = new Map(users.map(u => [u.username, u.status]));
                                         } else {
@@ -3536,9 +3601,14 @@
                                                     }
                                                 }
                                             });
-                                            const filteredUsernames = users.filter(u => officialStates.get(u.username) === true).map(u => u.username);
-                                            userListCache[cacheKey] = new Set(filteredUsernames);
+                                            // Filtra apenas os usuários marcados (checked) para salvar no cache
+                                            filteredUsersToSave = users.filter(u => officialStates.get(u.username) === true);
+                                            userListCache[cacheKey] = new Set(filteredUsersToSave.map(u => u.username));
                                         }
+                                        
+                                        // Salva no IndexedDB para uso futuro
+                                        await dbHelper.saveCache(cacheKey, filteredUsersToSave);
+                                        
                                         updateStatus(step, true);
                                         return true;
                                     } catch (error) {
@@ -3617,7 +3687,7 @@
                                     // Limpa o cache e recarrega os dados
                                     Object.keys(userListCache).forEach(key => userListCache[key] = null);
                                     div.remove();
-                                    iniciarProcessoSeguindo();
+                                    iniciarProcessoSeguindo(true);
                                 });
 
                                 const statusDiv = document.getElementById("statusSeguindo");
@@ -3689,6 +3759,11 @@
                                         updateStatus(1, success);
                                         return success;
                                     })();
+
+                                    // Salva a lista de seguindo no DB se for uma atualização forçada
+                                    if (forceUpdate && seguindoList) {
+                                        await dbHelper.saveCache('following', seguindoList);
+                                    }
 
                                     // Retorna para a página original
                                     history.pushState(null, null, originalPath);
@@ -5587,6 +5662,7 @@
                                     mute: {
                                         buttonId: 'silenciarSeguindoBtn',
                                         text: 'Silenciar/Reativar',
+                                        dbStore: 'muted',
                                         func: (users, cb) => {
                                             showUnmuteOptionsModal((targetType) => {
                                                 unmuteUsers(users, cb, true, targetType); // Passa `true` para ativar o modo toggle
@@ -5596,12 +5672,14 @@
                                 closeFriends: {
                                     buttonId: 'closeFriendsSeguindoBtn',
                                     text: 'Melhores Amigos',
+                                    dbStore: 'closeFriends',
                                     // Nova função que age no perfil individual
                                     func: (users, cb) => performActionOnProfile(users, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], cb)
                                 },
                                 hideStory: {
                                     buttonId: 'hideStorySeguindoBtn',
                                     text: 'Ocultar Story',
+                                    dbStore: 'hiddenStory',
                                     // Revertido para o método original que navega para a página de lista, conforme solicitado.
                                     func: (users, cb) => toggleListMembership(users, '/accounts/hide_story_and_live_from/', 'hiddenStory', cb)
                                 }
@@ -5614,10 +5692,16 @@
                                 btn.disabled = true;
                                 btn.textContent = 'Processando...';
 
-                                await config.func(selectedUsers, () => {
+                                await config.func(selectedUsers, async () => {
                                     btn.disabled = false;
                                     btn.textContent = config.text;
                                     alert(`Ação "${config.text}" concluída para ${selectedUsers.length} usuário(s).`);
+                                    
+                                    // Limpa apenas o cache específico do DB que foi alterado, forçando atualização da web apenas para ele
+                                    if (config.dbStore) {
+                                        await dbHelper.clearCache(config.dbStore);
+                                    }
+                                    
                                     // Recarrega todos os dados para ver a mudança
                                     document.getElementById("atualizarSeguindoBtn").click();
                                 });

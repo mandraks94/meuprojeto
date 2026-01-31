@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Instagram Tools_6
+// @name         código oficial
 // @description  Adds download buttons to Instagram stories
 // @author       You
 // @version      1.0
@@ -9,9 +9,11 @@
 
         (function() {
             'use strict';
-            
+
             function initScript() {
                 if (window.location.href.includes("instagram.com")) {
+                    const infoIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: text-bottom; margin-left: 5px;"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>`;
+
                     // Helper para IndexedDB
                     const dbHelper = {
                         db: null,
@@ -156,6 +158,16 @@
                                 req.onsuccess = () => resolve(new Set(req.result.map(i => i.username)));
                                 req.onerror = () => resolve(new Set());
                             });
+                        },
+                        clearCache: async function(storeName) {
+                            if (!this.db) await this.openDB();
+                            const transaction = this.db.transaction([storeName], 'readwrite');
+                            const store = transaction.objectStore(storeName);
+                            return new Promise((resolve) => {
+                                const req = store.clear();
+                                req.onsuccess = () => resolve();
+                                req.onerror = () => resolve();
+                            });
                         }
                     };
 
@@ -177,6 +189,20 @@
                         } catch (e) {
                             return defaults;
                         }
+                    }
+
+                    const translations = {
+                        'pt-BR': { likes: 'Curtidas', comments: 'Comentários', blocked: 'Bloqueados', messages: 'Mensagens', notFollowingBack: 'Não segue de volta', following: 'Seguindo', closeFriends: 'Amigos Próximos', hideStory: 'Ocultar Story', mutedAccounts: 'Contas Silenciadas', interactions: 'Interações', reelsMenu: 'Menu de Reels', downloadStory: 'Baixar Story', engagement: 'Engajamento', settings: 'Configurações', darkMode: 'Modo Escuro', rgbBorder: 'Borda RGB', shortcuts: 'Atalhos', parameters: 'Parâmetros', language: 'Idioma' },
+                        'en-US': { likes: 'Likes', comments: 'Comments', blocked: 'Blocked', messages: 'Messages', notFollowingBack: 'Not Following Back', following: 'Following', closeFriends: 'Close Friends', hideStory: 'Hide Story', mutedAccounts: 'Muted Accounts', interactions: 'Interactions', reelsMenu: 'Reels Menu', downloadStory: 'Download Story', engagement: 'Engagement', settings: 'Settings', darkMode: 'Dark Mode', rgbBorder: 'RGB Border', shortcuts: 'Shortcuts', parameters: 'Parameters', language: 'Language' },
+                        'es-ES': { likes: 'Me gusta', comments: 'Comentarios', blocked: 'Bloqueados', messages: 'Mensajes', notFollowingBack: 'No te sigue', following: 'Siguiendo', closeFriends: 'Mejores Amigos', hideStory: 'Ocultar Historia', mutedAccounts: 'Cuentas Silenciadas', interactions: 'Interacciones', reelsMenu: 'Menú de Reels', downloadStory: 'Descargar Historia', engagement: 'Compromiso', settings: 'Configuración', darkMode: 'Modo Oscuro', rgbBorder: 'Borde RGB', shortcuts: 'Atajos', parameters: 'Parámetros', language: 'Idioma' },
+                        'fr-FR': { likes: 'J\'aime', comments: 'Commentaires', blocked: 'Bloqués', messages: 'Messages', notFollowingBack: 'Ne suit pas en retour', following: 'Abonnements', closeFriends: 'Amis Proches', hideStory: 'Masquer Story', mutedAccounts: 'Comptes Muets', interactions: 'Interactions', reelsMenu: 'Menu Reels', downloadStory: 'Télécharger Story', engagement: 'Engagement', settings: 'Paramètres', darkMode: 'Mode Sombre', rgbBorder: 'Bordure RGB', shortcuts: 'Raccourcis', parameters: 'Paramètres', language: 'Langue' },
+                        'it-IT': { likes: 'Mi piace', comments: 'Commenti', blocked: 'Bloccati', messages: 'Messaggi', notFollowingBack: 'Non ti segue', following: 'Seguiti', closeFriends: 'Amici Più Stretti', hideStory: 'Nascondi Storia', mutedAccounts: 'Account Silenziati', interactions: 'Interazioni', reelsMenu: 'Menu Reels', downloadStory: 'Scarica Storia', engagement: 'Coinvolgimento', settings: 'Impostazioni', darkMode: 'Modalità Scura', rgbBorder: 'Bordo RGB', shortcuts: 'Scorciatoie', parameters: 'Parametri', language: 'Lingua' },
+                        'de-DE': { likes: 'Gefällt mir', comments: 'Kommentare', blocked: 'Blockiert', messages: 'Nachrichten', notFollowingBack: 'Folgt nicht zurück', following: 'Abonniert', closeFriends: 'Engste Freunde', hideStory: 'Story verbergen', mutedAccounts: 'Stummgeschaltete', interactions: 'Interaktionen', reelsMenu: 'Reels Menü', downloadStory: 'Story herunterladen', engagement: 'Engagement', settings: 'Einstellungen', darkMode: 'Dunkelmodus', rgbBorder: 'RGB-Rand', shortcuts: 'Verknüpfungen', parameters: 'Parameter', language: 'Sprache' }
+                    };
+
+                    function getText(key) {
+                        const lang = loadSettings().language || 'pt-BR';
+                        return translations[lang]?.[key] || translations['pt-BR'][key] || key;
                     }
 
                     function saveSettings(newSettings) {
@@ -249,7 +275,7 @@
                     function initShortcutListener() {
                         if (document.body.dataset.shortcutsInitialized) return; // Evita múltiplos listeners
                         document.body.dataset.shortcutsInitialized = 'true';
-                        
+
                         document.addEventListener('keydown', (event) => {
                             // Ignora atalhos se um input, textarea ou contenteditable estiver focado
                             if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable) {
@@ -262,7 +288,7 @@
                             }
 
                             const shortcuts = getShortcuts();
-                            const shortcut = shortcuts.find(s => 
+                            const shortcut = shortcuts.find(s =>
                                 s.key.toLowerCase() === event.key.toLowerCase() &&
                                 !!s.ctrlKey === event.ctrlKey &&
                                 !!s.altKey === event.altKey &&
@@ -284,44 +310,184 @@
 
                         function injectMenu() {
                             if (document.getElementById("assistiveTouchMenu")) return;
+                            if (document.getElementById("instagramToolsSidebarBtn")) return;
+
+                            // --- LÓGICA DE COMANDOS DE VOZ ---
+                            const voiceControl = {
+                                recognition: null,
+                                isListening: false,
+                                commands: [],
+                                init: function() {
+                                    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                                        console.warn("Web Speech API não suportada.");
+                                        return;
+                                    }
+                                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                                    this.recognition = new SpeechRecognition();
+                                    this.recognition.continuous = true;
+                                    this.recognition.lang = loadSettings().language || 'pt-BR';
+                                    this.recognition.interimResults = false;
+
+                                    this.recognition.onresult = (event) => {
+                                        const last = event.results.length - 1;
+                                        const command = event.results[last][0].transcript.trim().toLowerCase();
+                                        console.log("Comando de voz:", command);
+                                        this.executeCommand(command);
+                                    };
+
+                                    this.recognition.onerror = (event) => {
+                                        console.error("Erro voz:", event.error);
+                                        if (event.error === 'not-allowed') {
+                                            this.stop();
+                                            alert("Permissão de microfone negada.");
+                                        }
+                                    };
+
+                                    this.recognition.onend = () => {
+                                        if (this.isListening) {
+                                            try { this.recognition.start(); } catch(e) {}
+                                        }
+                                    };
+
+                                    this.loadCommands();
+                                    if (localStorage.getItem('instagram_voice_enabled') === 'true') {
+                                        try { this.start(); } catch(e) { console.log("Autostart voz bloqueado"); }
+                                    }
+                                },
+                                loadCommands: function() {
+                                    const defaults = [
+                                        { phrase: "baixar story", action: "downloadStory", description: "Baixa o story atual" },
+                                        { phrase: "abrir configurações", action: "openSettings", description: "Abre configurações" },
+                                        { phrase: "fechar menu", action: "closeMenu", description: "Fecha o menu" },
+                                        { phrase: "rolar reels", action: "toggleReelsScroll", description: "Rolagem de Reels" },
+                                        { phrase: "baixar reel", action: "downloadReel", description: "Baixa o Reel atual" },
+                                        { phrase: "amigos próximos", action: "openCloseFriends", description: "Menu Amigos Próximos" },
+                                        { phrase: "ocultar story", action: "openHideStory", description: "Menu Ocultar Story" },
+                                        { phrase: "contas silenciadas", action: "openMuted", description: "Menu Contas Silenciadas" },
+                                        { phrase: "não segue de volta", action: "openNotFollowingBack", description: "Análise Não Segue de Volta" },
+                                        { phrase: "seguindo", action: "openFollowing", description: "Gerenciador Seguindo" },
+                                        { phrase: "bloqueados", action: "openBlocked", description: "Lista de Bloqueados" },
+                                        { phrase: "análise reels", action: "analyzeReels", description: "Análise de Reels" },
+                                        { phrase: "engajamento", action: "openEngagement", description: "Dashboard Engajamento" },
+                                        { phrase: "interações", action: "openInteractions", description: "Verificar Interações" }
+                                    ];
+                                    try {
+                                        const saved = JSON.parse(localStorage.getItem('instagram_voice_commands'));
+                                        this.commands = saved || defaults;
+                                    } catch (e) { this.commands = defaults; }
+                                },
+                                saveCommands: function() {
+                                    localStorage.setItem('instagram_voice_commands', JSON.stringify(this.commands));
+                                },
+                                start: function() {
+                                    if (!this.recognition) this.init();
+                                    if (this.recognition && !this.isListening) {
+                                        try {
+                                            this.recognition.start();
+                                            this.isListening = true;
+                                            localStorage.setItem('instagram_voice_enabled', 'true');
+                                            console.log("Voz iniciada.");
+                                        } catch(e) { console.error(e); }
+                                    }
+                                },
+                                stop: function() {
+                                    if (this.recognition && this.isListening) {
+                                        this.recognition.stop();
+                                        this.isListening = false;
+                                        localStorage.setItem('instagram_voice_enabled', 'false');
+                                        console.log("Voz parada.");
+                                    }
+                                },
+                                toggle: function() {
+                                    if (this.isListening) this.stop();
+                                    else this.start();
+                                    return this.isListening;
+                                },
+                                executeCommand: function(transcript) {
+                                    const cmd = this.commands.find(c => transcript.includes(c.phrase.toLowerCase()));
+                                    if (cmd) {
+                                        console.log("Executando:", cmd.action);
+                                        const toast = document.createElement('div');
+                                        toast.innerText = `🎤 ${cmd.phrase}`;
+                                        toast.style.cssText = "position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); color: white; padding: 8px 16px; border-radius: 20px; z-index: 100000; font-size: 14px; pointer-events: none;";
+                                        document.body.appendChild(toast);
+                                        setTimeout(() => toast.remove(), 2000);
+
+                                        switch(cmd.action) {
+                                            case 'downloadStory': baixarStoryAtual(); break;
+                                            case 'openSettings': abrirModalConfiguracoes(); break;
+                                            case 'closeMenu':
+                                                const m = document.querySelector('.assistive-menu');
+                                                if(m) m.style.display = 'none';
+                                                break;
+                                            case 'toggleReelsScroll': toggleRolagemAutomaticaReels(); break;
+                                            case 'downloadReel': baixarReelAtual(); break;
+                                            case 'openCloseFriends': abrirModalAmigosProximos(); break;
+                                            case 'openHideStory': abrirModalOcultarStory(); break;
+                                            case 'openMuted': abrirModalContasSilenciadas(); break;
+                                            case 'openNotFollowingBack': iniciarProcessoNaoSegueDeVolta(); break;
+                                            case 'openFollowing': iniciarProcessoSeguindo(); break;
+                                            case 'openBlocked': iniciarProcessoBloqueados(); break;
+                                            case 'analyzeReels': iniciarAnaliseReels(); break;
+                                            case 'openEngagement': abrirModalEngajamento(); break;
+                                            case 'openInteractions': abrirModalInteracoes(); break;
+                                        }
+                                    }
+                                }
+                            };
+
+                            // --- Funções auxiliares ---
+                            function findSidebarContainer() {
+                                const homeLink = document.querySelector('a[href="/"]');
+                                const exploreLink = document.querySelector('a[href="/explore/"]');
+                                if (homeLink && exploreLink) {
+                                    let parent = homeLink.parentElement;
+                                    while (parent) {
+                                        if (parent.contains(exploreLink)) return parent;
+                                        parent = parent.parentElement;
+                                    }
+                                }
+                                return document.querySelector('div.x78zum5.xaw8158.xh8yej3');
+                            }
+
+                            function findItemToClone(container, link) {
+                                if (!container || !link) return null;
+                                let element = link;
+                                while (element && element.parentElement) {
+                                    if (element.parentElement === container) return element;
+                                    element = element.parentElement;
+                                }
+                                return null;
+                            }
+
+                            // Tenta encontrar o container da sidebar oficial usando o seletor fornecido
+                            const sidebarContainer = findSidebarContainer();
+                            if (!sidebarContainer) return; // Aguarda o carregamento da sidebar
 
                             // Add dynamic styles
+                            if (!document.getElementById("dynamicMenuStyle")) {
                             const style = document.createElement("style");
                             style.id = "dynamicMenuStyle";
                             document.head.appendChild(style);
 
                             function updateColors() {
                                 style.innerHTML = `
-                                    .assistive-touch {
-                                        position: fixed;
-                                        bottom: 50%;
-                                        right: 20px;
-                                        transform: translateY(50%);
-                                        width: 60px;
-                                        height: 60px;
-                                        background-color: #0095f6;
-                                        border-radius: 50%;
-                                        display: flex;
-                                        align-items: center;
-                                        justify-content: center;
-                                        z-index: 9999;
-                                        cursor: pointer;
-                                        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-                                        transition: all 0.3s ease;
-                                    }
                                     .assistive-menu {
                                         position: fixed;
-                                        bottom: 50%;
-                                        right: 90px;
-                                        transform: translateY(50%);
+                                        top: 50%;
+                                        left: 50%;
+                                        transform: translate(-50%, -50%);
                                         display: none;
                                         flex-direction: column;
                                         gap: 10px;
-                                        z-index: 9998;
+                                        z-index: 2147483647;
                                         background: white;
-                                        padding: 10px;
+                                        padding: 20px;
                                         border-radius: 12px;
                                         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                                        width: 300px;
+                                        max-height: 80vh;
+                                        overflow-y: auto;
                                     }
                                     .menu-item {
                                         display: flex;
@@ -333,16 +499,17 @@
                                         height: 50px;
                                         border-radius: 50%;
                                         border: none;
-                                        background: #f8f9fa;
-                                        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                                        background: transparent;
                                         display: flex;
                                         align-items: center;
                                         justify-content: center;
                                         cursor: pointer;
                                         transition: background 0.2s;
+                                        color: inherit;
                                     }
                                     .menu-item button:hover {
-                                        background: #e9ecef;
+                                        background: rgba(0, 0, 0, 0.05);
+                                        border-radius: 8px;
                                     }
                                     .menu-item span {
                                         font-size: 14px;
@@ -358,9 +525,16 @@
                                     }
                                     .dark-mode .assistive-menu {
                                         background: black !important;
+                                        border: 1px solid #333;
                                     }
                                     .dark-mode .menu-item span {
                                         color: white !important;
+                                    }
+                                    .dark-mode .menu-item button {
+                                        color: white;
+                                    }
+                                    .dark-mode .menu-item button:hover {
+                                        background: rgba(255, 255, 255, 0.1);
                                     }
                                     .dark-mode #allCloseFriendsDiv {
                                         background: black;
@@ -440,83 +614,174 @@
                                         90% { border-color: rgb(255, 0, 255); }
                                         100% { border-color: rgb(255, 0, 0); }
                                     }
-                                    .rgb-border-effect { 
+                                    .rgb-border-effect {
                                         border-style: solid !important;
                                         border-width: 2px !important;
-                                        animation: rgb-border-animation 5s linear infinite; 
+                                        animation: rgb-border-animation 5s linear infinite;
                                     }
+                                    .info-tooltip { position: relative; display: inline-block; cursor: help; color: #8e8e8e; vertical-align: middle; }
+                                    .info-tooltip .tooltip-text { visibility: hidden; width: 220px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100000; top: 100%; margin-top: 10px; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; font-size: 12px; font-weight: normal; line-height: 1.4; box-shadow: 0 2px 10px rgba(0,0,0,0.2); pointer-events: none; }
+                                    .info-tooltip .tooltip-text::after { content: ""; position: absolute; bottom: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: transparent transparent #333 transparent; }
+                                    .info-tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
                                 `;
                             }
 
                             updateColors();
-
-                            // Create main button
-                            const mainBtn = document.createElement("div");
-                            mainBtn.id = "assistiveTouchMenu";
-                            mainBtn.className = "assistive-touch";
-                            mainBtn.innerHTML = "⚙️";
+                            }
 
                             // Create menu
-                            const menu = document.createElement("div");
+                            let menu = document.querySelector('.assistive-menu');
+                            if (!menu) {
+                                menu = document.createElement("div");
                             menu.className = "assistive-menu";
                             menu.innerHTML = `
                                 <div class="menu-item">
-                                    <button id="curtidasBtn">❤️</button>
-                                    <span>Curtidas</span>
+                                    <button id="curtidasBtn"><svg aria-label="Curtidas" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M16.792 3.904A4.989 4.989 0 0 1 21.5 9.122c0 3.072-2.652 4.959-5.197 7.222-2.512 2.243-3.865 3.469-4.303 3.752-.477-.309-2.143-1.823-4.303-3.752C5.141 14.072 2.5 12.167 2.5 9.122a4.989 4.989 0 0 1 4.708-5.218 4.21 4.21 0 0 1 3.675 1.941c.843.118 3.377.135 4.234-.149a4.21 4.21 0 0 1 1.675-1.792z"></path></svg></button>
+                                    <span>${getText('likes')}</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="comentariosBtn">💬</button>
-                                    <span>Comentários</span>
+                                    <button id="comentariosBtn"><svg aria-label="Comentários" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M20.656 17.008a9.993 9.993 0 1 0-3.59 3.615L22 22z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"></path></svg></button>
+                                    <span>${getText('comments')}</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="bloqueadosBtn">⛔</button>
-                                    <span>Bloqueados</span>
+                                    <button id="bloqueadosBtn"><svg aria-label="Bloqueados" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"></circle><line x1="4.93" y1="19.07" x2="19.07" y2="4.93" stroke="currentColor" stroke-width="2"></line></svg></button>
+                                    <span>${getText('blocked')}</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="mensagensBtn">✉️</button>
-                                    <span>Mensagens</span>
+                                    <button id="mensagensBtn"><svg aria-label="Mensagens" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><line fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2" x1="22" x2="9.218" y1="3" y2="10.083"></line><polygon fill="none" points="11.698 20.334 22 3.001 2 3.001 9.218 10.084 11.698 20.334" stroke="currentColor" stroke-linejoin="round" stroke-width="2"></polygon></svg></button>
+                                    <span>${getText('messages')}</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="naoSegueDeVoltaBtn">🔄</button>
-                                    <span>Não segue de volta</span>
+                                    <button id="naoSegueDeVoltaBtn"><svg aria-label="Não segue de volta" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8.009 8.009 0 0 1-8 8z"></path><path d="M15.5 11h-7a1 1 0 0 0 0 2h7a1 1 0 0 0 0-2z"></path></svg></button>
+                                    <span>${getText('notFollowingBack')}</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="seguindoBtn">➡️</button>
-                                    <span>Seguindo</span>
+                                    <button id="seguindoBtn"><svg aria-label="Seguindo" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12.004 12.002c3.309 0 6-2.691 6-6s-2.691-6-6-6-6 2.691-6 6 2.691 6 6 6zm0-10c2.206 0 4 1.794 4 4s-1.794 4-4 4-4-1.794-4-4 1.794-4 4-4zm0 12c-2.67 0-8 1.337-8 4v2h16v-2c0-2.663-5.33-4-8-4zm-6 4c.22-.72 3.02-2 6-2s5.78 1.28 6 2H6.004z"></path></svg></button>
+                                    <span>${getText('following')}</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="closeFriendsBtn">🌟</button>
-                                    <span>Amigos Próximos</span>
+                                    <button id="closeFriendsBtn"><svg aria-label="Amigos Próximos" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" fill="none" r="10" stroke="currentColor" stroke-width="2"></circle><polygon points="12 16.63 7.85 19.33 9.15 14.48 5.24 11.24 10.19 10.96 12 6.38 13.81 10.96 18.76 11.24 14.85 14.48 16.15 19.33 12 16.63" fill="currentColor"></polygon></svg></button>
+                                    <span>${getText('closeFriends')}</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="hideStoryBtn">👁️‍🗨️</button>
-                                    <span>Ocultar Story</span>
+                                    <button id="hideStoryBtn"><svg aria-label="Ocultar Story" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill="none" stroke="currentColor" stroke-width="2"></path><line x1="2" y1="2" x2="22" y2="22" stroke="currentColor" stroke-width="2"></line></svg></button>
+                                    <span>${getText('hideStory')}</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="mutedAccountsBtn">🔇</button>
-                                    <span>Contas Silenciadas</span>
+                                    <button id="mutedAccountsBtn"><svg aria-label="Contas Silenciadas" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M11 5L6 9H2v6h4l5 4V5z" fill="none" stroke="currentColor" stroke-width="2"></path><line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2"></line><line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2"></line></svg></button>
+                                    <span>${getText('mutedAccounts')}</span>
+                                </div>
+                                <div class="menu-item">
+                                    <button id="interacoesBtn"><svg aria-label="Interações" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"></path></svg></button>
+                                    <span>${getText('interactions')}</span>
                                 </div>
 
                                 <div class="menu-item">
-                                    <button id="reelsMenuBtn">📹</button>
-                                    <span>Menu de Reels</span>
+                                    <button id="reelsMenuBtn"><svg aria-label="Reels" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12.87 1.51l-2.54 2.6-2.53-2.6a.86.86 0 0 0-.61-.25c-.23 0-.45.09-.61.25l-2.54 2.6-2.53-2.6A.86.86 0 0 0 .9 1.26c-.23 0-.45.09-.61.25L.1 1.7a.88.88 0 0 0 0 1.23l2.54 2.6-2.53 2.6a.88.88 0 0 0 0 1.23l.19.19c.16.16.38.25.61.25.23 0 .45-.09.61-.25l2.54-2.6 2.53 2.6c.16.16.38.25.61.25.23 0 .45-.09.61-.25l2.54-2.6 2.53 2.6c.16.16.38.25.61.25.23 0 .45-.09.61-.25l.19-.19a.88.88 0 0 0 0-1.23l-2.53-2.6 2.53-2.6a.88.88 0 0 0 0-1.23l-.19-.19a.86.86 0 0 0-.61-.25z" fill="currentColor"></path><rect height="16" rx="3" ry="3" width="18" x="3" y="7" fill="none" stroke="currentColor" stroke-width="2"></rect></svg></button>
+                                    <span>${getText('reelsMenu')}</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="baixarStoryBtn">⬇️</button>
-                                    <span>Baixar Story</span>
+                                    <button id="baixarStoryBtn"><svg aria-label="Baixar Story" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"></path></svg></button>
+                                    <span>${getText('downloadStory')}</span>
                                 </div>
                                 <div class="menu-item">
-                                    <button id="settingsBtn">⚙️</button>
-                                    <span>Configurações</span>
+                                    <button id="engajamentoBtn"><svg aria-label="Engajamento" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"></path></svg></button>
+                                    <span>${getText('engagement')}</span>
+                                </div>
+                                <div class="menu-item">
+                                    <button id="settingsBtn"><svg aria-label="Configurações" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" fill="none" r="3" stroke="currentColor" stroke-width="2"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.09 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"></path></svg></button>
+                                    <span>${getText('settings')}</span>
                                 </div>
                             `;
 
-                            document.body.appendChild(mainBtn);
                             document.body.appendChild(menu);
+                            }
 
-                            mainBtn.addEventListener("click", () => {
-                                menu.style.display = menu.style.display === "flex" ? "none" : "flex";
-                            });
+                            // Fechar submenu ao clicar fora (Comportamento nativo)
+                            if (!document.body.dataset.menuClickListenerAttached) {
+                                document.addEventListener('click', (e) => {
+                                    const menu = document.querySelector('.assistive-menu');
+                                    const btn = document.getElementById('instagramToolsSidebarBtn');
+                                    if (menu && menu.style.display === 'flex') {
+                                        // Se o clique não foi no menu nem no botão que o abre
+                                        if (!menu.contains(e.target) && (!btn || !btn.contains(e.target))) {
+                                            menu.style.display = 'none';
+                                        }
+                                    }
+                                });
+                                document.body.dataset.menuClickListenerAttached = 'true';
+                            }
+
+                            const homeLink = sidebarContainer.querySelector('a[href="/"]');
+                            const itemToClone = findItemToClone(sidebarContainer, homeLink);
+
+
+                            if (itemToClone) {
+                                const newItem = itemToClone.cloneNode(true);
+                                const link = newItem.querySelector('a');
+                                if (link) {
+                                    link.id = "instagramToolsSidebarBtn";
+                                    link.href = "#";
+                                    link.removeAttribute('aria-label');
+
+                                    // Substitui o ícone original pelo ícone de engrenagem
+                                    const svg = link.querySelector('svg');
+                                    if (svg) {
+                                        // SVG de Engrenagem estilo Instagram
+                                        const newSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                                        newSvg.setAttribute("aria-label", "Ferramentas");
+                                        newSvg.setAttribute("class", "x1lliihq x1n2onr6 x5n08af");
+                                        newSvg.setAttribute("fill", "currentColor");
+                                        newSvg.setAttribute("height", "24");
+                                        newSvg.setAttribute("role", "img");
+                                        newSvg.setAttribute("viewBox", "0 0 24 24");
+                                        newSvg.setAttribute("width", "24");
+                                        newSvg.innerHTML = '<circle cx="12" cy="12" fill="none" r="3" stroke="currentColor" stroke-width="2"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.09 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"></path>';
+                                        svg.replaceWith(newSvg);
+                                    }
+
+                                    // Adiciona o texto "IG Tools" (para visualização PC)
+                                    // Procura por elementos de texto dentro do link clonado de forma mais abrangente
+                                    const allDescendants = link.querySelectorAll('*');
+                                    allDescendants.forEach(el => {
+                                        // Verifica se é um elemento folha (sem filhos tags)
+                                        if (el.children.length === 0 && el.textContent.trim().length > 0) {
+                                            // Ignora se estiver dentro de um SVG ou for o próprio SVG
+                                            if (el.closest('svg')) return;
+
+                                            const text = el.textContent.trim();
+                                            // Ignora números (notificações) e textos muito curtos
+                                            if (isNaN(parseInt(text)) && text.length > 1) {
+                                                el.textContent = "IG Tools";
+                                            }
+                                        }
+                                    });
+
+                                    link.addEventListener("click", (e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+
+                                        // Lógica de posicionamento inteligente (PC vs Mobile)
+                                        const isDesktop = window.innerWidth >= 1024;
+                                        if (isDesktop) {
+                                            const sidebar = findSidebarContainer();
+                                            const rect = sidebar ? sidebar.getBoundingClientRect() : { right: 72 };
+                                            menu.style.left = (rect.right + 15) + 'px';
+                                            menu.style.bottom = '20px';
+                                            menu.style.top = 'auto';
+                                            menu.style.transform = 'none';
+                                        } else {
+                                            menu.style.left = '50%';
+                                            menu.style.top = '50%';
+                                            menu.style.bottom = 'auto';
+                                            menu.style.transform = 'translate(-50%, -50%)';
+                                        }
+
+                                        menu.style.display = menu.style.display === "flex" ? "none" : "flex";
+                                    });
+                                }
+                                sidebarContainer.appendChild(newItem);
+                            }
 
                             function closeMenu() {
                                 menu.style.display = 'none';
@@ -536,6 +801,7 @@
                             // Cache global para listas de usuários, para evitar buscas repetidas
                             const userListCache = {
                                 muted: null,       // Será um Set de usernames
+                                mutedDetails: new Map(), // Map username -> status string
                                 closeFriends: null,  // Será um Set de usernames
                                 hiddenStory: null    // Será um Set de usernames
                             };
@@ -713,7 +979,7 @@
                                 const closeButton = document.createElement("button");
                                 closeButton.innerText = "Cancelar";
                                 closeButton.style.cssText = "background:red;color:white;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;";
-                                
+
                                 bar.appendChild(fill);
                                 bar.appendChild(text);
                                 bar.appendChild(closeButton);
@@ -829,6 +1095,11 @@
                 }
             });
 
+                                document.getElementById("interacoesBtn").addEventListener("click", () => {
+                                    closeMenu();
+                                    abrirModalInteracoes();
+                                });
+
             // --- NOVO MENU: REELS ---
             document.getElementById("reelsMenuBtn").addEventListener("click", () => {
                 closeMenu();
@@ -839,6 +1110,11 @@
             document.getElementById("settingsBtn").addEventListener("click", () => {
                 closeMenu();
                 abrirModalConfiguracoes();
+            });
+
+            document.getElementById("engajamentoBtn").addEventListener("click", () => {
+                closeMenu();
+                abrirModalEngajamento();
             });
 
             function extractCloseFriendsUsernames(doc = document) {
@@ -979,7 +1255,10 @@
                 function renderPage(page) {
                     let html = `
                         <div class="modal-header">
-                            <span class="modal-title">Amigos Próximos</span>
+                            <span class="modal-title">
+                                Amigos Próximos
+                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie sua lista de Melhores Amigos. Selecione quem pode ver seus stories exclusivos (círculo verde).</span></div>
+                            </span>
                             <div class="modal-controls"><button id="closeFriendsMinimizarBtn" title="Minimizar">_</button><button id="closeFriendsFecharBtn" title="Fechar">X</button></div>
                         </div>`;
                     html += `
@@ -1059,7 +1338,7 @@
                         const isMinimized = modal.dataset.minimized === 'true';
 
                         contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-                        
+
                         modal.dataset.minimized = !isMinimized;
                         btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
                         modal.style.maxHeight = isMinimized ? '85vh' : 'none';
@@ -1094,7 +1373,7 @@
                     searchInput.addEventListener("input", () => {
                         const filter = searchInput.value.toLowerCase();
                         const listItems = div.querySelectorAll("#closeFriendsList li");
-                        listItems.forEach(li => { 
+                        listItems.forEach(li => {
                             // Seletor ajustado para ser mais específico
                             const usernameSpan = li.querySelector('span[style*="cursor:pointer"]');
                             if (usernameSpan) {
@@ -1143,7 +1422,7 @@
                             return initialStates.get(username) !== checked;
                         });
                         if (changedUsers.length === 0) {
-                            alert("Nenhuma alteração para aplicar."); 
+                            alert("Nenhuma alteração para aplicar.");
                             isApplyingChanges = false;
                             return;
                         }
@@ -1199,7 +1478,7 @@
                             // Atualiza o estado inicial para o próximo "Aplicar"
                             initialStates.set(username, isChecked);
                         }
-                        
+
                         bar.remove();
                         isApplyingChanges = false;
                     };
@@ -1259,7 +1538,7 @@
                      let scrollInterval;
                      let noNewUsersCount = 0;
                      const maxIdleCount = 3; // Parar após 3 tentativas sem novos usuários (3 segundos)
- 
+
                      let cancelled = false;
                      const { bar, update, closeButton } = createCancellableProgressBar();
                      closeButton.onclick = () => {
@@ -1268,7 +1547,7 @@
                          finishExtraction();
                      };
                      update(0, 0, "Buscando e rolando a lista de usuários com story oculto...");
- 
+
                      function finishExtraction() {
                          clearInterval(scrollInterval);
                          if (bar) bar.remove();
@@ -1276,25 +1555,25 @@
                          // Se foi cancelado, retorna uma lista vazia para não abrir o modal.
                          resolve(cancelled ? [] : Array.from(users.values()));
                      }
- 
+
                      function performScrollAndExtract() {
                          const initialUserCount = users.size;
- 
+
                          // Seletor para os elementos que contêm o nome de usuário
                          const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')).filter(el =>
                              el.querySelector('span[data-bloks-name="bk.components.Text"]')
                          );
- 
+
                          if (userElements.length === 0 && users.size === 0) {
                              console.log("Nenhum usuário encontrado ainda, tentando novamente...");
                              return; // Continua tentando se a lista estiver vazia
                          }
- 
+
                          userElements.forEach(userElement => {
                              const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
                              const username = usernameSpan ? usernameSpan.innerText.trim() : '';
                              const imgTag = userElement.querySelector('img');
- 
+
                              let isChecked = false;
                              const checkboxContainer = userElement.querySelector('div[role="button"][tabindex="0"]');
                              if (checkboxContainer) {
@@ -1309,7 +1588,7 @@
                                      }
                                  }
                              }
- 
+
                              // Adiciona o usuário apenas se tiver um nome válido, uma foto e ainda não estiver na lista
                              if (username && imgTag && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
                                  const photoUrl = imgTag.src;
@@ -1322,26 +1601,26 @@
                                  }
                              }
                          });
- 
+
                          update(users.size, users.size, `Encontrado(s) ${users.size} usuário(s)... Rolando...`);
- 
+
                          // Lógica de parada: se não encontrar novos usuários por um tempo, para.
                          if (users.size === initialUserCount) {
                              noNewUsersCount++;
                          } else {
                              noNewUsersCount = 0; // Reseta o contador se encontrar novos usuários
                          }
- 
+
                          if (noNewUsersCount >= maxIdleCount) {
                              console.log("Nenhum novo usuário encontrado após várias tentativas. Finalizando.");
                              finishExtraction();
                              return;
                          }
- 
+
                          // Simula a rolagem da janela principal
                          window.scrollTo(0, document.body.scrollHeight);
                      }
- 
+
                      // Inicia o processo de rolagem e extração
                      scrollInterval = setInterval(performScrollAndExtract, 1000); // Rola e extrai a cada 1 segundo
                  });
@@ -1397,7 +1676,10 @@
                 function renderPage(page) {
                     let html = `
                         <div class="modal-header">
-                            <span class="modal-title">Ocultar Story</span>
+                            <span class="modal-title">
+                                Ocultar Story
+                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Selecione usuários para ocultar seus stories e lives. Eles não saberão que foram ocultados.</span></div>
+                            </span>
                             <div class="modal-controls"><button id="hideStoryMinimizarBtn" title="Minimizar">_</button><button id="hideStoryFecharBtn" title="Fechar">X</button></div>
                         </div>`;
                     html += `
@@ -1475,7 +1757,7 @@
                         const isMinimized = modal.dataset.minimized === 'true';
 
                         contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-                        
+
                         modal.dataset.minimized = !isMinimized;
                         btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
                         modal.style.maxHeight = isMinimized ? '85vh' : 'none';
@@ -1632,6 +1914,29 @@
                 renderPage(currentPage);
             }
 
+            function showUnmuteOptionsModal(onConfirm) {
+                const div = document.createElement("div");
+                div.className = "submenu-modal";
+                div.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; padding: 20px; border: 1px solid #ccc; border-radius: 10px; z-index: 2147483648; text-align: center; background: white; color: black;`;
+                if (loadSettings().rgbBorder) div.classList.add('rgb-border-effect');
+
+                div.innerHTML = `
+                    <h3 style="margin-top:0;">O que deseja reativar?</h3>
+                    <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+                        <button id="optStories" style="padding: 10px; cursor: pointer; background: #f0f0f0; border: 1px solid #ccc; border-radius: 5px; color: black;">Stories</button>
+                        <button id="optPosts" style="padding: 10px; cursor: pointer; background: #f0f0f0; border: 1px solid #ccc; border-radius: 5px; color: black;">Publicações</button>
+                        <button id="optAll" style="padding: 10px; cursor: pointer; background: #0095f6; color: white; border: none; border-radius: 5px;">Ambos</button>
+                        <button id="optCancel" style="padding: 10px; cursor: pointer; background: #e74c3c; color: white; border: none; border-radius: 5px;">Cancelar</button>
+                    </div>
+                `;
+                document.body.appendChild(div);
+                const close = () => div.remove();
+                document.getElementById('optStories').onclick = () => { close(); onConfirm('stories'); };
+                document.getElementById('optPosts').onclick = () => { close(); onConfirm('posts'); };
+                document.getElementById('optAll').onclick = () => { close(); onConfirm('all'); };
+                document.getElementById('optCancel').onclick = close;
+            }
+
             let modalAbertoStory = false;
                             // --- FIM DO MENU OCULTAR STORY ---
 
@@ -1677,7 +1982,7 @@
                             const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
                             const username = usernameSpan ? usernameSpan.innerText.trim() : '';
                             const imgTag = userElement.querySelector('img');
-                            
+
                             let isChecked = false;
                             const checkboxContainer = userElement.querySelector('div[role="button"][tabindex="0"]');
                             if (checkboxContainer) {
@@ -1696,7 +2001,25 @@
                             // Adiciona o usuário apenas se tiver um nome válido, uma foto e ainda não estiver na lista
                             if (username && imgTag && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
                                 const photoUrl = imgTag.src;
-                                users.set(username, { username, photoUrl, isChecked });
+
+                                // Tenta extrair o status do texto do elemento
+                                let status = "Silenciado";
+
+                                // Procura especificamente pelo span de status
+                                const spans = Array.from(userElement.querySelectorAll('span[data-bloks-name="bk.components.Text"]'));
+                                const statusSpan = spans.find(s => {
+                                    const t = s.innerText.toLowerCase();
+                                    return (t.includes('silenci') || t.includes('muted')) && t !== username.toLowerCase();
+                                });
+
+                                if (statusSpan) status = statusSpan.innerText.trim();
+                                else {
+                                    const textLines = userElement.innerText.split('\n');
+                                    const statusLine = textLines.find(l => l.toLowerCase().includes('silenci') || l.toLowerCase().includes('muted'));
+                                    if (statusLine) status = statusLine;
+                                }
+
+                                users.set(username, { username, photoUrl, isChecked, status });
                             } else if (users.has(username)) {
                                 const u = users.get(username);
                                 if (!u.isChecked && isChecked) {
@@ -1746,6 +2069,7 @@
 
                 // Armazena a lista no cache global
                 userListCache.muted = new Set(users.map(u => u.username));
+                userListCache.mutedDetails = new Map(users.map(u => [u.username, u.status]));
                 console.log(`Cache atualizado com ${userListCache.muted.size} contas silenciadas.`);
 
                 const modalStates = new Map();
@@ -1776,7 +2100,10 @@
                 function renderPage(page) {
                     let html = `
                         <div class="modal-header">
-                            <span class="modal-title">Contas Silenciadas</span>
+                            <span class="modal-title">
+                                Contas Silenciadas
+                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie contas que você silenciou (Stories ou Posts). Você pode reativar o som aqui.</span></div>
+                            </span>
                             <div class="modal-controls"><button id="mutedMinimizarBtn" title="Minimizar">_</button><button id="mutedFecharBtn" title="Fechar">X</button></div>
                         </div>`;
                     html += `
@@ -1794,9 +2121,25 @@
                     const endIndex = Math.min(startIndex + itemsPerPage, users.length);
                     const pageUsers = users.slice(startIndex, endIndex);
 
-                    pageUsers.forEach(({ username, photoUrl }, idx) => {
+                    pageUsers.forEach(({ username, photoUrl, status }, idx) => {
                         const globalIdx = startIndex + idx;
                         const isChecked = modalStates.get(username) || false;
+
+                        // --- Lógica de Status Silenciado ---
+                        let mutedDetailText = '';
+                        const detail = status || '';
+                        const dLower = detail.toLowerCase();
+                        if ((dLower.includes('stories') || dLower.includes('story')) && (dLower.includes('publicações') || dLower.includes('posts'))) {
+                            mutedDetailText = '(Stories e Publicações)';
+                        } else if (dLower.includes('stories') || dLower.includes('story')) {
+                            mutedDetailText = '(Stories)';
+                        } else if (dLower.includes('publicações') || dLower.includes('posts')) {
+                            mutedDetailText = '(Publicações)';
+                        } else if (detail) { // Fallback
+                            mutedDetailText = `(${detail})`;
+                        }
+                        // --- Fim da Lógica ---
+
                         html += `
                             <li style="padding:5px 0;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px;">
                                 <label class="custom-checkbox" for="muted_cb_${globalIdx}" style="margin:0;">
@@ -1804,7 +2147,7 @@
                                     <span class="checkmark"></span>
                                 </label>
                                 <img src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
-                                <span style="cursor:pointer; color: black;">${username}</span>
+                                <div style="display:flex; flex-direction:column;"><span style="cursor:pointer; color: black; font-weight:bold;">${username}</span>${mutedDetailText ? `<span style="font-size:11px; color:gray;">${mutedDetailText}</span>` : ''}</div>
                             </li>
                         `;
                     });
@@ -1833,7 +2176,7 @@
                         const isMinimized = modal.dataset.minimized === 'true';
 
                         contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-                        
+
                         modal.dataset.minimized = !isMinimized;
                         btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
                         modal.style.maxHeight = isMinimized ? '85vh' : 'none';
@@ -1849,7 +2192,7 @@
                     const searchInput = document.getElementById("mutedSearchInput");
                     searchInput.addEventListener("input", () => {
                         const filter = searchInput.value.toLowerCase();
-                        div.querySelectorAll("#mutedList li").forEach(li => { 
+                        div.querySelectorAll("#mutedList li").forEach(li => {
                             // Seletor ajustado para ser mais específico
                             const usernameSpan = li.querySelector('span[style*="cursor:pointer"]');
                             const text = usernameSpan ? usernameSpan.textContent.toLowerCase() : '';
@@ -1880,21 +2223,23 @@
                         aplicarBtn.disabled = true;
                         aplicarBtn.textContent = "Processando...";
 
-                        await unmuteUsers(usersToUnmute, () => {
-                            aplicarBtn.disabled = false;
-                            aplicarBtn.textContent = "Reativar Som";
-                            alert(`${usersToUnmute.length} usuário(s) tiveram o som reativado.`);
-                            // Recarrega o modal para refletir as mudanças
-                            div.remove();
-                            modalAbertoMuted = false;
-                            abrirModalContasSilenciadas();
+                        showUnmuteOptionsModal(async (targetType) => {
+                            await unmuteUsers(usersToUnmute, () => {
+                                aplicarBtn.disabled = false;
+                                aplicarBtn.textContent = "Reativar Som";
+                                alert(`${usersToUnmute.length} usuário(s) processados.`);
+                                // Recarrega o modal para refletir as mudanças
+                                div.remove();
+                                modalAbertoMuted = false;
+                                abrirModalContasSilenciadas();
+                            }, false, targetType);
                         });
                     };
                 }
                 renderPage(currentPage);
             }
 
-            async function unmuteUsers(usersToUnmute, callback, toggleMode = false) {
+            async function unmuteUsers(usersToUnmute, callback, toggleMode = false, targetType = 'all') {
                 let cancelled = false;
                 const { bar, update, closeButton } = createCancellableProgressBar();
                 closeButton.onclick = () => {
@@ -1931,8 +2276,8 @@
 
                     // 3. Clicar na opção "Silenciar"
                     // Seletor mais robusto, similar ao de unfollow, para encontrar a opção "Silenciar"
-                    const muteOption = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], div[role="menuitem"]')).find(el => 
-                        el.innerText.trim() === 'Silenciar' || 
+                    const muteOption = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], div[role="menuitem"]')).find(el =>
+                        el.innerText.trim() === 'Silenciar' ||
                         (el.querySelector('span') && el.querySelector('span').innerText.trim() === 'Silenciar')
                     );
                     if (!muteOption) {
@@ -1946,13 +2291,16 @@
 
                     // 4. Desativar os toggles de "Publicações" e "Stories"
                     console.log('Procurando opções "Publicações" e "Stories" para alterar o estado...');
-                    const optionsToToggle = ['Publicações', 'Posts', 'Stories'];
+                    let optionsToToggle = [];
+                    if (targetType === 'posts' || targetType === 'all') optionsToToggle.push('Publicações', 'Posts');
+                    if (targetType === 'stories' || targetType === 'all') optionsToToggle.push('Stories');
+
                     let togglesClicked = 0;
 
                     for (const optionText of optionsToToggle) {
                         // Encontra o elemento de texto ("Publicações" ou "Stories") em toda a página
                         const textElement = Array.from(document.querySelectorAll('span, div')).find(el => el.innerText.trim() === optionText);
-                        
+
                         if (!textElement) {
                             console.log(`Elemento de texto para "${optionText}" não encontrado.`);
                             continue;
@@ -1971,7 +2319,7 @@
 
                                 if (toggleMode || isChecked === 'true') {
                                     console.log(`Tentando alterar o estado de "${optionText}".`);
-                                    
+
                                     // --- LÓGICA DE TESTE A/B ---
                                     if (optionText === 'Publicações' || optionText === 'Posts') {
                                         console.log(`Usando método 1 (clique no input) para "${optionText}".`);
@@ -2160,7 +2508,10 @@
                 function renderPage(page) {
                     let html = `
                         <div class="modal-header">
-                            <span class="modal-title">Contas Bloqueadas</span>
+                            <span class="modal-title">
+                                Contas Bloqueadas
+                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Lista de usuários que você bloqueou. Você pode desbloqueá-los em massa aqui.</span></div>
+                            </span>
                             <div class="modal-controls"><button id="blockedMinimizarBtn" title="Minimizar">_</button><button id="blockedFecharBtn" title="Fechar">X</button></div>
                         </div>`;
                     html += `
@@ -2333,15 +2684,15 @@
 
             let modalAbertoBlocked = false;
                             // --- FIM DO MENU CONTAS BLOQUEADAS ---
-            
+
             function simulateClick(element, triggerChangeEvent = false) {
                  if (!element) return;
                  const dispatch = (event) => element.dispatchEvent(event);
-            
+
                  // Simula eventos de toque, mais confiáveis em mobile
                  dispatch(new TouchEvent('touchstart', { bubbles: true, cancelable: true, view: window }));
                  dispatch(new TouchEvent('touchend', { bubbles: true, cancelable: true, view: window }));
-            
+
                  // Mantém os eventos de mouse como fallback
                  dispatch(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
                  dispatch(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
@@ -2432,6 +2783,48 @@
                                 alert('Nenhuma imagem ou vídeo de story encontrado para baixar.');
                             }
 
+                            // --- BOTÃO FLUTUANTE AUTOMÁTICO PARA STORIES ---
+                            function injectStoryFloatingButton() {
+                                if (window.location.href.includes('/stories/')) {
+                                    if (!document.getElementById("storyFloatingDownloadBtn")) {
+                                        const btn = document.createElement("button");
+                                        btn.id = "storyFloatingDownloadBtn";
+                                        btn.innerHTML = "⬇️";
+                                        btn.title = "Baixar Story Atual";
+                                        btn.style.cssText = `
+                                            position: fixed;
+                                            top: 20px;
+                                            left: 20px;
+                                            z-index: 2147483647;
+                                            background: rgba(255, 255, 255, 0.2);
+                                            color: white;
+                                            border: 1px solid rgba(255, 255, 255, 0.5);
+                                            border-radius: 50%;
+                                            width: 45px;
+                                            height: 45px;
+                                            font-size: 20px;
+                                            cursor: pointer;
+                                            display: flex;
+                                            align-items: center;
+                                            justify-content: center;
+                                            backdrop-filter: blur(4px);
+                                            transition: all 0.3s ease;
+                                        `;
+                                        btn.onmouseover = () => { btn.style.background = "rgba(255, 255, 255, 0.4)"; btn.style.transform = "scale(1.1)"; };
+                                        btn.onmouseout = () => { btn.style.background = "rgba(255, 255, 255, 0.2)"; btn.style.transform = "scale(1)"; };
+                                        btn.onclick = (e) => {
+                                            e.stopPropagation();
+                                            baixarStoryAtual();
+                                        };
+                                        document.body.appendChild(btn);
+                                    }
+                                } else {
+                                    const btn = document.getElementById("storyFloatingDownloadBtn");
+                                    if (btn) btn.remove();
+                                }
+                            }
+                            setInterval(injectStoryFloatingButton, 1000);
+
                             // --- LÓGICA UNIFICADA PARA "NÃO SEGUE DE VOLTA" ---
                             async function iniciarProcessoNaoSegueDeVolta(initialTab = 'tabNaoSegueDeVolta') {
                                 const pathParts = window.location.pathname.split('/').filter(Boolean);
@@ -2465,7 +2858,10 @@
                                 `;
                                 div.innerHTML = `
                                     <div class="modal-header">
-                                        <span class="modal-title">Análise de Seguidores (Não Seguem de Volta)</span>
+                                        <span class="modal-title">
+                                            Análise de Seguidores
+                                            <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Veja quem você segue mas não te segue de volta. Também mostra novos seguidores e histórico de unfollows.</span></div>
+                                        </span>
                                         <div class="modal-controls">
                                             <button id="naoSegueDeVoltaMinimizarBtn" title="Minimizar">_</button>
                                             <button id="fecharSubmenuBtn" title="Fechar">X</button>
@@ -2508,11 +2904,12 @@
                                     naoSegueDeVolta: null,
                                     novosSeguidores: null,
                                     unfollows: null,
+                                    seguidoresPerdidos: null,
                                     exceptions: null,
                                     profileInfo: null,
                                     userDetails: new Map()
                                 };
-                                
+
                                 // Variável compartilhada para as listas, acessível pelo unfollowUsers
                                 let lists = {};
 
@@ -2596,7 +2993,7 @@
                                 // Função principal que carrega os dados UMA VEZ
                                 async function carregarDadosIniciais() {
                                     statusDiv.innerText = 'Carregando dados do Banco de Dados (IndexedDB)...';
-                                    
+
                                     // 1. Carrega dados do DB (Sem requisições API)
                                     let dbFollowers = await dbHelper.loadCache('followers');
                                     let dbFollowing = await dbHelper.loadCache('following');
@@ -2626,7 +3023,7 @@
                                     // 2. Calcula listas baseadas no DB
                                     // Filtra quem não segue de volta E quem não está na lista de exceções (corrigidos)
                                     cachedData.naoSegueDeVolta = [...dbFollowing].filter(user => !dbFollowers.has(user) && !cachedData.exceptions.has(user));
-                                    
+
                                     // Tenta buscar info básica do perfil (leve) apenas para ter o ID caso o usuário queira atualizar
                                     try {
                                         const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
@@ -2642,10 +3039,11 @@
 
                                     // Listas iniciais (Novos estarão vazios até atualizar)
                                     let listNaoSegueDeVolta = toObjects(cachedData.naoSegueDeVolta);
-                                    let listNovosSeguidores = []; 
+                                    let listNovosSeguidores = [];
                                     let listNovosSeguindo = [];
+                                    let listSeguidoresPerdidos = [];
                                     let listNaoSigoDeVolta = toObjects([...dbFollowers].filter(u => !dbFollowing.has(u)));
-                                    let listHistorico = []; // Será carregado sob demanda
+                                    let listHistorico = await dbHelper.loadUnfollowHistory();
 
                                     const totalFollowers = cachedData.profileInfo ? cachedData.profileInfo.data.user.edge_followed_by.count : 'N/A';
                                     const totalFollowing = cachedData.profileInfo ? cachedData.profileInfo.data.user.edge_follow.count : 'N/A';
@@ -2653,41 +3051,74 @@
                                     statusDiv.innerText = `Dados carregados do cache. Seguidores: ${dbFollowers.size} (Oficial: ${totalFollowers}) | Seguindo: ${dbFollowing.size} (Oficial: ${totalFollowing})`;
 
                                     const tabelaContainer = document.getElementById("tabelaContainer");
-                                    
+
                                     // Adiciona abas
                                     const tabsHtml = `
                                         <div style="margin-bottom: 15px;">
                                             <button id="btnUpdateApi" style="background: #0095f6; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar Dados (Baixar e Salvar no DB)</button>
                                         </div>
-                                        <div class="tab-container">
-                                            <button id="tabNaoSegueDeVolta" class="tab-button active">Não Segue de Volta (<span id="countNaoSegue">${listNaoSegueDeVolta.length}</span>)</button>
-                                            <button id="tabNovosSeguidores" class="tab-button">Novos Seguidores (<span id="countNovosSeguidores">${listNovosSeguidores.length}</span>)</button>
-                                            <button id="tabNovosSeguindo" class="tab-button">Novos Seguindo (<span id="countNovosSeguindo">${listNovosSeguindo.length}</span>)</button>
-                                            <button id="tabNaoSigoDeVolta" class="tab-button">Não Sigo de Volta (<span id="countNaoSigo">${listNaoSigoDeVolta.length}</span>)</button>
-                                            <button id="tabHistorico" class="tab-button">Histórico</button>
+                                        <div class="cards-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px;">
+                                            <div id="tabNaoSegueDeVolta" class="card-tab active" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Não Segue de Volta</div>
+                                                <div id="countNaoSegue" style="font-size: 20px; font-weight: bold; color: #e74c3c;">${listNaoSegueDeVolta.length}</div>
+                                            </div>
+                                            <div id="tabNovosSeguidores" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Novos Seguidores</div>
+                                                <div id="countNovosSeguidores" style="font-size: 20px; font-weight: bold; color: #2ecc71;">${listNovosSeguidores.length}</div>
+                                            </div>
+                                            <div id="tabNovosSeguindo" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Novos Seguindo</div>
+                                                <div id="countNovosSeguindo" style="font-size: 20px; font-weight: bold; color: #0095f6;">${listNovosSeguindo.length}</div>
+                                            </div>
+                                            <div id="tabSeguidoresPerdidos" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Seguidores Perdidos</div>
+                                                <div id="countSeguidoresPerdidos" style="font-size: 20px; font-weight: bold; color: #e74c3c;">${listSeguidoresPerdidos.length}</div>
+                                            </div>
+                                            <div id="tabNaoSigoDeVolta" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Não Sigo de Volta</div>
+                                                <div id="countNaoSigo" style="font-size: 20px; font-weight: bold; color: #f39c12;">${listNaoSigoDeVolta.length}</div>
+                                            </div>
+                                            <div id="tabHistorico" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Histórico</div>
+                                                <div id="countHistorico" style="font-size: 20px; font-weight: bold; color: #333;">${listHistorico.length}</div>
+                                            </div>
                                         </div>
                                         <div id="tabContent"></div>
                                     `;
-                                    
+
                                     tabelaContainer.innerHTML = tabsHtml;
-                                    
+
                                     // Referências para as listas (usando let para poder atualizar)
                                     lists = {
                                         'tabNaoSegueDeVolta': listNaoSegueDeVolta,
                                         'tabNovosSeguidores': listNovosSeguidores,
                                         'tabNovosSeguindo': listNovosSeguindo,
+                                        'tabSeguidoresPerdidos': listSeguidoresPerdidos,
                                         'tabNaoSigoDeVolta': listNaoSigoDeVolta,
                                         'tabHistorico': listHistorico
                                     };
-                                    
-                                    let currentTabId = initialTab;
+
+                                    let currentTabId = null;
                                     let currentList = lists[currentTabId];
 
                                     async function renderCurrentTab() {
                                         // Atualiza classe active
-                                        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                                        document.querySelectorAll('.card-tab').forEach(b => {
+                                            b.style.borderColor = '#dbdbdb';
+                                            b.style.background = '#f8f9fa';
+                                        });
+
+                                        const contentDiv = document.getElementById("tabContent");
+                                        if (!currentTabId) {
+                                            contentDiv.innerHTML = '';
+                                            return;
+                                        }
+
                                         const activeBtn = document.getElementById(currentTabId);
-                                        if(activeBtn) activeBtn.classList.add('active');
+                                        if(activeBtn) {
+                                            activeBtn.style.borderColor = '#0095f6';
+                                            activeBtn.style.background = '#e8f0fe';
+                                        }
 
                                         if (currentTabId === 'tabHistorico') {
                                             currentList = await dbHelper.loadUnfollowHistory();
@@ -2696,7 +3127,6 @@
                                         }
 
                                         const tableId = currentTabId === 'tabHistorico' ? 'historicoTable' : 'naoSegueDeVoltaTable';
-                                        const contentDiv = document.getElementById("tabContent");
                                         contentDiv.innerHTML = `
                                             <div style="margin-bottom: 10px;">
                                             </div>
@@ -2704,21 +3134,21 @@
                                             <div style="margin-top: 20px;">
                                                 <button id="selecionarTodosBtn">Selecionar Todos</button>
                                                 <button id="desmarcarTodosBtn">Desmarcar Todos</button>
-                                                ${currentTabId === 'tabNaoSegueDeVolta' ? `
+                                                ${(currentTabId === 'tabNaoSegueDeVolta' || currentTabId === 'tabSeguidoresPerdidos') ? `
                                                     <button id="unfollowBtn">Unfollow</button>
                                                     <button id="bloquearBtn" style="margin-left: 10px; background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Bloquear</button>
-                                                    <button id="corrigirBtn" style="margin-left: 10px; background-color: #f39c12; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;" title="Remove usuários selecionados desta lista permanentemente">Corrigir (Já Sigo)</button>
+                                                    ${currentTabId === 'tabNaoSegueDeVolta' ? `<button id="corrigirBtn" style="margin-left: 10px; background-color: #f39c12; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;" title="Remove usuários selecionados desta lista permanentemente">Corrigir (Já Sigo)</button>` : ''}
                                                 ` : ''}
                                                 ${currentTabId === 'tabNaoSigoDeVolta' ? `<button id="followBackBtn" style="background:#0095f6;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">Seguir de Volta (Em breve)</button>` : ''}
                                                 ${currentTabId === 'tabHistorico' ? `<button id="limparHistoricoBtn" style="background:#e74c3c;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">Limpar Selecionados</button>` : ''}
                                             </div>
                                         `;
-                                        
+
                                         preencherTabela(currentList, true, currentTabId === 'tabHistorico');
-                                        
+
                                         document.getElementById("selecionarTodosBtn").onclick = selecionarTodos;
                                         document.getElementById("desmarcarTodosBtn").onclick = desmarcarTodos;
-                                        
+
                                         if (document.getElementById("unfollowBtn")) {
                                             document.getElementById("unfollowBtn").onclick = unfollowSelecionados;
                                         }
@@ -2729,7 +3159,7 @@
                                             document.getElementById("corrigirBtn").onclick = async () => {
                                                 const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(cb => cb.dataset.username);
                                                 if (selecionados.length === 0) return alert("Selecione os usuários que você já segue para corrigir.");
-                                                
+
                                                 if (confirm(`Marcar ${selecionados.length} usuários como 'Já Sigo'? Eles não aparecerão mais nesta lista.`)) {
                                                     for (const u of selecionados) {
                                                         await dbHelper.saveException(u);
@@ -2759,7 +3189,7 @@
                                     renderCurrentTab();
 
                                     // Event listeners para as abas
-                                    const tabs = ['tabNaoSegueDeVolta', 'tabNovosSeguidores', 'tabNovosSeguindo', 'tabNaoSigoDeVolta', 'tabHistorico'];
+                                    const tabs = ['tabNaoSegueDeVolta', 'tabNovosSeguidores', 'tabNovosSeguindo', 'tabSeguidoresPerdidos', 'tabNaoSigoDeVolta', 'tabHistorico'];
 
                                     tabs.forEach(tabId => {
                                         document.getElementById(tabId).addEventListener('click', () => {
@@ -2780,7 +3210,7 @@
                                                 return;
                                             }
                                         }
-                                        
+
                                         const userId = cachedData.profileInfo.data.user.id;
                                         const totalFollowing = cachedData.profileInfo.data.user.edge_follow.count;
                                         const totalFollowers = cachedData.profileInfo.data.user.edge_followed_by.count;
@@ -2788,7 +3218,7 @@
                                         // 1. Baixar Seguindo
                                         const apiFollowing = await fetchUserListAPI(userId, 'following', totalFollowing);
                                         if (processoCancelado || !apiFollowing) return;
-                                        
+
                                         // 2. Baixar Seguidores
                                         const apiFollowers = await fetchUserListAPI(userId, 'followers', totalFollowers);
                                         if (processoCancelado || !apiFollowers) return;
@@ -2798,6 +3228,7 @@
                                         // 3. Calcular Novos (Comparando API vs DB Antigo)
                                         const novosSeguidoresSet = [...apiFollowers].filter(u => !cachedData.seguidores.has(u));
                                         const novosSeguindoSet = [...apiFollowing].filter(u => !cachedData.seguindo.has(u));
+                                        const seguidoresPerdidosSet = [...cachedData.seguidores].filter(u => !apiFollowers.has(u));
 
                                         // 4. Salvar no DB (Substitui o antigo pelo novo da API)
                                         // Prepara objetos completos para salvar (com foto)
@@ -2815,12 +3246,14 @@
                                         lists['tabNaoSegueDeVolta'] = toObjects(cachedData.naoSegueDeVolta);
                                         lists['tabNovosSeguidores'] = toObjects(novosSeguidoresSet);
                                         lists['tabNovosSeguindo'] = toObjects(novosSeguindoSet);
+                                        lists['tabSeguidoresPerdidos'] = toObjects(seguidoresPerdidosSet);
                                         lists['tabNaoSigoDeVolta'] = toObjects([...apiFollowers].filter(u => !apiFollowing.has(u)));
 
                                         // Atualizar Contadores
                                         document.getElementById('countNaoSegue').innerText = lists['tabNaoSegueDeVolta'].length;
                                         document.getElementById('countNovosSeguidores').innerText = lists['tabNovosSeguidores'].length;
                                         document.getElementById('countNovosSeguindo').innerText = lists['tabNovosSeguindo'].length;
+                                        document.getElementById('countSeguidoresPerdidos').innerText = lists['tabSeguidoresPerdidos'].length;
                                         document.getElementById('countNaoSigo').innerText = lists['tabNaoSigoDeVolta'].length;
 
                                         statusDiv.innerText = "Dados atualizados e salvos no IndexDB com sucesso!";
@@ -2853,7 +3286,7 @@
                                     const btn = document.getElementById("bloquearBtn");
                                     btn.disabled = true;
                                     btn.textContent = "Processando...";
-                                    
+
                                     blockUsers(selecionados, 0, () => {
                                         btn.disabled = false;
                                         btn.textContent = "Bloquear";
@@ -2875,7 +3308,7 @@
                                         // 1. Clicar nos 3 pontinhos (Opções)
                                         const xpath1 = "/html/body/div[1]/div/div/div[2]/div/div/div[1]/div[2]/div[1]/section/main/div/div/header/div/section[2]/div/div[1]/div[2]/div";
                                         let optionsClicked = executeXPathClick(xpath1);
-                                        
+
                                         if (!optionsClicked) {
                                             // Fallback: busca por SVG de opções se o XPath falhar
                                             const svgs = document.querySelectorAll('svg[aria-label="Opções"], svg[aria-label="Options"]');
@@ -2922,7 +3355,7 @@
                                                         for (let xp of confirmXpaths) {
                                                             if (executeXPathClick(xp)) { confirmClicked = true; break; }
                                                         }
-                                                        
+
                                                         if (!confirmClicked) {
                                                             // Fallback robusto: Busca botão "Bloquear" no último dialog (que deve ser o de confirmação)
                                                             const dialogs = document.querySelectorAll('div[role="dialog"]');
@@ -3035,7 +3468,7 @@
                                                     const lowerUser = username.toLowerCase();
                                                     if (cachedData.seguindo && cachedData.seguindo.has(lowerUser)) {
                                                         cachedData.seguindo.delete(lowerUser);
-                                                        const newFollowingList = Array.from(cachedData.seguindo).map(u => 
+                                                        const newFollowingList = Array.from(cachedData.seguindo).map(u =>
                                                             cachedData.userDetails.get(u) || { username: u, photoUrl: null }
                                                         );
                                                         dbHelper.saveCache('following', newFollowingList).catch(e => console.error("Erro ao atualizar cache following:", e));
@@ -3068,9 +3501,8 @@
                             }
 
                             // --- LÓGICA PARA "SEGUINDO" ---
-                            async function iniciarProcessoSeguindo() {
+                            async function iniciarProcessoSeguindo(forceUpdate = false) {
                                 if (document.getElementById("seguindoModal")) return;
-                                if (document.getElementById("automationStatusModal")) return;
 
                                 const originalPath = window.location.pathname;
 
@@ -3082,52 +3514,54 @@
                                     return;
                                 }
 
-                                // 1. Criar o modal de status da automação
-                                const statusModal = document.createElement("div");
-                                statusModal.id = "automationStatusModal";
-                                statusModal.className = "submenu-modal";
-                                statusModal.style.cssText = `
-                                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                                    width: 90%; max-width: 500px; border: 1px solid #ccc;
-                                    border-radius: 10px; padding: 20px; z-index: 10001;
-                                `;
-                                statusModal.innerHTML = `
-                                    <div class="modal-header">
-                                        <span class="modal-title">Coletando Dados...</span>
-                                    </div>
-                                    <div style="padding: 15px;">
-                                        <p>Por favor, aguarde. O script está navegando para buscar as informações necessárias.</p>
-                                        <ul style="list-style: none; padding: 0; margin-top: 20px;">
-                                            <li id="status-step-1" style="margin-bottom: 10px;"><span>⏳</span> Carregando lista de "Seguindo"...</li>
-                                    <li id="status-step-2" style="margin-bottom: 10px;"><span>⏳</span> Carregando cache de "Melhores Amigos"...</li>
-                                    <li id="status-step-3" style="margin-bottom: 10px;"><span>⏳</span> Carregando cache de "Ocultar Stories"...</li>
-                                    <li id="status-step-4" style="margin-bottom: 10px;"><span>⏳</span> Carregando cache de "Contas Silenciadas"...</li>
-                                    </ul>
-                                <div id="automation-result" style="margin-top: 20px; font-weight: bold; color: red;"></div>
-                                `;
-                                document.body.appendChild(statusModal);
+                                // 1. Criar o modal de status da automação SE for atualização forçada
+                                if (forceUpdate) {
+                                    const statusModal = document.createElement("div");
+                                    statusModal.id = "automationStatusModal";
+                                    statusModal.className = "submenu-modal";
+                                    statusModal.style.cssText = `
+                                        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                        width: 90%; max-width: 500px; border: 1px solid #ccc;
+                                        border-radius: 10px; padding: 20px; z-index: 10001;
+                                    `;
+                                    statusModal.innerHTML = `
+                                        <div class="modal-header">
+                                            <span class="modal-title">Coletando Dados...</span>
+                                        </div>
+                                        <div style="padding: 15px;">
+                                            <p>Por favor, aguarde. O script está navegando para buscar as informações necessárias.</p>
+                                            <ul style="list-style: none; padding: 0; margin-top: 20px;">
+                                                <li id="status-step-1" style="margin-bottom: 10px;"><span>⏳</span> Carregando lista de "Seguindo"...</li>
+                                        <li id="status-step-2" style="margin-bottom: 10px;"><span>⏳</span> Carregando "Melhores Amigos"...</li>
+                                        <li id="status-step-3" style="margin-bottom: 10px;"><span>⏳</span> Carregando "Ocultar Stories"...</li>
+                                        <li id="status-step-4" style="margin-bottom: 10px;"><span>⏳</span> Carregando "Contas Silenciadas"...</li>
+                                        </ul>
+                                    <div id="automation-result" style="margin-top: 20px; font-weight: bold; color: red;"></div>
+                                    `;
+                                    document.body.appendChild(statusModal);
+                                }
 
                                 const updateStatus = (step, success, message = '') => {
+                                    if (!forceUpdate) return;
                                     const stepLi = document.getElementById(`status-step-${step}`);
                                     if (stepLi) {
                                         stepLi.innerHTML = `<span>${success ? '✅' : '❌'}</span> ${stepLi.innerText.substring(2)} ${message}`;
                                     }
                                 };
 
-                                // Função para navegar, extrair e retornar
                                 const fetchAndCache = async (url, extractorFn, cacheKey, step) => {
-                                    if (userListCache[cacheKey] !== null) {
-                                        updateStatus(step, true, '(Já em cache)');
-                                        return true;
-                                    }
                                     try {
                                         history.pushState(null, null, url);
                                         window.dispatchEvent(new Event("popstate"));
-                                        await new Promise(r => setTimeout(r, 3000)); // Espera a página carregar
+                                        await new Promise(r => setTimeout(r, 3000));
 
                                         const users = await extractorFn();
+                                        let filteredUsersToSave = [];
+
                                         if (url.includes('muted_accounts')) {
+                                            filteredUsersToSave = users;
                                             userListCache[cacheKey] = new Set(users.map(u => u.username));
+                                            userListCache.mutedDetails = new Map(users.map(u => [u.username, u.status]));
                                         } else {
                                             const officialStates = new Map();
                                             const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
@@ -3142,9 +3576,11 @@
                                                     }
                                                 }
                                             });
-                                            const filteredUsernames = users.filter(u => officialStates.get(u.username) === true).map(u => u.username);
-                                            userListCache[cacheKey] = new Set(filteredUsernames);
+                                            filteredUsersToSave = users.filter(u => officialStates.get(u.username) === true);
+                                            userListCache[cacheKey] = new Set(filteredUsersToSave.map(u => u.username));
                                         }
+
+                                        await dbHelper.saveCache(cacheKey, filteredUsersToSave);
                                         updateStatus(step, true);
                                         return true;
                                     } catch (error) {
@@ -3164,9 +3600,12 @@
                                     width: 90%; max-width: 800px; max-height: 90vh; border: 1px solid #ccc;
                                     border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
                                 `;
-                                div.innerHTML = ` 
+                                div.innerHTML = `
                                     <div class="modal-header">
-                                        <span class="modal-title">Gerenciador de "Seguindo"</span>
+                                        <span class="modal-title">
+                                            Gerenciador de "Seguindo"
+                                            <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie quem você segue. Filtre por quem é Melhor Amigo, Silenciado ou tem Story Oculto.</span></div>
+                                        </span>
                                         <div class="modal-controls"><button id="seguindoMinimizarBtn" title="Minimizar">_</button><button id="fecharSeguindoBtn" title="Fechar">X</button></div>
                                     </div>
                                     <div style="padding: 15px;">
@@ -3177,10 +3616,18 @@
                                             <button id="hideStorySeguindoBtn" style="background: #f39c12; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Ocultar Story</button>
                                         </div>
                                     </div>
-                                    <div style="margin: 20px 0;">
-                                        <input type="text" id="seguindoSearchInput" placeholder="Pesquisar na lista de seguindo..." style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                                    <div style="margin: 0 20px 20px 20px; display: flex; gap: 10px;">
+                                        <input type="text" id="seguindoSearchInput" placeholder="Pesquisar na lista de seguindo..." style="flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                                        <select id="seguindoFilterSelect" style="padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: black; width: 200px;">
+                                            <option value="all">Todos</option>
+                                            <option value="muted_stories">Silenciado (Stories)</option>
+                                            <option value="muted_posts">Silenciado (Publicações)</option>
+                                            <option value="muted_all">Silenciado (Ambos)</option>
+                                            <option value="close_friends">Melhores Amigos</option>
+                                            <option value="hidden_stories">Ocultar Stories</option>
+                                        </select>
                                     </div>
-                                    <div id="statusSeguindo" style="margin-top: 20px; font-weight: bold;"></div>
+                                    <div id="statusSeguindo" style="margin-top: 20px; font-weight: bold; padding: 0 20px;"></div>
                                     <div id="tabelaSeguindoContainer" style="display: block; margin-top: 15px;"></div>
                                 `;
                                 document.body.appendChild(div);
@@ -3212,7 +3659,7 @@
                                     // Limpa o cache e recarrega os dados
                                     Object.keys(userListCache).forEach(key => userListCache[key] = null);
                                     div.remove();
-                                    iniciarProcessoSeguindo();
+                                    iniciarProcessoSeguindo(true);
                                 });
 
                                 const statusDiv = document.getElementById("statusSeguindo");
@@ -3259,6 +3706,20 @@
                                 return processoCancelado ? null : userList;
                             };
 
+                            // Carrega dados do DB sem navegação
+                            const loadCacheFromDB = async (key) => {
+                                try {
+                                    const data = await dbHelper.loadCache(key);
+                                    if (data) {
+                                        userListCache[key] = data;
+                                        if (key === 'muted' && data.details) {
+                                            userListCache.mutedDetails = new Map();
+                                            data.details.forEach((u, username) => userListCache.mutedDetails.set(username, u.status));
+                                        }
+                                    } else { userListCache[key] = new Set(); }
+                                } catch (e) { userListCache[key] = new Set(); }
+                            };
+
                                 async function carregarSeguindo() {
                                     statusDiv.innerText = 'Buscando informações do perfil...';
                                     const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
@@ -3269,33 +3730,48 @@
 
                                     const totalFollowing = profileInfo.data.user.edge_follow.count;
 
-                                    // Inicia o processo de automação
-                                const step2Success = await fetchAndCache('/accounts/close_friends/', extractCloseFriendsUsernames, 'closeFriends', 2);
-                                const step3Success = await fetchAndCache('/accounts/hide_story_and_live_from/', extractHideStoryUsernames, 'hiddenStory', 3);
-                                const step4Success = await fetchAndCache('/accounts/muted_accounts/', extractMutedAccountsUsernames, 'muted', 4);
+                                    // Carrega caches do DB
+                                    await Promise.all([
+                                        loadCacheFromDB('closeFriends'),
+                                        loadCacheFromDB('hiddenStory'),
+                                        loadCacheFromDB('muted')
+                                    ]);
 
-                                const step1Success = await (async () => {
-                                    if (!step2Success || !step3Success || !step4Success) {
-                                        updateStatus(1, false, '(Abortado)');
-                                        return false;
+                                    // Carrega seguindo (DB ou API)
+                                    const dbFollowing = await dbHelper.loadCache('following');
+                                    if (!forceUpdate && dbFollowing) {
+                                        if (dbFollowing.details) {
+                                            seguindoList = Array.from(dbFollowing.details.values());
+                                        } else {
+                                            seguindoList = Array.from(dbFollowing).map(u => ({ username: u, photoUrl: 'https://via.placeholder.com/150' }));
+                                        }
+                                    } else {
+                                        if (forceUpdate) {
+                                            await fetchAndCache('/accounts/close_friends/', extractCloseFriendsUsernames, 'closeFriends', 2);
+                                            await fetchAndCache('/accounts/hide_story_and_live_from/', extractHideStoryUsernames, 'hiddenStory', 3);
+                                            await fetchAndCache('/accounts/muted_accounts/', extractMutedAccountsUsernames, 'muted', 4);
+
+                                            seguindoList = await fetchUserListAPISeguindo(userId, 'following', totalFollowing);
+                                            if (seguindoList) {
+                                                updateStatus(1, true);
+                                                await dbHelper.saveCache('following', seguindoList);
+                                            } else {
+                                                updateStatus(1, false);
+                                            }
+                                        } else {
+                                            seguindoList = await fetchUserListAPISeguindo(userId, 'following', totalFollowing);
+                                            await dbHelper.saveCache('following', seguindoList);
+                                        }
                                     }
-                                        seguindoList = await fetchUserListAPISeguindo(userId, 'following', totalFollowing);
-                                        const success = seguindoList !== null;
-                                        updateStatus(1, success);
-                                        return success;
-                                    })();
 
                                     // Retorna para a página original
                                     history.pushState(null, null, originalPath);
                                     window.dispatchEvent(new Event("popstate"));
                                     await new Promise(r => setTimeout(r, 500));
 
-                                if (!step1Success || !step2Success || !step3Success || !step4Success) {
-                                        document.getElementById('automation-result').innerHTML = 'Falha na coleta automática. Por favor, abra os menus "Melhores Amigos", "Ocultar Story" e "Contas Silenciadas" manualmente para carregar os dados e tente novamente.';
-                                        return; // Interrompe se alguma etapa falhou
-                                    }
+                                    const statusModal = document.getElementById("automationStatusModal");
+                                    if (statusModal) statusModal.remove();
 
-                                    statusModal.remove(); // Remove o modal de status
                                     document.body.appendChild(div); // Adiciona o modal principal
 
                                     statusDiv.innerText = `Total: ${seguindoList.length} perfis seguidos.`;
@@ -3309,12 +3785,38 @@
                                     const renderList = (page) => {
                                         const startIndex = (page - 1) * itemsPerPage;
                                         const endIndex = startIndex + itemsPerPage;
-                                        
+
                                         // Filtra por pesquisa antes de ordenar e paginar
                                         const searchTerm = document.getElementById('seguindoSearchInput')?.value.toLowerCase() || '';
+                                        const filterValue = document.getElementById('seguindoFilterSelect')?.value || 'all';
+
                                         let filteredUsers = seguindoList;
+
                                         if (searchTerm) {
                                             filteredUsers = seguindoList.filter(user => user.username.toLowerCase().includes(searchTerm));
+                                        }
+
+                                        if (filterValue !== 'all') {
+                                            filteredUsers = filteredUsers.filter(user => {
+                                                const username = user.username;
+                                                if (filterValue === 'close_friends') {
+                                                    return userListCache.closeFriends && userListCache.closeFriends.has(username);
+                                                }
+                                                if (filterValue === 'hidden_stories') {
+                                                    return userListCache.hiddenStory && userListCache.hiddenStory.has(username);
+                                                }
+                                                if (userListCache.muted && userListCache.muted.has(username)) {
+                                                    const detail = userListCache.mutedDetails.get(username) || '';
+                                                    const dLower = detail.toLowerCase();
+                                                    const isStories = dLower.includes('stories') || dLower.includes('story');
+                                                    const isPosts = dLower.includes('publicações') || dLower.includes('posts');
+
+                                                    if (filterValue === 'muted_all') return isStories && isPosts;
+                                                    if (filterValue === 'muted_stories') return isStories && !isPosts;
+                                                    if (filterValue === 'muted_posts') return isPosts && !isStories;
+                                                }
+                                                return false;
+                                            });
                                         }
                                         let tableHtml = `
                                             <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
@@ -3357,7 +3859,22 @@
                                         paginatedUsers.forEach(({ username, photoUrl }) => {
                                             const isChecked = selectedUsers.has(username);
                                             // Verifica os dados no cache global
-                                            const isMuted = userListCache.muted ? (userListCache.muted.has(username) ? "Sim" : "Não") : "??";
+                                            const isMutedSimple = userListCache.muted ? (userListCache.muted.has(username) ? "Sim" : "Não") : "??";
+                                            let mutedDetailText = '';
+                                            if (isMutedSimple === "Sim") {
+                                                const detail = userListCache.mutedDetails.get(username) || '';
+                                                const dLower = detail.toLowerCase();
+                                                if ((dLower.includes('stories') || dLower.includes('story')) && (dLower.includes('publicações') || dLower.includes('posts'))) {
+                                                    mutedDetailText = '(Stories e Publicações)';
+                                                } else if (dLower.includes('stories') || dLower.includes('story')) {
+                                                    mutedDetailText = '(Stories)';
+                                                } else if (dLower.includes('publicações') || dLower.includes('posts')) {
+                                                    mutedDetailText = '(Publicações)';
+                                                } else if (detail) { // Fallback
+                                                    mutedDetailText = `(${detail})`;
+                                                }
+                                            }
+
                                             const isCloseFriend = userListCache.closeFriends ? (userListCache.closeFriends.has(username) ? "Sim" : "Não") : "??";
                                             const isStoryHidden = userListCache.hiddenStory ? (userListCache.hiddenStory.has(username) ? "Sim" : "Não") : "??";
 
@@ -3381,9 +3898,12 @@
                                                     <td style="padding: 8px;"><input type="checkbox" class="user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
                                                     <td style="padding: 8px; display:flex; align-items:center; gap:10px;">
                                                         <img src="${photoUrl}" alt="${username}" style="width:40px; height:40px; border-radius:50%;">
-                                                        <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600;">${username}</a>
+                                                        <div style="display:flex; flex-direction:column;">
+                                                            <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600;">${username}</a>
+                                                            ${mutedDetailText ? `<span style="font-size:11px; color:gray;">${mutedDetailText}</span>` : ''}
+                                                        </div>
                                                     </td>
-                                                    <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isMuted, 'muted')}">${isMuted}</span></td>
+                                                    <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isMutedSimple, 'muted')}">${isMutedSimple}</span></td>
                                                     <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isCloseFriend, 'closeFriend')}">${isCloseFriend}</span></td>
                                                     <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isStoryHidden, 'storyHidden')}">${isStoryHidden}</span></td>
                                                 </tr>
@@ -3404,7 +3924,7 @@
                                         if (prevBtn) prevBtn.onclick = () => renderList(--currentPage);
                                         const nextBtn = document.getElementById("nextPageBtn");
                                         if (nextBtn) nextBtn.onclick = () => renderList(++currentPage);
-                                        
+
                                         // Adiciona eventos aos checkboxes individuais para atualizar o Set
                                         document.querySelectorAll('#seguindoModal .user-checkbox').forEach(checkbox => {
                                             checkbox.addEventListener('change', (e) => {
@@ -3424,6 +3944,12 @@
                                                 const isChecked = e.target.checked;
                                                 document.querySelectorAll('#tabelaSeguindoContainer .user-checkbox').forEach(checkbox => {
                                                     checkbox.checked = isChecked;
+                                                    const username = checkbox.dataset.username;
+                                                    if (isChecked) {
+                                                        selectedUsers.add(username);
+                                                    } else {
+                                                        selectedUsers.delete(username);
+                                                    }
                                                 });
                                             });
                                         }
@@ -3432,6 +3958,12 @@
                                         const searchInput = document.getElementById("seguindoSearchInput");
                                         searchInput.oninput = () => {
                                             renderList(1); // Volta para a primeira página ao pesquisar
+                                        };
+
+                                        // Evento para o filtro
+                                        const filterSelect = document.getElementById("seguindoFilterSelect");
+                                        filterSelect.onchange = () => {
+                                            renderList(1);
                                         };
 
                                         // Adiciona eventos de clique para ordenação nos cabeçalhos
@@ -3448,9 +3980,25 @@
                                         });
                                     };
 
-                                    document.getElementById('silenciarSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'mute');
-                                    document.getElementById('closeFriendsSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'closeFriends');
-                                    document.getElementById('hideStorySeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'hideStory');
+                                    const updateLocalState = async (users, dbStore) => {
+                                        if (!userListCache[dbStore]) userListCache[dbStore] = new Set();
+                                        users.forEach(u => {
+                                            if (userListCache[dbStore].has(u)) {
+                                                userListCache[dbStore].delete(u); // Toggle off
+                                            } else {
+                                                userListCache[dbStore].add(u); // Toggle on
+                                            }
+                                        });
+                                        // Salva o novo estado no DB
+                                        await dbHelper.saveCache(dbStore, Array.from(userListCache[dbStore]));
+                                        // Re-renderiza a lista para refletir as mudanças (flags 0 -> 1)
+                                        renderList(currentPage);
+                                        selectedUsers.clear(); // Limpa seleção
+                                    };
+
+                                    document.getElementById('silenciarSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'mute', updateLocalState);
+                                    document.getElementById('closeFriendsSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'closeFriends', updateLocalState);
+                                    document.getElementById('hideStorySeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'hideStory', updateLocalState);
 
                                     if (seguindoList.length > 0) renderList(currentPage);
                                 }
@@ -3476,18 +4024,22 @@
 
                                 div.innerHTML = `
                                     <div class="modal-header">
-                                        <span class="modal-title">Configurações</span>
+                                        <span class="modal-title">
+                                            ${getText('settings')}
+                                            <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Ajuste a aparência, atalhos e parâmetros de funcionamento do script.</span></div>
+                                        </span>
                                         <div class="modal-controls">
                                             <button id="fecharSettingsBtn" title="Fechar">X</button>
                                         </div>
                                     </div>
                                     <div style="padding: 15px;">
                                         <div style="display: flex; flex-direction: column; gap: 10px;">
-                                            <button id="settingsDarkModeBtn" class="menu-item-button" style="background: ${settings.darkMode ? '#4c5c75' : ''};">🌙 Modo Escuro</button>
-                                            <button id="settingsRgbBorderBtn" class="menu-item-button" style="background: ${settings.rgbBorder ? '#4c5c75' : ''};">🌈 Borda RGB</button>
-                                            <button id="settingsShortcutsBtn" class="menu-item-button">⌨️ Atalhos</button>
-                                            <button id="settingsParamsBtn" class="menu-item-button">🔧 Parâmetros</button>
-                                            <button id="settingsLangBtn" class="menu-item-button">🌐 Idioma</button>
+                                            <button id="settingsDarkModeBtn" class="menu-item-button" style="background: ${settings.darkMode ? '#4c5c75' : ''};">🌙 ${getText('darkMode')}</button>
+                                            <button id="settingsRgbBorderBtn" class="menu-item-button" style="background: ${settings.rgbBorder ? '#4c5c75' : ''};">🌈 ${getText('rgbBorder')}</button>
+                                            <button id="settingsVoiceBtn" class="menu-item-button">🎙️ Comandos de Voz</button>
+                                            <button id="settingsShortcutsBtn" class="menu-item-button">⌨️ ${getText('shortcuts')}</button>
+                                            <button id="settingsParamsBtn" class="menu-item-button">🔧 ${getText('parameters')}</button>
+                                            <button id="settingsLangBtn" class="menu-item-button">🌐 ${getText('language')}</button>
                                         </div>
                                     </div>
                                 `;
@@ -3507,6 +4059,11 @@
                                     saveSettings({ rgbBorder: newSetting });
                                 };
 
+                                document.getElementById("settingsVoiceBtn").onclick = () => {
+                                    div.remove();
+                                    abrirModalComandosVoz();
+                                };
+
                                 document.getElementById("settingsShortcutsBtn").onclick = () => {
                                     div.remove();
                                     abrirModalAtalhos();
@@ -3518,12 +4075,44 @@
                                 };
 
                                 document.getElementById("settingsLangBtn").onclick = () => {
-                                    // Apenas para exemplo, a lógica de idioma pode ser mais complexa
-                                    const currentLang = loadSettings().language;
-                                    const newLang = currentLang === 'pt-BR' ? 'en-US' : 'pt-BR';
-                                    saveSettings({ language: newLang });
-                                    alert(`Idioma alterado para ${newLang}. A tradução completa será aplicada no futuro.`);
+                                    div.remove();
+                                    abrirModalIdioma();
                                 };
+                            }
+
+                            function abrirModalIdioma() {
+                                if (document.getElementById("langModal")) return;
+                                const div = document.createElement("div");
+                                div.id = "langModal";
+                                div.className = "submenu-modal";
+                                div.style.cssText = `
+                                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                    width: 90%; max-width: 300px; border: 1px solid #ccc;
+                                    border-radius: 10px; z-index: 10001;
+                                `;
+                                if (loadSettings().rgbBorder) {
+                                    div.classList.add('rgb-border-effect');
+                                }
+
+                                const languages = [
+                                    { code: 'pt-BR', name: '🇧🇷 Português' },
+                                    { code: 'en-US', name: '🇺🇸 English' },
+                                    { code: 'es-ES', name: '🇪🇸 Español' },
+                                    { code: 'fr-FR', name: '🇫🇷 Français' },
+                                    { code: 'it-IT', name: '🇮🇹 Italiano' },
+                                    { code: 'de-DE', name: '🇩🇪 Deutsch' }
+                                ];
+
+                                let html = `<div class="modal-header"><span class="modal-title">${getText('language')}</span><div class="modal-controls"><button id="fecharLangBtn">X</button></div></div><div style="padding: 15px; display: flex; flex-direction: column; gap: 10px;">`;
+                                languages.forEach(lang => { html += `<button class="menu-item-button lang-option" data-lang="${lang.code}">${lang.name}</button>`; });
+                                html += `</div>`;
+                                div.innerHTML = html;
+                                document.body.appendChild(div);
+
+                                document.getElementById("fecharLangBtn").onclick = () => div.remove();
+                                div.querySelectorAll('.lang-option').forEach(btn => {
+                                    btn.onclick = () => { saveSettings({ language: btn.dataset.lang }); div.remove(); const oldMenu = document.querySelector('.assistive-menu'); if (oldMenu) oldMenu.remove(); };
+                                });
                             }
 
                             function renderShortcuts() {
@@ -3565,7 +4154,209 @@
                                     };
                                 });
                             }
-                            
+
+
+                            function abrirModalComandosVoz() {
+                                if (document.getElementById("voiceCommandsModal")) return;
+
+                                const div = document.createElement("div");
+                                div.id = "voiceCommandsModal";
+                                div.className = "submenu-modal";
+                                div.style.cssText = `
+                                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                    width: 90%; max-width: 500px; border: 1px solid #ccc;
+                                    border-radius: 10px; z-index: 10001; max-height: 90vh; overflow-y: auto;
+                                `;
+                                if (loadSettings().rgbBorder) {
+                                    div.classList.add('rgb-border-effect');
+                                }
+
+                                const isListening = voiceControl.isListening;
+
+                                // Available actions mapping
+                                const availableActions = [
+                                    { value: "downloadStory", label: "Baixar Story" },
+                                    { value: "openSettings", label: "Abrir Configurações" },
+                                    { value: "closeMenu", label: "Fechar Menu" },
+                                    { value: "toggleReelsScroll", label: "Rolar Reels" },
+                                    { value: "downloadReel", label: "Baixar Reel" },
+                                    { value: "openCloseFriends", label: "Amigos Próximos" },
+                                    { value: "openHideStory", label: "Ocultar Story" },
+                                    { value: "openMuted", label: "Contas Silenciadas" },
+                                    { value: "openNotFollowingBack", label: "Não Segue de Volta" },
+                                    { value: "openFollowing", label: "Seguindo" },
+                                    { value: "openBlocked", label: "Bloqueados" },
+                                    { value: "analyzeReels", label: "Análise Reels" },
+                                    { value: "openEngagement", label: "Engajamento" },
+                                    { value: "openInteractions", label: "Interações" }
+                                ];
+
+                                div.innerHTML = `
+                                    <div class="modal-header">
+                                        <span class="modal-title">
+                                            Comandos de Voz
+                                            <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Controle o script usando sua voz.</span></div>
+                                        </span>
+                                        <div class="modal-controls">
+                                            <button id="fecharVoiceBtn" title="Fechar">X</button>
+                                        </div>
+                                    </div>
+                                    <div style="padding: 20px;">
+                                        <div style="margin-bottom: 20px; text-align: center;">
+                                            <button id="toggleVoiceBtn" style="background: ${isListening ? '#e74c3c' : '#2ecc71'}; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-size: 16px; font-weight: bold;">
+                                                ${isListening ? '🛑 Parar Escuta' : '🎙️ Iniciar Escuta'}
+                                            </button>
+                                            <p id="voiceStatusText" style="font-size: 12px; color: #666; margin-top: 5px;">Status: ${isListening ? 'Ouvindo...' : 'Parado'}</p>
+                                        </div>
+
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                            <h3 style="font-size: 16px; margin: 0;">Lista de Comandos</h3>
+                                            <button id="addVoiceCommandBtn" style="background: #0095f6; color: white; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-weight: bold; font-size: 18px;">+</button>
+                                        </div>
+
+                                        <div id="voiceCommandForm" style="display: none; background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #dbdbdb;">
+                                            <h4 id="formTitle" style="margin-top: 0; margin-bottom: 10px; font-size: 14px;">Novo Comando</h4>
+                                            <input type="hidden" id="editIndex" value="-1">
+                                            <div style="margin-bottom: 10px;">
+                                                <label style="display: block; font-size: 12px; margin-bottom: 5px;">Frase de Comando:</label>
+                                                <input type="text" id="commandPhrase" placeholder="Ex: abrir menu" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; color: black;">
+                                            </div>
+                                            <div style="margin-bottom: 10px;">
+                                                <label style="display: block; font-size: 12px; margin-bottom: 5px;">Ação:</label>
+                                                <select id="commandAction" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; color: black;">
+                                                    ${availableActions.map(a => `<option value="${a.value}">${a.label}</option>`).join('')}
+                                                </select>
+                                            </div>
+                                            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                                                <button id="cancelCommandBtn" style="background: #ccc; color: black; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">Cancelar</button>
+                                                <button id="saveCommandBtn" style="background: #0095f6; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">Salvar</button>
+                                            </div>
+                                        </div>
+
+                                        <div id="voiceCommandsList" style="max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 5px;"></div>
+                                    </div>
+                                `;
+                                document.body.appendChild(div);
+
+                                const formDiv = document.getElementById('voiceCommandForm');
+                                const phraseInput = document.getElementById('commandPhrase');
+                                const actionSelect = document.getElementById('commandAction');
+                                const editIndexInput = document.getElementById('editIndex');
+                                const formTitle = document.getElementById('formTitle');
+
+                                const renderList = () => {
+                                    const list = document.getElementById('voiceCommandsList');
+                                    list.innerHTML = '';
+                                    if (voiceControl.commands.length === 0) {
+                                        list.innerHTML = '<div style="padding: 15px; text-align: center; color: #888;">Nenhum comando configurado.</div>';
+                                        return;
+                                    }
+                                    voiceControl.commands.forEach((cmd, index) => {
+                                        const item = document.createElement('div');
+                                        item.style.cssText = "padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;";
+
+                                        const actionLabel = availableActions.find(a => a.value === cmd.action)?.label || cmd.action;
+
+                                        item.innerHTML = `
+                                            <div>
+                                                <div style="font-weight: bold; color: #333;">"${cmd.phrase}"</div>
+                                                <div style="font-size: 12px; color: #888;">Ação: ${actionLabel}</div>
+                                            </div>
+                                            <div style="display: flex; gap: 5px;">
+                                                <button class="edit-voice-btn" data-index="${index}" style="background: #f39c12; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 12px;">✏️</button>
+                                                <button class="delete-voice-btn" data-index="${index}" style="background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 12px;">🗑️</button>
+                                            </div>
+                                        `;
+                                        list.appendChild(item);
+                                    });
+
+                                    document.querySelectorAll('.delete-voice-btn').forEach(btn => {
+                                        btn.onclick = (e) => {
+                                            const idx = parseInt(e.target.dataset.index);
+                                            if(confirm('Excluir este comando?')) {
+                                                voiceControl.commands.splice(idx, 1);
+                                                voiceControl.saveCommands();
+                                                renderList();
+                                            }
+                                        };
+                                    });
+
+                                    document.querySelectorAll('.edit-voice-btn').forEach(btn => {
+                                        btn.onclick = (e) => {
+                                            const idx = parseInt(e.target.dataset.index);
+                                            const cmd = voiceControl.commands[idx];
+                                            phraseInput.value = cmd.phrase;
+                                            actionSelect.value = cmd.action;
+                                            editIndexInput.value = idx;
+                                            formTitle.innerText = "Editar Comando";
+                                            formDiv.style.display = 'block';
+                                            phraseInput.focus();
+                                        };
+                                    });
+                                };
+
+                                renderList();
+
+                                document.getElementById("fecharVoiceBtn").onclick = () => div.remove();
+
+                                document.getElementById("toggleVoiceBtn").onclick = () => {
+                                    const listening = voiceControl.toggle();
+                                    const btn = document.getElementById("toggleVoiceBtn");
+                                    const status = document.getElementById("voiceStatusText");
+
+                                    if (listening) {
+                                        btn.style.background = '#e74c3c';
+                                        btn.innerText = '🛑 Parar Escuta';
+                                        status.innerText = 'Status: Ouvindo...';
+                                    } else {
+                                        btn.style.background = '#2ecc71';
+                                        btn.innerText = '🎙️ Iniciar Escuta';
+                                        status.innerText = 'Status: Parado';
+                                    }
+                                };
+
+                                document.getElementById("addVoiceCommandBtn").onclick = () => {
+                                    phraseInput.value = '';
+                                    actionSelect.selectedIndex = 0;
+                                    editIndexInput.value = -1;
+                                    formTitle.innerText = "Novo Comando";
+                                    formDiv.style.display = 'block';
+                                    phraseInput.focus();
+                                };
+
+                                document.getElementById("cancelCommandBtn").onclick = () => {
+                                    formDiv.style.display = 'none';
+                                };
+
+                                document.getElementById("saveCommandBtn").onclick = () => {
+                                    const phrase = phraseInput.value.trim().toLowerCase();
+                                    const action = actionSelect.value;
+                                    const idx = parseInt(editIndexInput.value);
+
+                                    if (!phrase) return alert("Digite uma frase para o comando.");
+
+                                    const newCmd = {
+                                        phrase,
+                                        action,
+                                        description: availableActions.find(a => a.value === action)?.label
+                                    };
+
+                                    if (idx >= 0) {
+                                        voiceControl.commands[idx] = newCmd;
+                                    } else {
+                                        if (voiceControl.commands.some(c => c.phrase === phrase)) {
+                                            return alert("Já existe um comando com essa frase.");
+                                        }
+                                        voiceControl.commands.push(newCmd);
+                                    }
+
+                                    voiceControl.saveCommands();
+                                    renderList();
+                                    formDiv.style.display = 'none';
+                                };
+                       }
+
+
                             function abrirModalAtalhos() {
                                 if (document.getElementById("shortcutsModal")) return;
 
@@ -3583,7 +4374,10 @@
 
                                 div.innerHTML = `
                                     <div class="modal-header">
-                                        <span class="modal-title">Configurar Atalhos</span>
+                                        <span class="modal-title">
+                                            Configurar Atalhos
+                                            <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Crie atalhos de teclado para ações rápidas ou navegação.</span></div>
+                                        </span>
                                         <div class="modal-controls">
                                             <button id="fecharShortcutsBtn" title="Fechar">X</button>
                                         </div>
@@ -3653,7 +4447,7 @@
                                     e.preventDefault();
                                     const xpathInput = document.getElementById('shortcut-xpath');
                                     const linkInput = document.getElementById('shortcut-link');
-                                    
+
                                     const xpath = xpathInput.value.trim();
                                     const link = linkInput.value.trim();
 
@@ -3668,9 +4462,9 @@
 
                                     const newShortcut = { ...capturedShortcut, xpath, link };
                                     const shortcuts = getShortcuts();
-                                    
+
                                     // Verifica se já existe um atalho com a mesma tecla
-                                    const existingIndex = shortcuts.findIndex(s => 
+                                    const existingIndex = shortcuts.findIndex(s =>
                                         s.key.toLowerCase() === newShortcut.key.toLowerCase() &&
                                         !!s.ctrlKey === newShortcut.ctrlKey &&
                                         !!s.altKey === newShortcut.altKey &&
@@ -3716,7 +4510,10 @@
 
                                 div.innerHTML = `
                                     <div class="modal-header">
-                                        <span class="modal-title">Parâmetros do Script</span>
+                                        <span class="modal-title">
+                                            Parâmetros do Script
+                                            <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Ajuste delays e limites para evitar bloqueios do Instagram.</span></div>
+                                        </span>
                                         <div class="modal-controls">
                                             <button id="fecharParamsBtn" title="Fechar">X</button>
                                         </div>
@@ -3749,9 +4546,9 @@
                                                 <option value="en-US" ${settings.language === 'en-US' ? 'selected' : ''}>🇺🇸 English</option>
                                             </select>
                                         </div>
-                                        
+
                                         <hr style="border: 1px solid #eee; width: 100%;">
-                                        
+
                                         <h3 style="margin: 0; font-size: 16px;">Gerenciamento de Banco de Dados (IndexedDB)</h3>
                                         <div style="display: flex; flex-direction: column; gap: 10px;">
                                             <select id="dbStoreSelect" style="padding: 5px; color: black;">
@@ -3812,18 +4609,18 @@
                                 document.getElementById("btnExportDB").onclick = async () => {
                                     const storeName = document.getElementById('dbStoreSelect').value;
                                     if (!storeName) return alert("Selecione uma tabela.");
-                                    
+
                                     const db = await dbHelper.openDB();
                                     const tx = db.transaction([storeName], 'readonly');
                                     const store = tx.objectStore(storeName);
                                     const req = store.getAll();
-                                    
+
                                     req.onsuccess = () => {
                                         const result = req.result;
                                         if (!result || result.length === 0) return alert("Tabela vazia.");
 
                                         let dataToExport = [];
-                                        
+
                                         // Lógica para extrair dados dependendo do formato da tabela
                                         if (result.length === 1 && result[0].usernames && Array.isArray(result[0].usernames)) {
                                             // Formato de cache (followers, following)
@@ -3886,7 +4683,10 @@
                                 `;
                                 div.innerHTML = `
                                     <div class="modal-header">
-                                        <span class="modal-title">Menu de Reels</span>
+                                        <span class="modal-title">
+                                            Menu de Reels
+                                            <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Ferramentas para Reels: Download, Análise de Desempenho e Rolagem Automática.</span></div>
+                                        </span>
                                         <div class="modal-controls">
                                             <button id="fecharReelsSubmenuBtn" title="Fechar">X</button>
                                         </div>
@@ -3953,25 +4753,25 @@
 
                             function startReelsAutoScroll() {
                                 if (!isReelsScrolling) return;
- 
+
                                 // Encontra o vídeo que está visível na tela
                                 const visibleVideo = Array.from(document.querySelectorAll('video')).find(v => {
                                     const rect = v.getBoundingClientRect();
                                     return rect.top >= 0 && rect.bottom <= window.innerHeight && v.readyState > 2;
                                 });
- 
+
                                 // Se encontrou um vídeo e ele ainda não tem nosso listener
                                 if (visibleVideo && !visibleVideo.hasAttribute('data-reels-scroller')) {
                                     visibleVideo.setAttribute('data-reels-scroller', 'true');
- 
+
                                     const timeUpdateListener = () => {
                                         // Verifica se o vídeo está perto do fim (últimos 700ms)
                                         if (visibleVideo.duration - visibleVideo.currentTime <= 0.7) {
                                             console.log("Vídeo quase no fim, rolando para o próximo.");
-                                            
+
                                             // Remove o listener para não disparar múltiplas vezes
                                             visibleVideo.removeEventListener('timeupdate', timeUpdateListener);
- 
+
                                             // Lógica para encontrar o contêiner de rolagem dinamicamente
                                             let scrollableContainer = visibleVideo.parentElement;
                                             while (scrollableContainer) {
@@ -3999,7 +4799,7 @@
                                                     behavior: 'smooth'
                                                 });
                                             }
-  
+
                                             // Após a rolagem, chama a função novamente para encontrar o novo vídeo
                                             // e adicionar o listener a ele.
                                             setTimeout(startReelsAutoScroll, 2000); // Aguarda a animação de rolagem
@@ -4049,7 +4849,7 @@
                                     while (hasNextPage) {
                                         const variables = { "user_id": userId, "first": 50, "after": nextMaxId };
                                         const url = `https://www.instagram.com/graphql/query/?query_hash=${queryHash}&variables=${encodeURIComponent(JSON.stringify(variables))}`;
-                                        
+
                                         const response = await fetch(url, { headers: { 'X-IG-App-ID': appID } });
                                         if (!response.ok) throw new Error(`A resposta da rede não foi 'ok'. Status: ${response.status}`);
                                         const data = await response.json();
@@ -4106,7 +4906,10 @@
 
                                     let tableHtml = `
                                         <div class="modal-header">
-                                            <span class="modal-title">Análise de Desempenho dos Reels</span>
+                                            <span class="modal-title">
+                                                Análise de Desempenho dos Reels
+                                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Tabela com métricas de visualizações, curtidas e comentários dos seus Reels.</span></div>
+                                            </span>
                                             <div class="modal-controls">
                                                 <button id="fecharReelsTableBtn" title="Fechar">X</button>
                                             </div>
@@ -4159,6 +4962,670 @@
                                 renderTable();
                             }
 
+                            // --- LÓGICA PARA O MENU DE ENGAJAMENTO ---
+
+                            async function abrirModalEngajamento() {
+                                if (document.getElementById("engajamentoModal")) return;
+
+                                const div = document.createElement("div");
+                                div.id = "engajamentoModal";
+                                div.className = "submenu-modal";
+                                div.style.cssText = `
+                                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                    width: 90%; max-width: 900px; max-height: 90vh; border: 1px solid #ccc;
+                                    border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
+                                `;
+
+                                div.innerHTML = `
+                                    <style>
+                                        .info-tooltip { position: relative; display: inline-block; cursor: help; margin-left: 5px; color: #8e8e8e; }
+                                        .info-tooltip .tooltip-text { visibility: hidden; width: 200px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 10; top: 100%; margin-top: 10px; left: 50%; margin-left: -100px; opacity: 0; transition: opacity 0.3s; font-size: 11px; font-weight: normal; line-height: 1.4; box-shadow: 0 2px 10px rgba(0,0,0,0.2); pointer-events: none; }
+                                        .info-tooltip .tooltip-text::after { content: ""; position: absolute; bottom: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: transparent transparent #333 transparent; }
+                                        .info-tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
+                                    </style>
+                                    <div class="modal-header">
+                                        <span class="modal-title">Dashboard de Engajamento</span>
+                                        <div class="modal-controls">
+                                            <button id="fecharEngajamentoBtn" title="Fechar">X</button>
+                                        </div>
+                                    </div>
+                                    <div style="padding: 15px;">
+                                        <div id="engajamentoLoading" style="text-align: center; padding: 20px;">Carregando dados e gráficos...</div>
+                                        <div id="engajamentoContent" style="display: none;">
+                                            <!-- Cards de Resumo -->
+                                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                                                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #dbdbdb;">
+                                                    <h3 style="margin: 0; font-size: 14px; color: #666;">
+                                                        Taxa de Engajamento
+                                                        <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Cálculo: ((Likes + Comentários) / Total Posts) / Seguidores * 100.</span></div>
+                                                    </h3>
+                                                    <p id="engRateVal" style="margin: 5px 0; font-size: 24px; font-weight: bold; color: #0095f6;">-</p>
+                                                </div>
+                                                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #dbdbdb;">
+                                                    <h3 style="margin: 0; font-size: 14px; color: #666;">
+                                                        Média de Likes
+                                                        <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Média simples de curtidas nos últimos posts analisados.</span></div>
+                                                    </h3>
+                                                    <p id="avgLikesVal" style="margin: 5px 0; font-size: 24px; font-weight: bold; color: #e74c3c;">-</p>
+                                                </div>
+                                                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #dbdbdb;">
+                                                    <h3 style="margin: 0; font-size: 14px; color: #666;">
+                                                        Média de Comentários
+                                                        <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Média simples de comentários nos últimos posts analisados.</span></div>
+                                                    </h3>
+                                                    <p id="avgCommentsVal" style="margin: 5px 0; font-size: 24px; font-weight: bold; color: #2ecc71;">-</p>
+                                                </div>
+                                                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #dbdbdb;">
+                                                    <h3 style="margin: 0; font-size: 14px; color: #666;">
+                                                        Melhor Horário
+                                                        <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Horário do dia com maior volume acumulado de interações.</span></div>
+                                                    </h3>
+                                                    <p id="bestTimeVal" style="margin: 5px 0; font-size: 24px; font-weight: bold; color: #f39c12;">-</p>
+                                                </div>
+                                            </div>
+
+                                            <!-- Gráficos -->
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                                                <div style="background: white; padding: 10px; border: 1px solid #eee; border-radius: 8px;">
+                                                    <h4 style="text-align: center; margin-bottom: 10px;">Desempenho dos Últimos Posts</h4>
+                                                    <div id="postsChartContainer" style="height: 200px; width: 100%;"></div>
+                                                </div>
+                                                <div style="background: white; padding: 10px; border: 1px solid #eee; border-radius: 8px;">
+                                                    <h4 style="text-align: center; margin-bottom: 10px;">Atividade por Hora</h4>
+                                                    <div id="hoursChartContainer" style="height: 200px; width: 100%;"></div>
+                                                </div>
+                                            </div>
+
+                                            <!-- IA Section -->
+                                            <div style="border-top: 1px solid #eee; padding-top: 20px;">
+                                                <h3>
+                                                    🔍 Análise de Conteúdo (IA)
+                                                    <div class="info-tooltip">${infoIcon}<span class="tooltip-text">A porcentagem indica o nível de confiança da IA na classificação da imagem.</span></div>
+                                                </h3>
+                                                <p style="font-size: 12px; color: #666;">Classificação de imagens usando IA (Simulação/Placeholder).</p>
+                                                <button id="analyzeImagesBtn" style="background: #8e44ad; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">Analisar Últimos Posts</button>
+                                                <div id="aiResults" style="margin-top: 10px; display: flex; gap: 10px; overflow-x: auto;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                                document.body.appendChild(div);
+                                document.getElementById("fecharEngajamentoBtn").onclick = () => div.remove();
+
+                                try {
+
+                                    // Buscar dados do perfil
+                                    const pathParts = window.location.pathname.split('/').filter(Boolean);
+                                    const username = pathParts[0];
+                                    const appID = '936619743392459';
+
+                                    const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
+                                    const profileInfo = await profileInfoResponse.json();
+                                    const userId = profileInfo.data?.user?.id;
+                                    const followersCount = profileInfo.data?.user?.edge_followed_by?.count || 1;
+
+                                    // Buscar posts (últimos 50)
+                                    const queryHash = '69cba40317214236af40e7efa697781d'; // Hash comum para feed de usuário
+                                    // Fallback para API v1 se GraphQL falhar ou for complexo
+                                    const feedUrl = `https://www.instagram.com/api/v1/feed/user/${userId}/?count=50`;
+                                    const feedRes = await fetch(feedUrl, { headers: { 'X-IG-App-ID': appID } });
+                                    const feedData = await feedRes.json();
+                                    const items = feedData.items || [];
+
+                                    // Processar dados
+                                    let totalLikes = 0;
+                                    let totalComments = 0;
+                                    const postsData = [];
+                                    const hoursActivity = new Array(24).fill(0);
+
+                                    items.forEach(item => {
+                                        const likes = item.like_count || 0;
+                                        const comments = item.comment_count || 0;
+                                        const timestamp = item.taken_at; // Unix timestamp
+                                        const date = new Date(timestamp * 1000);
+                                        const hour = date.getHours();
+
+                                        totalLikes += likes;
+                                        totalComments += comments;
+                                        hoursActivity[hour] += (likes + comments); // Peso por engajamento
+
+                                        postsData.push({
+                                            id: item.id,
+                                            code: item.code,
+                                            likes: likes,
+                                            comments: comments,
+                                            date: date.toLocaleDateString(),
+                                            url: item.image_versions2?.candidates?.[0]?.url || ''
+                                        });
+                                    });
+
+                                    // Calcular médias
+                                    const avgLikes = items.length ? (totalLikes / items.length).toFixed(0) : 0;
+                                    const avgComments = items.length ? (totalComments / items.length).toFixed(0) : 0;
+                                    const engRate = items.length ? (((totalLikes + totalComments) / items.length) / followersCount * 100).toFixed(2) : 0;
+
+                                    // Melhor horário
+                                    const maxActivity = Math.max(...hoursActivity);
+                                    const bestHour = hoursActivity.indexOf(maxActivity);
+
+                                    // Atualizar UI
+                                    document.getElementById("engRateVal").innerText = `${engRate}%`;
+                                    document.getElementById("avgLikesVal").innerText = avgLikes;
+                                    document.getElementById("avgCommentsVal").innerText = avgComments;
+                                    document.getElementById("bestTimeVal").innerText = `${bestHour}:00 - ${bestHour + 1}:00`;
+
+                                    document.getElementById("engajamentoLoading").style.display = "none";
+                                    document.getElementById("engajamentoContent").style.display = "block";
+
+                                    // Renderizar Gráficos
+                                    // Substituição do Chart.js por gráficos SVG/HTML simples para evitar CSP
+                                    const recentPosts = postsData.slice(0, 10).reverse();
+                                    renderSimpleBarChart(
+                                        'postsChartContainer',
+                                        recentPosts.map(p => p.date.split('/').slice(0,2).join('/')), // dd/mm
+                                        recentPosts.map(p => p.likes),
+                                        recentPosts.map(p => p.comments),
+                                        'Likes', 'Comentários'
+                                    );
+
+                                    renderSimpleLineChart(
+                                        'hoursChartContainer',
+                                        Array.from({length: 24}, (_, i) => `${i}h`),
+                                        hoursActivity,
+                                        'Atividade'
+                                    );
+
+                                    // Lógica de IA (Simulada)
+                                    document.getElementById("analyzeImagesBtn").onclick = () => {
+                                        const aiContainer = document.getElementById("aiResults");
+                                        aiContainer.innerHTML = '<p>Analisando...</p>';
+
+                                        // Simulação de chamada de API (Google Vision / Clarifai exigiria chave privada)
+                                        setTimeout(() => {
+                                            aiContainer.innerHTML = '';
+                                            const samplePosts = postsData.slice(0, 5);
+
+                                            // Categorias fictícias para demonstração
+                                            const categories = ['Paisagem', 'Selfie', 'Comida', 'Evento', 'Meme'];
+
+                                            samplePosts.forEach(post => {
+                                                if (!post.url) return;
+                                                const randomCat = categories[Math.floor(Math.random() * categories.length)];
+                                                const confidence = (Math.random() * (0.99 - 0.70) + 0.70).toFixed(2);
+
+                                                const card = document.createElement('div');
+                                                card.style.cssText = "min-width: 120px; border: 1px solid #eee; border-radius: 5px; padding: 5px; text-align: center;";
+                                                card.innerHTML = `
+                                                    <img src="${post.url}" style="width: 100px; height: 100px; object-fit: cover; border-radius: 4px;">
+                                                    <div style="font-weight: bold; font-size: 12px; margin-top: 5px;">${randomCat}</div>
+                                                    <div style="font-size: 10px; color: #666;">Confiança: ${parseInt(confidence * 100)}%</div>
+                                                `;
+                                                aiContainer.appendChild(card);
+                                            });
+
+                                            const note = document.createElement('p');
+                                            note.style.cssText = "font-size: 10px; color: red; width: 100%; margin-top: 10px;";
+                                            note.innerText = "Nota: Para classificação real, é necessário integrar uma API Key do Google Vision ou Clarifai no código.";
+                                            aiContainer.appendChild(note);
+
+                                        }, 1500);
+                                    };
+
+                                } catch (error) {
+                                    console.error("Erro no dashboard:", error);
+                                    document.getElementById("engajamentoLoading").innerText = "Erro ao carregar dados. Certifique-se de estar logado e na página de perfil.";
+                                }
+                            }
+
+                            // Funções auxiliares para gráficos sem bibliotecas externas (Bypass CSP)
+                            function renderSimpleBarChart(containerId, labels, data1, data2, label1, label2) {
+                                const container = document.getElementById(containerId);
+                                if (!container) return;
+                                container.innerHTML = '';
+                                const maxVal = Math.max(...data1, ...data2, 1);
+
+                                const chart = document.createElement('div');
+                                chart.style.cssText = "display: flex; align-items: flex-end; height: 100%; width: 100%; gap: 5px; padding-bottom: 20px; box-sizing: border-box;";
+
+                                labels.forEach((lbl, i) => {
+                                    const v1 = data1[i] || 0;
+                                    const v2 = data2[i] || 0;
+                                    const h1 = Math.max((v1 / maxVal) * 80, 1);
+                                    const h2 = Math.max((v2 / maxVal) * 80, 1);
+
+                                    const group = document.createElement('div');
+                                    group.style.cssText = "flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%;";
+
+                                    const bars = document.createElement('div');
+                                    bars.style.cssText = "display: flex; align-items: flex-end; gap: 2px; height: 100%; width: 100%; justify-content: center;";
+
+                                    const b1 = document.createElement('div');
+                                    b1.style.cssText = `width: 40%; background: #e74c3c; height: ${h1}%; border-radius: 2px 2px 0 0;`;
+                                    b1.title = `${label1}: ${v1}`;
+
+                                    const b2 = document.createElement('div');
+                                    b2.style.cssText = `width: 40%; background: #2ecc71; height: ${h2}%; border-radius: 2px 2px 0 0;`;
+                                    b2.title = `${label2}: ${v2}`;
+
+                                    bars.appendChild(b1);
+                                    bars.appendChild(b2);
+
+                                    const txt = document.createElement('div');
+                                    txt.innerText = lbl;
+                                    txt.style.cssText = "font-size: 9px; color: #666; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;";
+
+                                    group.appendChild(bars);
+                                    group.appendChild(txt);
+                                    chart.appendChild(group);
+                                });
+                                container.appendChild(chart);
+                            }
+
+                            function renderSimpleLineChart(containerId, labels, data, labelName) {
+                                const container = document.getElementById(containerId);
+                                if (!container) return;
+                                container.innerHTML = '';
+                                const maxVal = Math.max(...data, 1);
+                                const h = container.clientHeight || 200;
+                                const w = container.clientWidth || 400;
+                                const step = w / (labels.length - 1 || 1);
+
+                                const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                                svg.setAttribute("width", "100%");
+                                svg.setAttribute("height", "100%");
+                                svg.style.overflow = "visible";
+
+                                let points = "";
+                                data.forEach((val, i) => {
+                                    const x = i * step;
+                                    const y = h - ((val / maxVal) * (h - 20)) - 20; // Padding bottom
+                                    points += `${x},${y} `;
+
+                                    if (i % 4 === 0) { // Labels espaçados
+                                        const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                                        txt.setAttribute("x", x);
+                                        txt.setAttribute("y", h);
+                                        txt.setAttribute("font-size", "10");
+                                        txt.setAttribute("fill", "#666");
+                                        txt.setAttribute("text-anchor", "middle");
+                                        txt.textContent = labels[i];
+                                        svg.appendChild(txt);
+                                    }
+                                });
+
+                                const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+                                polyline.setAttribute("points", points);
+                                polyline.setAttribute("fill", "none");
+                                polyline.setAttribute("stroke", "#0095f6");
+                                polyline.setAttribute("stroke-width", "2");
+                                svg.appendChild(polyline);
+                                container.appendChild(svg);
+                            }
+
+                        function abrirModalInteracoes() {
+                            if (document.getElementById("interacoesModal")) return;
+
+                            // Helper para pegar cookie
+                            const getCookie = (name) => {
+                                const value = `; ${document.cookie}`;
+                                const parts = value.split(`; ${name}=`);
+                                if (parts.length === 2) return parts.pop().split(';').shift();
+                            };
+
+                            const div = document.createElement("div");
+                            div.id = "interacoesModal";
+                            div.className = "submenu-modal";
+                            div.style.cssText = `
+                                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                width: 90%; max-width: 600px; max-height: 90vh; border: 1px solid #ccc;
+                                border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
+                            `;
+
+                            div.innerHTML = `
+                                <div class="modal-header">
+                                    <span class="modal-title">
+                                        Verificar Interações
+                                        <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Verifique o que você curtiu de um usuário específico (Posts e Stories).</span></div>
+                                    </span>
+                                    <div class="modal-controls">
+                                        <button id="fecharInteracoesBtn" title="Fechar">X</button>
+                                    </div>
+                                </div>
+                                <div style="padding: 15px;">
+                                    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                                        <div style="flex: 1; position: relative;">
+                                            <input type="text" id="interacoesUsernameInput" placeholder="Digite o username..." style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: black; box-sizing: border-box;" autocomplete="off">
+                                            <div id="interacoesSuggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ccc; border-top: none; border-radius: 0 0 5px 5px; max-height: 200px; overflow-y: auto; z-index: 1001; display: none; color: black; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+                                        </div>
+                                        <button id="verificarInteracoesBtn" style="background: #0095f6; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Verificar</button>
+                                    </div>
+                                    <div id="interacoesUserProfile" style="display: none; flex-direction: column; align-items: center; margin-bottom: 20px;">
+                                        <img id="interacoesUserPic" src="" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; border: 1px solid #dbdbdb;">
+                                        <span id="interacoesUserNameDisplay" style="font-weight: bold; font-size: 16px; color: black;"></span>
+                                        <span id="interacoesUserBioDisplay" style="font-size: 14px; color: #666; text-align: center; margin-top: 5px; max-width: 80%;"></span>
+                                    </div>
+                                    <div id="interacoesResultados" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px;">
+                                        <!-- Cards serão inseridos aqui -->
+                                    </div>
+                                    <div id="interacoesDetalhes" style="margin-top: 20px; display: none;">
+                                        <h3 id="detalhesTitulo" style="margin-bottom: 10px; color: black;"></h3>
+                                        <button id="voltarCardsBtn" style="margin-bottom: 10px; padding: 5px 10px; cursor: pointer;">Voltar</button>
+                                        <div id="detalhesLista" style="max-height: 300px; overflow-y: auto; color: black;"></div>
+                                    </div>
+                                </div>
+                            `;
+                            document.body.appendChild(div);
+
+                            document.getElementById("fecharInteracoesBtn").onclick = () => div.remove();
+
+                            // Lógica de Autocomplete
+                            const inputUsername = document.getElementById("interacoesUsernameInput");
+                            const suggestionsDiv = document.getElementById("interacoesSuggestions");
+                            let followingList = [];
+
+                            // Carrega a lista de seguindo do cache
+                            dbHelper.loadCache('following').then(set => {
+                                if (set) {
+                                    followingList = Array.from(set);
+                                }
+                            });
+
+                            inputUsername.addEventListener('input', () => {
+                                const val = inputUsername.value.toLowerCase();
+                                suggestionsDiv.innerHTML = '';
+                                if (!val) {
+                                    suggestionsDiv.style.display = 'none';
+                                    return;
+                                }
+
+                                const matches = followingList.filter(u => u.toLowerCase().includes(val)).slice(0, 10);
+
+                                if (matches.length > 0) {
+                                    matches.forEach(u => {
+                                        const item = document.createElement('div');
+                                        item.style.cssText = 'padding: 10px; cursor: pointer; border-bottom: 1px solid #eee;';
+                                        item.innerText = u;
+                                        item.onmouseover = () => item.style.background = '#f0f0f0';
+                                        item.onmouseout = () => item.style.background = 'white';
+                                        item.onclick = () => {
+                                            inputUsername.value = u;
+                                            suggestionsDiv.style.display = 'none';
+                                        };
+                                        suggestionsDiv.appendChild(item);
+                                    });
+                                    suggestionsDiv.style.display = 'block';
+                                } else {
+                                    suggestionsDiv.style.display = 'none';
+                                }
+                            });
+
+                            // Fechar sugestões ao clicar fora
+                            document.addEventListener('click', (e) => {
+                                if (e.target !== inputUsername && e.target !== suggestionsDiv) {
+                                    suggestionsDiv.style.display = 'none';
+                                }
+                            });
+
+                            let dataEuCurti = null;
+
+                            document.getElementById("verificarInteracoesBtn").onclick = async () => {
+                                const username = document.getElementById("interacoesUsernameInput").value.trim();
+                                if (!username) return alert("Digite um username.");
+
+                                const btn = document.getElementById("verificarInteracoesBtn");
+                                btn.disabled = true;
+                                btn.textContent = "Verificando...";
+
+                                const resultadosDiv = document.getElementById("interacoesResultados");
+                                const profileDiv = document.getElementById("interacoesUserProfile");
+
+                                resultadosDiv.innerHTML = '<p style="color:black;">Carregando interações...</p>';
+                                document.getElementById("interacoesDetalhes").style.display = "none";
+                                profileDiv.style.display = "none";
+
+                                // Buscar foto de perfil
+                                let photoUrl = 'https://via.placeholder.com/80';
+                                let bio = '';
+                                try {
+                                    const response = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, {
+                                        headers: { 'X-IG-App-ID': '936619743392459' }
+                                    });
+                                    if (response.ok) {
+                                        const data = await response.json();
+                                        photoUrl = data.data?.user?.profile_pic_url || photoUrl;
+                                        bio = data.data?.user?.biography || '';
+                                    }
+                                } catch (e) {
+                                    console.error("Erro ao buscar foto de perfil:", e);
+                                }
+
+                                document.getElementById("interacoesUserPic").src = photoUrl;
+                                document.getElementById("interacoesUserNameDisplay").innerText = username;
+                                document.getElementById("interacoesUserBioDisplay").innerText = bio;
+                                profileDiv.style.display = "flex";
+
+                                const headers = { 'X-IG-App-ID': '936619743392459' };
+                                const myId = getCookie('ds_user_id');
+
+                                try {
+                                    // Obter ID do usuário
+                                    let targetUserId = '';
+                                    const profileRes = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers });
+                                    if (profileRes.ok) {
+                                        const profileData = await profileRes.json();
+                                        targetUserId = profileData.data.user.id;
+                                    } else {
+                                        throw new Error("Não foi possível obter o ID do usuário.");
+                                    }
+
+                                    // --- O QUE EU CURTI DELE ---
+                                        resultadosDiv.innerHTML = '<p style="color:black;">Analisando posts e destaques...</p>';
+
+                                        const likedPosts = [];
+                                        const likedStories = [];
+
+                                        // 1. Posts
+                                        let nextMaxId = null;
+                                        let hasNext = true;
+                                        let processedCount = 0;
+                                        const MAX_POSTS = 500;
+
+                                        while (hasNext && processedCount < MAX_POSTS) {
+                                            let url = `https://www.instagram.com/api/v1/feed/user/${targetUserId}/?count=33`;
+                                            if (nextMaxId) url += `&max_id=${nextMaxId}`;
+
+                                            const feedRes = await fetch(url, { headers });
+                                            if (!feedRes.ok) break;
+
+                                            const feedData = await feedRes.json();
+                                            const items = feedData.items || [];
+
+                                            for (const item of items) {
+                                                if (item.has_liked) {
+                                                    let thumb = item.image_versions2?.candidates?.[0]?.url || item.carousel_media?.[0]?.image_versions2?.candidates?.[0]?.url || '';
+                                                    likedPosts.push({ type: 'Post', url: `https://www.instagram.com/p/${item.code}/`, thumb: thumb, id: item.id });
+                                                }
+                                            }
+
+                                            processedCount += items.length;
+                                            resultadosDiv.innerHTML = `<p style="color:black;">Analisando posts... (${processedCount} verificados)</p>`;
+
+                                            nextMaxId = feedData.next_max_id;
+                                            if (!feedData.more_available || !nextMaxId) hasNext = false;
+                                            await new Promise(r => setTimeout(r, 300));
+                                        }
+
+                                        // 2. Destaques (Stories)
+                                        resultadosDiv.innerHTML = `<p style="color:black;">Analisando destaques...</p>`;
+                                        try {
+                                            const trayRes = await fetch(`https://www.instagram.com/api/v1/highlights/${targetUserId}/highlights_tray/`, { headers });
+                                            if (trayRes.ok) {
+                                                const trayData = await trayRes.json();
+                                                const tray = trayData.tray || [];
+                                                const reelIds = tray.map(t => t.id);
+
+                                                if (reelIds.length > 0) {
+                                                    let url = `https://www.instagram.com/api/v1/feed/reels_media/?`;
+                                                    reelIds.forEach(id => url += `reel_ids=${id}&`);
+                                                    const mediaRes = await fetch(url, { headers });
+                                                    if (mediaRes.ok) {
+                                                        const mediaData = await mediaRes.json();
+                                                        for (const reelId in mediaData.reels) {
+                                                            const items = mediaData.reels[reelId].items || [];
+                                                            for (const item of items) {
+                                                                if (item.has_liked) {
+                                                                    let thumb = item.image_versions2?.candidates?.[0]?.url || item.video_versions?.[0]?.url || '';
+                                                                    const cleanReelId = reelId.replace(/^highlight:/, '');
+                                                                    likedStories.push({ type: 'Story (Destaque)', url: `https://www.instagram.com/stories/highlights/${cleanReelId}/?story_media_id=${item.id}`, thumb: thumb, id: item.id });
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } catch (e) { console.error("Erro destaques", e); }
+
+                                        const dadosReais = {
+                                            fotosCurtidas: { count: likedPosts.length, items: likedPosts },
+                                            storiesCurtidos: { count: likedStories.length, items: likedStories },
+                                            comentarios: { count: 0, items: [] },
+                                            enquetes: { count: 0, items: [] }
+                                        };
+                                        dataEuCurti = dadosReais;
+                                        renderizarCardsInteracoes(dadosReais);
+
+                                } catch (e) {
+                                    console.error(e);
+                                    resultadosDiv.innerHTML = `<p style="color:red;">Erro ao buscar dados: ${e.message}</p>`;
+                                } finally { btn.disabled = false; btn.textContent = "Verificar"; }
+                            };
+
+                        function renderizarCardsInteracoes(dados) {
+                            const container = document.getElementById("interacoesResultados");
+                            container.innerHTML = '';
+
+                            const mapLabels = {
+                                fotosCurtidas: 'Fotos Curtidas',
+                                storiesCurtidos: 'Stories Curtidos',
+                                comentarios: 'Comentários',
+                                enquetes: 'Enquetes'
+                            };
+
+                            for (const [key, data] of Object.entries(dados)) {
+                                const card = document.createElement("div");
+                                card.style.cssText = `
+                                    border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px;
+                                    text-align: center; cursor: pointer; background: #f8f9fa; transition: transform 0.2s;
+                                `;
+                                card.innerHTML = `
+                                    <div style="font-size: 24px; font-weight: bold; color: #0095f6;">${data.count}</div>
+                                    <div style="font-size: 14px; color: #8e8e8e;">${mapLabels[key] || key}</div>
+                                `;
+                                card.onmouseover = () => card.style.transform = "scale(1.05)";
+                                card.onmouseout = () => card.style.transform = "scale(1)";
+                                card.onclick = () => mostrarDetalhesInteracao(mapLabels[key] || key, data.items);
+                                container.appendChild(card);
+                            }
+                        }
+
+                        function mostrarDetalhesInteracao(titulo, itens) {
+                            document.getElementById("interacoesResultados").style.display = "none";
+                            const detalhesDiv = document.getElementById("interacoesDetalhes");
+                            detalhesDiv.style.display = "block";
+                            document.getElementById("detalhesTitulo").innerText = titulo;
+
+                            const lista = document.getElementById("detalhesLista");
+                            lista.innerHTML = '';
+
+                            if (itens.length === 0) {
+                                lista.innerHTML = '<p>Nenhum item encontrado.</p>';
+                            } else {
+                                const grid = document.createElement("div");
+                                grid.style.cssText = "display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px;";
+                                itens.forEach(item => {
+                                    const div = document.createElement("div");
+                                    div.style.cssText = "aspect-ratio: 1; overflow: hidden; border-radius: 5px; border: 1px solid #dbdbdb; cursor: pointer; position: relative;";
+
+                                    const contentDiv = document.createElement("div");
+                                    contentDiv.style.cssText = "width: 100%; height: 100%;";
+
+                                    if (item.thumb) {
+                                        contentDiv.innerHTML = `<img src="${item.thumb}" style="width: 100%; height: 100%; object-fit: cover;">`;
+                                        contentDiv.onclick = () => window.open(item.url, '_blank');
+                                    } else {
+                                        contentDiv.innerText = item.type;
+                                    }
+                                    div.appendChild(contentDiv);
+
+                                    if (item.id) {
+                                        const unlikeBtn = document.createElement("button");
+                                        unlikeBtn.innerHTML = "💔";
+                                        unlikeBtn.title = "Descurtir";
+                                        unlikeBtn.style.cssText = "position: absolute; bottom: 5px; right: 5px; width: 30px; height: 30px; border-radius: 50%; border: none; background: rgba(0,0,0,0.7); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; z-index: 10;";
+                                        unlikeBtn.onclick = async (e) => {
+                                            e.stopPropagation();
+                                            if (confirm("Tem certeza que deseja descurtir?")) {
+                                                const success = await unlikeMedia(item.id, item.type);
+                                                if (success) {
+                                                    div.remove();
+                                                }
+                                            }
+                                        };
+                                        div.appendChild(unlikeBtn);
+                                    }
+
+                                    grid.appendChild(div);
+                                });
+                                lista.appendChild(grid);
+                            }
+
+                            document.getElementById("voltarCardsBtn").onclick = () => {
+                                detalhesDiv.style.display = "none";
+                                document.getElementById("interacoesResultados").style.display = "grid";
+                            };
+                        }
+
+                        async function unlikeMedia(mediaId, type) {
+                            try {
+                                const csrf = getCookie('csrftoken');
+                                if (!csrf) {
+                                    alert("Erro: Token CSRF não encontrado. Recarregue a página.");
+                                    return false;
+                                }
+
+                                let url, body;
+                                if (type && (type.includes('Story') || type.includes('Destaque'))) {
+                                    url = `https://www.instagram.com/api/v1/story_interactions/unlike_story_like/`;
+                                    body = `media_id=${mediaId}`;
+                                } else {
+                                    url = `https://www.instagram.com/api/v1/web/likes/${mediaId}/unlike/`;
+                                    body = '';
+                                }
+
+                                const response = await fetch(url, {
+                                    method: 'POST',
+                                    headers: {
+                                        'X-IG-App-ID': '936619743392459',
+                                        'X-CSRFToken': csrf,
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                        'X-ASBD-ID': '129477',
+                                        'X-Instagram-AJAX': '1',
+                                        'Content-Type': 'application/x-www-form-urlencoded'
+                                    },
+                                    body: body
+                                });
+                                if (response.ok) return true;
+                                console.error("Falha ao descurtir:", await response.text());
+                                alert("Falha ao descurtir.");
+                                return false;
+                            } catch (e) {
+                                console.error(e);
+                                alert("Erro ao descurtir.");
+                                return false;
+                            }
+                        }
+                    }
+
                             function baixarReelAtual() {
                                 // Função auxiliar para verificar se um elemento está visível na tela
                                 const isElementVisible = (el) => {
@@ -4197,7 +5664,7 @@
                                 }
                             }
 
-                            async function handleActionOnSelected(selectedUsers, actionType) {
+                            async function handleActionOnSelected(selectedUsers, actionType, updateCallback) {
                                 if (selectedUsers.length === 0) {
                                     alert("Nenhum usuário selecionado.");
                                     return;
@@ -4207,17 +5674,24 @@
                                     mute: {
                                         buttonId: 'silenciarSeguindoBtn',
                                         text: 'Silenciar/Reativar',
-                                        func: (users, cb) => unmuteUsers(users, cb, true) // Passa `true` para ativar o modo toggle
-                                }, 
-                                closeFriends: { 
-                                    buttonId: 'closeFriendsSeguindoBtn', 
-                                    text: 'Melhores Amigos', 
-                                    // Nova função que age no perfil individual 
-                                    func: (users, cb) => performActionOnProfile(users, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], cb) 
+                                        dbStore: 'muted',
+                                        func: (users, cb) => {
+                                            showUnmuteOptionsModal((targetType) => {
+                                                unmuteUsers(users, cb, true, targetType); // Passa `true` para ativar o modo toggle
+                                            });
+                                        }
                                 },
-                                hideStory: { 
-                                    buttonId: 'hideStorySeguindoBtn', 
-                                    text: 'Ocultar Story', 
+                                closeFriends: {
+                                    buttonId: 'closeFriendsSeguindoBtn',
+                                    text: 'Melhores Amigos',
+                                    dbStore: 'closeFriends',
+                                    // Nova função que age no perfil individual
+                                    func: (users, cb) => performActionOnProfile(users, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], cb)
+                                },
+                                hideStory: {
+                                    buttonId: 'hideStorySeguindoBtn',
+                                    text: 'Ocultar Story',
+                                    dbStore: 'hiddenStory',
                                     // Revertido para o método original que navega para a página de lista, conforme solicitado.
                                     func: (users, cb) => toggleListMembership(users, '/accounts/hide_story_and_live_from/', 'hiddenStory', cb)
                                 }
@@ -4230,12 +5704,12 @@
                                 btn.disabled = true;
                                 btn.textContent = 'Processando...';
 
-                                await config.func(selectedUsers, () => {
+                                await config.func(selectedUsers, async () => {
                                     btn.disabled = false;
                                     btn.textContent = config.text;
                                     alert(`Ação "${config.text}" concluída para ${selectedUsers.length} usuário(s).`);
-                                    // Recarrega todos os dados para ver a mudança
-                                    document.getElementById("atualizarSeguindoBtn").click();
+                                    // Atualiza o estado localmente e re-renderiza
+                                    if (updateCallback && config.dbStore) await updateCallback(selectedUsers, config.dbStore);
                                 });
                             }
 
@@ -4275,7 +5749,7 @@
 
                                 // 3. Clicar na opção desejada (ex: "Adicionar aos melhores amigos")
                                  // Seletor aprimorado para encontrar o texto em qualquer lugar dentro do elemento clicável
-                                 const actionOption = Array.from(document.querySelectorAll('div[role="button"], div[role="menuitem"]')).find(el => 
+                                 const actionOption = Array.from(document.querySelectorAll('div[role="button"], div[role="menuitem"]')).find(el =>
                                      menuTexts.some(text => el.innerText.includes(text))
                                  );
 
@@ -4706,6 +6180,7 @@
                                     lastScrollTop = currentScrollTop; // Atualizar a posição do scroll
                                 }, 1000); // Intervalo de 1 segundo
                             }
+                            voiceControl.init();
                         }
 
                         async function downloadMedia(url, filename) {
@@ -4764,6 +6239,11 @@
                                 if (document.getElementById("assistiveTouchMenu")) applyInitialSettings();
                             }, 500);
                         });
+
+                        // Garante que o menu seja injetado periodicamente caso o DOM mude (SPA)
+                        setInterval(() => {
+                            if (window.location.href.includes("instagram.com")) injectMenu();
+                        }, 1000);
 
                     // --- DOWNLOAD DE MÍDIA DO FEED E REELS ---
                     function addFeedDownloadButtons() {
@@ -4918,4 +6398,4 @@
                     subtree: true,
             });
 
-        })(); 
+        })();

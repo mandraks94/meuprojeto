@@ -15,6 +15,78 @@
                 if (window.location.href.includes("instagram.com")) {
                     const infoIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: text-bottom; margin-left: 5px;"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>`;
 
+                    // Helper para Cookies
+                    function getCookie(name) {
+                        const value = `; ${document.cookie}`;
+                        const parts = value.split(`; ${name}=`);
+                        if (parts.length === 2) return parts.pop().split(';').shift();
+                        return null;
+                    }
+
+                    // Helper para API do Instagram
+                    const apiHelper = {
+                        getHeaders: () => ({
+                            'X-IG-App-ID': '936619743392459',
+                            'X-CSRFToken': getCookie('csrftoken'),
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }),
+                        getUserId: async (username) => {
+                            if (!window.userIdCache) window.userIdCache = new Map();
+                            if (window.userIdCache.has(username)) return window.userIdCache.get(username);
+                            try {
+                                const res = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, {
+                                    headers: { 'X-IG-App-ID': '936619743392459' }
+                                });
+                                const data = await res.json();
+                                const id = data.data.user.id;
+                                window.userIdCache.set(username, id);
+                                return id;
+                            } catch (e) {
+                                console.error(`Erro ao obter ID para ${username}:`, e);
+                                return null;
+                            }
+                        },
+                        unfollow: async (userId) => {
+                            const res = await fetch(`https://www.instagram.com/api/v1/friendships/destroy/${userId}/`, {
+                                method: 'POST',
+                                headers: apiHelper.getHeaders()
+                            });
+                            return res.ok;
+                        },
+                        setCloseFriend: async (userId, add = true) => {
+                            const body = add ? `add=[${userId}]` : `remove=[${userId}]`;
+                            const res = await fetch(`https://www.instagram.com/api/v1/friendships/set_besties/`, {
+                                method: 'POST',
+                                headers: apiHelper.getHeaders(),
+                                body: body
+                            });
+                            return res.ok;
+                        },
+                        setHideStory: async (userId, hide = true) => {
+                            // block_on_reel=true para ocultar, false para mostrar
+                            const body = `source=story_viewer_list&target_id=${userId}&block_on_reel=${hide}`;
+                            const res = await fetch(`https://www.instagram.com/api/v1/friendships/set_reel_block_status/`, {
+                                method: 'POST',
+                                headers: apiHelper.getHeaders(),
+                                body: body
+                            });
+                            return res.ok;
+                        },
+                        mute: async (userId, type, mute = true) => {
+                            // type: 'story' ou 'posts'
+                            const endpoint = mute ? 'mute_posts_or_story_from_follow' : 'unmute_posts_or_story_from_follow';
+                            const param = type === 'story' ? 'target_reel_author_id' : 'target_posts_author_id';
+                            const body = `container_module=profile&${param}=${userId}`;
+                            const res = await fetch(`https://www.instagram.com/api/v1/friendships/${endpoint}/`, {
+                                method: 'POST',
+                                headers: apiHelper.getHeaders(),
+                                body: body
+                            });
+                            return res.ok;
+                        }
+                    };
+
                     // Helper para Toast (Notificação Visual)
                     function showToast(message) {
                         const toast = document.createElement('div');
@@ -2369,134 +2441,42 @@
                 };
                 const isCancelled = () => cancelled;
 
-                const originalPath = window.location.pathname;
-
                 for (let i = 0; i < usersToUnmute.length; i++) {
                     if (isCancelled()) break;
                     const username = usersToUnmute[i];
                     update(i + 1, usersToUnmute.length, toggleMode ? "Alterando status de silenciar:" : "Reativando som:");
 
-                    // 1. Navegar para o perfil do usuário
-                    history.pushState(null, null, `/${username}/`);
-                    window.dispatchEvent(new Event("popstate"));
-                    await new Promise(resolve => setTimeout(resolve, 4000)); // Espera o perfil carregar
-
-                    // 2. Clicar no botão "Seguindo"
-                    // Seletor aprimorado para iPhone: procura em mais tipos de elementos e verifica o texto de forma mais flexível.
-                    const followingButton = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"]')).find(el => {
-                        const text = el.innerText.trim();
-                        return text === 'Seguindo' || text === 'Following';
-                    });
-                    if (!followingButton) {
-                        console.warn(`Botão 'Seguindo' não encontrado para ${username}. Pulando.`);
-                        continue;
-                    }
-                    simulateClick(followingButton);
-                    await new Promise(resolve => setTimeout(resolve, 1500)); // Espera o menu dropdown aparecer
-
-                    // 3. Clicar na opção "Silenciar"
-                    // Seletor mais robusto, similar ao de unfollow, para encontrar a opção "Silenciar"
-                    const muteOption = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], div[role="menuitem"]')).find(el =>
-                        el.innerText.trim() === 'Silenciar' ||
-                        (el.querySelector('span') && el.querySelector('span').innerText.trim() === 'Silenciar')
-                    );
-                    if (!muteOption) {
-                        console.warn(`Opção 'Silenciar' não encontrada para ${username}. Pulando.`);
-                        // Tenta fechar o menu se ele abriu
-                        if (followingButton) simulateClick(followingButton);
-                        continue;
-                    }
-                    simulateClick(muteOption);
-                    await new Promise(resolve => setTimeout(resolve, 2000)); // Espera o modal de silenciar abrir
-
-                    // 4. Desativar os toggles de "Publicações" e "Stories"
-                    console.log('Procurando opções "Publicações" e "Stories" para alterar o estado...');
-                    let optionsToToggle = [];
-                    if (targetType === 'posts' || targetType === 'all') optionsToToggle.push('Publicações', 'Posts');
-                    if (targetType === 'stories' || targetType === 'all') optionsToToggle.push('Stories');
-
-                    let togglesClicked = 0;
-
-                    for (const optionText of optionsToToggle) {
-                        // Encontra o elemento de texto ("Publicações" ou "Stories") em toda a página
-                        const textElement = Array.from(document.querySelectorAll('span, div')).find(el => el.innerText.trim() === optionText);
-
-                        if (!textElement) {
-                            console.log(`Elemento de texto para "${optionText}" não encontrado.`);
-                            continue;
+                    const userId = await apiHelper.getUserId(username);
+                    if (userId) {
+                        // Lógica de Toggle: Se já está na lista de silenciados, vamos reativar (unmute). Se não, silenciar.
+                        // Mas a função unmuteUsers é chamada principalmente para reativar.
+                        // Se toggleMode for true, verificamos o estado atual.
+                        
+                        let shouldMute = true;
+                        if (toggleMode && userListCache.muted && userListCache.muted.has(username)) {
+                            shouldMute = false; // Já está silenciado, então vamos reativar
+                        } else if (!toggleMode) {
+                            shouldMute = false; // Modo explícito de reativar
                         }
-                        console.log(`Elemento de texto para "${optionText}" encontrado:`, textElement);
 
-                        // Sobe na árvore DOM para encontrar o contêiner da linha inteira, que é clicável
-                        const rowContainer = textElement.closest('div[role="button"]');
-                        if (rowContainer) {
-                            console.log(`Contêiner clicável para "${optionText}" encontrado:`, rowContainer);
-                            const stateIndicator = rowContainer.querySelector('input[type="checkbox"], div[role="switch"]');
-
-                            if (stateIndicator) {
-                                const isChecked = stateIndicator.getAttribute('aria-checked');
-                                console.log(`Indicador de estado para "${optionText}" encontrado. Estado (aria-checked): ${isChecked}. Modo Toggle: ${toggleMode}`);
-
-                                if (toggleMode || isChecked === 'true') {
-                                    console.log(`Tentando alterar o estado de "${optionText}".`);
-
-                                    // --- LÓGICA DE TESTE A/B ---
-                                    if (optionText === 'Publicações' || optionText === 'Posts') {
-                                        console.log(`Usando método 1 (clique no input) para "${optionText}".`);
-                                        simulateClick(stateIndicator, true);
-                                    } else if (optionText === 'Stories') {
-                                        console.log(`Usando método 2 (clique no container) para "${optionText}".`);
-                                        simulateClick(rowContainer);
-                                    }
-                                    // --- FIM DA LÓGICA ---
-
-                                    await new Promise(resolve => setTimeout(resolve, 500)); // Pausa final
-                                } else {
-                                    console.log(`Estado de "${optionText}" já é 'false' e o modo toggle está desativado. Nenhuma ação necessária.`);
-                                }
-                            } else {
-                                console.warn(`Indicador de estado (checkbox/switch) não encontrado para "${optionText}".`);
-                            }
-                        } else {
-                            console.warn(`Contêiner clicável (div[role="button"]) não encontrado para a opção: "${optionText}".`);
+                        if (targetType === 'all' || targetType === 'posts') {
+                            await apiHelper.mute(userId, 'posts', shouldMute);
                         }
+                        if (targetType === 'all' || targetType === 'stories') {
+                            await apiHelper.mute(userId, 'story', shouldMute);
+                        }
+                        
+                        console.log(`[API] ${shouldMute ? 'Silenciado' : 'Reativado'} ${username} (${targetType})`);
+                        
+                        // Feedback visual
+                        const modalLi = document.querySelector(`#mutedList li input[data-username="${username}"]`);
+                        if (modalLi && !shouldMute) modalLi.closest('li').remove();
                     }
-
-                    // 5. Clicar no botão "Salvar" se ele existir (desktop) ou aguardar se não existir (mobile).
-                    console.log('Procurando pelo botão "Salvar" ou "Concluído"...');
-                    const saveButton = Array.from(document.querySelectorAll('button, div[role="button"]')).find(
-                        btn => ['Salvar', 'Save', 'Concluído', 'Done'].includes(btn.innerText.trim())
-                    );
-
-                    if (saveButton) {
-                        console.log('Botão "Salvar" encontrado (Desktop). Clicando...', saveButton);
-                        simulateClick(saveButton);
-                        await new Promise(resolve => setTimeout(resolve, 2000)); // Pausa após clicar em salvar.
-                    } else {
-                        console.warn('Botão "Salvar" não encontrado (Mobile). A ação deve salvar automaticamente. Aguardando...');
-                        await new Promise(resolve => setTimeout(resolve, 3000)); // Pausa maior para mobile.
-                    }
-
-                    // Remove a linha do modal para feedback visual imediato
-                    const modalLi = document.querySelector(`#mutedList li input[data-username="${username}"]`);
-                    if (modalLi) modalLi.closest('li').remove();
-
-                    // No mobile, o modal de silenciar pode não fechar sozinho. Clicamos em "Voltar".
-                    // O seletor foi melhorado para encontrar o botão que contém o SVG com o aria-label correto.
-                    const backButton = document.querySelector('button svg[aria-label="Voltar"], button svg[aria-label="Back"]')?.closest('button');
-                    if (backButton) {
-                        console.log("Botão 'Voltar' do mobile encontrado. Clicando para salvar a alteração...");
-                        simulateClick(backButton);
-                        await new Promise(resolve => setTimeout(resolve, 1000)); // Pausa extra após fechar o modal.
-                    }
+                    
+                    await new Promise(resolve => setTimeout(resolve, 500)); // Delay menor pois é API
                 }
 
                 bar.remove();
-
-                // Retorna para a página original de contas silenciadas
-                history.pushState(null, null, originalPath);
-                window.dispatchEvent(new Event("popstate"));
-                await new Promise(resolve => setTimeout(resolve, 1000));
 
                 if (callback) callback();
             }
@@ -3086,7 +3066,8 @@
                                                 userList.add(lowerUsername);
                                                 cachedData.userDetails.set(lowerUsername, {
                                                     username: user.username,
-                                                    photoUrl: user.profile_pic_url
+                                                    photoUrl: user.profile_pic_url,
+                                                    id: user.pk
                                                 });
                                             });
                                             updateLocalProgressBar(userList.size, total, `Extraindo ${type}:`);
@@ -3540,81 +3521,60 @@
 
                                     const username = users[index];
                                     statusDiv.innerText = `Deixando de seguir ${username} (${index + 1}/${users.length})...`;
-                                    history.pushState(null, null, `/${username}/`);
-                                    window.dispatchEvent(new Event("popstate"));
-
                                     const unfollowDelay = loadSettings().unfollowDelay;
 
-                                    setTimeout(() => {
-                                        if (processoCancelado) { if (callback) callback(); return; }
+                                    // Tenta pegar ID do cache local primeiro
+                                    let userId = cachedData.userDetails.get(username.toLowerCase())?.id;
 
-                                        // Seletores robustos para o botão "Seguindo"
-                                        let followBtn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(el => ['Seguindo', 'Following'].includes(el.innerText.trim()));
-
-                                        if (followBtn) {
-                                            followBtn.click();
-                                            setTimeout(() => {
-                                                if (processoCancelado) { if (callback) callback(); return; }
-
-                                                // Seletor robusto para o botão de confirmação
-                                                const confirmBtn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(btn => ['Deixar de seguir', 'Unfollow'].includes(btn.innerText.trim()));
-
-                                                if (confirmBtn) {
-                                                    confirmBtn.click();
-                                                    console.log(`Unfollow confirmado para ${username}`);
-
-                                                    // Salva no histórico
-                                                    getProfilePic(username).then(photoUrl => {
-                                                        dbHelper.saveUnfollowHistory({
-                                                            username: username,
-                                                            photoUrl: photoUrl,
-                                                            unfollowDate: new Date().toISOString()
-                                                        }).catch(err => console.error(`Falha ao salvar ${username} no histórico:`, err));
-                                                    });
-
-                                                    // Remove da lista de "Não segue de volta" em memória
-                                                    const naoSegueList = lists['tabNaoSegueDeVolta'];
-                                                    if (naoSegueList) {
-                                                        const userIndex = naoSegueList.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
-                                                        if (userIndex > -1) {
-                                                            naoSegueList.splice(userIndex, 1);
-                                                        }
-                                                        // Atualiza o contador da aba
-                                                        const countSpan = document.getElementById('countNaoSegue');
-                                                        if (countSpan) countSpan.innerText = naoSegueList.length;
-                                                    }
-
-                                                    // Atualiza o cache de 'following' no banco de dados para persistir a mudança
-                                                    const lowerUser = username.toLowerCase();
-                                                    if (cachedData.seguindo && cachedData.seguindo.has(lowerUser)) {
-                                                        cachedData.seguindo.delete(lowerUser);
-                                                        const newFollowingList = Array.from(cachedData.seguindo).map(u =>
-                                                            cachedData.userDetails.get(u) || { username: u, photoUrl: null }
-                                                        );
-                                                        dbHelper.saveCache('following', newFollowingList).catch(e => console.error("Erro ao atualizar cache following:", e));
-                                                    }
-
-                                                    // Remove a linha da tabela visível
-                                                    const row = document.querySelector(`#naoSegueDeVoltaTable tr[data-username="${username}"]`);
-                                                    if (row) row.remove();
-
-                                                    // Processa o próximo usuário após o delay
-                                                    setTimeout(() => {
-                                                        unfollowUsers(users, index + 1, callback);
-                                                    }, unfollowDelay);
-
-                                                } else {
-                                                    console.log(`Botão de confirmação não encontrado para ${username}, pulando.`);
-                                                    alert(`Não foi possível confirmar o unfollow para ${username}. Pulando.`);
-                                                    unfollowUsers(users, index + 1, callback);
-                                                }
-                                            }, 2000); // Atraso para o modal de confirmação aparecer
-                                        } else {
-                                            console.log(`Botão 'Seguindo' não encontrado para ${username}, pulando.`);
-                                            alert(`Botão 'Seguindo' não encontrado para ${username}. Pulando.`);
-                                            unfollowUsers(users, index + 1, callback);
+                                    (async () => {
+                                        if (!userId) {
+                                            userId = await apiHelper.getUserId(username);
                                         }
-                                    }, 4000); // Atraso para a página do perfil carregar
+
+                                        if (userId) {
+                                            const success = await apiHelper.unfollow(userId);
+                                            if (success) {
+                                                console.log(`[API] Unfollow realizado com sucesso: ${username}`);
+                                                
+                                                // Salva no histórico
+                                                const photoUrl = cachedData.userDetails.get(username.toLowerCase())?.photoUrl || 'https://via.placeholder.com/32';
+                                                dbHelper.saveUnfollowHistory({
+                                                    username: username,
+                                                    photoUrl: photoUrl,
+                                                    unfollowDate: new Date().toISOString()
+                                                });
+
+                                                // Atualiza UI e Cache
+                                                const naoSegueList = lists['tabNaoSegueDeVolta'];
+                                                if (naoSegueList) {
+                                                    const userIndex = naoSegueList.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
+                                                    if (userIndex > -1) naoSegueList.splice(userIndex, 1);
+                                                    const countSpan = document.getElementById('countNaoSegue');
+                                                    if (countSpan) countSpan.innerText = naoSegueList.length;
+                                                }
+
+                                                const lowerUser = username.toLowerCase();
+                                                if (cachedData.seguindo && cachedData.seguindo.has(lowerUser)) {
+                                                    cachedData.seguindo.delete(lowerUser);
+                                                    const newFollowingList = Array.from(cachedData.seguindo).map(u =>
+                                                        cachedData.userDetails.get(u) || { username: u, photoUrl: null }
+                                                    );
+                                                    dbHelper.saveCache('following', newFollowingList);
+                                                }
+
+                                                const row = document.querySelector(`#naoSegueDeVoltaTable tr[data-username="${username}"]`);
+                                                if (row) row.remove();
+                                            } else {
+                                                console.error(`[API] Falha ao dar unfollow em ${username}`);
+                                            }
+                                        } else {
+                                            console.error(`[API] ID não encontrado para ${username}`);
+                                        }
+
+                                        setTimeout(() => {
+                                            unfollowUsers(users, index + 1, callback);
+                                        }, unfollowDelay);
+                                    })();
                                 }
 
                                 carregarDadosIniciais();
@@ -5896,7 +5856,6 @@
                             }
 
                         async function performActionOnProfile(users, menuTexts, callback) {
-                            const originalPath = window.location.pathname;
                             let cancelled = false;
                             const { bar, update, closeButton } = createCancellableProgressBar();
                             closeButton.onclick = () => {
@@ -5911,59 +5870,28 @@
                                 const username = users[i];
                                 update(i + 1, users.length, "Processando:");
 
-                                // 1. Navegar para o perfil do usuário
-                                history.pushState(null, null, `/${username}/`);
-                                window.dispatchEvent(new Event("popstate"));
-                                await new Promise(resolve => setTimeout(resolve, 4000)); // Espera o perfil carregar
-
-                                // 2. Clicar no botão "Seguindo"
-                                // Seletor aprimorado para iPhone: procura em mais tipos de elementos e verifica o texto de forma mais flexível.
-                                const followingButton = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"]')).find(el => {
-                                    const text = el.innerText.trim();
-                                    return text === 'Seguindo' || text === 'Following';
-                                });
-                                if (!followingButton) {
-                                    console.warn(`Botão 'Seguindo' não encontrado para ${username}. Pulando.`);
-                                    continue;
+                                const userId = await apiHelper.getUserId(username);
+                                if (userId) {
+                                    // Lógica de Toggle para Melhores Amigos
+                                    // Se já é CF, remove. Se não, adiciona.
+                                    const isCloseFriend = userListCache.closeFriends && userListCache.closeFriends.has(username);
+                                    const shouldAdd = !isCloseFriend;
+                                    
+                                    await apiHelper.setCloseFriend(userId, shouldAdd);
+                                    console.log(`[API] Melhores Amigos: ${shouldAdd ? 'Adicionado' : 'Removido'} ${username}`);
                                 }
-                                simulateClick(followingButton);
-                                await new Promise(resolve => setTimeout(resolve, 1500)); // Espera o menu dropdown aparecer
-
-                                // 3. Clicar na opção desejada (ex: "Adicionar aos melhores amigos")
-                                 // Seletor aprimorado para encontrar o texto em qualquer lugar dentro do elemento clicável
-                                 const actionOption = Array.from(document.querySelectorAll('div[role="button"], div[role="menuitem"]')).find(el =>
-                                     menuTexts.some(text => el.innerText.includes(text))
-                                 );
-
-
-
-                                if (actionOption) {
-                                    simulateClick(actionOption);
-                                    console.log(`Ação '${actionOption.innerText}' executada para ${username}.`);
-                                } else {
-                                    console.warn(`Opção de ação não encontrada para ${username}. Textos procurados: ${menuTexts.join(', ')}`);
-                                    // Tenta fechar o menu se a opção não foi encontrada
-                                    simulateClick(followingButton);
-                                }
-                                await new Promise(resolve => setTimeout(resolve, 2000)); // Pausa antes do próximo
+                                await new Promise(resolve => setTimeout(resolve, 500));
                             }
 
                             bar.remove();
 
-                            // Retorna para a página original
-                            history.pushState(null, null, originalPath);
-                            window.dispatchEvent(new Event("popstate"));
-                            await new Promise(r => setTimeout(r, 1000));
-
                             // Limpa os caches relevantes para forçar a recarga na próxima vez
                             userListCache.closeFriends = null;
-                            userListCache.hiddenStory = null;
 
                             if (callback) callback();
                         }
 
                             async function toggleListMembership(users, pageUrl, cacheKey, callback) {
-                                const originalPath = window.location.pathname;
                                 let cancelled = false;
                                 const { bar, update, closeButton } = createCancellableProgressBar();
                                 closeButton.onclick = () => {
@@ -5973,38 +5901,20 @@
                                 };
                                 const isCancelled = () => cancelled;
 
-                                // Navega para a página correta
-                                history.pushState(null, null, pageUrl);
-                                window.dispatchEvent(new Event("popstate"));
-                                await new Promise(r => setTimeout(r, 3000));
-
                                 for (let i = 0; i < users.length; i++) { if (isCancelled()) break; const username = users[i]; update(i + 1, users.length, "Processando:");
-                                    // A lógica para encontrar e clicar no checkbox é a mesma para CF e Hide Story
-                                    const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
-                                    let found = false;
-                                    for (const flex of flexboxes) {
-                                        const userText = flex.innerText && flex.innerText.trim().split('\n')[0];
-                                        if (userText === username) {
-                                            const checkboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção'));
-                                            if (checkboxContainer) {
-                                                checkboxContainer.click();
-                                                found = true;
-                                                break;
-                                            }
-                                        }
+                                    const userId = await apiHelper.getUserId(username);
+                                    if (userId) {
+                                        // Lógica de Toggle para Ocultar Story
+                                        const isHidden = userListCache.hiddenStory && userListCache.hiddenStory.has(username);
+                                        const shouldHide = !isHidden;
+                                        
+                                        await apiHelper.setHideStory(userId, shouldHide);
+                                        console.log(`[API] Ocultar Story: ${shouldHide ? 'Ocultado' : 'Visível'} para ${username}`);
                                     }
-                                    if (!found) {
-                                        console.warn(`Não foi possível encontrar o checkbox para ${username} na página ${pageUrl}.`);
-                                    }
-                                    await new Promise(r => setTimeout(r, 1500)); // Pausa entre as ações
+                                    await new Promise(r => setTimeout(r, 500));
                                 }
 
                                 bar.remove();
-
-                                // Retorna para a página original
-                                history.pushState(null, null, originalPath);
-                                window.dispatchEvent(new Event("popstate"));
-                                await new Promise(r => setTimeout(r, 1000));
 
                                 // Limpa o cache específico para forçar a recarga na próxima vez
                                 userListCache[cacheKey] = null;

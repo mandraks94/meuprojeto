@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Instagram Tools_8
+// @name         código oficial_1
 // @description  Adds download buttons to Instagram stories
 // @author       You
 // @version      1.0
@@ -9,10 +9,123 @@
 
         (function() {
             'use strict';
+            console.log("[IG Tools] Script injetado e rodando.");
 
             function initScript() {
                 if (window.location.href.includes("instagram.com")) {
                     const infoIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: text-bottom; margin-left: 5px;"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>`;
+
+                    // Helper para Toast (Notificação Visual)
+                    function showToast(message) {
+                        const toast = document.createElement('div');
+                        toast.innerText = message;
+                        toast.style.cssText = "position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px; z-index: 2147483647; font-size: 14px; pointer-events: none; transition: opacity 0.5s;";
+                        document.body.appendChild(toast);
+                        setTimeout(() => {
+                            toast.style.opacity = '0';
+                            setTimeout(() => toast.remove(), 500);
+                        }, 3000);
+                    }
+
+                    // --- INTERCEPTOR STORIES ANÔNIMO ---
+                    if (!window._anonymousInterceptorInstalled) {
+                        window._anonymousInterceptorInstalled = true;
+                        console.log("[IG Tools] Instalando interceptores de rede (XHR, Fetch, Beacon)...");
+                        const originalOpen = XMLHttpRequest.prototype.open;
+                        const originalSend = XMLHttpRequest.prototype.send;
+                        
+                        XMLHttpRequest.prototype.open = function(method, url) {
+                            this._url = url;
+                            return originalOpen.apply(this, arguments);
+                        };
+                        
+                        XMLHttpRequest.prototype.send = function(body) {
+                            // Debug: Logar qualquer URL que contenha 'seen' para ver se estamos capturando
+                            if (this._url && this._url.includes('seen')) {
+                                console.log("[IG Tools] XHR Detectado (seen):", this._url);
+                            }
+
+                            if (this._url && (this._url.includes('/stories/reel/seen') || this._url.includes('/api/v1/stories/reel/seen'))) {
+                                // Tenta ler a configuração de forma robusta
+                                let isAnon = false;
+                                try {
+                                    const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
+                                    if (saved) isAnon = saved.anonymousStories;
+                                } catch(e) {}
+
+                                if (isAnon) {
+                                    console.log("%c[IG Tools] Bloqueado request de visto (XHR): " + this._url, "color: orange; font-weight: bold;");
+                                    showToast("👁️ Story visto anonimamente!");
+                                    return; 
+                                } else {
+                                    console.log("[IG Tools] Request de visto PERMITIDO (Modo Anônimo OFF): " + this._url);
+                                }
+                            }
+                            return originalSend.apply(this, arguments);
+                        };
+                        
+                        const originalFetch = window.fetch;
+                        window.fetch = async function(input, init) {
+                            let urlString = '';
+                            if (typeof input === 'string') {
+                                urlString = input;
+                            } else if (input instanceof URL) {
+                                urlString = input.toString();
+                            } else if (input && input.url) {
+                                urlString = input.url;
+                            }
+                            
+                            // Debug: Logar qualquer URL que contenha 'seen'
+                            if (urlString && urlString.includes('seen')) {
+                                console.log("[IG Tools] Fetch Detectado (seen):", urlString);
+                            }
+                            
+                            if (urlString && (urlString.includes('/stories/reel/seen') || urlString.includes('/api/v1/stories/reel/seen'))) {
+                                let isAnon = false;
+                                try {
+                                    const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
+                                    if (saved) isAnon = saved.anonymousStories;
+                                } catch(e) {}
+
+                                if (isAnon) {
+                                    console.log("%c[IG Tools] Bloqueado request de visto (Fetch): " + urlString, "color: orange; font-weight: bold;");
+                                    showToast("👁️ Story visto anonimamente!");
+                                    return new Response(JSON.stringify({status: 'ok'}), {status: 200});
+                                } else {
+                                    console.log("[IG Tools] Request de visto PERMITIDO (Modo Anônimo OFF): " + urlString);
+                                }
+                            }
+                            return originalFetch.apply(this, arguments);
+                        };
+
+                        // Interceptor para Beacon (usado frequentemente para analytics/seen events)
+                        if (navigator.sendBeacon) {
+                            const originalSendBeacon = navigator.sendBeacon;
+                            navigator.sendBeacon = function(url, data) {
+                                // Debug: Logar qualquer URL que contenha 'seen'
+                                if (url && url.includes('seen')) {
+                                    console.log("[IG Tools] Beacon Detectado (seen):", url);
+                                }
+
+                                if (url && (url.includes('/stories/reel/seen') || url.includes('/api/v1/stories/reel/seen'))) {
+                                    let isAnon = false;
+                                    try {
+                                        const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
+                                        if (saved) isAnon = saved.anonymousStories;
+                                    } catch(e) {}
+
+                                    if (isAnon) {
+                                        console.log("%c[IG Tools] Bloqueado request de visto (Beacon): " + url, "color: orange; font-weight: bold;");
+                                        showToast("👁️ Story visto anonimamente!");
+                                        return true;
+                                    } else {
+                                        console.log("[IG Tools] Request de visto PERMITIDO (Modo Anônimo OFF): " + url);
+                                    }
+                                }
+                                return originalSendBeacon.apply(this, arguments);
+                            };
+                        }
+                    }
 
                     // Helper para IndexedDB
                     const dbHelper = {
@@ -181,7 +294,8 @@
                             itemsPerPage: 10,
                             requestDelay: 250,
                             requestBatchSize: 50,
-                            maxRequests: 0
+                            maxRequests: 0,
+                            anonymousStories: false
                         };
                         try {
                             const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
@@ -192,12 +306,12 @@
                     }
 
                     const translations = {
-                        'pt-BR': { likes: 'Curtidas', comments: 'Comentários', blocked: 'Bloqueados', messages: 'Mensagens', notFollowingBack: 'Não segue de volta', following: 'Seguindo', closeFriends: 'Amigos Próximos', hideStory: 'Ocultar Story', mutedAccounts: 'Contas Silenciadas', interactions: 'Interações', reelsMenu: 'Menu de Reels', downloadStory: 'Baixar Story', engagement: 'Engajamento', settings: 'Configurações', darkMode: 'Modo Escuro', rgbBorder: 'Borda RGB', shortcuts: 'Atalhos', parameters: 'Parâmetros', language: 'Idioma' },
-                        'en-US': { likes: 'Likes', comments: 'Comments', blocked: 'Blocked', messages: 'Messages', notFollowingBack: 'Not Following Back', following: 'Following', closeFriends: 'Close Friends', hideStory: 'Hide Story', mutedAccounts: 'Muted Accounts', interactions: 'Interactions', reelsMenu: 'Reels Menu', downloadStory: 'Download Story', engagement: 'Engagement', settings: 'Settings', darkMode: 'Dark Mode', rgbBorder: 'RGB Border', shortcuts: 'Shortcuts', parameters: 'Parameters', language: 'Language' },
-                        'es-ES': { likes: 'Me gusta', comments: 'Comentarios', blocked: 'Bloqueados', messages: 'Mensajes', notFollowingBack: 'No te sigue', following: 'Siguiendo', closeFriends: 'Mejores Amigos', hideStory: 'Ocultar Historia', mutedAccounts: 'Cuentas Silenciadas', interactions: 'Interacciones', reelsMenu: 'Menú de Reels', downloadStory: 'Descargar Historia', engagement: 'Compromiso', settings: 'Configuración', darkMode: 'Modo Oscuro', rgbBorder: 'Borde RGB', shortcuts: 'Atajos', parameters: 'Parámetros', language: 'Idioma' },
-                        'fr-FR': { likes: 'J\'aime', comments: 'Commentaires', blocked: 'Bloqués', messages: 'Messages', notFollowingBack: 'Ne suit pas en retour', following: 'Abonnements', closeFriends: 'Amis Proches', hideStory: 'Masquer Story', mutedAccounts: 'Comptes Muets', interactions: 'Interactions', reelsMenu: 'Menu Reels', downloadStory: 'Télécharger Story', engagement: 'Engagement', settings: 'Paramètres', darkMode: 'Mode Sombre', rgbBorder: 'Bordure RGB', shortcuts: 'Raccourcis', parameters: 'Paramètres', language: 'Langue' },
-                        'it-IT': { likes: 'Mi piace', comments: 'Commenti', blocked: 'Bloccati', messages: 'Messaggi', notFollowingBack: 'Non ti segue', following: 'Seguiti', closeFriends: 'Amici Più Stretti', hideStory: 'Nascondi Storia', mutedAccounts: 'Account Silenziati', interactions: 'Interazioni', reelsMenu: 'Menu Reels', downloadStory: 'Scarica Storia', engagement: 'Coinvolgimento', settings: 'Impostazioni', darkMode: 'Modalità Scura', rgbBorder: 'Bordo RGB', shortcuts: 'Scorciatoie', parameters: 'Parametri', language: 'Lingua' },
-                        'de-DE': { likes: 'Gefällt mir', comments: 'Kommentare', blocked: 'Blockiert', messages: 'Nachrichten', notFollowingBack: 'Folgt nicht zurück', following: 'Abonniert', closeFriends: 'Engste Freunde', hideStory: 'Story verbergen', mutedAccounts: 'Stummgeschaltete', interactions: 'Interaktionen', reelsMenu: 'Reels Menü', downloadStory: 'Story herunterladen', engagement: 'Engagement', settings: 'Einstellungen', darkMode: 'Dunkelmodus', rgbBorder: 'RGB-Rand', shortcuts: 'Verknüpfungen', parameters: 'Parameter', language: 'Sprache' }
+                        'pt-BR': { likes: 'Curtidas', comments: 'Comentários', blocked: 'Bloqueados', messages: 'Mensagens', notFollowingBack: 'Não segue de volta', following: 'Seguindo', closeFriends: 'Amigos Próximos', hideStory: 'Ocultar Story', mutedAccounts: 'Contas Silenciadas', interactions: 'Interações', reelsMenu: 'Menu de Reels', downloadStory: 'Baixar Story', engagement: 'Engajamento', settings: 'Configurações', darkMode: 'Modo Escuro', rgbBorder: 'Borda RGB', shortcuts: 'Atalhos', parameters: 'Parâmetros', language: 'Idioma', anonymousStories: 'Stories Anônimo' },
+                        'en-US': { likes: 'Likes', comments: 'Comments', blocked: 'Blocked', messages: 'Messages', notFollowingBack: 'Not Following Back', following: 'Following', closeFriends: 'Close Friends', hideStory: 'Hide Story', mutedAccounts: 'Muted Accounts', interactions: 'Interactions', reelsMenu: 'Reels Menu', downloadStory: 'Download Story', engagement: 'Engagement', settings: 'Settings', darkMode: 'Dark Mode', rgbBorder: 'RGB Border', shortcuts: 'Shortcuts', parameters: 'Parameters', language: 'Language', anonymousStories: 'Anonymous Stories' },
+                        'es-ES': { likes: 'Me gusta', comments: 'Comentarios', blocked: 'Bloqueados', messages: 'Mensajes', notFollowingBack: 'No te sigue', following: 'Siguiendo', closeFriends: 'Mejores Amigos', hideStory: 'Ocultar Historia', mutedAccounts: 'Cuentas Silenciadas', interactions: 'Interacciones', reelsMenu: 'Menú de Reels', downloadStory: 'Descargar Historia', engagement: 'Compromiso', settings: 'Configuración', darkMode: 'Modo Oscuro', rgbBorder: 'Borde RGB', shortcuts: 'Atajos', parameters: 'Parámetros', language: 'Idioma', anonymousStories: 'Historias Anónimas' },
+                        'fr-FR': { likes: 'J\'aime', comments: 'Commentaires', blocked: 'Bloqués', messages: 'Messages', notFollowingBack: 'Ne suit pas en retour', following: 'Abonnements', closeFriends: 'Amis Proches', hideStory: 'Masquer Story', mutedAccounts: 'Comptes Muets', interactions: 'Interactions', reelsMenu: 'Menu Reels', downloadStory: 'Télécharger Story', engagement: 'Engagement', settings: 'Paramètres', darkMode: 'Mode Sombre', rgbBorder: 'Bordure RGB', shortcuts: 'Raccourcis', parameters: 'Paramètres', language: 'Langue', anonymousStories: 'Stories Anonymes' },
+                        'it-IT': { likes: 'Mi piace', comments: 'Commenti', blocked: 'Bloccati', messages: 'Messaggi', notFollowingBack: 'Non ti segue', following: 'Seguiti', closeFriends: 'Amici Più Stretti', hideStory: 'Nascondi Storia', mutedAccounts: 'Account Silenziati', interactions: 'Interazioni', reelsMenu: 'Menu Reels', downloadStory: 'Scarica Storia', engagement: 'Coinvolgimento', settings: 'Impostazioni', darkMode: 'Modalità Scura', rgbBorder: 'Bordo RGB', shortcuts: 'Scorciatoie', parameters: 'Parametri', language: 'Lingua', anonymousStories: 'Storie Anonime' },
+                        'de-DE': { likes: 'Gefällt mir', comments: 'Kommentare', blocked: 'Blockiert', messages: 'Nachrichten', notFollowingBack: 'Folgt nicht zurück', following: 'Abonniert', closeFriends: 'Engste Freunde', hideStory: 'Story verbergen', mutedAccounts: 'Stummgeschaltete', interactions: 'Interaktionen', reelsMenu: 'Reels Menü', downloadStory: 'Story herunterladen', engagement: 'Engagement', settings: 'Einstellungen', darkMode: 'Dunkelmodus', rgbBorder: 'RGB-Rand', shortcuts: 'Verknüpfungen', parameters: 'Parameter', language: 'Sprache', anonymousStories: 'Anonyme Stories' }
                     };
 
                     function getText(key) {
@@ -226,10 +340,16 @@
                         if (btn) btn.style.background = enabled ? '#4c5c75' : '';
                     }
 
+                    function toggleAnonymousStories(enabled) {
+                        const btn = document.getElementById("settingsAnonymousStoriesBtn");
+                        if (btn) btn.style.background = enabled ? '#4c5c75' : '';
+                    }
+
                     function applyInitialSettings() {
                         const settings = loadSettings();
                         toggleDarkMode(settings.darkMode);
                         toggleRgbBorder(settings.rgbBorder);
+                        toggleAnonymousStories(settings.anonymousStories);
                     }
 
                     // --- LÓGICA PARA ATALHOS ---
@@ -342,7 +462,7 @@
                                             alert("Permissão de microfone negada.");
                                         }
                                     };
-                                    
+
                                     this.recognition.onend = () => {
                                         if (this.isListening) {
                                             try { this.recognition.start(); } catch(e) {}
@@ -416,7 +536,7 @@
                                         switch(cmd.action) {
                                             case 'downloadStory': baixarStoryAtual(); break;
                                             case 'openSettings': abrirModalConfiguracoes(); break;
-                                            case 'closeMenu': 
+                                            case 'closeMenu':
                                                 const m = document.querySelector('.assistive-menu');
                                                 if(m) m.style.display = 'none';
                                                 break;
@@ -1919,7 +2039,7 @@
                 div.className = "submenu-modal";
                 div.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; padding: 20px; border: 1px solid #ccc; border-radius: 10px; z-index: 2147483648; text-align: center; background: white; color: black;`;
                 if (loadSettings().rgbBorder) div.classList.add('rgb-border-effect');
-                
+
                 div.innerHTML = `
                     <h3 style="margin-top:0;">O que deseja reativar?</h3>
                     <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
@@ -2001,10 +2121,10 @@
                             // Adiciona o usuário apenas se tiver um nome válido, uma foto e ainda não estiver na lista
                             if (username && imgTag && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
                                 const photoUrl = imgTag.src;
-                                
+
                                 // Tenta extrair o status do texto do elemento
                                 let status = "Silenciado";
-                                
+
                                 // Procura especificamente pelo span de status
                                 const spans = Array.from(userElement.querySelectorAll('span[data-bloks-name="bk.components.Text"]'));
                                 const statusSpan = spans.find(s => {
@@ -3501,9 +3621,8 @@
                             }
 
                             // --- LÓGICA PARA "SEGUINDO" ---
-                            async function iniciarProcessoSeguindo(forceUpdate = false) {
+                            async function iniciarProcessoSeguindo(updateOptions = null) {
                                 if (document.getElementById("seguindoModal")) return;
-                                if (document.getElementById("automationStatusModal")) return;
 
                                 const originalPath = window.location.pathname;
 
@@ -3515,70 +3634,54 @@
                                     return;
                                 }
 
-                                // 1. Criar o modal de status da automação
-                                const statusModal = document.createElement("div");
-                                statusModal.id = "automationStatusModal";
-                                statusModal.className = "submenu-modal";
-                                statusModal.style.cssText = `
-                                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                                    width: 90%; max-width: 500px; border: 1px solid #ccc;
-                                    border-radius: 10px; padding: 20px; z-index: 10001;
-                                `;
-                                statusModal.innerHTML = `
-                                    <div class="modal-header">
-                                        <span class="modal-title">Coletando Dados...</span>
-                                    </div>
-                                    <div style="padding: 15px;">
-                                        <p>Por favor, aguarde. O script está navegando para buscar as informações necessárias.</p>
-                                        <ul style="list-style: none; padding: 0; margin-top: 20px;">
-                                            <li id="status-step-1" style="margin-bottom: 10px;"><span>⏳</span> Carregando lista de "Seguindo"...</li>
-                                    <li id="status-step-2" style="margin-bottom: 10px;"><span>⏳</span> Carregando cache de "Melhores Amigos"...</li>
-                                    <li id="status-step-3" style="margin-bottom: 10px;"><span>⏳</span> Carregando cache de "Ocultar Stories"...</li>
-                                    <li id="status-step-4" style="margin-bottom: 10px;"><span>⏳</span> Carregando cache de "Contas Silenciadas"...</li>
-                                    </ul>
-                                <div id="automation-result" style="margin-top: 20px; font-weight: bold; color: red;"></div>
-                                `;
-                                document.body.appendChild(statusModal);
+                                // Helper para verificar o que atualizar
+                                const shouldUpdate = (key) => {
+                                    if (!updateOptions) return false;
+                                    if (updateOptions === true) return true; // Suporte a legado/tudo
+                                    return !!updateOptions[key];
+                                };
+                                const isUpdate = updateOptions !== null;
+
+                                // 1. Criar o modal de status da automação SE for atualização forçada
+                                if (isUpdate) {
+                                    const statusModal = document.createElement("div");
+                                    statusModal.id = "automationStatusModal";
+                                    statusModal.className = "submenu-modal";
+                                    statusModal.style.cssText = `
+                                        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                        width: 90%; max-width: 500px; border: 1px solid #ccc;
+                                        border-radius: 10px; padding: 20px; z-index: 10001;
+                                    `;
+                                    statusModal.innerHTML = `
+                                        <div class="modal-header">
+                                            <span class="modal-title">Coletando Dados...</span>
+                                        </div>
+                                        <div style="padding: 15px;">
+                                            <p>Por favor, aguarde. O script está navegando para buscar as informações necessárias.</p>
+                                            <ul style="list-style: none; padding: 0; margin-top: 20px;">
+                                                <li id="status-step-1" style="margin-bottom: 10px;"><span>⏳</span> Carregando lista de "Seguindo"...</li>
+                                        <li id="status-step-2" style="margin-bottom: 10px;"><span>⏳</span> Carregando "Melhores Amigos"...</li>
+                                        <li id="status-step-3" style="margin-bottom: 10px;"><span>⏳</span> Carregando "Ocultar Stories"...</li>
+                                        <li id="status-step-4" style="margin-bottom: 10px;"><span>⏳</span> Carregando "Contas Silenciadas"...</li>
+                                        </ul>
+                                    <div id="automation-result" style="margin-top: 20px; font-weight: bold; color: red;"></div>
+                                    `;
+                                    document.body.appendChild(statusModal);
+                                }
 
                                 const updateStatus = (step, success, message = '') => {
+                                    if (!isUpdate) return;
                                     const stepLi = document.getElementById(`status-step-${step}`);
                                     if (stepLi) {
                                         stepLi.innerHTML = `<span>${success ? '✅' : '❌'}</span> ${stepLi.innerText.substring(2)} ${message}`;
                                     }
                                 };
 
-                                // Função para navegar, extrair e retornar
                                 const fetchAndCache = async (url, extractorFn, cacheKey, step) => {
-                                    if (!forceUpdate && userListCache[cacheKey] !== null) {
-                                        updateStatus(step, true, '(Já em cache)');
-                                        return true;
-                                    }
-                                    
-                                    // Tenta carregar do IndexedDB primeiro
-                                    if (!forceUpdate) {
-                                        try {
-                                            const dbData = await dbHelper.loadCache(cacheKey);
-                                            if (dbData && dbData.size > 0) {
-                                                userListCache[cacheKey] = dbData;
-                                                // Recupera detalhes extras se existirem (ex: status do silenciamento)
-                                                if (cacheKey === 'muted' && dbData.details) {
-                                                    userListCache.mutedDetails = new Map();
-                                                    dbData.details.forEach((u, username) => {
-                                                        userListCache.mutedDetails.set(username, u.status);
-                                                    });
-                                                }
-                                                updateStatus(step, true, '(Do Banco de Dados)');
-                                                return true;
-                                            }
-                                        } catch (e) {
-                                            console.warn(`Erro ao carregar ${cacheKey} do DB:`, e);
-                                        }
-                                    }
-
                                     try {
                                         history.pushState(null, null, url);
                                         window.dispatchEvent(new Event("popstate"));
-                                        await new Promise(r => setTimeout(r, 3000)); // Espera a página carregar
+                                        await new Promise(r => setTimeout(r, 3000));
 
                                         const users = await extractorFn();
                                         let filteredUsersToSave = [];
@@ -3601,14 +3704,11 @@
                                                     }
                                                 }
                                             });
-                                            // Filtra apenas os usuários marcados (checked) para salvar no cache
                                             filteredUsersToSave = users.filter(u => officialStates.get(u.username) === true);
                                             userListCache[cacheKey] = new Set(filteredUsersToSave.map(u => u.username));
                                         }
-                                        
-                                        // Salva no IndexedDB para uso futuro
+
                                         await dbHelper.saveCache(cacheKey, filteredUsersToSave);
-                                        
                                         updateStatus(step, true);
                                         return true;
                                     } catch (error) {
@@ -3684,10 +3784,7 @@
                                 });
 
                                 document.getElementById("atualizarSeguindoBtn").addEventListener("click", () => {
-                                    // Limpa o cache e recarrega os dados
-                                    Object.keys(userListCache).forEach(key => userListCache[key] = null);
-                                    div.remove();
-                                    iniciarProcessoSeguindo(true);
+                                    showUpdateOptionsModal();
                                 });
 
                                 const statusDiv = document.getElementById("statusSeguindo");
@@ -3734,6 +3831,20 @@
                                 return processoCancelado ? null : userList;
                             };
 
+                            // Carrega dados do DB sem navegação
+                            const loadCacheFromDB = async (key) => {
+                                try {
+                                    const data = await dbHelper.loadCache(key);
+                                    if (data) {
+                                        userListCache[key] = data;
+                                        if (key === 'muted' && data.details) {
+                                            userListCache.mutedDetails = new Map();
+                                            data.details.forEach((u, username) => userListCache.mutedDetails.set(username, u.status));
+                                        }
+                                    } else { userListCache[key] = new Set(); }
+                                } catch (e) { userListCache[key] = new Set(); }
+                            };
+
                                 async function carregarSeguindo() {
                                     statusDiv.innerText = 'Buscando informações do perfil...';
                                     const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
@@ -3744,25 +3855,53 @@
 
                                     const totalFollowing = profileInfo.data.user.edge_follow.count;
 
-                                    // Inicia o processo de automação
-                                const step2Success = await fetchAndCache('/accounts/close_friends/', extractCloseFriendsUsernames, 'closeFriends', 2);
-                                const step3Success = await fetchAndCache('/accounts/hide_story_and_live_from/', extractHideStoryUsernames, 'hiddenStory', 3);
-                                const step4Success = await fetchAndCache('/accounts/muted_accounts/', extractMutedAccountsUsernames, 'muted', 4);
+                                    // Carrega caches do DB
+                                    await Promise.all([
+                                        loadCacheFromDB('closeFriends'),
+                                        loadCacheFromDB('hiddenStory'),
+                                        loadCacheFromDB('muted')
+                                    ]);
 
-                                const step1Success = await (async () => {
-                                    if (!step2Success || !step3Success || !step4Success) {
-                                        updateStatus(1, false, '(Abortado)');
-                                        return false;
+                                    // Carrega seguindo (DB ou API)
+                                    const dbFollowing = await dbHelper.loadCache('following');
+                                    
+                                    // Lógica de atualização seletiva
+                                    if (shouldUpdate('closeFriends')) {
+                                        await fetchAndCache('/accounts/close_friends/', extractCloseFriendsUsernames, 'closeFriends', 2);
+                                    } else {
+                                        await loadCacheFromDB('closeFriends');
+                                        if (isUpdate) updateStatus(2, true, '(Cache)');
                                     }
-                                        seguindoList = await fetchUserListAPISeguindo(userId, 'following', totalFollowing);
-                                        const success = seguindoList !== null;
-                                        updateStatus(1, success);
-                                        return success;
-                                    })();
 
-                                    // Salva a lista de seguindo no DB se for uma atualização forçada
-                                    if (forceUpdate && seguindoList) {
-                                        await dbHelper.saveCache('following', seguindoList);
+                                    if (shouldUpdate('hiddenStory')) {
+                                        await fetchAndCache('/accounts/hide_story_and_live_from/', extractHideStoryUsernames, 'hiddenStory', 3);
+                                    } else {
+                                        await loadCacheFromDB('hiddenStory');
+                                        if (isUpdate) updateStatus(3, true, '(Cache)');
+                                    }
+
+                                    if (shouldUpdate('muted')) {
+                                        await fetchAndCache('/accounts/muted_accounts/', extractMutedAccountsUsernames, 'muted', 4);
+                                    } else {
+                                        await loadCacheFromDB('muted');
+                                        if (isUpdate) updateStatus(4, true, '(Cache)');
+                                    }
+
+                                    if (!shouldUpdate('following') && dbFollowing) {
+                                        if (dbFollowing.details) {
+                                            seguindoList = Array.from(dbFollowing.details.values());
+                                        } else {
+                                            seguindoList = Array.from(dbFollowing).map(u => ({ username: u, photoUrl: 'https://via.placeholder.com/150' }));
+                                        }
+                                        if (isUpdate) updateStatus(1, true, '(Cache)');
+                                    } else {
+                                        seguindoList = await fetchUserListAPISeguindo(userId, 'following', totalFollowing);
+                                        if (seguindoList) {
+                                            if (isUpdate) updateStatus(1, true);
+                                            await dbHelper.saveCache('following', seguindoList);
+                                        } else {
+                                            if (isUpdate) updateStatus(1, false);
+                                        }
                                     }
 
                                     // Retorna para a página original
@@ -3770,12 +3909,9 @@
                                     window.dispatchEvent(new Event("popstate"));
                                     await new Promise(r => setTimeout(r, 500));
 
-                                if (!step1Success || !step2Success || !step3Success || !step4Success) {
-                                        document.getElementById('automation-result').innerHTML = 'Falha na coleta automática. Por favor, abra os menus "Melhores Amigos", "Ocultar Story" e "Contas Silenciadas" manualmente para carregar os dados e tente novamente.';
-                                        return; // Interrompe se alguma etapa falhou
-                                    }
+                                    const statusModal = document.getElementById("automationStatusModal");
+                                    if (statusModal) statusModal.remove();
 
-                                    statusModal.remove(); // Remove o modal de status
                                     document.body.appendChild(div); // Adiciona o modal principal
 
                                     statusDiv.innerText = `Total: ${seguindoList.length} perfis seguidos.`;
@@ -3793,9 +3929,9 @@
                                         // Filtra por pesquisa antes de ordenar e paginar
                                         const searchTerm = document.getElementById('seguindoSearchInput')?.value.toLowerCase() || '';
                                         const filterValue = document.getElementById('seguindoFilterSelect')?.value || 'all';
-                                        
+
                                         let filteredUsers = seguindoList;
-                                        
+
                                         if (searchTerm) {
                                             filteredUsers = seguindoList.filter(user => user.username.toLowerCase().includes(searchTerm));
                                         }
@@ -3814,7 +3950,7 @@
                                                     const dLower = detail.toLowerCase();
                                                     const isStories = dLower.includes('stories') || dLower.includes('story');
                                                     const isPosts = dLower.includes('publicações') || dLower.includes('posts');
-                                                    
+
                                                     if (filterValue === 'muted_all') return isStories && isPosts;
                                                     if (filterValue === 'muted_stories') return isStories && !isPosts;
                                                     if (filterValue === 'muted_posts') return isPosts && !isStories;
@@ -3984,13 +4120,63 @@
                                         });
                                     };
 
-                                    document.getElementById('silenciarSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'mute');
-                                    document.getElementById('closeFriendsSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'closeFriends');
-                                    document.getElementById('hideStorySeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'hideStory');
+                                    const updateLocalState = async (users, dbStore) => {
+                                        if (!userListCache[dbStore]) userListCache[dbStore] = new Set();
+                                        users.forEach(u => {
+                                            if (userListCache[dbStore].has(u)) {
+                                                userListCache[dbStore].delete(u); // Toggle off
+                                            } else {
+                                                userListCache[dbStore].add(u); // Toggle on
+                                            }
+                                        });
+                                        // Salva o novo estado no DB
+                                        await dbHelper.saveCache(dbStore, Array.from(userListCache[dbStore]));
+                                        // Re-renderiza a lista para refletir as mudanças (flags 0 -> 1)
+                                        renderList(currentPage);
+                                        selectedUsers.clear(); // Limpa seleção
+                                    };
+
+                                    document.getElementById('silenciarSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'mute', updateLocalState);
+                                    document.getElementById('closeFriendsSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'closeFriends', updateLocalState);
+                                    document.getElementById('hideStorySeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'hideStory', updateLocalState);
 
                                     if (seguindoList.length > 0) renderList(currentPage);
                                 }
                                 carregarSeguindo();
+                            }
+
+                            function showUpdateOptionsModal() {
+                                const div = document.createElement("div");
+                                div.className = "submenu-modal";
+                                div.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; padding: 20px; border: 1px solid #ccc; border-radius: 10px; z-index: 2147483648; background: white; color: black; display: flex; flex-direction: column; gap: 10px;`;
+                                if (loadSettings().rgbBorder) div.classList.add('rgb-border-effect');
+
+                                div.innerHTML = `
+                                    <h3 style="margin: 0 0 10px 0;">O que deseja atualizar?</h3>
+                                    <label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="chkCloseFriends" checked> Melhores Amigos</label>
+                                    <label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="chkHiddenStory" checked> Ocultar Stories</label>
+                                    <label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="chkMuted" checked> Contas Silenciadas</label>
+                                    <label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="chkFollowing" checked> Lista Seguindo</label>
+                                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                                        <button id="btnUpdateSelected" style="flex: 1; padding: 8px; background: #0095f6; color: white; border: none; border-radius: 5px; cursor: pointer;">Atualizar</button>
+                                        <button id="btnCancelUpdate" style="flex: 1; padding: 8px; background: #e74c3c; color: white; border: none; border-radius: 5px; cursor: pointer;">Cancelar</button>
+                                    </div>
+                                `;
+                                document.body.appendChild(div);
+
+                                document.getElementById('btnCancelUpdate').onclick = () => div.remove();
+                                document.getElementById('btnUpdateSelected').onclick = () => {
+                                    const options = {
+                                        closeFriends: document.getElementById('chkCloseFriends').checked,
+                                        hiddenStory: document.getElementById('chkHiddenStory').checked,
+                                        muted: document.getElementById('chkMuted').checked,
+                                        following: document.getElementById('chkFollowing').checked
+                                    };
+                                    div.remove();
+                                    const seguindoModal = document.getElementById("seguindoModal");
+                                    if (seguindoModal) seguindoModal.remove();
+                                    iniciarProcessoSeguindo(options);
+                                };
                             }
 
                             function abrirModalConfiguracoes() {
@@ -4024,6 +4210,7 @@
                                         <div style="display: flex; flex-direction: column; gap: 10px;">
                                             <button id="settingsDarkModeBtn" class="menu-item-button" style="background: ${settings.darkMode ? '#4c5c75' : ''};">🌙 ${getText('darkMode')}</button>
                                             <button id="settingsRgbBorderBtn" class="menu-item-button" style="background: ${settings.rgbBorder ? '#4c5c75' : ''};">🌈 ${getText('rgbBorder')}</button>
+                                            <button id="settingsAnonymousStoriesBtn" class="menu-item-button" style="background: ${settings.anonymousStories ? '#4c5c75' : ''};">👻 ${getText('anonymousStories')}</button>
                                             <button id="settingsVoiceBtn" class="menu-item-button">🎙️ Comandos de Voz</button>
                                             <button id="settingsShortcutsBtn" class="menu-item-button">⌨️ ${getText('shortcuts')}</button>
                                             <button id="settingsParamsBtn" class="menu-item-button">🔧 ${getText('parameters')}</button>
@@ -4045,6 +4232,13 @@
                                     const newSetting = !loadSettings().rgbBorder;
                                     toggleRgbBorder(newSetting);
                                     saveSettings({ rgbBorder: newSetting });
+                                };
+
+                                document.getElementById("settingsAnonymousStoriesBtn").onclick = () => {
+                                    const newSetting = !loadSettings().anonymousStories;
+                                    toggleAnonymousStories(newSetting);
+                                    saveSettings({ anonymousStories: newSetting });
+                                    console.log("[IG Tools] Stories Anônimo alterado para:", newSetting);
                                 };
 
                                 document.getElementById("settingsVoiceBtn").onclick = () => {
@@ -4143,7 +4337,7 @@
                                 });
                             }
 
-                            
+
                             function abrirModalComandosVoz() {
                                 if (document.getElementById("voiceCommandsModal")) return;
 
@@ -4196,7 +4390,7 @@
                                             </button>
                                             <p id="voiceStatusText" style="font-size: 12px; color: #666; margin-top: 5px;">Status: ${isListening ? 'Ouvindo...' : 'Parado'}</p>
                                         </div>
-                                        
+
                                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                                             <h3 style="font-size: 16px; margin: 0;">Lista de Comandos</h3>
                                             <button id="addVoiceCommandBtn" style="background: #0095f6; color: white; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-weight: bold; font-size: 18px;">+</button>
@@ -4242,7 +4436,7 @@
                                     voiceControl.commands.forEach((cmd, index) => {
                                         const item = document.createElement('div');
                                         item.style.cssText = "padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;";
-                                        
+
                                         const actionLabel = availableActions.find(a => a.value === cmd.action)?.label || cmd.action;
 
                                         item.innerHTML = `
@@ -4286,12 +4480,12 @@
                                 renderList();
 
                                 document.getElementById("fecharVoiceBtn").onclick = () => div.remove();
-                                
+
                                 document.getElementById("toggleVoiceBtn").onclick = () => {
                                     const listening = voiceControl.toggle();
                                     const btn = document.getElementById("toggleVoiceBtn");
                                     const status = document.getElementById("voiceStatusText");
-                                    
+
                                     if (listening) {
                                         btn.style.background = '#e74c3c';
                                         btn.innerText = '🛑 Parar Escuta';
@@ -4323,10 +4517,10 @@
 
                                     if (!phrase) return alert("Digite uma frase para o comando.");
 
-                                    const newCmd = { 
-                                        phrase, 
-                                        action, 
-                                        description: availableActions.find(a => a.value === action)?.label 
+                                    const newCmd = {
+                                        phrase,
+                                        action,
+                                        description: availableActions.find(a => a.value === action)?.label
                                     };
 
                                     if (idx >= 0) {
@@ -5652,7 +5846,7 @@
                                 }
                             }
 
-                            async function handleActionOnSelected(selectedUsers, actionType) {
+                            async function handleActionOnSelected(selectedUsers, actionType, updateCallback) {
                                 if (selectedUsers.length === 0) {
                                     alert("Nenhum usuário selecionado.");
                                     return;
@@ -5696,14 +5890,8 @@
                                     btn.disabled = false;
                                     btn.textContent = config.text;
                                     alert(`Ação "${config.text}" concluída para ${selectedUsers.length} usuário(s).`);
-                                    
-                                    // Limpa apenas o cache específico do DB que foi alterado, forçando atualização da web apenas para ele
-                                    if (config.dbStore) {
-                                        await dbHelper.clearCache(config.dbStore);
-                                    }
-                                    
-                                    // Recarrega todos os dados para ver a mudança
-                                    document.getElementById("atualizarSeguindoBtn").click();
+                                    // Atualiza o estado localmente e re-renderiza
+                                    if (updateCallback && config.dbStore) await updateCallback(selectedUsers, config.dbStore);
                                 });
                             }
 
@@ -6386,10 +6574,16 @@
                 }
             });
 
-            // Começa a observar o corpo do documento por mudanças
-            observer.observe(document.body, {
-                childList: true,
+            // Tenta iniciar imediatamente caso já esteja carregado
+            const mainContainer = document.querySelector('main[role="main"], div[data-main-nav="true"]');
+            if (mainContainer) {
+                initScript();
+            } else {
+                // Começa a observar o corpo do documento por mudanças
+                observer.observe(document.body, {
+                    childList: true,
                     subtree: true,
-            });
+                });
+            }
 
         })();

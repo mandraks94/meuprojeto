@@ -15,6 +15,69 @@
                 if (window.location.href.includes("instagram.com")) {
                     const infoIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: text-bottom; margin-left: 5px;"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>`;
 
+                    // Helper para Cookie
+                    function getCookie(name) {
+                        const value = `; ${document.cookie}`;
+                        const parts = value.split(`; ${name}=`);
+                        if (parts.length === 2) return parts.pop().split(';').shift();
+                    }
+
+                    function getDeviceId() {
+                        const cookie = getCookie('ig_did');
+                        return cookie ? cookie : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+                            const r = Math.random() * 16 | 0;
+                            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+                        });
+                    }
+
+                    let cachedRolloutHash = "";
+                    function getRolloutHash() {
+                        if (cachedRolloutHash) return cachedRolloutHash;
+                        try {
+                            const scripts = document.querySelectorAll("script");
+                            for (let i = 0; i < scripts.length; i++) {
+                                const text = scripts[i].innerText;
+                                if (text.includes('"rollout_hash"')) {
+                                    const match = text.match(/"rollout_hash":"([a-z0-9]+)"/);
+                                    if (match) {
+                                        cachedRolloutHash = match[1];
+                                        return cachedRolloutHash;
+                                    }
+                                }
+                            }
+                        } catch (e) {}
+                        return "1";
+                    }
+
+                    function getApiHeaders() {
+                        return {
+                            "X-IG-App-ID": "936619743392459",
+                            "X-CSRFToken": getCookie("csrftoken"),
+                            "X-Requested-With": "XMLHttpRequest",
+                            "X-ASBD-ID": "129477",
+                            "X-Instagram-AJAX": getRolloutHash(),
+                            "X-IG-WWW-Claim": "0",
+                            "Content-Type": "application/x-www-form-urlencoded",
+                        };
+                    }
+
+                    // Helper para obter ID de usuário
+                    async function getUserId(username) {
+                        try {
+                            const response = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, {
+                                headers: { 'X-IG-App-ID': '936619743392459' }
+                            });
+                            const data = await response.json();
+                            return data.data?.user?.id;
+                        } catch (e) {
+                            console.error("Erro ao obter ID:", e);
+                            return null;
+                        }
+                    }
+
+
+
+
                     // Helper para Toast (Notificação Visual)
                     function showToast(message) {
                         const toast = document.createElement('div');
@@ -295,7 +358,8 @@
                             requestDelay: 250,
                             requestBatchSize: 50,
                             maxRequests: 0,
-                            anonymousStories: false
+                            anonymousStories: false,
+                            useApi: true
                         };
                         try {
                             const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
@@ -306,12 +370,12 @@
                     }
 
                     const translations = {
-                        'pt-BR': { likes: 'Curtidas', comments: 'Comentários', blocked: 'Bloqueados', messages: 'Mensagens', notFollowingBack: 'Não segue de volta', following: 'Seguindo', closeFriends: 'Amigos Próximos', hideStory: 'Ocultar Story', mutedAccounts: 'Contas Silenciadas', interactions: 'Interações', reelsMenu: 'Menu de Reels', downloadStory: 'Baixar Story', engagement: 'Engajamento', settings: 'Configurações', darkMode: 'Modo Escuro', rgbBorder: 'Borda RGB', shortcuts: 'Atalhos', parameters: 'Parâmetros', language: 'Idioma', anonymousStories: 'Stories Anônimo' },
-                        'en-US': { likes: 'Likes', comments: 'Comments', blocked: 'Blocked', messages: 'Messages', notFollowingBack: 'Not Following Back', following: 'Following', closeFriends: 'Close Friends', hideStory: 'Hide Story', mutedAccounts: 'Muted Accounts', interactions: 'Interactions', reelsMenu: 'Reels Menu', downloadStory: 'Download Story', engagement: 'Engagement', settings: 'Settings', darkMode: 'Dark Mode', rgbBorder: 'RGB Border', shortcuts: 'Shortcuts', parameters: 'Parameters', language: 'Language', anonymousStories: 'Anonymous Stories' },
-                        'es-ES': { likes: 'Me gusta', comments: 'Comentarios', blocked: 'Bloqueados', messages: 'Mensajes', notFollowingBack: 'No te sigue', following: 'Siguiendo', closeFriends: 'Mejores Amigos', hideStory: 'Ocultar Historia', mutedAccounts: 'Cuentas Silenciadas', interactions: 'Interacciones', reelsMenu: 'Menú de Reels', downloadStory: 'Descargar Historia', engagement: 'Compromiso', settings: 'Configuración', darkMode: 'Modo Oscuro', rgbBorder: 'Borde RGB', shortcuts: 'Atajos', parameters: 'Parámetros', language: 'Idioma', anonymousStories: 'Historias Anónimas' },
-                        'fr-FR': { likes: 'J\'aime', comments: 'Commentaires', blocked: 'Bloqués', messages: 'Messages', notFollowingBack: 'Ne suit pas en retour', following: 'Abonnements', closeFriends: 'Amis Proches', hideStory: 'Masquer Story', mutedAccounts: 'Comptes Muets', interactions: 'Interactions', reelsMenu: 'Menu Reels', downloadStory: 'Télécharger Story', engagement: 'Engagement', settings: 'Paramètres', darkMode: 'Mode Sombre', rgbBorder: 'Bordure RGB', shortcuts: 'Raccourcis', parameters: 'Paramètres', language: 'Langue', anonymousStories: 'Stories Anonymes' },
-                        'it-IT': { likes: 'Mi piace', comments: 'Commenti', blocked: 'Bloccati', messages: 'Messaggi', notFollowingBack: 'Non ti segue', following: 'Seguiti', closeFriends: 'Amici Più Stretti', hideStory: 'Nascondi Storia', mutedAccounts: 'Account Silenziati', interactions: 'Interazioni', reelsMenu: 'Menu Reels', downloadStory: 'Scarica Storia', engagement: 'Coinvolgimento', settings: 'Impostazioni', darkMode: 'Modalità Scura', rgbBorder: 'Bordo RGB', shortcuts: 'Scorciatoie', parameters: 'Parametri', language: 'Lingua', anonymousStories: 'Storie Anonime' },
-                        'de-DE': { likes: 'Gefällt mir', comments: 'Kommentare', blocked: 'Blockiert', messages: 'Nachrichten', notFollowingBack: 'Folgt nicht zurück', following: 'Abonniert', closeFriends: 'Engste Freunde', hideStory: 'Story verbergen', mutedAccounts: 'Stummgeschaltete', interactions: 'Interaktionen', reelsMenu: 'Reels Menü', downloadStory: 'Story herunterladen', engagement: 'Engagement', settings: 'Einstellungen', darkMode: 'Dunkelmodus', rgbBorder: 'RGB-Rand', shortcuts: 'Verknüpfungen', parameters: 'Parameter', language: 'Sprache', anonymousStories: 'Anonyme Stories' }
+                        'pt-BR': { likes: 'Curtidas', comments: 'Comentários', blocked: 'Bloqueados', messages: 'Mensagens', notFollowingBack: 'Não segue de volta', following: 'Seguindo', closeFriends: 'Amigos Próximos', hideStory: 'Ocultar Story', mutedAccounts: 'Contas Silenciadas', interactions: 'Interações', reelsMenu: 'Menu de Reels', downloadStory: 'Baixar Story', engagement: 'Engajamento', settings: 'Configurações', darkMode: 'Modo Escuro', rgbBorder: 'Borda RGB', shortcuts: 'Atalhos', parameters: 'Parâmetros', language: 'Idioma', anonymousStories: 'Stories Anônimo', useApi: 'Usar API (Rápido)' },
+                        'en-US': { likes: 'Likes', comments: 'Comments', blocked: 'Blocked', messages: 'Messages', notFollowingBack: 'Not Following Back', following: 'Following', closeFriends: 'Close Friends', hideStory: 'Hide Story', mutedAccounts: 'Muted Accounts', interactions: 'Interactions', reelsMenu: 'Reels Menu', downloadStory: 'Download Story', engagement: 'Engagement', settings: 'Settings', darkMode: 'Dark Mode', rgbBorder: 'RGB Border', shortcuts: 'Shortcuts', parameters: 'Parameters', language: 'Language', anonymousStories: 'Anonymous Stories', useApi: 'Use API (Fast)' },
+                        'es-ES': { likes: 'Me gusta', comments: 'Comentarios', blocked: 'Bloqueados', messages: 'Mensajes', notFollowingBack: 'No te sigue', following: 'Siguiendo', closeFriends: 'Mejores Amigos', hideStory: 'Ocultar Historia', mutedAccounts: 'Cuentas Silenciadas', interactions: 'Interacciones', reelsMenu: 'Menú de Reels', downloadStory: 'Descargar Historia', engagement: 'Compromiso', settings: 'Configuración', darkMode: 'Modo Oscuro', rgbBorder: 'Borde RGB', shortcuts: 'Atajos', parameters: 'Parámetros', language: 'Idioma', anonymousStories: 'Historias Anónimas', useApi: 'Usar API (Rápido)' },
+                        'fr-FR': { likes: 'J\'aime', comments: 'Commentaires', blocked: 'Bloqués', messages: 'Messages', notFollowingBack: 'Ne suit pas en retour', following: 'Abonnements', closeFriends: 'Amis Proches', hideStory: 'Masquer Story', mutedAccounts: 'Comptes Muets', interactions: 'Interactions', reelsMenu: 'Menu Reels', downloadStory: 'Télécharger Story', engagement: 'Engagement', settings: 'Paramètres', darkMode: 'Mode Sombre', rgbBorder: 'Bordure RGB', shortcuts: 'Raccourcis', parameters: 'Paramètres', language: 'Langue', anonymousStories: 'Stories Anonymes', useApi: 'Utiliser API (Rapide)' },
+                        'it-IT': { likes: 'Mi piace', comments: 'Commenti', blocked: 'Bloccati', messages: 'Messaggi', notFollowingBack: 'Non ti segue', following: 'Seguiti', closeFriends: 'Amici Più Stretti', hideStory: 'Nascondi Storia', mutedAccounts: 'Account Silenziati', interactions: 'Interazioni', reelsMenu: 'Menu Reels', downloadStory: 'Scarica Storia', engagement: 'Coinvolgimento', settings: 'Impostazioni', darkMode: 'Modalità Scura', rgbBorder: 'Bordo RGB', shortcuts: 'Scorciatoie', parameters: 'Parametri', language: 'Lingua', anonymousStories: 'Storie Anonime', useApi: 'Usa API (Veloce)' },
+                        'de-DE': { likes: 'Gefällt mir', comments: 'Kommentare', blocked: 'Blockiert', messages: 'Nachrichten', notFollowingBack: 'Folgt nicht zurück', following: 'Abonniert', closeFriends: 'Engste Freunde', hideStory: 'Story verbergen', mutedAccounts: 'Stummgeschaltete', interactions: 'Interaktionen', reelsMenu: 'Reels Menü', downloadStory: 'Story herunterladen', engagement: 'Engagement', settings: 'Einstellungen', darkMode: 'Dunkelmodus', rgbBorder: 'RGB-Rand', shortcuts: 'Verknüpfungen', parameters: 'Parameter', language: 'Sprache', anonymousStories: 'Anonyme Stories', useApi: 'API verwenden (Schnell)' }
                     };
 
                     function getText(key) {
@@ -345,11 +409,17 @@
                         if (btn) btn.style.background = enabled ? '#4c5c75' : '';
                     }
 
+                    function toggleUseApi(enabled) {
+                        const btn = document.getElementById("settingsUseApiBtn");
+                        if (btn) btn.style.background = enabled ? '#4c5c75' : '';
+                    }
+
                     function applyInitialSettings() {
                         const settings = loadSettings();
                         toggleDarkMode(settings.darkMode);
                         toggleRgbBorder(settings.rgbBorder);
                         toggleAnonymousStories(settings.anonymousStories);
+                        toggleUseApi(settings.useApi);
                     }
 
                     // --- LÓGICA PARA ATALHOS ---
@@ -1557,6 +1627,41 @@
                         };
                         const isCancelled = () => cancelled;
 
+                        // --- LÓGICA API VS HUMANA ---
+                        if (loadSettings().useApi) {
+                            update(0, changedUsers.length, "Obtendo IDs e aplicando via API...");
+                            const adds = [];
+                            const removes = [];
+                            
+                            for (let i = 0; i < changedUsers.length; i++) {
+                                if (isCancelled()) break;
+                                const [username, isChecked] = changedUsers[i];
+                                update(i + 1, changedUsers.length, `Processando ${username}...`);
+                                const uid = await getUserId(username);
+                                if (uid) {
+                                    if (isChecked) adds.push(uid);
+                                    else removes.push(uid);
+                                }
+                                await new Promise(r => setTimeout(r, 200));
+                            }
+
+                            if (!isCancelled() && (adds.length > 0 || removes.length > 0)) {
+                                try {
+                                    const body = new URLSearchParams();
+                                    if (adds.length) body.append('add', adds.join(','));
+                                    if (removes.length) body.append('remove', removes.join(','));
+                                    
+                                    await fetch(`https://www.instagram.com/api/v1/friendships/set_besties/`, {
+                                        method: 'POST',
+                                        headers: getApiHeaders(),
+                                        body: body
+                                    });
+                                    alert("Alterações aplicadas via API com sucesso!");
+                                } catch (e) { console.error(e); alert("Erro ao aplicar via API."); }
+                            }
+                            bar.remove(); isApplyingChanges = false; return;
+                        }
+
                         if (window.location.pathname !== "/accounts/close_friends/") {
                             history.pushState(null, null, "/accounts/close_friends/");
                             window.dispatchEvent(new Event("popstate"));
@@ -1946,6 +2051,29 @@
                     alert("Processo interrompido.");
                 };
                 const isCancelled = () => cancelled;
+
+                        // --- LÓGICA API VS HUMANA ---
+                        if (loadSettings().useApi) {
+                            update(0, changedUsers.length, "Obtendo IDs e aplicando via API...");
+                            for (let i = 0; i < changedUsers.length; i++) {
+                                if (isCancelled()) break;
+                                const { dataset: { username }, checked } = changedUsers[i];
+                                update(i + 1, changedUsers.length, `Aplicando para ${username}...`);
+                                const uid = await getUserId(username);
+                                if (uid) {
+                                    try {
+                                        const endpoint = checked ? 'block_friend_reel' : 'unblock_friend_reel';
+                                        await fetch(`https://www.instagram.com/api/v1/friendships/${endpoint}/${uid}/`, {
+                                            method: 'POST',
+                                            headers: getApiHeaders()
+                                        });
+                                        officialStates.set(username, checked);
+                                    } catch (e) { console.error(`Erro API Hide Story para ${username}`, e); }
+                                }
+                                await new Promise(r => setTimeout(r, 500));
+                            }
+                            bar.remove(); isApplyingChangesStory = false; renderPage(currentPage); alert("Processo via API concluído."); return;
+                        }
 
                         if (window.location.pathname !== "/accounts/hide_story_and_live_from/") {
                             history.pushState(null, null, "/accounts/hide_story_and_live_from/");
@@ -2370,6 +2498,36 @@
                 const isCancelled = () => cancelled;
 
                 const originalPath = window.location.pathname;
+
+                // --- LÓGICA API VS HUMANA ---
+                if (loadSettings().useApi) {
+                    for (let i = 0; i < usersToUnmute.length; i++) {
+                        if (isCancelled()) break;
+                        const username = usersToUnmute[i];
+                        update(i + 1, usersToUnmute.length, `Processando ${username} via API...`);
+                        const uid = await getUserId(username);
+                        if (uid) {
+                            try {
+                                let action = 'unmute_posts_or_story_from_follow';
+                                if (toggleMode) {
+                                    const isMuted = userListCache.muted && userListCache.muted.has(username);
+                                    action = isMuted ? 'unmute_posts_or_story_from_follow' : 'mute_posts_or_story_from_follow';
+                                }
+                                const body = new URLSearchParams();
+                                body.append('container_module', 'profile');
+                                if (targetType === 'posts' || targetType === 'all') body.append('target_posts_author_id', uid);
+                                if (targetType === 'stories' || targetType === 'all') body.append('target_reel_author_id', uid);
+                                await fetch(`https://www.instagram.com/api/v1/friendships/${action}/`, {
+                                    method: 'POST',
+                                    headers: getApiHeaders(),
+                                    body: body
+                                });
+                            } catch (e) { console.error(`Erro API Mute/Unmute ${username}`, e); }
+                        }
+                        await new Promise(r => setTimeout(r, 500));
+                    }
+                    bar.remove(); if (callback) callback(); return;
+                }
 
                 for (let i = 0; i < usersToUnmute.length; i++) {
                     if (isCancelled()) break;
@@ -3540,6 +3698,36 @@
 
                                     const username = users[index];
                                     statusDiv.innerText = `Deixando de seguir ${username} (${index + 1}/${users.length})...`;
+
+                                    // --- LÓGICA API VS HUMANA ---
+                                    if (loadSettings().useApi) {
+                                        statusDiv.innerText = `Deixando de seguir ${username} (${index + 1}/${users.length}) via API...`;
+                                        (async () => {
+                                            const uid = await getUserId(username);
+                                            if (uid) {
+                                                try {
+                                                    await fetch(`https://www.instagram.com/api/v1/friendships/destroy/${uid}/`, {
+                                                        method: 'POST',
+                                                        headers: getApiHeaders()
+                                                    });
+                                                    // Atualizações de UI e Cache
+                                                    getProfilePic(username).then(photoUrl => { dbHelper.saveUnfollowHistory({ username, photoUrl, unfollowDate: new Date().toISOString() }); });
+                                                    const naoSegueList = lists['tabNaoSegueDeVolta'];
+                                                    if (naoSegueList) {
+                                                        const userIndex = naoSegueList.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
+                                                        if (userIndex > -1) naoSegueList.splice(userIndex, 1);
+                                                        const countSpan = document.getElementById('countNaoSegue');
+                                                        if (countSpan) countSpan.innerText = naoSegueList.length;
+                                                    }
+                                                    const row = document.querySelector(`#naoSegueDeVoltaTable tr[data-username="${username}"]`);
+                                                    if (row) row.remove();
+                                                } catch (e) { console.error(`Erro API Unfollow ${username}`, e); }
+                                            }
+                                            setTimeout(() => unfollowUsers(users, index + 1, callback), loadSettings().unfollowDelay);
+                                        })();
+                                        return;
+                                    }
+
                                     history.pushState(null, null, `/${username}/`);
                                     window.dispatchEvent(new Event("popstate"));
 
@@ -4211,6 +4399,7 @@
                                             <button id="settingsDarkModeBtn" class="menu-item-button" style="background: ${settings.darkMode ? '#4c5c75' : ''};">🌙 ${getText('darkMode')}</button>
                                             <button id="settingsRgbBorderBtn" class="menu-item-button" style="background: ${settings.rgbBorder ? '#4c5c75' : ''};">🌈 ${getText('rgbBorder')}</button>
                                             <button id="settingsAnonymousStoriesBtn" class="menu-item-button" style="background: ${settings.anonymousStories ? '#4c5c75' : ''};">👻 ${getText('anonymousStories')}</button>
+                                            <button id="settingsUseApiBtn" class="menu-item-button" style="background: ${settings.useApi ? '#4c5c75' : ''};">⚡ ${getText('useApi')}</button>
                                             <button id="settingsVoiceBtn" class="menu-item-button">🎙️ Comandos de Voz</button>
                                             <button id="settingsShortcutsBtn" class="menu-item-button">⌨️ ${getText('shortcuts')}</button>
                                             <button id="settingsParamsBtn" class="menu-item-button">🔧 ${getText('parameters')}</button>
@@ -4239,6 +4428,13 @@
                                     toggleAnonymousStories(newSetting);
                                     saveSettings({ anonymousStories: newSetting });
                                     console.log("[IG Tools] Stories Anônimo alterado para:", newSetting);
+                                };
+
+                                document.getElementById("settingsUseApiBtn").onclick = () => {
+                                    const newSetting = !loadSettings().useApi;
+                                    toggleUseApi(newSetting);
+                                    saveSettings({ useApi: newSetting });
+                                    console.log("[IG Tools] Modo API alterado para:", newSetting);
                                 };
 
                                 document.getElementById("settingsVoiceBtn").onclick = () => {
@@ -5906,46 +6102,75 @@
                             };
                             const isCancelled = () => cancelled;
 
-                            for (let i = 0; i < users.length; i++) {
-                                if (isCancelled()) break;
-                                const username = users[i];
-                                update(i + 1, users.length, "Processando:");
-
-                                // 1. Navegar para o perfil do usuário
+                            // Função interna para ação humana (navegação e clique)
+                            const executeHumanAction = async (username) => {
                                 history.pushState(null, null, `/${username}/`);
                                 window.dispatchEvent(new Event("popstate"));
-                                await new Promise(resolve => setTimeout(resolve, 4000)); // Espera o perfil carregar
-
-                                // 2. Clicar no botão "Seguindo"
-                                // Seletor aprimorado para iPhone: procura em mais tipos de elementos e verifica o texto de forma mais flexível.
+                                await new Promise(resolve => setTimeout(resolve, 4000));
                                 const followingButton = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"]')).find(el => {
                                     const text = el.innerText.trim();
                                     return text === 'Seguindo' || text === 'Following';
                                 });
-                                if (!followingButton) {
-                                    console.warn(`Botão 'Seguindo' não encontrado para ${username}. Pulando.`);
-                                    continue;
-                                }
+                                if (!followingButton) { console.warn(`Botão 'Seguindo' não encontrado para ${username}.`); return; }
                                 simulateClick(followingButton);
-                                await new Promise(resolve => setTimeout(resolve, 1500)); // Espera o menu dropdown aparecer
-
-                                // 3. Clicar na opção desejada (ex: "Adicionar aos melhores amigos")
-                                 // Seletor aprimorado para encontrar o texto em qualquer lugar dentro do elemento clicável
-                                 const actionOption = Array.from(document.querySelectorAll('div[role="button"], div[role="menuitem"]')).find(el =>
+                                await new Promise(resolve => setTimeout(resolve, 1500));
+                                const actionOption = Array.from(document.querySelectorAll('div[role="button"], div[role="menuitem"]')).find(el =>
                                      menuTexts.some(text => el.innerText.includes(text))
-                                 );
+                                );
+                                if (actionOption) { simulateClick(actionOption); console.log(`Ação executada para ${username}.`); }
+                                else { console.warn(`Opção não encontrada para ${username}.`); simulateClick(followingButton); }
+                                await new Promise(resolve => setTimeout(resolve, 2000));
+                            };
 
-
-
-                                if (actionOption) {
-                                    simulateClick(actionOption);
-                                    console.log(`Ação '${actionOption.innerText}' executada para ${username}.`);
-                                } else {
-                                    console.warn(`Opção de ação não encontrada para ${username}. Textos procurados: ${menuTexts.join(', ')}`);
-                                    // Tenta fechar o menu se a opção não foi encontrada
-                                    simulateClick(followingButton);
+                            // --- LÓGICA API VS HUMANA ---
+                            if (loadSettings().useApi) {
+                                for (let i = 0; i < users.length; i++) {
+                                    if (isCancelled()) break;
+                                    const username = users[i];
+                                    update(i + 1, users.length, `Processando ${username}...`);
+                                    const uid = await getUserId(username);
+                                    let success = false;
+                                    if (uid) {
+                                        try {
+                                            if (menuTexts.some(t => t.includes('Amigos Próximos') || t.includes('Amigo próximo'))) {
+                                                const isCurrentlyCF = userListCache.closeFriends && userListCache.closeFriends.has(username);
+                                                const body = new URLSearchParams(); 
+                                                
+                                                if (isCurrentlyCF) {
+                                                    body.append('remove', JSON.stringify([parseInt(uid)]));
+                                                } else {
+                                                    body.append('add', JSON.stringify([parseInt(uid)]));
+                                                }
+                                                
+                                                body.append('source', 'audience_manager');
+                                                body.append('_uid', getCookie('ds_user_id'));
+                                                body.append('_uuid', getDeviceId());
+                                                body.append('_csrftoken', getCookie('csrftoken'));
+                                                
+                                                const res = await fetch(`https://www.instagram.com/api/v1/friendships/set_besties/`, { method: 'POST', headers: getApiHeaders(), body: body, credentials: "include" });
+                                                if (res.ok) { success = true; console.log(`[IG Tools] API Success: ${username} (Close Friends)`); }
+                                                else console.error(`API Error ${username}:`, await res.text());
+                                            }
+                                        } catch (e) { console.error(`Erro API Action ${username}`, e); }
+                                    }
+                                    
+                                    if (!success) {
+                                        console.log(`Fallback para humano: ${username}`);
+                                        await executeHumanAction(username);
+                                    } else {
+                                        await new Promise(r => setTimeout(r, loadSettings().requestDelay || 500));
+                                    }
                                 }
-                                await new Promise(resolve => setTimeout(resolve, 2000)); // Pausa antes do próximo
+                                bar.remove(); 
+                                history.pushState(null, null, originalPath); window.dispatchEvent(new Event("popstate"));
+                                if (callback) callback(); 
+                                return;
+                            }
+
+                            for (let i = 0; i < users.length; i++) {
+                                if (isCancelled()) break;
+                                update(i + 1, users.length, "Processando:");
+                                await executeHumanAction(users[i]);
                             }
 
                             bar.remove();
@@ -5973,13 +6198,14 @@
                                 };
                                 const isCancelled = () => cancelled;
 
-                                // Navega para a página correta
-                                history.pushState(null, null, pageUrl);
-                                window.dispatchEvent(new Event("popstate"));
-                                await new Promise(r => setTimeout(r, 3000));
-
-                                for (let i = 0; i < users.length; i++) { if (isCancelled()) break; const username = users[i]; update(i + 1, users.length, "Processando:");
-                                    // A lógica para encontrar e clicar no checkbox é a mesma para CF e Hide Story
+                                // Função interna para ação humana
+                                const executeHumanToggle = async (username) => {
+                                    if (window.location.pathname !== pageUrl) {
+                                        history.pushState(null, null, pageUrl);
+                                        window.dispatchEvent(new Event("popstate"));
+                                        await new Promise(r => setTimeout(r, 3000));
+                                    }
+                                    
                                     const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
                                     let found = false;
                                     for (const flex of flexboxes) {
@@ -5996,7 +6222,56 @@
                                     if (!found) {
                                         console.warn(`Não foi possível encontrar o checkbox para ${username} na página ${pageUrl}.`);
                                     }
-                                    await new Promise(r => setTimeout(r, 1500)); // Pausa entre as ações
+                                    await new Promise(r => setTimeout(r, 1500));
+                                };
+
+                                // --- LÓGICA API VS HUMANA ---
+                                if (loadSettings().useApi) {
+                                    for (let i = 0; i < users.length; i++) {
+                                        if (isCancelled()) break;
+                                        const username = users[i];
+                                        update(i + 1, users.length, `Processando ${username}...`);
+                                        const uid = await getUserId(username);
+                                        let success = false;
+                                        if (uid) {
+                                            try {
+                                                if (cacheKey === 'hiddenStory') {
+                                                    const isCurrentlyHidden = userListCache.hiddenStory && userListCache.hiddenStory.has(username);
+                                                    const endpoint = isCurrentlyHidden ? 'unblock_friend_reel' : 'block_friend_reel';
+                                                    const body = new URLSearchParams();
+                                                    body.append('source', 'profile');
+                                                    body.append('_uuid', getDeviceId());
+                                                    body.append('_uid', getCookie('ds_user_id'));
+                                                    body.append('_csrftoken', getCookie('csrftoken'));
+                                                    const res = await fetch(`https://www.instagram.com/api/v1/friendships/${endpoint}/${uid}/`, { method: 'POST', headers: getApiHeaders(), body: body, credentials: 'include' });
+                                                    if (res.ok) { success = true; console.log(`[IG Tools] API Success: ${username} (Hide Story)`); }
+                                                    else console.error(`API Error ${username}:`, await res.text());
+                                                }
+                                            } catch (e) { console.error(`Erro API Toggle List ${username}`, e); }
+                                        }
+                                        
+                                        if (!success) {
+                                            console.log(`Fallback para humano: ${username}`);
+                                            await executeHumanToggle(username);
+                                        } else {
+                                            await new Promise(r => setTimeout(r, loadSettings().requestDelay || 500));
+                                        }
+                                    }
+                                    bar.remove(); 
+                                    history.pushState(null, null, originalPath); window.dispatchEvent(new Event("popstate"));
+                                    if (callback) callback(); 
+                                    return;
+                                }
+
+                                // Navega para a página correta
+                                history.pushState(null, null, pageUrl);
+                                window.dispatchEvent(new Event("popstate"));
+                                await new Promise(r => setTimeout(r, 3000));
+
+                                for (let i = 0; i < users.length; i++) { 
+                                    if (isCancelled()) break; 
+                                    update(i + 1, users.length, "Processando:");
+                                    await executeHumanToggle(users[i]);
                                 }
 
                                 bar.remove();

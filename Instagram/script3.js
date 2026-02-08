@@ -6235,19 +6235,47 @@
                                         let success = false;
                                         if (uid) {
                                             try {
-                                                if (cacheKey === 'hiddenStory') {
-                                                    const isCurrentlyHidden = userListCache.hiddenStory && userListCache.hiddenStory.has(username);
-                                                    const endpoint = isCurrentlyHidden ? 'unblock_friend_reel' : 'block_friend_reel';
-                                                    const body = new URLSearchParams();
-                                                    body.append('source', 'profile');
-                                                    body.append('_uuid', getDeviceId());
-                                                    body.append('_uid', getCookie('ds_user_id'));
-                                                    body.append('_csrftoken', getCookie('csrftoken'));
-                                                    const res = await fetch(`https://www.instagram.com/api/v1/friendships/${endpoint}/${uid}/`, { method: 'POST', headers: getApiHeaders(), body: body, credentials: 'include' });
-                                                    if (res.ok) { success = true; console.log(`[IG Tools] API Success: ${username} (Hide Story)`); }
-                                                    else console.error(`API Error ${username}:`, await res.text());
+                                                    if (cacheKey === 'hiddenStory') {
+                                                        const isCurrentlyHidden = userListCache.hiddenStory && userListCache.hiddenStory.has(username);
+                                                        const endpoint = isCurrentlyHidden ? 'unblock_friend_reel' : 'block_friend_reel';
+
+                                                        const body = new URLSearchParams();
+                                                        body.append('source', 'reel_settings');                  // origem da ação
+                                                        body.append('_uid', getCookie('ds_user_id'));            // ID do usuário autenticado
+                                                        body.append('_uuid', getDeviceId());                     // identificador único do dispositivo
+                                                        body.append('_csrftoken', getCookie('csrftoken'));       // token CSRF da sessão
+
+                                                        const res = await fetch(`https://www.instagram.com/api/v1/friendships/${endpoint}/${uid}/`, {
+                                                            method: 'POST',
+                                                            headers: {
+                                                        //  'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Mobile Safari/537.36',
+                                                            'Content-Type': 'application/x-www-form-urlencoded',
+                                                            'X-CSRFToken': getCookie('csrftoken'),
+                                                            'X-IG-App-ID': '936619743392459',
+                                                            'X-Requested-With': 'XMLHttpRequest',
+                                                         // ...getApiHeaders()
+                                                            },
+                                                            body: body.toString(),
+                                                            credentials: 'include' // garante envio dos cookies
+                                                        });
+
+                                                        if (res.ok) {
+                                                            success = true;
+                                                            console.log(`[IG Tools] API Success: ${username} (${endpoint})`);
+                                                        } else {
+                                                            const errorText = await res.text();
+                                                            console.error(`[IG Tools] API Error ${username} (${endpoint}):`, {
+                                                                status: res.status,
+                                                                statusText: res.statusText,
+                                                                response: errorText,
+                                                                sentBody: body.toString()
+                                                            });
+                                                        }
+                                                    }
+                                                } catch (e) {
+                                                    console.error(`Erro API Toggle List ${username}`, e);
                                                 }
-                                            } catch (e) { console.error(`Erro API Toggle List ${username}`, e); }
+
                                         }
                                         
                                         if (!success) {

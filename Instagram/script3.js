@@ -6206,6 +6206,17 @@
                                         await new Promise(r => setTimeout(r, 3000));
                                     }
                                     
+                                    // Pesquisa pelo username
+                                    const searchInput = document.querySelector('input[data-bloks-name="bk.components.TextInput"][placeholder="Pesquisar"]');
+                                    if (searchInput) {
+                                        // Simula digitação (React friendly)
+                                        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                                        nativeInputValueSetter.call(searchInput, username);
+                                        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                        
+                                        await new Promise(r => setTimeout(r, 5000)); // Aumentado para 5s para garantir carregamento
+                                    }
+
                                     const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
                                     let found = false;
                                     for (const flex of flexboxes) {
@@ -6215,6 +6226,7 @@
                                             if (checkboxContainer) {
                                                 checkboxContainer.click();
                                                 found = true;
+                                                await new Promise(r => setTimeout(r, 3000)); // Espera 3s após o clique
                                                 break;
                                             }
                                         }
@@ -6222,7 +6234,16 @@
                                     if (!found) {
                                         console.warn(`Não foi possível encontrar o checkbox para ${username} na página ${pageUrl}.`);
                                     }
-                                    await new Promise(r => setTimeout(r, 1500));
+                                    
+                                    // Limpa a pesquisa se foi usada
+                                    if (searchInput) {
+                                        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                                        nativeInputValueSetter.call(searchInput, "");
+                                        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                        await new Promise(r => setTimeout(r, 2000)); // Aumentado para 2s para limpar
+                                    } else {
+                                        await new Promise(r => setTimeout(r, 1500));
+                                    }
                                 };
 
                                 // --- LÓGICA API VS HUMANA ---

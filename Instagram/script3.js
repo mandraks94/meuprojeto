@@ -1863,6 +1863,13 @@
                     return;
                 }
 
+                // Carrega cache de seguindo para o filtro
+                const followingCache = await dbHelper.loadCache('following');
+                const followingSet = new Set();
+                if (followingCache) {
+                    followingCache.forEach(u => followingSet.add(u.toLowerCase()));
+                }
+
                 const officialStates = new Map();
                 users.forEach(u => {
                     officialStates.set(u.username, u.isChecked || false);
@@ -1897,6 +1904,7 @@
             console.log(`Cache atualizado com ${userListCache.hiddenStory.size} usuários com story oculto.`);
 
             let currentTab = 'ocultados'; // 'ocultados' ou 'amigos'
+            let filterFollowing = false; // Estado do filtro "Seguindo"
 
                 function renderPage(page) {
                     let html = `
@@ -1913,8 +1921,11 @@
                             <button id="hideStoryDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
                             <button id="hideStoryAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
                         </div>
-                        <div style="margin-bottom:15px;">
-                            <input type="text" id="hideStorySearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                        <div style="margin-bottom:15px; display: flex; gap: 10px; align-items: center; padding: 0 15px;">
+                            <input type="text" id="hideStorySearchInput" placeholder="Pesquisar..." style="flex: 1; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: black; font-weight: 500;">
+                                <input type="checkbox" id="hideStoryFilterFollowing" ${filterFollowing ? 'checked' : ''}> Seguindo
+                            </label>
                         </div>
                     <div class="tab-container">
                         <button id="tabOcultados" class="tab-button ${currentTab === 'ocultados' ? 'active' : ''}">Ocultados</button>
@@ -1935,6 +1946,11 @@
                 const searchTerm = document.getElementById('hideStorySearchInput')?.value.toLowerCase() || '';
                 if (searchTerm) {
                     filteredUsers = filteredUsers.filter(({ username }) => username.toLowerCase().includes(searchTerm));
+                }
+
+                // Filtra por "Seguindo"
+                if (filterFollowing) {
+                    filteredUsers = filteredUsers.filter(({ username }) => followingSet.has(username.toLowerCase()));
                 }
 
                     const startIndex = (page - 1) * itemsPerPage;
@@ -2000,6 +2016,15 @@
                     currentPage = 1;
                     renderPage(currentPage);
                 });
+
+                const filterCheckbox = document.getElementById("hideStoryFilterFollowing");
+                if (filterCheckbox) {
+                    filterCheckbox.addEventListener("change", (e) => {
+                        filterFollowing = e.target.checked;
+                        currentPage = 1;
+                        renderPage(currentPage);
+                    });
+                }
 
                 // Eventos das abas
                 document.getElementById("tabOcultados").onclick = () => {

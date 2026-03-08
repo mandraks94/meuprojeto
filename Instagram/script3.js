@@ -96,12 +96,12 @@
                         console.log("[IG Tools] Instalando interceptores de rede (XHR, Fetch, Beacon)...");
                         const originalOpen = XMLHttpRequest.prototype.open;
                         const originalSend = XMLHttpRequest.prototype.send;
-                        
+
                         XMLHttpRequest.prototype.open = function(method, url) {
                             this._url = url;
                             return originalOpen.apply(this, arguments);
                         };
-                        
+
                         XMLHttpRequest.prototype.send = function(body) {
                             // Debug: Logar qualquer URL que contenha 'seen' para ver se estamos capturando
                             if (this._url && this._url.includes('seen')) {
@@ -119,14 +119,14 @@
                                 if (isAnon) {
                                     console.log("%c[IG Tools] Bloqueado request de visto (XHR): " + this._url, "color: orange; font-weight: bold;");
                                     showToast("👁️ Story visto anonimamente!");
-                                    return; 
+                                    return;
                                 } else {
                                     console.log("[IG Tools] Request de visto PERMITIDO (Modo Anônimo OFF): " + this._url);
                                 }
                             }
                             return originalSend.apply(this, arguments);
                         };
-                        
+
                         const originalFetch = window.fetch;
                         window.fetch = async function(input, init) {
                             let urlString = '';
@@ -137,12 +137,12 @@
                             } else if (input && input.url) {
                                 urlString = input.url;
                             }
-                            
+
                             // Debug: Logar qualquer URL que contenha 'seen'
                             if (urlString && urlString.includes('seen')) {
                                 console.log("[IG Tools] Fetch Detectado (seen):", urlString);
                             }
-                            
+
                             if (urlString && (urlString.includes('/stories/reel/seen') || urlString.includes('/api/v1/stories/reel/seen'))) {
                                 let isAnon = false;
                                 try {
@@ -1632,7 +1632,7 @@
                             update(0, changedUsers.length, "Obtendo IDs e aplicando via API...");
                             const adds = [];
                             const removes = [];
-                            
+
                             for (let i = 0; i < changedUsers.length; i++) {
                                 if (isCancelled()) break;
                                 const [username, isChecked] = changedUsers[i];
@@ -1650,7 +1650,7 @@
                                     const body = new URLSearchParams();
                                     if (adds.length) body.append('add', adds.join(','));
                                     if (removes.length) body.append('remove', removes.join(','));
-                                    
+
                                     await fetch(`https://www.instagram.com/api/v1/friendships/set_besties/`, {
                                         method: 'POST',
                                         headers: getApiHeaders(),
@@ -3418,7 +3418,10 @@
                                                     ${currentTabId === 'tabNaoSegueDeVolta' ? `<button id="corrigirBtn" style="margin-left: 10px; background-color: #f39c12; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;" title="Remove usuários selecionados desta lista permanentemente">Corrigir (Já Sigo)</button>` : ''}
                                                 ` : ''}
                                                 ${currentTabId === 'tabNaoSigoDeVolta' ? `<button id="followBackBtn" style="background:#0095f6;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">Seguir de Volta (Em breve)</button>` : ''}
-                                                ${currentTabId === 'tabHistorico' ? `<button id="limparHistoricoBtn" style="background:#e74c3c;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">Limpar Selecionados</button>` : ''}
+                                                ${currentTabId === 'tabHistorico' ? `
+                                                    <button id="seguirNovamenteBtn" style="background:#0095f6;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;margin-right:10px;">Seguir Novamente</button>
+                                                    <button id="limparHistoricoBtn" style="background:#e74c3c;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">Limpar Selecionados</button>
+                                                ` : ''}
                                             </div>
                                         `;
 
@@ -3452,6 +3455,25 @@
                                                 }
                                             };
                                         }
+                                        if (document.getElementById("seguirNovamenteBtn")) {
+                                            document.getElementById("seguirNovamenteBtn").onclick = () => {
+                                                const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(cb => cb.dataset.username);
+                                                if (selecionados.length === 0) return alert("Selecione usuários para seguir.");
+                                                
+                                                const btn = document.getElementById("seguirNovamenteBtn");
+                                                btn.disabled = true;
+                                                btn.textContent = "Processando...";
+                                                
+                                                followUsers(selecionados, 0, async () => {
+                                                    btn.disabled = false;
+                                                    btn.textContent = "Seguir Novamente";
+                                                    // Remove os usuários do histórico após seguir
+                                                    await dbHelper.deleteUnfollowHistory(selecionados);
+                                                    showToast(`${selecionados.length} usuário(s) removido(s) do histórico.`);
+                                                    renderCurrentTab(); // Atualiza a visualização da aba
+                                                });
+                                            };
+                                        }
                                         if (document.getElementById("limparHistoricoBtn")) {
                                             document.getElementById("limparHistoricoBtn").onclick = async () => {
                                                 const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(cb => cb.dataset.username);
@@ -3477,7 +3499,40 @@
                                     });
 
                                     // Lógica do Botão Atualizar
-                                    document.getElementById("btnUpdateApi").onclick = async () => {
+                                    document.getElementById("btnUpdateApi").onclick = () => {
+                                        showUpdateOptionsModalNaoSegue();
+                                    };
+
+                                    function showUpdateOptionsModalNaoSegue() {
+                                        const div = document.createElement("div");
+                                        div.className = "submenu-modal";
+                                        div.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; padding: 20px; border: 1px solid #ccc; border-radius: 10px; z-index: 2147483648; background: white; color: black; display: flex; flex-direction: column; gap: 10px;`;
+                                        if (loadSettings().rgbBorder) div.classList.add('rgb-border-effect');
+
+                                        div.innerHTML = `
+                                            <h3 style="margin: 0 0 10px 0;">O que deseja atualizar?</h3>
+                                            <label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="chkFollowers" checked> Seguidores</label>
+                                            <label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="chkFollowing" checked> Seguindo</label>
+                                            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                                                <button id="btnUpdateSelectedNaoSegue" style="flex: 1; padding: 8px; background: #0095f6; color: white; border: none; border-radius: 5px; cursor: pointer;">Atualizar</button>
+                                                <button id="btnCancelUpdateNaoSegue" style="flex: 1; padding: 8px; background: #e74c3c; color: white; border: none; border-radius: 5px; cursor: pointer;">Cancelar</button>
+                                            </div>
+                                        `;
+                                        document.body.appendChild(div);
+
+                                        document.getElementById('btnCancelUpdateNaoSegue').onclick = () => div.remove();
+                                        document.getElementById('btnUpdateSelectedNaoSegue').onclick = async () => {
+                                            const updateFollowers = document.getElementById('chkFollowers').checked;
+                                            const updateFollowing = document.getElementById('chkFollowing').checked;
+                                            div.remove();
+                                            
+                                            if (!updateFollowers && !updateFollowing) return alert("Selecione pelo menos uma opção.");
+                                            
+                                            await executarAtualizacao(updateFollowers, updateFollowing);
+                                        };
+                                    }
+
+                                    async function executarAtualizacao(updateFollowers, updateFollowing) {
                                         if (!cachedData.profileInfo) {
                                             statusDiv.innerText = "Buscando ID do usuário...";
                                             const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
@@ -3493,39 +3548,71 @@
                                         const totalFollowing = cachedData.profileInfo.data.user.edge_follow.count;
                                         const totalFollowers = cachedData.profileInfo.data.user.edge_followed_by.count;
 
+                                        let apiFollowing = null;
+                                        let apiFollowers = null;
+
                                         // 1. Baixar Seguindo
-                                        const apiFollowing = await fetchUserListAPI(userId, 'following', totalFollowing);
-                                        if (processoCancelado || !apiFollowing) return;
+                                        if (updateFollowing) {
+                                            apiFollowing = await fetchUserListAPI(userId, 'following', totalFollowing);
+                                            if (processoCancelado || !apiFollowing) return;
+                                        } else {
+                                            apiFollowing = cachedData.seguindo;
+                                        }
 
                                         // 2. Baixar Seguidores
-                                        const apiFollowers = await fetchUserListAPI(userId, 'followers', totalFollowers);
-                                        if (processoCancelado || !apiFollowers) return;
+                                        if (updateFollowers) {
+                                            apiFollowers = await fetchUserListAPI(userId, 'followers', totalFollowers);
+                                            if (processoCancelado || !apiFollowers) return;
+                                        } else {
+                                            apiFollowers = cachedData.seguidores;
+                                        }
 
                                         statusDiv.innerText = "Calculando diferenças e salvando no Banco de Dados...";
 
                                         // 3. Calcular Novos (Comparando API vs DB Antigo)
-                                        const novosSeguidoresSet = [...apiFollowers].filter(u => !cachedData.seguidores.has(u));
-                                        const novosSeguindoSet = [...apiFollowing].filter(u => !cachedData.seguindo.has(u));
-                                        const seguidoresPerdidosSet = [...cachedData.seguidores].filter(u => !apiFollowers.has(u));
+                                        let novosSeguidoresSet = [];
+                                        if (updateFollowers) {
+                                            novosSeguidoresSet = [...apiFollowers].filter(u => !cachedData.seguidores.has(u));
+                                        }
+                                        
+                                        let novosSeguindoSet = [];
+                                        if (updateFollowing) {
+                                            novosSeguindoSet = [...apiFollowing].filter(u => !cachedData.seguindo.has(u));
+                                        }
+                                        
+                                        let seguidoresPerdidosSet = [];
+                                        if (updateFollowers) {
+                                            seguidoresPerdidosSet = [...cachedData.seguidores].filter(u => !apiFollowers.has(u));
+                                        }
 
                                         // 4. Salvar no DB (Substitui o antigo pelo novo da API)
-                                        // Prepara objetos completos para salvar (com foto)
-                                        const followersToSave = [...apiFollowers].map(u => cachedData.userDetails.get(u) || { username: u, photoUrl: null });
-                                        const followingToSave = [...apiFollowing].map(u => cachedData.userDetails.get(u) || { username: u, photoUrl: null });
-
-                                        await dbHelper.saveCache('followers', followersToSave);
-                                        await dbHelper.saveCache('following', followingToSave);
+                                        if (updateFollowers) {
+                                            const followersToSave = [...apiFollowers].map(u => cachedData.userDetails.get(u) || { username: u, photoUrl: null });
+                                            await dbHelper.saveCache('followers', followersToSave);
+                                            cachedData.seguidores = apiFollowers;
+                                        }
+                                        
+                                        if (updateFollowing) {
+                                            const followingToSave = [...apiFollowing].map(u => cachedData.userDetails.get(u) || { username: u, photoUrl: null });
+                                            await dbHelper.saveCache('following', followingToSave);
+                                            cachedData.seguindo = apiFollowing;
+                                        }
 
                                         // 5. Atualizar Cache em Memória e Listas
-                                        cachedData.seguidores = apiFollowers;
-                                        cachedData.seguindo = apiFollowing;
                                         cachedData.naoSegueDeVolta = [...apiFollowing].filter(user => !apiFollowers.has(user) && !cachedData.exceptions.has(user));
 
                                         lists['tabNaoSegueDeVolta'] = toObjects(cachedData.naoSegueDeVolta);
-                                        lists['tabNovosSeguidores'] = toObjects(novosSeguidoresSet);
-                                        lists['tabNovosSeguindo'] = toObjects(novosSeguindoSet);
-                                        lists['tabSeguidoresPerdidos'] = toObjects(seguidoresPerdidosSet);
-                                        lists['tabNaoSigoDeVolta'] = toObjects([...apiFollowers].filter(u => !apiFollowing.has(u)));
+                                        
+                                        if (updateFollowers) {
+                                            lists['tabNovosSeguidores'] = toObjects(novosSeguidoresSet);
+                                            lists['tabSeguidoresPerdidos'] = toObjects(seguidoresPerdidosSet);
+                                        }
+                                        
+                                        if (updateFollowing) {
+                                            lists['tabNovosSeguindo'] = toObjects(novosSeguindoSet);
+                                        }
+                                        
+                                        lists['tabNaoSigoDeVolta'] = toObjects([...cachedData.seguidores].filter(u => !cachedData.seguindo.has(u)));
 
                                         // Atualizar Contadores
                                         document.getElementById('countNaoSegue').innerText = lists['tabNaoSegueDeVolta'].length;
@@ -3537,18 +3624,20 @@
                                         statusDiv.innerText = "Dados atualizados e salvos no IndexDB com sucesso!";
                                         currentList = lists[currentTabId];
                                         renderCurrentTab();
-                                    };
+                                    }
                                 }
 
                                 // As funções de unfollow são movidas para cá para ter acesso ao escopo de `cachedData`, `statusDiv`, etc.
                                 function selecionarTodos() {
-                                    document.querySelectorAll(`#naoSegueDeVoltaTable .unfollowCheckbox`).forEach((checkbox) => {
+                                    const tableId = currentTabId === 'tabHistorico' ? 'historicoTable' : 'naoSegueDeVoltaTable';
+                                    document.querySelectorAll(`#${tableId} .unfollowCheckbox`).forEach((checkbox) => {
                                         checkbox.checked = true;
                                     });
                                 }
 
                                 function desmarcarTodos() {
-                                    document.querySelectorAll(`#naoSegueDeVoltaTable .unfollowCheckbox`).forEach((checkbox) => {
+                                    const tableId = currentTabId === 'tabHistorico' ? 'historicoTable' : 'naoSegueDeVoltaTable';
+                                    document.querySelectorAll(`#${tableId} .unfollowCheckbox`).forEach((checkbox) => {
                                         checkbox.checked = false;
                                     });
                                 }
@@ -3805,6 +3894,51 @@
                                     }, 4000); // Atraso para a página do perfil carregar
                                 }
 
+                                function followUsers(users, index, callback) {
+                                    if (index >= users.length || processoCancelado) {
+                                        if (!processoCancelado) {
+                                            alert("Processo concluído.");
+                                        }
+                                        if (callback) callback();
+                                        return;
+                                    }
+
+                                    const username = users[index];
+                                    statusDiv.innerText = `Seguindo ${username} (${index + 1}/${users.length})...`;
+
+                                    if (loadSettings().useApi) {
+                                        (async () => {
+                                            const uid = await getUserId(username);
+                                            if (uid) {
+                                                try {
+                                                    await fetch(`https://www.instagram.com/api/v1/friendships/create/${uid}/`, {
+                                                        method: 'POST',
+                                                        headers: getApiHeaders()
+                                                    });
+                                                } catch (e) { console.error(`Erro API Follow ${username}`, e); }
+                                            }
+                                            setTimeout(() => followUsers(users, index + 1, callback), loadSettings().requestDelay || 1000);
+                                        })();
+                                        return;
+                                    }
+
+                                    history.pushState(null, null, `/${username}/`);
+                                    window.dispatchEvent(new Event("popstate"));
+
+                                    setTimeout(() => {
+                                        if (processoCancelado) { if (callback) callback(); return; }
+                                        let followBtn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(el => ['Seguir', 'Follow', 'Seguir de volta', 'Follow Back'].includes(el.innerText.trim()));
+                                        
+                                        if (followBtn) {
+                                            followBtn.click();
+                                            setTimeout(() => followUsers(users, index + 1, callback), 2000);
+                                        } else {
+                                            console.log(`Botão Seguir não encontrado para ${username}`);
+                                            followUsers(users, index + 1, callback);
+                                        }
+                                    }, 4000);
+                                }
+
                                 carregarDadosIniciais();
                             }
 
@@ -4052,7 +4186,7 @@
 
                                     // Carrega seguindo (DB ou API)
                                     const dbFollowing = await dbHelper.loadCache('following');
-                                    
+
                                     // Lógica de atualização seletiva
                                     if (shouldUpdate('closeFriends')) {
                                         await fetchAndCache('/accounts/close_friends/', extractCloseFriendsUsernames, 'closeFriends', 2);
@@ -6134,26 +6268,26 @@
                                         try {
                                             if (menuTexts.some(t => t.includes('Amigos Próximos') || t.includes('Amigo próximo'))) {
                                                 const isCurrentlyCF = userListCache.closeFriends && userListCache.closeFriends.has(username);
-                                                const body = new URLSearchParams(); 
-                                                
+                                                const body = new URLSearchParams();
+
                                                 if (isCurrentlyCF) {
                                                     body.append('remove', JSON.stringify([parseInt(uid)]));
                                                 } else {
                                                     body.append('add', JSON.stringify([parseInt(uid)]));
                                                 }
-                                                
+
                                                 body.append('source', 'audience_manager');
                                                 body.append('_uid', getCookie('ds_user_id'));
                                                 body.append('_uuid', getDeviceId());
                                                 body.append('_csrftoken', getCookie('csrftoken'));
-                                                
+
                                                 const res = await fetch(`https://www.instagram.com/api/v1/friendships/set_besties/`, { method: 'POST', headers: getApiHeaders(), body: body, credentials: "include" });
                                                 if (res.ok) { success = true; console.log(`[IG Tools] API Success: ${username} (Close Friends)`); }
                                                 else console.error(`API Error ${username}:`, await res.text());
                                             }
                                         } catch (e) { console.error(`Erro API Action ${username}`, e); }
                                     }
-                                    
+
                                     if (!success) {
                                         console.log(`Fallback para humano: ${username}`);
                                         await executeHumanAction(username);
@@ -6161,9 +6295,9 @@
                                         await new Promise(r => setTimeout(r, loadSettings().requestDelay || 500));
                                     }
                                 }
-                                bar.remove(); 
+                                bar.remove();
                                 history.pushState(null, null, originalPath); window.dispatchEvent(new Event("popstate"));
-                                if (callback) callback(); 
+                                if (callback) callback();
                                 return;
                             }
 
@@ -6205,7 +6339,7 @@
                                         window.dispatchEvent(new Event("popstate"));
                                         await new Promise(r => setTimeout(r, 3000));
                                     }
-                                    
+
                                     // Pesquisa pelo username
                                     const searchInput = document.querySelector('input[data-bloks-name="bk.components.TextInput"][placeholder="Pesquisar"]');
                                     if (searchInput) {
@@ -6213,7 +6347,7 @@
                                         const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
                                         nativeInputValueSetter.call(searchInput, username);
                                         searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-                                        
+
                                         await new Promise(r => setTimeout(r, 5000)); // Aumentado para 5s para garantir carregamento
                                     }
 
@@ -6234,7 +6368,7 @@
                                     if (!found) {
                                         console.warn(`Não foi possível encontrar o checkbox para ${username} na página ${pageUrl}.`);
                                     }
-                                    
+
                                     // Limpa a pesquisa se foi usada
                                     if (searchInput) {
                                         const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
@@ -6298,7 +6432,7 @@
                                                 }
 
                                         }
-                                        
+
                                         if (!success) {
                                             console.log(`Fallback para humano: ${username}`);
                                             await executeHumanToggle(username);
@@ -6306,9 +6440,9 @@
                                             await new Promise(r => setTimeout(r, loadSettings().requestDelay || 500));
                                         }
                                     }
-                                    bar.remove(); 
+                                    bar.remove();
                                     history.pushState(null, null, originalPath); window.dispatchEvent(new Event("popstate"));
-                                    if (callback) callback(); 
+                                    if (callback) callback();
                                     return;
                                 }
 
@@ -6317,8 +6451,8 @@
                                 window.dispatchEvent(new Event("popstate"));
                                 await new Promise(r => setTimeout(r, 3000));
 
-                                for (let i = 0; i < users.length; i++) { 
-                                    if (isCancelled()) break; 
+                                for (let i = 0; i < users.length; i++) {
+                                    if (isCancelled()) break;
                                     update(i + 1, users.length, "Processando:");
                                     await executeHumanToggle(users[i]);
                                 }
@@ -6408,21 +6542,39 @@
                                                 <a href="https://www.instagram.com/${username}" target="_blank">${username}</a>
                                             </td>
                                             <td style="border: 1px solid #ccc; padding: 10px;">
-                                                <img id="img_${username}_${isHistory ? 'hist' : 'main'}" src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%;" onerror="this.onerror=null;this.src='https://via.placeholder.com/32';">
+                                                <img id="img_${username}_${isHistory ? 'hist' : 'main'}" src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%;">
                                             </td>` +
                                             (isHistory ? `<td style="border: 1px solid #ccc; padding: 10px;">${unfollowDate}</td>` : '') +
                                             (showCheckbox ? `<td style="border: 1px solid #ccc; padding: 10px;">
                                                 <input type="checkbox" class="unfollowCheckbox" data-username="${username}" />
                                             </td>` : '') + `
                                         `;
+
+                                        // Tratamento de erro de imagem (link expirado)
+                                        const img = tr.querySelector('img');
+                                        if (img) {
+                                            img.onerror = function() {
+                                                this.onerror = null;
+                                                this.src = 'https://via.placeholder.com/32'; // Fallback imediato
+                                                
+                                                // Tenta buscar URL atualizada
+                                                getProfilePic(username).then(newUrl => {
+                                                    if (newUrl && !newUrl.includes('placeholder')) {
+                                                        this.src = newUrl;
+                                                        // Se for histórico, atualiza no banco para corrigir o link expirado
+                                                        if (isHistory) {
+                                                            dbHelper.saveUnfollowHistory({
+                                                                username: username,
+                                                                photoUrl: newUrl,
+                                                                unfollowDate: userData.unfollowDate || new Date().toISOString()
+                                                            }).catch(e => console.log("Erro ao atualizar foto no histórico", e));
+                                                        }
+                                                    }
+                                                });
+                                            };
+                                        }
+
                                         tbody.appendChild(tr);
-                                        // Comentado para evitar erro 429 (Too Many Requests) ao renderizar a tabela
-                                        // if (!isHistory && !photoUrl) {
-                                        //     getProfilePic(username).then(url => {
-                                        //         const img = document.getElementById(`img_${username}_main`);
-                                        //         if (img) img.src = url;
-                                        //     });
-                                        // }
                                     });
 
                                     updatePaginationControls();

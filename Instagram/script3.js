@@ -3452,8 +3452,12 @@
 
                                         preencherTabela(currentList, true, currentTabId === 'tabHistorico');
 
-                                        document.getElementById("selecionarTodosBtn").onclick = selecionarTodos;
-                                        document.getElementById("desmarcarTodosBtn").onclick = desmarcarTodos;
+                                        const selecionarTodosNaTabela = () => document.querySelectorAll(`#${tableId} .unfollowCheckbox`).forEach(cb => cb.checked = true);
+                                        const desmarcarTodosNaTabela = () => document.querySelectorAll(`#${tableId} .unfollowCheckbox`).forEach(cb => cb.checked = false);
+
+                                        document.getElementById("selecionarTodosBtn").onclick = selecionarTodosNaTabela;
+                                        document.getElementById("desmarcarTodosBtn").onclick = desmarcarTodosNaTabela;
+
 
                                         if (document.getElementById("unfollowBtn")) {
                                             document.getElementById("unfollowBtn").onclick = unfollowSelecionados;

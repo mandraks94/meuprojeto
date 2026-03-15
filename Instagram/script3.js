@@ -195,7 +195,7 @@
                         db: null,
                         openDB: function() {
                             return new Promise((resolve, reject) => {
-                                const request = indexedDB.open('InstagramToolsDB', 6);
+                                const request = indexedDB.open('InstagramToolsDB', 7);
                                 request.onupgradeneeded = (event) => {
                                     const db = event.target.result;
                                     if (!db.objectStoreNames.contains('closeFriends')) {
@@ -216,14 +216,14 @@
                                     if (!db.objectStoreNames.contains('following')) {
                                         db.createObjectStore('following', { keyPath: 'id', autoIncrement: true });
                                     }
-                                    if (!db.objectStoreNames.contains('followers')) {
-                                        db.createObjectStore('followers', { keyPath: 'id', autoIncrement: true });
-                                    }
-                                    if (!db.objectStoreNames.contains('following')) {
-                                        db.createObjectStore('following', { keyPath: 'id', autoIncrement: true });
-                                    }
                                     if (!db.objectStoreNames.contains('exceptions')) {
                                         db.createObjectStore('exceptions', { keyPath: 'username' });
+                                    }
+                                    if (!db.objectStoreNames.contains('categories')) {
+                                        db.createObjectStore('categories', { keyPath: 'id' });
+                                    }
+                                    if (!db.objectStoreNames.contains('userCategories')) {
+                                        db.createObjectStore('userCategories', { keyPath: 'username' });
                                     }
                                 };
                                 request.onsuccess = (event) => {
@@ -343,6 +343,65 @@
                                 const req = store.clear();
                                 req.onsuccess = () => resolve();
                                 req.onerror = () => resolve();
+                            });
+                        },
+                        saveCategory: async function(category) {
+                            if (!this.db) await this.openDB();
+                            const tx = this.db.transaction(['categories'], 'readwrite');
+                            tx.objectStore('categories').put(category);
+                            return tx.complete;
+                        },
+                        loadCategories: async function() {
+                            if (!this.db) await this.openDB();
+                            const tx = this.db.transaction(['categories'], 'readonly');
+                            return new Promise(resolve => {
+                                const req = tx.objectStore('categories').getAll();
+                                req.onsuccess = () => resolve(req.result.sort((a, b) => a.name.localeCompare(b.name)));
+                                req.onerror = () => resolve([]);
+                            });
+                        },
+                        deleteCategory: async function(categoryId) {
+                            if (!this.db) await this.openDB();
+                            const tx = this.db.transaction(['categories', 'userCategories'], 'readwrite');
+                            tx.objectStore('categories').delete(categoryId);
+
+                            // Also remove this category from all users
+                            const userStore = tx.objectStore('userCategories');
+                            const cursorReq = userStore.openCursor();
+                            cursorReq.onsuccess = e => {
+                                const cursor = e.target.result;
+                                if (cursor) {
+                                    const user = cursor.value;
+                                    const updatedCategories = user.categories.filter(c => c !== categoryId);
+                                    if (updatedCategories.length < user.categories.length) {
+                                        user.categories = updatedCategories;
+                                        cursor.update(user);
+                                    }
+                                    cursor.continue();
+                                }
+                            };
+                            return tx.complete;
+                        },
+                        saveUserCategories: async function(username, categoryIds) {
+                            if (!this.db) await this.openDB();
+                            const tx = this.db.transaction(['userCategories'], 'readwrite');
+                            const store = tx.objectStore('userCategories');
+                            store.put({ username: username.toLowerCase(), categories: categoryIds });
+                            return tx.complete;
+                        },
+                        loadAllUserCategories: async function() {
+                            if (!this.db) await this.openDB();
+                            const tx = this.db.transaction(['userCategories'], 'readonly');
+                            return new Promise(resolve => {
+                                const req = tx.objectStore('userCategories').getAll();
+                                req.onsuccess = () => {
+                                    const map = new Map();
+                                    req.result.forEach(item => {
+                                        if (item.username) map.set(item.username.toLowerCase(), item.categories);
+                                    });
+                                    resolve(map);
+                                };
+                                req.onerror = () => resolve(new Map());
                             });
                         }
                     };
@@ -4091,6 +4150,8 @@
                                         <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; margin-bottom: 15px;">
                                             <button id="atualizarSeguindoBtn" title="Atualizar Dados" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">🔄️ Atualizar</button>
                                             <button id="silenciarSeguindoBtn" style="background: #8e44ad; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Silenciar/Reativar</button>
+                                            <button id="manageCategoriesBtn" style="background: #3498db; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Gerenciar Categorias</button>
+                                            <button id="addToCategoryBtn" style="background: #9b59b6; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Adicionar à Categoria</button>
                                             <button id="closeFriendsSeguindoBtn" style="background: #2ecc71; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Melhores Amigos</button>
                                             <button id="hideStorySeguindoBtn" style="background: #f39c12; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Ocultar Story</button>
                                         </div>
@@ -4111,37 +4172,50 @@
                                 `;
                                 document.body.appendChild(div);
 
-                                document.getElementById("fecharSeguindoBtn").addEventListener("click", () => {
-                                    processoCancelado = true;
-                                    document.getElementById("progressBar")?.remove();
-                                    div.remove();
-                                });
+                                const attachStaticListeners = () => {
+                                    document.getElementById("fecharSeguindoBtn").addEventListener("click", () => {
+                                        processoCancelado = true;
+                                        document.getElementById("progressBar")?.remove();
+                                        div.remove();
+                                    });
 
-                                document.getElementById("seguindoMinimizarBtn").addEventListener("click", () => {
-                                    const modal = document.getElementById('seguindoModal');
-                                    const contentToToggle = [
-                                        modal.querySelector('input[type="text"]').parentElement, // div da pesquisa
-                                        modal.querySelector('#tabelaSeguindoContainer'),
-                                        modal.querySelector('#tabelaSeguindoContainer')
-                                    ].filter(Boolean);
+                                    document.getElementById("seguindoMinimizarBtn").addEventListener("click", () => {
+                                        const modal = document.getElementById('seguindoModal');
+                                        const contentToToggle = [
+                                            modal.querySelector('input[type="text"]').parentElement, // div da pesquisa
+                                            modal.querySelector('#tabelaSeguindoContainer'),
+                                            modal.querySelector('#tabelaSeguindoContainer')
+                                        ].filter(Boolean);
 
-                                    const btn = document.getElementById('seguindoMinimizarBtn');
-                                    const isMinimized = modal.dataset.minimized === 'true';
+                                        const btn = document.getElementById('seguindoMinimizarBtn');
+                                        const isMinimized = modal.dataset.minimized === 'true';
 
-                                    contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-                                    modal.dataset.minimized = !isMinimized;
-                                    btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
-                                    modal.style.maxHeight = isMinimized ? '90vh' : 'none';
-                                });
+                                        contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+                                        modal.dataset.minimized = !isMinimized;
+                                        btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
+                                        modal.style.maxHeight = isMinimized ? '90vh' : 'none';
+                                    });
 
-                                document.getElementById("atualizarSeguindoBtn").addEventListener("click", () => {
-                                    showUpdateOptionsModal();
-                                });
+                                    document.getElementById("atualizarSeguindoBtn").addEventListener("click", () => {
+                                        showUpdateOptionsModal();
+                                    });
+
+                                    document.getElementById("manageCategoriesBtn").addEventListener("click", () => {
+                                        abrirModalGerenciarCategorias();
+                                    });
+
+                                    document.getElementById("addToCategoryBtn").addEventListener("click", () => {
+                                        abrirModalAdicionarACategoria(Array.from(selectedUsers));
+                                    });
+                                };
+                                attachStaticListeners();
 
                                 const statusDiv = document.getElementById("statusSeguindo");
                                 const container = document.getElementById("tabelaSeguindoContainer");
                                 let seguindoList = [];
                                 const selectedUsers = new Set(); // Armazena todos os usuários selecionados entre as páginas
+                                let allCategories = [];
+                                let userCategoryMap = new Map();
 
                             const fetchUserListAPISeguindo = async (userId, type, total) => {
                                 const userList = [];
@@ -4197,6 +4271,9 @@
                             };
 
                                 async function carregarSeguindo() {
+                                    allCategories = await dbHelper.loadCategories();
+                                    userCategoryMap = await dbHelper.loadAllUserCategories();
+
                                     statusDiv.innerText = 'Buscando informações do perfil...';
                                     const profileInfoResponse = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, { headers: { 'X-IG-App-ID': appID } });
                                     if (processoCancelado) return;
@@ -4260,11 +4337,12 @@
                                     window.dispatchEvent(new Event("popstate"));
                                     await new Promise(r => setTimeout(r, 500));
 
-                                    const statusModal = document.getElementById("automationStatusModal");
-                                    if (statusModal) statusModal.remove();
-
-                                    document.body.appendChild(div); // Adiciona o modal principal
-
+                                    if (isUpdate) {
+                                        const statusModal = document.getElementById("automationStatusModal");
+                                        if (statusModal) statusModal.remove();
+                                        document.body.appendChild(div); // Re-adiciona o modal principal DEPOIS da navegação
+                                        attachStaticListeners(); // Re-anexa os listeners estáticos
+                                    }
                                     statusDiv.innerText = `Total: ${seguindoList.length} perfis seguidos.`;
 
                                     let currentPage = 1; // Reinicia a paginação
@@ -4282,31 +4360,34 @@
                                         const filterValue = document.getElementById('seguindoFilterSelect')?.value || 'all';
 
                                         let filteredUsers = seguindoList;
-
+                                        
                                         if (searchTerm) {
+                                            // Aplica o filtro de pesquisa sobre a lista original
                                             filteredUsers = seguindoList.filter(user => user.username.toLowerCase().includes(searchTerm));
                                         }
 
-                                        if (filterValue !== 'all') {
+                                        // Aplica o filtro de seleção (dropdown) sobre a lista já filtrada pela pesquisa (ou a lista completa)
+                                        if (filterValue === 'close_friends') {
+                                            filteredUsers = filteredUsers.filter(user => userListCache.closeFriends && userListCache.closeFriends.has(user.username));
+                                        } else if (filterValue === 'hidden_stories') {
+                                            filteredUsers = filteredUsers.filter(user => userListCache.hiddenStory && userListCache.hiddenStory.has(user.username));
+                                        } else if (filterValue.startsWith('muted_')) {
                                             filteredUsers = filteredUsers.filter(user => {
-                                                const username = user.username;
-                                                if (filterValue === 'close_friends') {
-                                                    return userListCache.closeFriends && userListCache.closeFriends.has(username);
-                                                }
-                                                if (filterValue === 'hidden_stories') {
-                                                    return userListCache.hiddenStory && userListCache.hiddenStory.has(username);
-                                                }
-                                                if (userListCache.muted && userListCache.muted.has(username)) {
-                                                    const detail = userListCache.mutedDetails.get(username) || '';
+                                                if (userListCache.muted && userListCache.muted.has(user.username)) {
+                                                    const detail = userListCache.mutedDetails.get(user.username) || '';
                                                     const dLower = detail.toLowerCase();
                                                     const isStories = dLower.includes('stories') || dLower.includes('story');
                                                     const isPosts = dLower.includes('publicações') || dLower.includes('posts');
-
                                                     if (filterValue === 'muted_all') return isStories && isPosts;
                                                     if (filterValue === 'muted_stories') return isStories && !isPosts;
                                                     if (filterValue === 'muted_posts') return isPosts && !isStories;
                                                 }
                                                 return false;
+                                            });
+                                        } else if (filterValue.startsWith('category_')) {
+                                            const categoryId = filterValue.replace('category_', '');
+                                            filteredUsers = filteredUsers.filter(user => {
+                                                return userCategoryMap.get(user.username.toLowerCase())?.includes(categoryId);
                                             });
                                         }
                                         let tableHtml = `
@@ -4318,6 +4399,7 @@
                                                         <th style="padding: 8px; text-align: center;" data-sort-key="isMuted" title="${userListCache.muted === null ? 'Visite o menu Contas Silenciadas para carregar estes dados.' : ''}">Silenciado? ${userListCache.muted === null ? '??' : (sortConfig.key === 'isMuted' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
                                                         <th style="padding: 8px; text-align: center;" data-sort-key="isCloseFriend" title="${userListCache.closeFriends === null ? 'Visite o menu Amigos Próximos para carregar estes dados.' : ''}">Melhores Amigos? ${userListCache.closeFriends === null ? '??' : (sortConfig.key === 'isCloseFriend' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
                                                         <th style="padding: 8px; text-align: center;" data-sort-key="isStoryHidden" title="${userListCache.hiddenStory === null ? 'Visite o menu Ocultar Story para carregar estes dados.' : ''}">Ocultar Stories? ${userListCache.hiddenStory === null ? '??' : (sortConfig.key === 'isStoryHidden' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
+                                                        <th style="padding: 8px;">Categorias</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody style="max-height: 60vh; overflow-y: auto;">
@@ -4369,6 +4451,13 @@
                                             const isCloseFriend = userListCache.closeFriends ? (userListCache.closeFriends.has(username) ? "Sim" : "Não") : "??";
                                             const isStoryHidden = userListCache.hiddenStory ? (userListCache.hiddenStory.has(username) ? "Sim" : "Não") : "??";
 
+                                            const userCategories = userCategoryMap.get(username.toLowerCase()) || [];
+                                            const categorySpans = userCategories.map(catId => {
+                                                const category = allCategories.find(c => c.id === catId);
+                                                if (!category) return '';
+                                                return `<span style="background-color: ${category.color}; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-right: 4px; white-space: nowrap; display: inline-block; margin-bottom: 2px;">${category.name}</span>`;
+                                            }).join('');
+
                                             const getStatusStyle = (status, type) => {
                                                 if (status === 'Sim') {
                                                     const colors = {
@@ -4397,6 +4486,7 @@
                                                     <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isMutedSimple, 'muted')}">${isMutedSimple}</span></td>
                                                     <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isCloseFriend, 'closeFriend')}">${isCloseFriend}</span></td>
                                                     <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isStoryHidden, 'storyHidden')}">${isStoryHidden}</span></td>
+                                                    <td style="padding: 8px; min-width: 100px;">${categorySpans}</td>
                                                 </tr>
                                             `;
                                         });
@@ -4456,6 +4546,20 @@
                                         filterSelect.onchange = () => {
                                             renderList(1);
                                         };
+
+                                        // Popula o filtro de categorias
+                                        Array.from(filterSelect.options).forEach(opt => {
+                                            if (opt.value.startsWith('category_')) opt.remove();
+                                        });
+                                        allCategories.forEach(cat => {
+                                            const option = document.createElement('option');
+                                            option.value = `category_${cat.id}`;
+                                            option.textContent = `Categoria: ${cat.name}`;
+                                            filterSelect.appendChild(option);
+                                        });
+
+                                        // Restaura o valor do filtro após repopular as opções para evitar que ele volte para "Todos"
+                                        filterSelect.value = filterValue;
 
                                         // Adiciona eventos de clique para ordenação nos cabeçalhos
                                         document.querySelectorAll('#seguindoModal th[data-sort-key]').forEach(th => {
@@ -5197,6 +5301,160 @@
                                         link.click();
                                         document.body.removeChild(link);
                                     };
+                                };
+                            }
+
+                            async function abrirModalGerenciarCategorias() {
+                                if (document.getElementById("manageCategoriesModal")) return;
+
+                                const div = document.createElement("div");
+                                div.id = "manageCategoriesModal";
+                                div.className = "submenu-modal";
+                                div.style.cssText = `
+                                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                    width: 90%; max-width: 400px; border: 1px solid #ccc;
+                                    border-radius: 10px; z-index: 10002; max-height: 80vh; overflow-y: auto;
+                                `;
+                                if (loadSettings().rgbBorder) div.classList.add('rgb-border-effect');
+
+                                const render = async () => {
+                                    const categories = await dbHelper.loadCategories();
+                                    let html = `
+                                        <div class="modal-header">
+                                            <span class="modal-title">Gerenciar Categorias</span>
+                                            <div class="modal-controls"><button id="fecharCategoriasBtn" title="Fechar">X</button></div>
+                                        </div>
+                                        <div style="padding: 20px;">
+                                            <div style="margin-bottom: 20px;">
+                                                <h4 style="margin:0 0 10px 0;">Nova Categoria</h4>
+                                                <div style="display:flex; gap: 10px;">
+                                                    <input type="text" id="newCategoryName" placeholder="Nome da Categoria" style="flex: 1; padding: 8px; color: black;">
+                                                    <input type="color" id="newCategoryColor" value="#3498db" style="padding: 0; border: none; background: transparent; width: 40px; height: 40px; cursor: pointer;">
+                                                    <button id="addCategoryBtn" style="padding: 8px 12px; background: #2ecc71; color: white; border: none; border-radius: 5px;">Adicionar</button>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <h4 style="margin:0 0 10px 0;">Categorias Existentes</h4>
+                                                <div id="categoriesList" style="display: flex; flex-direction: column; gap: 8px;">
+                                                    ${categories.length === 0 ? '<p style="color: #888;">Nenhuma categoria criada.</p>' :
+                                                    categories.map(cat => `
+                                                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #f9f9f9; border-radius: 5px;">
+                                                            <div>
+                                                                <span style="display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: ${cat.color}; margin-right: 8px; vertical-align: middle;"></span>
+                                                                <span style="font-weight: bold;">${cat.name}</span>
+                                                            </div>
+                                                            <button class="delete-category-btn" data-id="${cat.id}" style="background: #e74c3c; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; line-height: 24px;">X</button>
+                                                        </div>
+                                                    `).join('')}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
+                                    div.innerHTML = html;
+
+                                    document.getElementById("fecharCategoriasBtn").onclick = () => div.remove();
+
+                                    document.getElementById("addCategoryBtn").onclick = async () => {
+                                        const nameInput = document.getElementById("newCategoryName");
+                                        const colorInput = document.getElementById("newCategoryColor");
+                                        const name = nameInput.value.trim();
+                                        if (!name) return alert("O nome da categoria não pode ser vazio.");
+
+                                        await dbHelper.saveCategory({
+                                            id: `cat_${Date.now()}`,
+                                            name: name,
+                                            color: colorInput.value
+                                        });
+                                        nameInput.value = '';
+                                        render(); // Re-render the modal content
+                                    };
+
+                                    div.querySelectorAll('.delete-category-btn').forEach(btn => {
+                                        btn.onclick = async (e) => {
+                                            const catId = e.target.dataset.id;
+                                            if (confirm("Tem certeza que deseja excluir esta categoria? Ela será removida de todos os usuários.")) {
+                                                await dbHelper.deleteCategory(catId);
+                                                render();
+                                            }
+                                        };
+                                    });
+                                };
+
+                                document.body.appendChild(div);
+                                await render();
+                            }
+
+                            async function abrirModalAdicionarACategoria(usernames) {
+                                if (usernames.length === 0) {
+                                    return alert("Nenhum usuário selecionado.");
+                                }
+                                if (document.getElementById("addToCategoryModal")) return;
+
+                                const categories = await dbHelper.loadCategories();
+                                if (categories.length === 0) {
+                                    return alert("Nenhuma categoria criada. Crie categorias em 'Gerenciar Categorias' primeiro.");
+                                }
+
+                                const div = document.createElement("div");
+                                div.id = "addToCategoryModal";
+                                div.className = "submenu-modal";
+                                div.style.cssText = `
+                                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                    width: 90%; max-width: 400px; border: 1px solid #ccc;
+                                    border-radius: 10px; z-index: 10002;
+                                `;
+                                if (loadSettings().rgbBorder) div.classList.add('rgb-border-effect');
+
+                                let html = `
+                                    <div class="modal-header">
+                                        <span class="modal-title">Adicionar ${usernames.length} usuário(s) à Categoria</span>
+                                        <div class="modal-controls"><button id="fecharAddToCatBtn" title="Fechar">X</button></div>
+                                    </div>
+                                    <div style="padding: 20px;">
+                                        <p style="margin-top: 0;">Selecione as categorias:</p>
+                                        <div id="categoryChecklist" style="display: flex; flex-direction: column; gap: 10px; max-height: 200px; overflow-y: auto; margin-bottom: 20px;">
+                                            ${categories.map(cat => `
+                                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                                    <input type="checkbox" class="category-checkbox" value="${cat.id}">
+                                                    <span style="display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: ${cat.color};"></span>
+                                                    <span>${cat.name}</span>
+                                                </label>
+                                            `).join('')}
+                                        </div>
+                                        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                                            <button id="cancelAddToCatBtn" style="background: #ccc; color: black; border: none; padding: 8px 16px; border-radius: 5px;">Cancelar</button>
+                                            <button id="saveUserCategoriesBtn" style="background: #0095f6; color: white; border: none; padding: 8px 16px; border-radius: 5px;">Salvar</button>
+                                        </div>
+                                    </div>
+                                `;
+                                div.innerHTML = html;
+                                document.body.appendChild(div);
+
+                                const close = () => div.remove();
+                                document.getElementById("fecharAddToCatBtn").onclick = close;
+                                document.getElementById("cancelAddToCatBtn").onclick = close;
+
+                                document.getElementById("saveUserCategoriesBtn").onclick = async () => {
+                                    const selectedCategoryIds = Array.from(div.querySelectorAll('.category-checkbox:checked')).map(cb => cb.value);
+
+                                    const allUserCategories = await dbHelper.loadAllUserCategories();
+
+                                    for (const username of usernames) {
+                                        const existingCategories = allUserCategories.get(username.toLowerCase()) || [];
+                                        const newCategories = new Set([...existingCategories, ...selectedCategoryIds]);
+                                        await dbHelper.saveUserCategories(username, Array.from(newCategories));
+                                    }
+
+                                    showToast(`${usernames.length} usuário(s) atualizado(s) com sucesso!`);
+                                    close();
+                                    // Recarrega o modal de "Seguindo" para refletir as mudanças
+                                    const seguindoModal = document.getElementById("seguindoModal");
+                                    if (seguindoModal) {
+                                        seguindoModal.remove();
+                                        // Adia a chamada para o próximo ciclo de eventos para garantir que o DOM seja atualizado
+                                        // antes da verificação de existência do modal em iniciarProcessoSeguindo().
+                                        setTimeout(() => iniciarProcessoSeguindo(), 0);
+                                    }
                                 };
                             }
 

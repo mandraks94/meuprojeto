@@ -3547,11 +3547,11 @@
                                             document.getElementById("seguirNovamenteBtn").onclick = () => {
                                                 const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(cb => cb.dataset.username);
                                                 if (selecionados.length === 0) return alert("Selecione usuários para seguir.");
-                                                
+
                                                 const btn = document.getElementById("seguirNovamenteBtn");
                                                 btn.disabled = true;
                                                 btn.textContent = "Processando...";
-                                                
+
                                                 followUsers(selecionados, 0, async () => {
                                                     btn.disabled = false;
                                                     btn.textContent = "Seguir Novamente";
@@ -3613,9 +3613,9 @@
                                             const updateFollowers = document.getElementById('chkFollowers').checked;
                                             const updateFollowing = document.getElementById('chkFollowing').checked;
                                             div.remove();
-                                            
+
                                             if (!updateFollowers && !updateFollowing) return alert("Selecione pelo menos uma opção.");
-                                            
+
                                             await executarAtualizacao(updateFollowers, updateFollowing);
                                         };
                                     }
@@ -3662,12 +3662,12 @@
                                         if (updateFollowers) {
                                             novosSeguidoresSet = [...apiFollowers].filter(u => !cachedData.seguidores.has(u));
                                         }
-                                        
+
                                         let novosSeguindoSet = [];
                                         if (updateFollowing) {
                                             novosSeguindoSet = [...apiFollowing].filter(u => !cachedData.seguindo.has(u));
                                         }
-                                        
+
                                         let seguidoresPerdidosSet = [];
                                         if (updateFollowers) {
                                             seguidoresPerdidosSet = [...cachedData.seguidores].filter(u => !apiFollowers.has(u));
@@ -3679,7 +3679,7 @@
                                             await dbHelper.saveCache('followers', followersToSave);
                                             cachedData.seguidores = apiFollowers;
                                         }
-                                        
+
                                         if (updateFollowing) {
                                             const followingToSave = [...apiFollowing].map(u => cachedData.userDetails.get(u) || { username: u, photoUrl: null });
                                             await dbHelper.saveCache('following', followingToSave);
@@ -3690,16 +3690,16 @@
                                         cachedData.naoSegueDeVolta = [...apiFollowing].filter(user => !apiFollowers.has(user) && !cachedData.exceptions.has(user));
 
                                         lists['tabNaoSegueDeVolta'] = toObjects(cachedData.naoSegueDeVolta);
-                                        
+
                                         if (updateFollowers) {
                                             lists['tabNovosSeguidores'] = toObjects(novosSeguidoresSet);
                                             lists['tabSeguidoresPerdidos'] = toObjects(seguidoresPerdidosSet);
                                         }
-                                        
+
                                         if (updateFollowing) {
                                             lists['tabNovosSeguindo'] = toObjects(novosSeguindoSet);
                                         }
-                                        
+
                                         lists['tabNaoSigoDeVolta'] = toObjects([...cachedData.seguidores].filter(u => !cachedData.seguindo.has(u)));
 
                                         // Atualizar Contadores
@@ -4016,7 +4016,7 @@
                                     setTimeout(() => {
                                         if (processoCancelado) { if (callback) callback(); return; }
                                         let followBtn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(el => ['Seguir', 'Follow', 'Seguir de volta', 'Follow Back'].includes(el.innerText.trim()));
-                                        
+
                                         if (followBtn) {
                                             followBtn.click();
                                             setTimeout(() => followUsers(users, index + 1, callback), 2000);
@@ -4360,7 +4360,7 @@
                                         const filterValue = document.getElementById('seguindoFilterSelect')?.value || 'all';
 
                                         let filteredUsers = seguindoList;
-                                        
+
                                         if (searchTerm) {
                                             // Aplica o filtro de pesquisa sobre a lista original
                                             filteredUsers = seguindoList.filter(user => user.username.toLowerCase().includes(searchTerm));
@@ -6843,7 +6843,7 @@
                                             img.onerror = function() {
                                                 this.onerror = null;
                                                 this.src = 'https://via.placeholder.com/32'; // Fallback imediato
-                                                
+
                                                 // Tenta buscar URL atualizada
                                                 getProfilePic(username).then(newUrl => {
                                                     if (newUrl && !newUrl.includes('placeholder')) {

@@ -4151,7 +4151,7 @@
                                             <button id="atualizarSeguindoBtn" title="Atualizar Dados" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">🔄️ Atualizar</button>
                                             <button id="silenciarSeguindoBtn" style="background: #8e44ad; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Silenciar/Reativar</button>
                                             <button id="manageCategoriesBtn" style="background: #3498db; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Gerenciar Categorias</button>
-                                            <button id="addToCategoryBtn" style="background: #9b59b6; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Adicionar à Categoria</button>
+                                            <button id="addToCategoryBtn" style="background: #9b59b6; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Categorias</button>
                                             <button id="closeFriendsSeguindoBtn" style="background: #2ecc71; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Melhores Amigos</button>
                                             <button id="hideStorySeguindoBtn" style="background: #f39c12; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Ocultar Story</button>
                                         </div>
@@ -4399,7 +4399,7 @@
                                                         <th style="padding: 8px; text-align: center;" data-sort-key="isMuted" title="${userListCache.muted === null ? 'Visite o menu Contas Silenciadas para carregar estes dados.' : ''}">Silenciado? ${userListCache.muted === null ? '??' : (sortConfig.key === 'isMuted' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
                                                         <th style="padding: 8px; text-align: center;" data-sort-key="isCloseFriend" title="${userListCache.closeFriends === null ? 'Visite o menu Amigos Próximos para carregar estes dados.' : ''}">Melhores Amigos? ${userListCache.closeFriends === null ? '??' : (sortConfig.key === 'isCloseFriend' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
                                                         <th style="padding: 8px; text-align: center;" data-sort-key="isStoryHidden" title="${userListCache.hiddenStory === null ? 'Visite o menu Ocultar Story para carregar estes dados.' : ''}">Ocultar Stories? ${userListCache.hiddenStory === null ? '??' : (sortConfig.key === 'isStoryHidden' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
-                                                        <th style="padding: 8px;">Categorias</th>
+                                                        <th style="padding: 8px;" data-sort-key="categories">Categorias ${sortConfig.key === 'categories' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody style="max-height: 60vh; overflow-y: auto;">
@@ -4412,6 +4412,11 @@
                                                 if (key === 'isMuted') return userListCache.muted ? (userListCache.muted.has(user.username) ? 1 : 2) : 3;
                                                 if (key === 'isCloseFriend') return userListCache.closeFriends ? (userListCache.closeFriends.has(user.username) ? 1 : 2) : 3;
                                                 if (key === 'isStoryHidden') return userListCache.hiddenStory ? (userListCache.hiddenStory.has(user.username) ? 1 : 2) : 3;
+                                                if (key === 'categories') {
+                                                    const catsA = userCategoryMap.get(user.username.toLowerCase()) || [];
+                                                    const nameA = catsA.map(cid => allCategories.find(c => c.id === cid)?.name || '').sort().join(', ');
+                                                    return nameA;
+                                                }
                                                 return 0;
                                             };
 
@@ -5343,7 +5348,10 @@
                                                                 <span style="display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: ${cat.color}; margin-right: 8px; vertical-align: middle;"></span>
                                                                 <span style="font-weight: bold;">${cat.name}</span>
                                                             </div>
-                                                            <button class="delete-category-btn" data-id="${cat.id}" style="background: #e74c3c; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; line-height: 24px;">X</button>
+                                                            <div style="display: flex; gap: 5px;">
+                                                                <button class="edit-category-btn" data-id="${cat.id}" data-name="${cat.name}" data-color="${cat.color}" style="background: #f39c12; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; line-height: 24px;" title="Renomear">✎</button>
+                                                                <button class="delete-category-btn" data-id="${cat.id}" style="background: #e74c3c; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; line-height: 24px;" title="Excluir">X</button>
+                                                            </div>
                                                         </div>
                                                     `).join('')}
                                                 </div>
@@ -5368,6 +5376,19 @@
                                         nameInput.value = '';
                                         render(); // Re-render the modal content
                                     };
+
+                                    div.querySelectorAll('.edit-category-btn').forEach(btn => {
+                                        btn.onclick = async (e) => {
+                                            const id = e.target.dataset.id;
+                                            const currentName = e.target.dataset.name;
+                                            const color = e.target.dataset.color;
+                                            const newName = prompt("Novo nome da categoria:", currentName);
+                                            if (newName && newName.trim() !== "" && newName !== currentName) {
+                                                await dbHelper.saveCategory({ id, name: newName.trim(), color });
+                                                render();
+                                            }
+                                        };
+                                    });
 
                                     div.querySelectorAll('.delete-category-btn').forEach(btn => {
                                         btn.onclick = async (e) => {
@@ -5407,7 +5428,7 @@
 
                                 let html = `
                                     <div class="modal-header">
-                                        <span class="modal-title">Adicionar ${usernames.length} usuário(s) à Categoria</span>
+                                        <span class="modal-title">Gerenciar Categorias para ${usernames.length} usuário(s)</span>
                                         <div class="modal-controls"><button id="fecharAddToCatBtn" title="Fechar">X</button></div>
                                     </div>
                                     <div style="padding: 20px;">
@@ -5423,7 +5444,8 @@
                                         </div>
                                         <div style="display: flex; justify-content: flex-end; gap: 10px;">
                                             <button id="cancelAddToCatBtn" style="background: #ccc; color: black; border: none; padding: 8px 16px; border-radius: 5px;">Cancelar</button>
-                                            <button id="saveUserCategoriesBtn" style="background: #0095f6; color: white; border: none; padding: 8px 16px; border-radius: 5px;">Salvar</button>
+                                            <button id="removeUserCategoriesBtn" style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 5px;">Remover</button>
+                                            <button id="addUserCategoriesBtn" style="background: #0095f6; color: white; border: none; padding: 8px 16px; border-radius: 5px;">Adicionar</button>
                                         </div>
                                     </div>
                                 `;
@@ -5434,7 +5456,7 @@
                                 document.getElementById("fecharAddToCatBtn").onclick = close;
                                 document.getElementById("cancelAddToCatBtn").onclick = close;
 
-                                document.getElementById("saveUserCategoriesBtn").onclick = async () => {
+                                document.getElementById("addUserCategoriesBtn").onclick = async () => {
                                     const selectedCategoryIds = Array.from(div.querySelectorAll('.category-checkbox:checked')).map(cb => cb.value);
 
                                     const allUserCategories = await dbHelper.loadAllUserCategories();
@@ -5445,7 +5467,25 @@
                                         await dbHelper.saveUserCategories(username, Array.from(newCategories));
                                     }
 
-                                    showToast(`${usernames.length} usuário(s) atualizado(s) com sucesso!`);
+                                    showToast(`${usernames.length} usuário(s) atualizado(s) (Categorias Adicionadas)!`);
+                                    close();
+                                    // Recarrega o modal de "Seguindo" para refletir as mudanças
+                                    const seguindoModal = document.getElementById("seguindoModal");
+                                    if (seguindoModal) {
+                                        seguindoModal.remove();
+                                        setTimeout(() => iniciarProcessoSeguindo(), 0);
+                                    }
+                                };
+
+                                document.getElementById("removeUserCategoriesBtn").onclick = async () => {
+                                    const selectedCategoryIds = Array.from(div.querySelectorAll('.category-checkbox:checked')).map(cb => cb.value);
+                                    const allUserCategories = await dbHelper.loadAllUserCategories();
+                                    for (const username of usernames) {
+                                        const existingCategories = allUserCategories.get(username.toLowerCase()) || [];
+                                        const newCategories = existingCategories.filter(id => !selectedCategoryIds.includes(id));
+                                        await dbHelper.saveUserCategories(username, newCategories);
+                                    }
+                                    showToast(`${usernames.length} usuário(s) atualizado(s) (Categorias Removidas)!`);
                                     close();
                                     // Recarrega o modal de "Seguindo" para refletir as mudanças
                                     const seguindoModal = document.getElementById("seguindoModal");

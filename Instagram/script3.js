@@ -4154,6 +4154,7 @@
                                             <button id="addToCategoryBtn" style="background: #9b59b6; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Categorias</button>
                                             <button id="closeFriendsSeguindoBtn" style="background: #2ecc71; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Melhores Amigos</button>
                                             <button id="hideStorySeguindoBtn" style="background: #f39c12; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Ocultar Story</button>
+                                            <button id="loadStatsSeguindoBtn" style="background: #e67e22; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Carregar Stats (Página)</button>
                                         </div>
                                     </div>
                                     <div style="margin: 0 20px 20px 20px; display: flex; gap: 10px;">
@@ -4213,6 +4214,7 @@
                                 const statusDiv = document.getElementById("statusSeguindo");
                                 const container = document.getElementById("tabelaSeguindoContainer");
                                 let seguindoList = [];
+                                let currentPaginatedUsers = [];
                                 const selectedUsers = new Set(); // Armazena todos os usuários selecionados entre as páginas
                                 let allCategories = [];
                                 let userCategoryMap = new Map();
@@ -4399,6 +4401,9 @@
                                                         <th style="padding: 8px; text-align: center;" data-sort-key="isMuted" title="${userListCache.muted === null ? 'Visite o menu Contas Silenciadas para carregar estes dados.' : ''}">Silenciado? ${userListCache.muted === null ? '??' : (sortConfig.key === 'isMuted' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
                                                         <th style="padding: 8px; text-align: center;" data-sort-key="isCloseFriend" title="${userListCache.closeFriends === null ? 'Visite o menu Amigos Próximos para carregar estes dados.' : ''}">Melhores Amigos? ${userListCache.closeFriends === null ? '??' : (sortConfig.key === 'isCloseFriend' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
                                                         <th style="padding: 8px; text-align: center;" data-sort-key="isStoryHidden" title="${userListCache.hiddenStory === null ? 'Visite o menu Ocultar Story para carregar estes dados.' : ''}">Ocultar Stories? ${userListCache.hiddenStory === null ? '??' : (sortConfig.key === 'isStoryHidden' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
+                                                        <th style="padding: 8px; text-align: center;" data-sort-key="followers">Seguidores ${sortConfig.key === 'followers' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                                        <th style="padding: 8px; text-align: center;" data-sort-key="following">Seguindo ${sortConfig.key === 'following' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                                        <th style="padding: 8px; text-align: center;" data-sort-key="status">Status ${sortConfig.key === 'status' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
                                                         <th style="padding: 8px;" data-sort-key="categories">Categorias ${sortConfig.key === 'categories' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
                                                     </tr>
                                                 </thead>
@@ -4412,6 +4417,14 @@
                                                 if (key === 'isMuted') return userListCache.muted ? (userListCache.muted.has(user.username) ? 1 : 2) : 3;
                                                 if (key === 'isCloseFriend') return userListCache.closeFriends ? (userListCache.closeFriends.has(user.username) ? 1 : 2) : 3;
                                                 if (key === 'isStoryHidden') return userListCache.hiddenStory ? (userListCache.hiddenStory.has(user.username) ? 1 : 2) : 3;
+                                                if (key === 'followers') return (user.followers || 0);
+                                                if (key === 'following') return (user.following || 0);
+                                                if (key === 'status') {
+                                                    if (user.followers !== undefined && user.following !== undefined) {
+                                                        if (user.following > user.followers) return 'Unfollow';
+                                                    }
+                                                    return '-';
+                                                }
                                                 if (key === 'categories') {
                                                     const catsA = userCategoryMap.get(user.username.toLowerCase()) || [];
                                                     const nameA = catsA.map(cid => allCategories.find(c => c.id === cid)?.name || '').sort().join(', ');
@@ -4433,8 +4446,10 @@
                                         });
 
                                         const paginatedUsers = sortedUsers.slice(startIndex, endIndex);
+                                        currentPaginatedUsers = paginatedUsers;
 
-                                        paginatedUsers.forEach(({ username, photoUrl }) => {
+                                        paginatedUsers.forEach((userObj) => {
+                                            const { username, photoUrl } = userObj;
                                             const isChecked = selectedUsers.has(username);
                                             // Verifica os dados no cache global
                                             const isMutedSimple = userListCache.muted ? (userListCache.muted.has(username) ? "Sim" : "Não") : "??";
@@ -4451,7 +4466,7 @@
                                                 } else if (detail) { // Fallback
                                                     mutedDetailText = `(${detail})`;
                                                 }
-                                            }
+                                        }
 
                                             const isCloseFriend = userListCache.closeFriends ? (userListCache.closeFriends.has(username) ? "Sim" : "Não") : "??";
                                             const isStoryHidden = userListCache.hiddenStory ? (userListCache.hiddenStory.has(username) ? "Sim" : "Não") : "??";
@@ -4478,6 +4493,15 @@
                                                 return ''; // Estilo padrão para '??'
                                             };
 
+                                            let statusText = '-';
+                                            let statusStyle = '';
+                                            if (userObj.followers !== undefined && userObj.following !== undefined) {
+                                                if (userObj.following > userObj.followers) {
+                                                    statusText = 'Unfollow';
+                                                    statusStyle = 'color: #e74c3c; font-weight: bold;';
+                                                }
+                                            }
+
                                             tableHtml += `
                                                 <tr style="border-bottom: 1px solid #dbdbdb;">
                                                     <td style="padding: 8px;"><input type="checkbox" class="user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
@@ -4491,6 +4515,9 @@
                                                     <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isMutedSimple, 'muted')}">${isMutedSimple}</span></td>
                                                     <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isCloseFriend, 'closeFriend')}">${isCloseFriend}</span></td>
                                                     <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isStoryHidden, 'storyHidden')}">${isStoryHidden}</span></td>
+                                                    <td style="text-align: center; padding: 8px;">${userObj.followers !== undefined ? userObj.followers.toLocaleString() : '-'}</td>
+                                                    <td style="text-align: center; padding: 8px;">${userObj.following !== undefined ? userObj.following.toLocaleString() : '-'}</td>
+                                                    <td style="text-align: center; padding: 8px; ${statusStyle}">${statusText}</td>
                                                     <td style="padding: 8px; min-width: 100px;">${categorySpans}</td>
                                                 </tr>
                                             `;
@@ -4596,9 +4623,52 @@
                                         selectedUsers.clear(); // Limpa seleção
                                     };
 
+                                    const getFollowersAndFollowing = async (username) => {
+                                        try {
+                                            const response = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, {
+                                                headers: { 'X-IG-App-ID': '936619743392459' }
+                                            });
+                                            if (response.ok) {
+                                                const data = await response.json();
+                                                return {
+                                                    followers: data.data.user.edge_followed_by.count,
+                                                    following: data.data.user.edge_follow.count
+                                                };
+                                            }
+                                        } catch (e) {
+                                            console.error(`Erro ao buscar stats para ${username}`, e);
+                                        }
+                                        return null;
+                                    };
+
                                     document.getElementById('silenciarSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'mute', updateLocalState);
                                     document.getElementById('closeFriendsSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'closeFriends', updateLocalState);
                                     document.getElementById('hideStorySeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'hideStory', updateLocalState);
+
+                                    document.getElementById('loadStatsSeguindoBtn').onclick = async () => {
+                                        const btn = document.getElementById('loadStatsSeguindoBtn');
+                                        btn.disabled = true;
+                                        const originalText = btn.textContent;
+                                        btn.textContent = 'Carregando...';
+
+                                        for (let i = 0; i < currentPaginatedUsers.length; i++) {
+                                            const user = currentPaginatedUsers[i];
+                                            // If data exists, skip to next
+                                            if (user.followers !== undefined && user.following !== undefined) continue;
+
+                                            btn.textContent = `Carregando (${i + 1}/${currentPaginatedUsers.length})...`;
+                                            const stats = await getFollowersAndFollowing(user.username);
+                                            if (stats) {
+                                                user.followers = stats.followers;
+                                                user.following = stats.following;
+                                            }
+                                            await new Promise(r => setTimeout(r, 500));
+                                        }
+                                        await dbHelper.saveCache('following', seguindoList);
+                                        btn.disabled = false;
+                                        btn.textContent = originalText;
+                                        renderList(currentPage);
+                                    };
 
                                     if (seguindoList.length > 0) renderList(currentPage);
                                 }

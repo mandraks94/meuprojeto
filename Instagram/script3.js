@@ -34,6 +34,10 @@
                     function getRolloutHash() {
                         if (cachedRolloutHash) return cachedRolloutHash;
                         try {
+                            if (window.__p && window.__p.rollout_hash) {
+                                cachedRolloutHash = window.__p.rollout_hash;
+                                return cachedRolloutHash;
+                            }
                             const scripts = document.querySelectorAll("script");
                             for (let i = 0; i < scripts.length; i++) {
                                 const text = scripts[i].innerText;
@@ -49,6 +53,18 @@
                         return "1";
                     }
 
+                    let cachedWWWClaim = "0";
+                    function getWWWClaim() {
+                        if (cachedWWWClaim !== "0") return cachedWWWClaim;
+                        try {
+                            if (window.__p && window.__p.www_claim) {
+                                cachedWWWClaim = window.__p.www_claim;
+                                return cachedWWWClaim;
+                            }
+                        } catch (e) {}
+                        return "0";
+                    }
+
                     function getApiHeaders() {
                         return {
                             "X-IG-App-ID": "936619743392459",
@@ -56,7 +72,7 @@
                             "X-Requested-With": "XMLHttpRequest",
                             "X-ASBD-ID": "129477",
                             "X-Instagram-AJAX": getRolloutHash(),
-                            "X-IG-WWW-Claim": "0",
+                            "X-IG-WWW-Claim": getWWWClaim(),
                             "Content-Type": "application/x-www-form-urlencoded",
                         };
                     }
@@ -2601,11 +2617,13 @@
                                 body.append('container_module', 'profile');
                                 if (targetType === 'posts' || targetType === 'all') body.append('target_posts_author_id', uid);
                                 if (targetType === 'stories' || targetType === 'all') body.append('target_reel_author_id', uid);
-                                await fetch(`https://www.instagram.com/api/v1/friendships/${action}/`, {
+                                const res = await fetch(`https://www.instagram.com/api/v1/friendships/${action}/`, {
                                     method: 'POST',
                                     headers: getApiHeaders(),
-                                    body: body
+                                    body: body.toString(),
+                                    credentials: 'include'
                                 });
+                                if (res.status === 401) return;
                             } catch (e) { console.error(`Erro API Mute/Unmute ${username}`, e); }
                         }
                         await new Promise(r => setTimeout(r, 500));
@@ -3000,6 +3018,31 @@
                     alert("Processo de desbloqueio interrompido.");
                 };
 
+                // --- LÓGICA API ---
+                if (loadSettings().useApi) {
+                    for (let i = 0; i < usersToUnblock.length; i++) {
+                        if (cancelled) break;
+                        const username = usersToUnblock[i];
+                        update(i + 1, usersToUnblock.length, `Desbloqueando ${username} via API...`);
+                        const uid = await getUserId(username);
+                        if (uid) {
+                            try {
+                                const body = new URLSearchParams();
+                                body.append('container_module', 'profile');
+                                const res = await fetch(`https://www.instagram.com/api/v1/friendships/unblock/${uid}/`, {
+                                    method: 'POST',
+                                    headers: getApiHeaders(),
+                                    body: body.toString(),
+                                    credentials: 'include'
+                                });
+                                if (res.status === 401) { alert("Sessão invalidada. Por favor, faça login novamente."); return; }
+                            } catch (e) { console.error(`Erro API Unblock ${username}`, e); }
+                        }
+                        await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
+                    }
+                    bar.remove(); if (onComplete) onComplete(); return;
+                }
+
                 // Garante que estamos na página de contas bloqueadas
                 if (window.location.pathname !== "/accounts/blocked_accounts/") {
                     history.pushState(null, null, "/accounts/blocked_accounts/");
@@ -3042,6 +3085,82 @@
 
                 bar.remove();
                 if (onComplete) onComplete();
+            }
+
+            async function blockUsers(users, index, callback) {
+                if (index >= users.length) {
+                    alert("Bloqueio concluído.");
+                    if (callback) callback();
+                    return;
+                }
+                const username = users[index];
+                const statusDiv = document.getElementById("statusNaoSegue") || document.getElementById("statusSeguindo");
+                if (statusDiv) statusDiv.innerText = `Bloqueando ${username} (${index + 1}/${users.length})...`;
+
+                if (loadSettings().useApi) {
+                    const uid = await getUserId(username);
+                    if (uid) {
+                        try {
+                            const body = new URLSearchParams();
+                            body.append('surface', 'profile');
+                            const res = await fetch(`https://www.instagram.com/api/v1/friendships/block/${uid}/`, {
+                                method: 'POST',
+                                headers: getApiHeaders(),
+                                body: body.toString(),
+                                credentials: 'include'
+                            });
+                            if (res.status === 401) { alert("Sessão invalidada. Por favor, faça login novamente."); return; }
+                        } catch (e) { console.error(`Erro API Block ${username}`, e); }
+                    }
+                    setTimeout(() => blockUsers(users, index + 1, callback), (loadSettings().requestDelay || 500) + Math.random() * 1000);
+                    return;
+                }
+
+                history.pushState(null, null, `/${username}/`);
+                window.dispatchEvent(new Event("popstate"));
+
+                setTimeout(() => {
+                    const xpath1 = "/html/body/div[1]/div/div/div[2]/div/div/div[1]/div[2]/div[1]/section/main/div/div/header/div/section[2]/div/div[1]/div[2]/div";
+                    let optionsClicked = executeXPathClick(xpath1);
+                    if (!optionsClicked) {
+                        const svgs = document.querySelectorAll('svg[aria-label="Opções"], svg[aria-label="Options"]');
+                        if (svgs.length > 0) {
+                            let parent = svgs[0].closest('div[role="button"]') || svgs[0].parentNode;
+                            if (parent) { parent.click(); optionsClicked = true; }
+                        }
+                    }
+                    if (optionsClicked) {
+                        setTimeout(() => {
+                            let blockMenuClicked = false;
+                            const menuXpaths = ["/html/body/div[5]/div[1]/div/div[2]/div/div/div/div/div/button[1]", "/html/body/div[6]/div[1]/div/div[2]/div/div/div/div/div/button[1]", "/html/body/div[7]/div[1]/div/div[2]/div/div/div/div/div/button[1]"];
+                            for (let xp of menuXpaths) { if (executeXPathClick(xp)) { blockMenuClicked = true; break; } }
+                            if (!blockMenuClicked) {
+                                const dialogs = document.querySelectorAll('div[role="dialog"]');
+                                if (dialogs.length > 0) {
+                                    const lastDialog = dialogs[dialogs.length - 1];
+                                    const btn = Array.from(lastDialog.querySelectorAll('button')).find(b => b.innerText.trim() === 'Bloquear' || b.innerText.trim() === 'Block');
+                                    if (btn) { btn.click(); blockMenuClicked = true; }
+                                }
+                            }
+                            if (blockMenuClicked) {
+                                setTimeout(() => {
+                                    let confirmClicked = false;
+                                    const confirmXpaths = ["/html/body/div[10]/div[1]/div/div[2]/div/div/div/div/div/div/div[2]/button[1]", "/html/body/div[9]/div[1]/div/div[2]/div/div/div/div/div/div/div[2]/button[1]", "/html/body/div[8]/div[1]/div/div[2]/div/div/div/div/div/div/div[2]/button[1]"];
+                                    for (let xp of confirmXpaths) { if (executeXPathClick(xp)) { confirmClicked = true; break; } }
+                                    if (!confirmClicked) {
+                                        const dialogs = document.querySelectorAll('div[role="dialog"]');
+                                        if (dialogs.length > 0) {
+                                            const lastDialog = dialogs[dialogs.length - 1];
+                                            const btn = Array.from(lastDialog.querySelectorAll('button')).find(b => b.innerText.trim() === 'Bloquear' || b.innerText.trim() === 'Block');
+                                            if (btn) { btn.click(); confirmClicked = true; }
+                                        }
+                                    }
+                                    setTimeout(() => blockUsers(users, index + 1, callback), 2000);
+                                }, 2000);
+                            } else { blockUsers(users, index + 1, callback); }
+                        }, 2000);
+                    } else { blockUsers(users, index + 1, callback); }
+                }, 4000);
             }
 
             let modalAbertoBlocked = false;
@@ -3748,92 +3867,6 @@
                                     });
                                 }
 
-                                function blockUsers(users, index, callback) {
-                                    if (index >= users.length) {
-                                        alert("Bloqueio concluído.");
-                                        if (callback) callback();
-                                        return;
-                                    }
-                                    const username = users[index];
-                                    statusDiv.innerText = `Bloqueando ${username} (${index + 1}/${users.length})...`;
-                                    history.pushState(null, null, `/${username}/`);
-                                    window.dispatchEvent(new Event("popstate"));
-
-                                    setTimeout(() => {
-                                        // 1. Clicar nos 3 pontinhos (Opções)
-                                        const xpath1 = "/html/body/div[1]/div/div/div[2]/div/div/div[1]/div[2]/div[1]/section/main/div/div/header/div/section[2]/div/div[1]/div[2]/div";
-                                        let optionsClicked = executeXPathClick(xpath1);
-
-                                        if (!optionsClicked) {
-                                            // Fallback: busca por SVG de opções se o XPath falhar
-                                            const svgs = document.querySelectorAll('svg[aria-label="Opções"], svg[aria-label="Options"]');
-                                            if (svgs.length > 0) {
-                                                let parent = svgs[0].closest('div[role="button"]') || svgs[0].parentNode;
-                                                if (parent) { parent.click(); optionsClicked = true; }
-                                            }
-                                        }
-
-                                        if (optionsClicked) {
-                                            setTimeout(() => {
-                                                // 2. Clicar em "Bloquear" no menu que abriu
-                                                let blockMenuClicked = false;
-                                                // Tenta XPaths comuns para o menu (div[5], div[6], etc)
-                                                const menuXpaths = [
-                                                    "/html/body/div[5]/div[1]/div/div[2]/div/div/div/div/div/button[1]",
-                                                    "/html/body/div[6]/div[1]/div/div[2]/div/div/div/div/div/button[1]",
-                                                    "/html/body/div[7]/div[1]/div/div[2]/div/div/div/div/div/button[1]"
-                                                ];
-                                                for (let xp of menuXpaths) {
-                                                    if (executeXPathClick(xp)) { blockMenuClicked = true; break; }
-                                                }
-
-                                                if (!blockMenuClicked) {
-                                                    // Fallback: Busca botão "Bloquear" no último dialog aberto
-                                                    const dialogs = document.querySelectorAll('div[role="dialog"]');
-                                                    if (dialogs.length > 0) {
-                                                        const lastDialog = dialogs[dialogs.length - 1];
-                                                        const btn = Array.from(lastDialog.querySelectorAll('button')).find(b => b.innerText.trim() === 'Bloquear' || b.innerText.trim() === 'Block');
-                                                        if (btn) { btn.click(); blockMenuClicked = true; }
-                                                    }
-                                                }
-
-                                                if (blockMenuClicked) {
-                                                    setTimeout(() => {
-                                                        // 3. Confirmar "Bloquear" no modal de confirmação
-                                                        let confirmClicked = false;
-                                                        // Tenta XPaths comuns para o modal de confirmação
-                                                        const confirmXpaths = [
-                                                            "/html/body/div[10]/div[1]/div/div[2]/div/div/div/div/div/div/div[2]/button[1]",
-                                                            "/html/body/div[9]/div[1]/div/div[2]/div/div/div/div/div/div/div[2]/button[1]",
-                                                            "/html/body/div[8]/div[1]/div/div[2]/div/div/div/div/div/div/div[2]/button[1]"
-                                                        ];
-                                                        for (let xp of confirmXpaths) {
-                                                            if (executeXPathClick(xp)) { confirmClicked = true; break; }
-                                                        }
-
-                                                        if (!confirmClicked) {
-                                                            // Fallback robusto: Busca botão "Bloquear" no último dialog (que deve ser o de confirmação)
-                                                            const dialogs = document.querySelectorAll('div[role="dialog"]');
-                                                            if (dialogs.length > 0) {
-                                                                const lastDialog = dialogs[dialogs.length - 1];
-                                                                const btn = Array.from(lastDialog.querySelectorAll('button')).find(b => b.innerText.trim() === 'Bloquear' || b.innerText.trim() === 'Block');
-                                                                if (btn) { btn.click(); confirmClicked = true; }
-                                                            }
-                                                        }
-                                                        setTimeout(() => blockUsers(users, index + 1, callback), 2000);
-                                                    }, 2000);
-                                                } else {
-                                                    console.warn("Botão Bloquear do menu não encontrado.");
-                                                    blockUsers(users, index + 1, callback);
-                                                }
-                                            }, 2000);
-                                        } else {
-                                            console.warn("Botão Opções (3 pontos) não encontrado.");
-                                            blockUsers(users, index + 1, callback);
-                                        }
-                                    }, 4000);
-                                }
-
                                 function unfollowSelecionados() {
                                     if (isUnfollowing) {
                                         alert("Processo de unfollow já em andamento.");
@@ -3883,10 +3916,15 @@
                                             const uid = await getUserId(username);
                                             if (uid) {
                                                 try {
-                                                    await fetch(`https://www.instagram.com/api/v1/friendships/destroy/${uid}/`, {
+                                                    const body = new URLSearchParams();
+                                                    body.append('container_module', 'profile');
+                                                    const res = await fetch(`https://www.instagram.com/api/v1/friendships/destroy/${uid}/`, {
                                                         method: 'POST',
-                                                        headers: getApiHeaders()
+                                                        headers: getApiHeaders(),
+                                                        body: body.toString(),
+                                                        credentials: 'include'
                                                     });
+                                                    if (res.status === 401) return;
                                                     // Atualizações de UI e Cache
                                                     getProfilePic(username).then(photoUrl => { dbHelper.saveUnfollowHistory({ username, photoUrl, unfollowDate: new Date().toISOString() }); });
                                                     const naoSegueList = lists['tabNaoSegueDeVolta'];
@@ -3999,10 +4037,15 @@
                                             const uid = await getUserId(username);
                                             if (uid) {
                                                 try {
-                                                    await fetch(`https://www.instagram.com/api/v1/friendships/create/${uid}/`, {
+                                                    const body = new URLSearchParams();
+                                                    body.append('container_module', 'profile');
+                                                    const res = await fetch(`https://www.instagram.com/api/v1/friendships/create/${uid}/`, {
                                                         method: 'POST',
-                                                        headers: getApiHeaders()
+                                                        headers: getApiHeaders(),
+                                                        body: body.toString(),
+                                                        credentials: 'include'
                                                     });
+                                                    if (res.status === 401) return;
                                                 } catch (e) { console.error(`Erro API Follow ${username}`, e); }
                                             }
                                             setTimeout(() => followUsers(users, index + 1, callback), loadSettings().requestDelay || 1000);
@@ -4150,6 +4193,8 @@
                                         <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; margin-bottom: 15px;">
                                             <button id="atualizarSeguindoBtn" title="Atualizar Dados" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">🔄️ Atualizar</button>
                                             <button id="silenciarSeguindoBtn" style="background: #8e44ad; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Silenciar/Reativar</button>
+                                            <button id="unfollowSeguindoBtn" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Unfollow</button>
+                                            <button id="blockSeguindoBtn" style="background: #c0392b; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Bloquear</button>
                                             <button id="manageCategoriesBtn" style="background: #3498db; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Gerenciar Categorias</button>
                                             <button id="addToCategoryBtn" style="background: #9b59b6; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Categorias</button>
                                             <button id="closeFriendsSeguindoBtn" style="background: #2ecc71; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Melhores Amigos</button>
@@ -4644,6 +4689,8 @@
                                     document.getElementById('silenciarSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'mute', updateLocalState);
                                     document.getElementById('closeFriendsSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'closeFriends', updateLocalState);
                                     document.getElementById('hideStorySeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'hideStory', updateLocalState);
+                                    document.getElementById('unfollowSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'unfollow', updateLocalState);
+                                    document.getElementById('blockSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'block', updateLocalState);
 
                                     document.getElementById('loadStatsSeguindoBtn').onclick = async () => {
                                         const btn = document.getElementById('loadStatsSeguindoBtn');
@@ -6603,6 +6650,18 @@
                                     dbStore: 'hiddenStory',
                                     // Revertido para o método original que navega para a página de lista, conforme solicitado.
                                     func: (users, cb) => toggleListMembership(users, '/accounts/hide_story_and_live_from/', 'hiddenStory', cb)
+                                    },
+                                    unfollow: {
+                                        buttonId: 'unfollowSeguindoBtn',
+                                        text: 'Unfollow',
+                                        dbStore: 'following',
+                                        func: (users, cb) => { if(confirm(`Deixar de seguir ${users.length} usuários?`)) unfollowUsers(users, 0, cb); else { const b = document.getElementById('unfollowSeguindoBtn'); b.disabled = false; b.textContent = 'Unfollow'; } }
+                                    },
+                                    block: {
+                                        buttonId: 'blockSeguindoBtn',
+                                        text: 'Bloquear',
+                                        dbStore: 'following',
+                                        func: (users, cb) => { if(confirm(`Bloquear ${users.length} usuários?`)) blockUsers(users, 0, cb); else { const b = document.getElementById('blockSeguindoBtn'); b.disabled = false; b.textContent = 'Bloquear'; } }
                                 }
                                 };
 
@@ -7100,6 +7159,24 @@
                                     console.log("Todos os usuários processados. Unfollow concluído.");
                                     alert("Unfollow concluído.");
                                     if (callback) callback();
+                                    return;
+                                }
+
+                                if (loadSettings().useApi) {
+                                    const username = users[index];
+                                    (async () => {
+                                        const uid = await getUserId(username);
+                                        if (uid) {
+                                            try {
+                                                await fetch(`https://www.instagram.com/api/v1/friendships/destroy/${uid}/`, {
+                                                    method: 'POST',
+                                                    headers: getApiHeaders()
+                                                });
+                                                getProfilePic(username).then(photoUrl => { dbHelper.saveUnfollowHistory({ username, photoUrl, unfollowDate: new Date().toISOString() }); });
+                                            } catch (e) { console.error(`Erro API Unfollow ${username}`, e); }
+                                        }
+                                        setTimeout(() => unfollowUsers(users, index + 1, callback), loadSettings().unfollowDelay);
+                                    })();
                                     return;
                                 }
 

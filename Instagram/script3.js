@@ -3036,6 +3036,10 @@
                                     credentials: 'include'
                                 });
                                 if (res.status === 401) { alert("Sessão invalidada. Por favor, faça login novamente."); return; }
+
+                                // Feedback visual imediato: remove a linha da tabela
+                                const row = document.querySelector(`tr[data-username="${username}"]`);
+                                if (row) row.remove();
                             } catch (e) { console.error(`Erro API Unblock ${username}`, e); }
                         }
                         await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
@@ -3110,6 +3114,10 @@
                                 credentials: 'include'
                             });
                             if (res.status === 401) { alert("Sessão invalidada. Por favor, faça login novamente."); return; }
+
+                            // Feedback visual imediato: remove a linha da tabela
+                            const row = document.querySelector(`tr[data-username="${username}"]`);
+                            if (row) row.remove();
                         } catch (e) { console.error(`Erro API Block ${username}`, e); }
                     }
                     setTimeout(() => blockUsers(users, index + 1, callback), (loadSettings().requestDelay || 500) + Math.random() * 1000);
@@ -3155,6 +3163,10 @@
                                             if (btn) { btn.click(); confirmClicked = true; }
                                         }
                                     }
+                                    // Feedback visual imediato
+                                    const row = document.querySelector(`tr[data-username="${username}"]`);
+                                    if (row) row.remove();
+
                                     setTimeout(() => blockUsers(users, index + 1, callback), 2000);
                                 }, 2000);
                             } else { blockUsers(users, index + 1, callback); }
@@ -3927,14 +3939,15 @@
                                                     if (res.status === 401) return;
                                                     // Atualizações de UI e Cache
                                                     getProfilePic(username).then(photoUrl => { dbHelper.saveUnfollowHistory({ username, photoUrl, unfollowDate: new Date().toISOString() }); });
-                                                    const naoSegueList = lists['tabNaoSegueDeVolta'];
-                                                    if (naoSegueList) {
-                                                        const userIndex = naoSegueList.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
-                                                        if (userIndex > -1) naoSegueList.splice(userIndex, 1);
+                                                    // Atualiza lista se estiver no menu 'Não segue de volta'
+                                                    if (typeof lists !== 'undefined' && lists['tabNaoSegueDeVolta']) {
+                                                        const list = lists['tabNaoSegueDeVolta'];
+                                                        const userIndex = list.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
+                                                        if (userIndex > -1) list.splice(userIndex, 1);
                                                         const countSpan = document.getElementById('countNaoSegue');
-                                                        if (countSpan) countSpan.innerText = naoSegueList.length;
+                                                        if (countSpan) countSpan.innerText = list.length;
                                                     }
-                                                    const row = document.querySelector(`#naoSegueDeVoltaTable tr[data-username="${username}"]`);
+                                                    const row = document.querySelector(`tr[data-username="${username}"]`);
                                                     if (row) row.remove();
                                                 } catch (e) { console.error(`Erro API Unfollow ${username}`, e); }
                                             }
@@ -4548,7 +4561,7 @@
                                             }
 
                                             tableHtml += `
-                                                <tr style="border-bottom: 1px solid #dbdbdb;">
+                                                <tr style="border-bottom: 1px solid #dbdbdb;" data-username="${username}">
                                                     <td style="padding: 8px;"><input type="checkbox" class="user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
                                                     <td style="padding: 8px; display:flex; align-items:center; gap:10px;">
                                                         <img src="${photoUrl}" alt="${username}" style="width:40px; height:40px; border-radius:50%;">
@@ -4653,16 +4666,24 @@
                                     };
 
                                     const updateLocalState = async (users, dbStore) => {
-                                        if (!userListCache[dbStore]) userListCache[dbStore] = new Set();
-                                        users.forEach(u => {
-                                            if (userListCache[dbStore].has(u)) {
-                                                userListCache[dbStore].delete(u); // Toggle off
-                                            } else {
-                                                userListCache[dbStore].add(u); // Toggle on
-                                            }
-                                        });
-                                        // Salva o novo estado no DB
-                                        await dbHelper.saveCache(dbStore, Array.from(userListCache[dbStore]));
+                                        if (dbStore === 'following') {
+                                            // Se for unfollow ou block, removemos permanentemente da lista local
+                                            seguindoList = seguindoList.filter(user => !users.includes(user.username));
+                                            // Atualiza o cache do IndexedDB para refletir a remoção
+                                            await dbHelper.saveCache('following', seguindoList);
+                                        } else {
+                                            if (!userListCache[dbStore]) userListCache[dbStore] = new Set();
+                                            users.forEach(u => {
+                                                if (userListCache[dbStore].has(u)) {
+                                                    userListCache[dbStore].delete(u); // Toggle off
+                                                } else {
+                                                    userListCache[dbStore].add(u); // Toggle on
+                                                }
+                                            });
+                                            // Salva o novo estado no DB
+                                            await dbHelper.saveCache(dbStore, Array.from(userListCache[dbStore]));
+                                        }
+
                                         // Re-renderiza a lista para refletir as mudanças (flags 0 -> 1)
                                         renderList(currentPage);
                                         selectedUsers.clear(); // Limpa seleção

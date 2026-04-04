@@ -55,10 +55,18 @@
 
                     let cachedWWWClaim = "0";
                     function getWWWClaim() {
-                        if (cachedWWWClaim !== "0") return cachedWWWClaim;
+                        if (cachedWWWClaim && cachedWWWClaim !== "" && cachedWWWClaim !== "0") return cachedWWWClaim;
                         try {
-                            if (window.__p && window.__p.www_claim) {
-                                cachedWWWClaim = window.__p.www_claim;
+                            // Tenta obter de múltiplas fontes globais do Instagram
+                            const claim = window.__p?.www_claim ||
+                                          window._sharedData?.config?.viewer?.www_claim ||
+                                          window.__cu?.www_claim ||
+                                          window.__v?.www_claim ||
+                                          window.__DTS?.www_claim ||
+                                          window._sharedData?.config?.viewer?.www_claim;
+
+                            if (claim && claim !== "0" && claim !== "") {
+                                cachedWWWClaim = claim;
                                 return cachedWWWClaim;
                             }
                         } catch (e) {}
@@ -211,7 +219,7 @@
                         db: null,
                         openDB: function() {
                             return new Promise((resolve, reject) => {
-                                const request = indexedDB.open('InstagramToolsDB', 7);
+                                const request = indexedDB.open('InstagramToolsDB', 8);
                                 request.onupgradeneeded = (event) => {
                                     const db = event.target.result;
                                     if (!db.objectStoreNames.contains('closeFriends')) {
@@ -361,6 +369,16 @@
                                 req.onerror = () => resolve();
                             });
                         },
+                        loadCacheRaw: async function(storeName) {
+                            if (!this.db) await this.openDB();
+                            const transaction = this.db.transaction([storeName], 'readonly');
+                            const store = transaction.objectStore(storeName);
+                            return new Promise((resolve) => {
+                                const request = store.getAll();
+                                request.onsuccess = () => resolve(request.result[0] || null);
+                                req.onerror = () => resolve();
+                            });
+                        },
                         saveCategory: async function(category) {
                             if (!this.db) await this.openDB();
                             const tx = this.db.transaction(['categories'], 'readwrite');
@@ -466,8 +484,6 @@
 
                     function toggleDarkMode(enabled) {
                         document.body.classList.toggle('dark-mode', enabled);
-                        const btn = document.getElementById("settingsDarkModeBtn");
-                        if (btn) btn.style.background = enabled ? '#4c5c75' : '';
                     }
 
                     function toggleRgbBorder(enabled) {
@@ -475,19 +491,10 @@
                         elements.forEach(el => {
                             el.classList.toggle('rgb-border-effect', enabled);
                         });
-                        const btn = document.getElementById("settingsRgbBorderBtn");
-                        if (btn) btn.style.background = enabled ? '#4c5c75' : '';
                     }
 
-                    function toggleAnonymousStories(enabled) {
-                        const btn = document.getElementById("settingsAnonymousStoriesBtn");
-                        if (btn) btn.style.background = enabled ? '#4c5c75' : '';
-                    }
-
-                    function toggleUseApi(enabled) {
-                        const btn = document.getElementById("settingsUseApiBtn");
-                        if (btn) btn.style.background = enabled ? '#4c5c75' : '';
-                    }
+                    function toggleAnonymousStories(enabled) { /* Estado controlado pelo switch no modal */ }
+                    function toggleUseApi(enabled) { /* Estado controlado pelo switch no modal */ }
 
                     function applyInitialSettings() {
                         const settings = loadSettings();
@@ -784,6 +791,11 @@
                                     .submenu-modal {
                                         background: white;
                                         color: black;
+                                        box-sizing: border-box;
+                                    }
+                                    .submenu-modal * { box-sizing: border-box; }
+                                    .table-container-responsive {
+                                        width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;
                                     }
                                     .submenu-modal h2, .submenu-modal span, .submenu-modal th, .submenu-modal td, .submenu-modal li span, .submenu-modal label {
                                         color: black !important;
@@ -822,6 +834,26 @@
                                     }
                                     .dark-mode .submenu-modal span, .dark-mode .submenu-modal th, .dark-mode .submenu-modal td, .dark-mode .submenu-modal li span, .dark-mode .submenu-modal a, .dark-mode .submenu-modal label, .dark-mode .submenu-modal input[type="file"] {
                                         color: white !important;
+                                    }
+                                    .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+                                    .switch input { opacity: 0; width: 0; height: 0; }
+                                    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
+                                    .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
+                                    input:checked + .slider { background-color: #0095f6; }
+                                    input:checked + .slider:before { transform: translateX(20px); }
+                                    .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #dbdbdb; color: black; }
+                                    @media (max-width: 768px) {
+                                        .submenu-modal {
+                                            width: 96% !important;
+                                            max-width: 96% !important;
+                                            padding: 10px !important;
+                                            font-size: 13px !important;
+                                        }
+                                    }
+                                    .dark-mode .setting-row { color: white; border-bottom-color: #333; }
+                                    /* Correção para visibilidade de categorias no modo escuro */
+                                    .dark-mode .category-item-container {
+                                        background: #262626 !important;
                                     }
                                     .menu-item-button {
                                         background: #f8f9fa; border: 1px solid #dbdbdb; padding: 10px; border-radius: 8px; cursor: pointer; text-align: left; font-size: 16px; color: black;
@@ -1314,11 +1346,19 @@
                     console.log("Navegando para /accounts/close_friends/");
                     history.pushState(null, null, "/accounts/close_friends/");
                     window.dispatchEvent(new Event("popstate"));
-                    // Abrir o modal independente do resultado da função buscarUsernames
-                    setTimeout(() => {
-                        console.log("Abrindo modal após navegação");
-                        abrirModalAmigosProximos();
-                    }, 1000);
+                    
+                    let modalStarted = false;
+                    // Espera o carregamento da página antes de abrir o modal
+                    let checkLoad = setInterval(async () => {
+                        if (document.querySelector('div[data-bloks-name="bk.components.Flexbox"]') && !modalStarted) {
+                            modalStarted = true;
+                            clearInterval(checkLoad);
+                            await new Promise(r => setTimeout(r, 1000)); // Delay extra para estabilidade
+                            await abrirModalAmigosProximos();
+                        }
+                    }, 500);
+                    // Timeout de segurança após 5s
+                    setTimeout(() => clearInterval(checkLoad), 5000);
                 } else {
                     console.log("Já na página /accounts/close_friends/, abrindo modal");
                     abrirModalAmigosProximos();
@@ -1334,11 +1374,17 @@
                     console.log("Navegando para /accounts/hide_story_and_live_from/");
                     history.pushState(null, null, "/accounts/hide_story_and_live_from/");
                     window.dispatchEvent(new Event("popstate"));
-                    // Abrir o modal independente do resultado da função buscarUsernames
-                    setTimeout(() => {
-                        console.log("Abrindo modal após navegação");
-                        abrirModalOcultarStory();
-                    }, 1000);
+                    
+                    let modalStarted = false;
+                    let checkLoad = setInterval(async () => {
+                        if (document.querySelector('div[data-bloks-name="bk.components.Flexbox"]') && !modalStarted) {
+                            modalStarted = true;
+                            clearInterval(checkLoad);
+                            await new Promise(r => setTimeout(r, 1000));
+                            await abrirModalOcultarStory();
+                        }
+                    }, 500);
+                    setTimeout(() => clearInterval(checkLoad), 5000);
                 } else {
                     console.log("Já na página /accounts/hide_story_and_live_from/, abrindo modal");
                     abrirModalOcultarStory();
@@ -1352,9 +1398,17 @@
                     console.log("Navegando para /accounts/muted_accounts/");
                     history.pushState(null, null, "/accounts/muted_accounts/");
                     window.dispatchEvent(new Event("popstate"));
-                    setTimeout(() => {
-                        abrirModalContasSilenciadas();
-                    }, 1000);
+                    
+                    let modalStarted = false;
+                    let checkLoad = setInterval(async () => {
+                        if (document.querySelector('div[data-bloks-name="bk.components.Flexbox"]') && !modalStarted) {
+                            modalStarted = true;
+                            clearInterval(checkLoad);
+                            await new Promise(r => setTimeout(r, 1000));
+                            await abrirModalContasSilenciadas();
+                        }
+                    }, 500);
+                    setTimeout(() => clearInterval(checkLoad), 5000);
                 } else {
                     abrirModalContasSilenciadas();
                 }
@@ -1384,7 +1438,7 @@
 
             function extractCloseFriendsUsernames(doc = document) {
                 return new Promise((resolve) => {
-                    const maxAttempts = 20;
+                    const maxAttempts = 15;
                     let attempts = 0;
 
                     function tryExtract() {
@@ -1398,7 +1452,7 @@
                         if (userElements.length === 0) {
                             console.log("No user elements found for close friends usernames, attempt", attempts);
                             if (attempts < maxAttempts) {
-                                setTimeout(tryExtract, 500);
+                                setTimeout(tryExtract, 800);
                             } else {
                                 resolve(users);
                             }
@@ -1464,11 +1518,11 @@
                 div.className = "submenu-modal";
                 div.style.cssText = `
                     position: fixed;
-                    top: 100px;
+            top: 50%;
                     left: 50%;
-                    transform: translateX(-50%);
-                    width: 70vw;
-                    max-width: 700px;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 800px;
                     max-height: 85vh;
                     overflow: auto;
                     border: 2px solid #0095f6;
@@ -1931,19 +1985,18 @@
                 modalAbertoStory = true;
 
                 const users = await extractHideStoryUsernames();
-
-                // Se a extração foi cancelada ou não encontrou usuários, não abre o modal.
                 if (users.length === 0) {
-                    modalAbertoStory = false; // Permite abrir novamente
+                    modalAbertoStory = false;
                     return;
                 }
 
-                // Carrega cache de seguindo para o filtro
-                const followingCache = await dbHelper.loadCache('following');
-                const followingSet = new Set();
-                if (followingCache) {
-                    followingCache.forEach(u => followingSet.add(u.toLowerCase()));
-                }
+                // Carrega caches de seguindo e seguidores para o filtro
+                const [followingCache, followersCache] = await Promise.all([
+                    dbHelper.loadCache('following'),
+                    dbHelper.loadCache('followers')
+                ]);
+                const followingSet = new Set(followingCache ? Array.from(followingCache).map(u => u.toLowerCase()) : []);
+                const followersSet = new Set(followersCache ? Array.from(followersCache).map(u => u.toLowerCase()) : []);
 
                 const officialStates = new Map();
                 users.forEach(u => {
@@ -1957,11 +2010,11 @@
                 div.className = "submenu-modal";
                 div.style.cssText = `
                     position: fixed;
-                    top: 80px;
+                    top: 50%;
                     left: 50%;
-                    transform: translateX(-50%);
-                    width: 70vw;
-                    max-width: 700px;
+                    transform: translate(-50%, -50%);
+                    width: 90%;
+                    max-width: 800px;
                     max-height: 85vh;
                     overflow: auto;
                     border: 2px solid #f39c12;
@@ -1971,67 +2024,55 @@
                     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
                 `;
 
-            // Filtra e armazena no cache APENAS os usuários que estão realmente marcados
-            const hiddenStoryUsernames = users
-                .filter(u => modalStates.get(u.username) === true)
-                .map(u => u.username);
-            userListCache.hiddenStory = new Set(hiddenStoryUsernames);
-            console.log(`Cache atualizado com ${userListCache.hiddenStory.size} usuários com story oculto.`);
+                let currentTab = 'ocultados';
+                let userFilterType = 'all'; // 'all', 'following', 'followers'
 
-            let currentTab = 'ocultados'; // 'ocultados' ou 'amigos'
-            let filterFollowing = false; // Estado do filtro "Seguindo"
-
-                function renderPage(page) {
-                    let html = `
-                        <div class="modal-header">
-                            <span class="modal-title">
-                                Ocultar Story
-                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Selecione usuários para ocultar seus stories e lives. Eles não saberão que foram ocultados.</span></div>
-                            </span>
-                            <div class="modal-controls"><button id="hideStoryMinimizarBtn" title="Minimizar">_</button><button id="hideStoryFecharBtn" title="Fechar">X</button></div>
-                        </div>`;
-                    html += `
-                        <div style="padding: 15px;">
-                            <button id="hideStoryMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
-                            <button id="hideStoryDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
-                            <button id="hideStoryAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
-                        </div>
-                        <div style="margin-bottom:15px; display: flex; gap: 10px; align-items: center; padding: 0 15px;">
-                            <input type="text" id="hideStorySearchInput" placeholder="Pesquisar..." style="flex: 1; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
-                            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: black; font-weight: 500;">
-                                <input type="checkbox" id="hideStoryFilterFollowing" ${filterFollowing ? 'checked' : ''}> Seguindo
-                            </label>
-                        </div>
-                    <div class="tab-container">
-                        <button id="tabOcultados" class="tab-button ${currentTab === 'ocultados' ? 'active' : ''}">Ocultados</button>
-                        <button id="tabAmigos" class="tab-button ${currentTab === 'amigos' ? 'active' : ''}">Amigos</button>
+                div.innerHTML = `
+                    <div class="modal-header">
+                        <span class="modal-title">Ocultar Story <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Selecione usuários para ocultar seus stories.</span></div></span>
+                        <div class="modal-controls"><button id="hideStoryMinimizarBtn">_</button><button id="hideStoryFecharBtn">X</button></div>
                     </div>
-                        <ul id="hideStoryList" style='list-style:none;padding:0;max-height:40vh;overflow:auto;'>
-                    `;
+                    <div style="padding: 15px;">
+                        <button id="hideStoryMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
+                        <button id="hideStoryDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
+                        <button id="hideStoryAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
+                    </div>
+                    <div style="margin-bottom:15px; display: flex; gap: 10px; align-items: center; padding: 0 15px;">
+                        <input type="text" id="hideStorySearchInput" placeholder="Pesquisar..." style="flex: 1; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                        <select id="hideStoryUserFilter" style="padding: 6px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                            <option value="all">Todos</option>
+                            <option value="following">Seguindo</option>
+                            <option value="followers">Seguidores</option>
+                        </select>
+                    </div>
+                    <div class="tab-container">
+                        <button id="tabOcultados" class="tab-button active">Ocultados</button>
+                        <button id="tabAmigos" class="tab-button">Amigos</button>
+                    </div>
+                    <div id="hideStoryListContent"></div>
+                `;
+                document.body.appendChild(div);
 
-                // Filtra usuários com base na aba
-                let filteredUsers;
-                if (currentTab === 'ocultados') {
-                    filteredUsers = users.filter(({ username }) => modalStates.get(username));
-                } else { // amigos
-                    filteredUsers = users.filter(({ username }) => !modalStates.get(username));
-                }
+                function renderList(page) {
+                    const listContainer = document.getElementById("hideStoryListContent");
+                    const searchTerm = document.getElementById('hideStorySearchInput').value.toLowerCase();
+                    
+                    let filteredUsers = users.filter(u => {
+                        const isMatch = u.username.toLowerCase().includes(searchTerm);
+                        const tabMatch = (currentTab === 'ocultados' ? modalStates.get(u.username) : !modalStates.get(u.username));
+                        
+                        let filterMatch = true;
+                        if (userFilterType === 'following') filterMatch = followingSet.has(u.username.toLowerCase());
+                        if (userFilterType === 'followers') filterMatch = followersSet.has(u.username.toLowerCase());
 
-                // Filtra por pesquisa
-                const searchTerm = document.getElementById('hideStorySearchInput')?.value.toLowerCase() || '';
-                if (searchTerm) {
-                    filteredUsers = filteredUsers.filter(({ username }) => username.toLowerCase().includes(searchTerm));
-                }
-
-                // Filtra por "Seguindo"
-                if (filterFollowing) {
-                    filteredUsers = filteredUsers.filter(({ username }) => followingSet.has(username.toLowerCase()));
-                }
+                        return isMatch && tabMatch && filterMatch;
+                    });
 
                     const startIndex = (page - 1) * itemsPerPage;
-                const endIndex = Math.min(startIndex + itemsPerPage, filteredUsers.length);
-                const pageUsers = filteredUsers.slice(startIndex, endIndex);
+                    const endIndex = Math.min(startIndex + itemsPerPage, filteredUsers.length);
+                    const pageUsers = filteredUsers.slice(startIndex, endIndex);
 
+                    let html = `<ul id="hideStoryList" style='list-style:none;padding:0;max-height:40vh;overflow:auto;'>`;
                     pageUsers.forEach(({ username, photoUrl }, idx) => {
                         const isChecked = modalStates.get(username) || false;
                         html += `
@@ -2046,7 +2087,8 @@
                         `;
                     });
                     html += "</ul>";
-                const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+                    
+                    const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
                     html += `<div id="paginationControls" style="margin-top:20px; display:flex; justify-content:center; align-items:center; gap:10px;">`;
                     if (totalPages > 1) {
                         if (page > 1) html += `<button id="prevPageBtn">Anterior</button>`;
@@ -2054,85 +2096,50 @@
                         if (page < totalPages) html += `<button id="nextPageBtn">Próximo</button>`;
                     }
                     html += `</div>`;
-                    div.innerHTML = html;
-                    document.body.appendChild(div);
-                    document.getElementById("hideStoryFecharBtn").onclick = () => {
-                        div.remove();
-                        modalAbertoStory = false;
-                    };
-                    document.getElementById("hideStoryMinimizarBtn").onclick = () => {
-                        const modal = document.getElementById('allHideStoryDiv');
-                        const contentToToggle = [
-                            modal.querySelector('input[type="text"]'),
-                            modal.querySelector('.tab-container'),
-                            modal.querySelector('ul'),
-                            modal.querySelector('#paginationControls')
-                        ].filter(Boolean);
+                    
+                    listContainer.innerHTML = html;
 
-                        const btn = document.getElementById('hideStoryMinimizarBtn');
-                        const isMinimized = modal.dataset.minimized === 'true';
-
-                        contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-
-                        modal.dataset.minimized = !isMinimized;
-                        btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
-                        modal.style.maxHeight = isMinimized ? '85vh' : 'none';
-                    };
-                    document.getElementById("hideStoryMarcarTodosBtn").onclick = () => {
-                    pageUsers.forEach(({ username }) => modalStates.set(username, true));
-                    renderPage(currentPage);
-                    };
-                    document.getElementById("hideStoryDesmarcarTodosBtn").onclick = () => {
-                    pageUsers.forEach(({ username }) => modalStates.set(username, false));
-                    renderPage(currentPage);
-                    };
-                    const searchInput = document.getElementById("hideStorySearchInput");
-                    searchInput.addEventListener("input", () => {
-                    currentPage = 1;
-                    renderPage(currentPage);
-                });
-
-                const filterCheckbox = document.getElementById("hideStoryFilterFollowing");
-                if (filterCheckbox) {
-                    filterCheckbox.addEventListener("change", (e) => {
-                        filterFollowing = e.target.checked;
-                        currentPage = 1;
-                        renderPage(currentPage);
-                    });
-                }
-
-                // Eventos das abas
-                document.getElementById("tabOcultados").onclick = () => {
-                    if (currentTab !== 'ocultados') {
-                        currentTab = 'ocultados';
-                        currentPage = 1;
-                        renderPage(currentPage);
-                    }
-                };
-                document.getElementById("tabAmigos").onclick = () => {
-                    if (currentTab !== 'amigos') {
-                        currentTab = 'amigos';
-                        currentPage = 1;
-                        renderPage(currentPage);
-                    }
-                };
-
-                // Eventos dos checkboxes
-                document.querySelectorAll(".hideStoryCheckbox").forEach(cb => {
-                    cb.addEventListener("change", () => {
-                        modalStates.set(cb.dataset.username, cb.checked);
-                    });
+                    // Reatribui eventos
+                    document.querySelectorAll(".hideStoryCheckbox").forEach(cb => {
+                        cb.onchange = () => modalStates.set(cb.dataset.username, cb.checked);
                     });
                     const prevBtn = document.getElementById("prevPageBtn");
                     if (prevBtn) prevBtn.onclick = () => {
                         currentPage--;
-                        renderPage(currentPage);
+                        renderList(currentPage);
                     };
                     const nextBtn = document.getElementById("nextPageBtn");
                     if (nextBtn) nextBtn.onclick = () => {
                         currentPage++;
-                        renderPage(currentPage);
+                        renderList(currentPage);
                     };
+                }
+
+                document.getElementById("hideStorySearchInput").oninput = () => { currentPage = 1; renderList(1); };
+                document.getElementById("hideStoryUserFilter").onchange = (e) => { userFilterType = e.target.value; currentPage = 1; renderList(1); };
+                document.getElementById("tabOcultados").onclick = (e) => { 
+                    currentTab = 'ocultados'; 
+                    document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    renderList(1); 
+                };
+                document.getElementById("tabAmigos").onclick = (e) => { 
+                    currentTab = 'amigos'; 
+                    document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    renderList(1); 
+                };
+                document.getElementById("hideStoryFecharBtn").onclick = () => { div.remove(); modalAbertoStory = false; };
+                
+                document.getElementById("hideStoryMarcarTodosBtn").onclick = () => {
+                    users.forEach(u => modalStates.set(u.username, true));
+                    renderList(currentPage);
+                };
+                document.getElementById("hideStoryDesmarcarTodosBtn").onclick = () => {
+                    users.forEach(u => modalStates.set(u.username, false));
+                    renderList(currentPage);
+                };
+
                     document.getElementById("hideStoryAplicarBtn").onclick = async () => {
                         isApplyingChangesStory = true;
                         const changedUsers = Array.from(modalStates.entries()).filter(([username, checked]) => officialStates.get(username) !== checked).map(([username, checked]) => ({ dataset: { username }, checked }));
@@ -2163,16 +2170,17 @@
                                 if (uid) {
                                     try {
                                         const endpoint = checked ? 'block_friend_reel' : 'unblock_friend_reel';
-                                        await fetch(`https://www.instagram.com/api/v1/friendships/${endpoint}/${uid}/`, {
+                                        const res = await fetch(`https://www.instagram.com/api/v1/friendships/${endpoint}/${uid}/`, {
                                             method: 'POST',
-                                            headers: getApiHeaders()
+                                            headers: getApiHeaders(),
+                                            body: `source=reel_settings&_uid=${getCookie('ds_user_id')}&_uuid=${getDeviceId()}`
                                         });
-                                        officialStates.set(username, checked);
+                                        if (res.ok) officialStates.set(username, checked);
                                     } catch (e) { console.error(`Erro API Hide Story para ${username}`, e); }
                                 }
                                 await new Promise(r => setTimeout(r, 500));
                             }
-                            bar.remove(); isApplyingChangesStory = false; renderPage(currentPage); alert("Processo via API concluído."); return;
+                            bar.remove(); isApplyingChangesStory = false; renderList(currentPage); alert("Processo via API concluído."); return;
                         }
 
                         if (window.location.pathname !== "/accounts/hide_story_and_live_from/") {
@@ -2214,7 +2222,7 @@
                             await new Promise(resolve => setTimeout(resolve, 2000));
                             officialStates.set(changedUsers[i].dataset.username, changedUsers[i].checked);
                             // Redesenha a página atual para refletir a mudança em tempo real
-                            renderPage(currentPage);
+                            renderList(currentPage);
                         }
                 bar.remove();
                         isApplyingChangesStory = false;
@@ -2258,8 +2266,9 @@
                             isApplyingChangesStory = false;
                         };
                     }
-                }
-                renderPage(currentPage);
+
+                // Inicializa a lista
+                renderList(1);
             }
 
             function showUnmuteOptionsModal(onConfirm) {
@@ -2431,11 +2440,11 @@
                 div.className = "submenu-modal";
                 div.style.cssText = `
                     position: fixed;
-                    top: 80px;
+                    top: 50%;
                     left: 50%;
-                    transform: translateX(-50%);
-                    width: 70vw;
-                    max-width: 700px;
+                    transform: translate(-50%, -50%);
+                    width: 90%;
+                    max-width: 800px;
                     max-height: 85vh;
                     overflow: auto;
                     border: 2px solid #8e44ad;
@@ -2445,30 +2454,34 @@
                     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
                 `;
 
-                function renderPage(page) {
-                    let html = `
-                        <div class="modal-header">
-                            <span class="modal-title">
-                                Contas Silenciadas
-                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie contas que você silenciou (Stories ou Posts). Você pode reativar o som aqui.</span></div>
-                            </span>
-                            <div class="modal-controls"><button id="mutedMinimizarBtn" title="Minimizar">_</button><button id="mutedFecharBtn" title="Fechar">X</button></div>
-                        </div>`;
-                    html += `
-                        <div style="padding: 15px;">
-                            <button id="mutedMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
-                            <button id="mutedDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
-                            <button id="mutedAplicarBtn" style="background:#8e44ad;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Reativar Som</button>
-                        </div>
-                        <div style="margin-bottom:15px;">
-                            <input type="text" id="mutedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
-                        </div>
-                        <ul id="mutedList" style='list-style:none;padding:0;max-height:40vh;overflow:auto;'>
-                    `;
-                    const startIndex = (page - 1) * itemsPerPage;
-                    const endIndex = Math.min(startIndex + itemsPerPage, users.length);
-                    const pageUsers = users.slice(startIndex, endIndex);
+                div.innerHTML = `
+                    <div class="modal-header">
+                        <span class="modal-title">Contas Silenciadas <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie contas silenciadas.</span></div></span>
+                        <div class="modal-controls"><button id="mutedMinimizarBtn">_</button><button id="mutedFecharBtn">X</button></div>
+                    </div>
+                    <div style="padding: 15px;">
+                        <button id="mutedMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
+                        <button id="mutedDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
+                        <button id="mutedAplicarBtn" style="background:#8e44ad;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Reativar Som</button>
+                    </div>
+                    <div style="margin-bottom:15px; padding: 0 15px;">
+                        <input type="text" id="mutedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                    </div>
+                    <div id="mutedListContent"></div>
+                `;
+                document.body.appendChild(div);
 
+                function renderList(page) {
+                    const listContainer = document.getElementById("mutedListContent");
+                    const searchTerm = document.getElementById('mutedSearchInput').value.toLowerCase();
+                    
+                    const filteredUsers = users.filter(u => u.username.toLowerCase().includes(searchTerm));
+
+                    const startIndex = (page - 1) * itemsPerPage;
+                    const endIndex = Math.min(startIndex + itemsPerPage, filteredUsers.length);
+                    const pageUsers = filteredUsers.slice(startIndex, endIndex);
+
+                    let html = `<ul id="mutedList" style='list-style:none;padding:0;max-height:40vh;overflow:auto;'>`;
                     pageUsers.forEach(({ username, photoUrl, status }, idx) => {
                         const globalIdx = startIndex + idx;
                         const isChecked = modalStates.get(username) || false;
@@ -2491,7 +2504,7 @@
                         html += `
                             <li style="padding:5px 0;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px;">
                                 <label class="custom-checkbox" for="muted_cb_${globalIdx}" style="margin:0;">
-                                    <input type="checkbox" class="mutedCheckbox" id="muted_cb_${globalIdx}" data-username="${username}" ${isChecked ? "checked" : ""}>
+                                    <input type="checkbox" class="mutedCheckbox" data-username="${username}" ${isChecked ? "checked" : ""}>
                                     <span class="checkmark"></span>
                                 </label>
                                 <img src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
@@ -2500,7 +2513,8 @@
                         `;
                     });
                     html += "</ul>";
-                    const totalPages = Math.ceil(users.length / itemsPerPage);
+                    
+                    const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
                     html += `<div id="paginationControls" style="margin-top:20px; display:flex; justify-content:center; align-items:center; gap:10px;">`;
                     if (totalPages > 1) {
                         if (page > 1) html += `<button id="prevPageBtn">Anterior</button>`;
@@ -2508,83 +2522,39 @@
                         if (page < totalPages) html += `<button id="nextPageBtn">Próximo</button>`;
                     }
                     html += `</div>`;
-                    div.innerHTML = html;
-                    document.body.appendChild(div);
-
-                    document.getElementById("mutedFecharBtn").onclick = () => { div.remove(); modalAbertoMuted = false; };
-                    document.getElementById("mutedMinimizarBtn").onclick = () => {
-                        const modal = document.getElementById('allMutedAccountsDiv');
-                        const contentToToggle = [
-                            modal.querySelector('input[type="text"]'),
-                            modal.querySelector('ul'),
-                            modal.querySelector('#paginationControls')
-                        ].filter(Boolean);
-
-                        const btn = document.getElementById('mutedMinimizarBtn');
-                        const isMinimized = modal.dataset.minimized === 'true';
-
-                        contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-
-                        modal.dataset.minimized = !isMinimized;
-                        btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
-                        modal.style.maxHeight = isMinimized ? '85vh' : 'none';
-                    };
-
-                    document.getElementById("mutedMarcarTodosBtn").onclick = () => {
-                        document.querySelectorAll("#mutedList .mutedCheckbox").forEach(cb => { cb.checked = true; modalStates.set(cb.dataset.username, true); });
-                    };
-                    document.getElementById("mutedDesmarcarTodosBtn").onclick = () => {
-                        document.querySelectorAll("#mutedList .mutedCheckbox").forEach(cb => { cb.checked = false; modalStates.set(cb.dataset.username, false); });
-                    };
-
-                    const searchInput = document.getElementById("mutedSearchInput");
-                    searchInput.addEventListener("input", () => {
-                        const filter = searchInput.value.toLowerCase();
-                        div.querySelectorAll("#mutedList li").forEach(li => {
-                            // Seletor ajustado para ser mais específico
-                            const usernameSpan = li.querySelector('span[style*="cursor:pointer"]');
-                            const text = usernameSpan ? usernameSpan.textContent.toLowerCase() : '';
-                            li.style.display = text.includes(filter) ? "" : "none";
-                        });
-                    });
-
-                    const prevBtn = document.getElementById("prevPageBtn");
-                    if (prevBtn) prevBtn.onclick = () => { currentPage--; renderPage(currentPage); };
-                    const nextBtn = document.getElementById("nextPageBtn");
-                    if (nextBtn) nextBtn.onclick = () => { currentPage++; renderPage(currentPage); };
+                    listContainer.innerHTML = html;
 
                     document.querySelectorAll(".mutedCheckbox").forEach(cb => {
-                        cb.addEventListener("change", () => modalStates.set(cb.dataset.username, cb.checked));
+                        cb.onchange = () => modalStates.set(cb.dataset.username, cb.checked);
                     });
-
-                    document.getElementById("mutedAplicarBtn").onclick = async () => {
-                        const usersToUnmute = Array.from(modalStates.entries())
-                            .filter(([_, checked]) => checked)
-                            .map(([username]) => username);
-
-                        if (usersToUnmute.length === 0) {
-                            alert("Nenhum usuário selecionado para reativar o som.");
-                            return;
-                        }
-
-                        const aplicarBtn = document.getElementById("mutedAplicarBtn");
-                        aplicarBtn.disabled = true;
-                        aplicarBtn.textContent = "Processando...";
-
-                        showUnmuteOptionsModal(async (targetType) => {
-                            await unmuteUsers(usersToUnmute, () => {
-                                aplicarBtn.disabled = false;
-                                aplicarBtn.textContent = "Reativar Som";
-                                alert(`${usersToUnmute.length} usuário(s) processados.`);
-                                // Recarrega o modal para refletir as mudanças
-                                div.remove();
-                                modalAbertoMuted = false;
-                                abrirModalContasSilenciadas();
-                            }, false, targetType);
-                        });
-                    };
+                    const prevBtn = document.getElementById("prevPageBtn");
+                    if (prevBtn) prevBtn.onclick = () => { currentPage--; renderList(currentPage); };
+                    const nextBtn = document.getElementById("nextPageBtn");
+                    if (nextBtn) nextBtn.onclick = () => { currentPage++; renderList(currentPage); };
                 }
-                renderPage(currentPage);
+
+                renderList(1);
+
+                document.getElementById("mutedSearchInput").oninput = () => { currentPage = 1; renderList(1); };
+                document.getElementById("mutedFecharBtn").onclick = () => { div.remove(); modalAbertoMuted = false; };
+                document.getElementById("mutedMinimizarBtn").onclick = () => {
+                    const modal = document.getElementById('allMutedAccountsDiv');
+                    const contentToToggle = [modal.querySelector('input[type="text"]'), document.getElementById('mutedListContent')].filter(Boolean);
+                    const btn = document.getElementById('mutedMinimizarBtn');
+                    const isMinimized = modal.dataset.minimized === 'true';
+                    contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+                    modal.dataset.minimized = !isMinimized;
+                    btn.textContent = isMinimized ? '_' : '□';
+                    modal.style.maxHeight = isMinimized ? '85vh' : 'auto';
+                };
+                document.getElementById("mutedMarcarTodosBtn").onclick = () => {
+                    users.forEach(u => modalStates.set(u.username, true));
+                    renderList(currentPage);
+                };
+                document.getElementById("mutedDesmarcarTodosBtn").onclick = () => {
+                    users.forEach(u => modalStates.set(u.username, false));
+                    renderList(currentPage);
+                };
             }
 
             async function unmuteUsers(usersToUnmute, callback, toggleMode = false, targetType = 'all') {
@@ -2871,11 +2841,11 @@
                 div.className = "submenu-modal";
                 div.style.cssText = `
                     position: fixed;
-                    top: 80px;
+                    top: 50%;
                     left: 50%;
-                    transform: translateX(-50%);
-                    width: 70vw;
-                    max-width: 700px;
+                    transform: translate(-50%, -50%);
+                    width: 90%;
+                    max-width: 800px;
                     max-height: 85vh;
                     overflow: auto;
                     border: 2px solid #e74c3c;
@@ -3029,6 +2999,12 @@
                             try {
                                 const body = new URLSearchParams();
                                 body.append('container_module', 'profile');
+                            body.append('surface', 'profile');
+                            body.append('container_module', 'profile');
+                            body.append('user_id', uid);
+                            body.append('_uid', getCookie('ds_user_id'));
+                            body.append('_uuid', getDeviceId());
+                            
                                 const res = await fetch(`https://www.instagram.com/api/v1/friendships/unblock/${uid}/`, {
                                     method: 'POST',
                                     headers: getApiHeaders(),
@@ -3107,6 +3083,11 @@
                         try {
                             const body = new URLSearchParams();
                             body.append('surface', 'profile');
+                            body.append('container_module', 'profile');
+                            body.append('user_id', uid);
+                            body.append('_uid', getCookie('ds_user_id'));
+                            body.append('_uuid', getDeviceId());
+                            
                             const res = await fetch(`https://www.instagram.com/api/v1/friendships/block/${uid}/`, {
                                 method: 'POST',
                                 headers: getApiHeaders(),
@@ -3361,7 +3342,7 @@
                                         </div>
                                     </div>
                                     <div id="statusNaoSegue" style="margin-top: 20px; font-weight: bold;"></div>
-                                    <div id="tabelaContainer" style="display: block; margin-top: 15px;"></div>
+                                    <div id="tabelaContainer" class="table-container-responsive" style="margin-top: 15px;"></div>
                                 `;
                                 document.body.appendChild(div);
 
@@ -4203,8 +4184,12 @@
                                         <div class="modal-controls"><button id="seguindoMinimizarBtn" title="Minimizar">_</button><button id="fecharSeguindoBtn" title="Fechar">X</button></div>
                                     </div>
                                     <div style="padding: 15px;">
-                                        <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; margin-bottom: 15px;">
+                                        <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; margin-bottom: 15px; align-items: center;">
                                             <button id="atualizarSeguindoBtn" title="Atualizar Dados" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">🔄️ Atualizar</button>
+                                            <div style="display: flex; align-items: center; gap: 8px; background: #f0f0f0; padding: 5px 12px; border-radius: 20px; border: 1px solid #dbdbdb; height: 35px;">
+                                                <span style="font-size: 12px; font-weight: bold; color: #555;">⚡ API</span>
+                                                <label class="switch" style="transform: scale(0.8); margin: 0;"><input type="checkbox" id="seguindoUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}><span class="slider"></span></label>
+                                            </div>
                                             <button id="silenciarSeguindoBtn" style="background: #8e44ad; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Silenciar/Reativar</button>
                                             <button id="unfollowSeguindoBtn" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Unfollow</button>
                                             <button id="blockSeguindoBtn" style="background: #c0392b; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Bloquear</button>
@@ -4227,7 +4212,7 @@
                                         </select>
                                     </div>
                                     <div id="statusSeguindo" style="margin-top: 20px; font-weight: bold; padding: 0 20px;"></div>
-                                    <div id="tabelaSeguindoContainer" style="display: block; margin-top: 15px;"></div>
+                                    <div id="tabelaSeguindoContainer" class="table-container-responsive" style="margin-top: 15px;"></div>
                                 `;
                                 document.body.appendChild(div);
 
@@ -4258,6 +4243,13 @@
                                     document.getElementById("atualizarSeguindoBtn").addEventListener("click", () => {
                                         showUpdateOptionsModal();
                                     });
+
+                                    document.getElementById("seguindoUseApiToggle").onchange = (e) => {
+                                        const enabled = e.target.checked;
+                                        saveSettings({ useApi: enabled });
+                                        showToast(`⚡ Modo API ${enabled ? 'LIGADO' : 'DESLIGADO'}`);
+                                        console.log("[IG Tools] Modo API alterado no menu Seguindo para:", enabled);
+                                    };
 
                                     document.getElementById("manageCategoriesBtn").addEventListener("click", () => {
                                         abrirModalGerenciarCategorias();
@@ -4805,11 +4797,23 @@
                                         </div>
                                     </div>
                                     <div style="padding: 15px;">
-                                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                                            <button id="settingsDarkModeBtn" class="menu-item-button" style="background: ${settings.darkMode ? '#4c5c75' : ''};">🌙 ${getText('darkMode')}</button>
-                                            <button id="settingsRgbBorderBtn" class="menu-item-button" style="background: ${settings.rgbBorder ? '#4c5c75' : ''};">🌈 ${getText('rgbBorder')}</button>
-                                            <button id="settingsAnonymousStoriesBtn" class="menu-item-button" style="background: ${settings.anonymousStories ? '#4c5c75' : ''};">👻 ${getText('anonymousStories')}</button>
-                                            <button id="settingsUseApiBtn" class="menu-item-button" style="background: ${settings.useApi ? '#4c5c75' : ''};">⚡ ${getText('useApi')}</button>
+                                        <div style="display: flex; flex-direction: column;">
+                                            <div class="setting-row">
+                                                <span>🌙 ${getText('darkMode')}</span>
+                                                <label class="switch"><input type="checkbox" id="settingsDarkModeToggle" ${settings.darkMode ? 'checked' : ''}><span class="slider"></span></label>
+                                            </div>
+                                            <div class="setting-row">
+                                                <span>🌈 ${getText('rgbBorder')}</span>
+                                                <label class="switch"><input type="checkbox" id="settingsRgbBorderToggle" ${settings.rgbBorder ? 'checked' : ''}><span class="slider"></span></label>
+                                            </div>
+                                            <div class="setting-row">
+                                                <span>👻 ${getText('anonymousStories')}</span>
+                                                <label class="switch"><input type="checkbox" id="settingsAnonymousStoriesToggle" ${settings.anonymousStories ? 'checked' : ''}><span class="slider"></span></label>
+                                            </div>
+                                            <div class="setting-row">
+                                                <span>⚡ ${getText('useApi')}</span>
+                                                <label class="switch"><input type="checkbox" id="settingsUseApiToggle" ${settings.useApi ? 'checked' : ''}><span class="slider"></span></label>
+                                            </div>
                                             <button id="settingsVoiceBtn" class="menu-item-button">🎙️ Comandos de Voz</button>
                                             <button id="settingsShortcutsBtn" class="menu-item-button">⌨️ ${getText('shortcuts')}</button>
                                             <button id="settingsParamsBtn" class="menu-item-button">🔧 ${getText('parameters')}</button>
@@ -4821,30 +4825,30 @@
 
                                 document.getElementById("fecharSettingsBtn").onclick = () => div.remove();
 
-                                document.getElementById("settingsDarkModeBtn").onclick = () => {
-                                    const newSetting = !loadSettings().darkMode;
-                                    toggleDarkMode(newSetting);
-                                    saveSettings({ darkMode: newSetting });
+                                document.getElementById("settingsDarkModeToggle").onchange = (e) => {
+                                    const enabled = e.target.checked;
+                                    toggleDarkMode(enabled);
+                                    saveSettings({ darkMode: enabled });
                                 };
 
-                                document.getElementById("settingsRgbBorderBtn").onclick = () => {
-                                    const newSetting = !loadSettings().rgbBorder;
-                                    toggleRgbBorder(newSetting);
-                                    saveSettings({ rgbBorder: newSetting });
+                                document.getElementById("settingsRgbBorderToggle").onchange = (e) => {
+                                    const enabled = e.target.checked;
+                                    toggleRgbBorder(enabled);
+                                    saveSettings({ rgbBorder: enabled });
                                 };
 
-                                document.getElementById("settingsAnonymousStoriesBtn").onclick = () => {
-                                    const newSetting = !loadSettings().anonymousStories;
-                                    toggleAnonymousStories(newSetting);
-                                    saveSettings({ anonymousStories: newSetting });
-                                    console.log("[IG Tools] Stories Anônimo alterado para:", newSetting);
+                                document.getElementById("settingsAnonymousStoriesToggle").onchange = (e) => {
+                                    const enabled = e.target.checked;
+                                    toggleAnonymousStories(enabled);
+                                    saveSettings({ anonymousStories: enabled });
+                                    console.log("[IG Tools] Stories Anônimo alterado para:", enabled);
                                 };
 
-                                document.getElementById("settingsUseApiBtn").onclick = () => {
-                                    const newSetting = !loadSettings().useApi;
-                                    toggleUseApi(newSetting);
-                                    saveSettings({ useApi: newSetting });
-                                    console.log("[IG Tools] Modo API alterado para:", newSetting);
+                                document.getElementById("settingsUseApiToggle").onchange = (e) => {
+                                    const enabled = e.target.checked;
+                                    toggleUseApi(enabled);
+                                    saveSettings({ useApi: enabled });
+                                    console.log("[IG Tools] Modo API alterado para:", enabled);
                                 };
 
                                 document.getElementById("settingsVoiceBtn").onclick = () => {
@@ -5481,7 +5485,7 @@
                                                 <div id="categoriesList" style="display: flex; flex-direction: column; gap: 8px;">
                                                     ${categories.length === 0 ? '<p style="color: #888;">Nenhuma categoria criada.</p>' :
                                                     categories.map(cat => `
-                                                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #f9f9f9; border-radius: 5px;">
+                                                        <div class="category-item-container" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-radius: 5px;">
                                                             <div>
                                                                 <span style="display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: ${cat.color}; margin-right: 8px; vertical-align: middle;"></span>
                                                                 <span style="font-weight: bold;">${cat.name}</span>
@@ -5892,7 +5896,7 @@
                                             </div>
                                         </div>
                                         <div style="padding: 15px;">
-                                        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                                        <div class="table-container-responsive"><table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
                                             <thead style="cursor: pointer;">
                                                 <tr style="text-align: left; border-bottom: 2px solid #dbdbdb;">
                                                     <th style="padding: 8px;">Reel</th>
@@ -5916,7 +5920,7 @@
                                                 <td style="text-align: right;">${reel.date.toLocaleDateString('pt-BR')}</td>
                                             </tr>`;
                                     });
-                                    tableHtml += `</tbody></table></div>`;
+                                    tableHtml += `</tbody></table></div></div>`;
                                     tableHtml += `</tbody></table>`;
                                     div.innerHTML = tableHtml;
 
@@ -7127,24 +7131,6 @@
                                 renderTable(currentPage); // Renderiza a primeira página
                             }
 
-                            function selecionarTodos(e, tableId = "naoSegueDeVoltaTable") {
-                                document.querySelectorAll(`#${tableId} .unfollowCheckbox`).forEach((checkbox) => {
-                                    checkbox.checked = true;
-                                });
-                            }
-
-                            function desmarcarTodos(e, tableId = "naoSegueDeVoltaTable") {
-                                document.querySelectorAll(".unfollowCheckbox").forEach((checkbox) => {
-                                    checkbox.checked = false;
-                                });
-                            }
-
-                            function unfollowSelecionados(e, tableId = "naoSegueDeVoltaTable") {
-                                const selecionados = getSelectedUsers(tableId);
-                                // ... resto da função unfollowSelecionados
-                            }
-
-
                             function unfollowSelecionados() {
                                 if (isUnfollowing) {
                                     alert("Processo de unfollow já em andamento.");
@@ -7556,5 +7542,4 @@
                     subtree: true,
                 });
             }
-
         })();

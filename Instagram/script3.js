@@ -785,7 +785,7 @@
                                         background: white;
                                         color: black;
                                     }
-                                    .submenu-modal h2, .submenu-modal span, .submenu-modal th, .submenu-modal td, .submenu-modal li span, .submenu-modal label {
+                                    .submenu-modal h2, .submenu-modal span, .submenu-modal th, .submenu-modal td, .submenu-modal li span, .submenu-modal label, .submenu-modal input, .submenu-modal select {
                                         color: black !important;
                                     }
                                     .dark-mode .assistive-menu {
@@ -820,7 +820,7 @@
                                     .dark-mode .submenu-modal h2 {
                                         color: white !important;
                                     }
-                                    .dark-mode .submenu-modal span, .dark-mode .submenu-modal th, .dark-mode .submenu-modal td, .dark-mode .submenu-modal li span, .dark-mode .submenu-modal a, .dark-mode .submenu-modal label, .dark-mode .submenu-modal input[type="file"] {
+                                    .dark-mode .submenu-modal span, .dark-mode .submenu-modal th, .dark-mode .submenu-modal td, .dark-mode .submenu-modal li span, .dark-mode .submenu-modal a, .dark-mode .submenu-modal label, .dark-mode .submenu-modal input, .dark-mode .submenu-modal select {
                                         color: white !important;
                                     }
                                     .menu-item-button {
@@ -1533,7 +1533,7 @@
                             <button id="closeFriendsAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
                         </div>
                         <div style="margin-bottom:15px;">
-                            <input type="text" id="closeFriendsSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                            <input type="text" id="closeFriendsSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc;">
                         </div>
                         <div class="tab-container">
                             <button id="tabSelecionados" class="tab-button ${currentTab === 'selecionados' ? 'active' : ''}">Melhores Amigos</button>
@@ -1570,7 +1570,7 @@
                                     <span class="checkmark"></span>
                                 </label>
                                 <img src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
-                                <span style="cursor:pointer; color: black;">${username}</span>
+                                <span style="cursor:pointer;">${username}</span>
                             </li>
                         `;
                     });
@@ -1997,8 +1997,8 @@
                             <button id="hideStoryAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
                         </div>
                         <div style="margin-bottom:15px; display: flex; gap: 10px; align-items: center; padding: 0 15px;">
-                            <input type="text" id="hideStorySearchInput" placeholder="Pesquisar..." style="flex: 1; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
-                            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: black; font-weight: 500;">
+                            <input type="text" id="hideStorySearchInput" placeholder="Pesquisar..." style="flex: 1; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc;">
+                            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; font-weight: 500;">
                                 <input type="checkbox" id="hideStoryFilterFollowing" ${filterFollowing ? 'checked' : ''}> Seguindo
                             </label>
                         </div>
@@ -2041,7 +2041,7 @@
                                     <span class="checkmark"></span>
                                 </label>
                                 <img src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
-                                <span style="cursor:pointer; color: black;">${username}</span>
+                                <span style="cursor:pointer;">${username}</span>
                             </li>
                         `;
                     });
@@ -2461,7 +2461,7 @@
                             <button id="mutedAplicarBtn" style="background:#8e44ad;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Reativar Som</button>
                         </div>
                         <div style="margin-bottom:15px;">
-                            <input type="text" id="mutedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                            <input type="text" id="mutedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc;">
                         </div>
                         <ul id="mutedList" style='list-style:none;padding:0;max-height:40vh;overflow:auto;'>
                     `;
@@ -2495,7 +2495,7 @@
                                     <span class="checkmark"></span>
                                 </label>
                                 <img src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
-                                <div style="display:flex; flex-direction:column;"><span style="cursor:pointer; color: black; font-weight:bold;">${username}</span>${mutedDetailText ? `<span style="font-size:11px; color:gray;">${mutedDetailText}</span>` : ''}</div>
+                                <div style="display:flex; flex-direction:column;"><span style="cursor:pointer; font-weight:bold;">${username}</span>${mutedDetailText ? `<span style="font-size:11px; color:gray;">${mutedDetailText}</span>` : ''}</div>
                             </li>
                         `;
                     });
@@ -2901,7 +2901,7 @@
                             <button id="blockedDesbloquearBtn" style="background:#2ecc71;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Desbloquear</button>
                         </div>
                         <div style="margin-bottom:15px;">
-                            <input type="text" id="blockedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                            <input type="text" id="blockedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc;">
                         </div>
                         <ul id="blockedList" style='list-style:none;padding:0;max-height:40vh;overflow:auto;'>
                     `;
@@ -2919,7 +2919,7 @@
                                     <span class="checkmark"></span>
                                 </label>
                                 <img src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
-                                <span style="cursor:pointer; color: black;">${username}</span>
+                                <span style="cursor:pointer;">${username}</span>
                             </li>
                         `;
                     });
@@ -4216,8 +4216,8 @@
                                         </div>
                                     </div>
                                     <div style="margin: 0 20px 20px 20px; display: flex; gap: 10px;">
-                                        <input type="text" id="seguindoSearchInput" placeholder="Pesquisar na lista de seguindo..." style="flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
-                                        <select id="seguindoFilterSelect" style="padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: black; width: 200px;">
+                                        <input type="text" id="seguindoSearchInput" placeholder="Pesquisar na lista de seguindo..." style="flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #ccc;">
+                                        <select id="seguindoFilterSelect" style="padding: 10px; border-radius: 5px; border: 1px solid #ccc; width: 200px;">
                                             <option value="all">Todos</option>
                                             <option value="muted_stories">Silenciado (Stories)</option>
                                             <option value="muted_posts">Silenciado (Publicações)</option>

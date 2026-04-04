@@ -4226,7 +4226,7 @@
                                 </select>
                             </div>
                             <div id="statusSeguindo" style="margin-top: 20px; font-weight: bold; padding: 0 20px;"></div>
-                            <div id="tabelaSeguindoContainer" style="display: block; margin-top: 15px;"></div>
+                                    <div id="tabelaSeguindoContainer" style="display: block; margin-top: 15px;"></div>
                         `;
                         document.body.appendChild(div);
 
@@ -4453,12 +4453,12 @@
                                         <thead style="cursor: pointer;">
                                             <tr style="text-align: left; border-bottom: 2px solid #dbdbdb;">
                                                 <th style="padding: 8px; width: 20px;"><input type="checkbox" id="selectAllCheckbox" title="Selecionar Todos"></th>
-                                                <th style="padding: 8px;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                                <th style="padding: 8px; text-align: center;" data-sort-key="isMuted" title="${userListCache.muted === null ? 'Visite o menu Contas Silenciadas para carregar estes dados.' : ''}">Silenciado? ${userListCache.muted === null ? '??' : (sortConfig.key === 'isMuted' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
-                                                <th style="padding: 8px; text-align: center;" data-sort-key="isCloseFriend" title="${userListCache.closeFriends === null ? 'Visite o menu Amigos Próximos para carregar estes dados.' : ''}">Melhores Amigos? ${userListCache.closeFriends === null ? '??' : (sortConfig.key === 'isCloseFriend' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
-                                                <th style="padding: 8px; text-align: center;" data-sort-key="isStoryHidden" title="${userListCache.hiddenStory === null ? 'Visite o menu Ocultar Story para carregar estes dados.' : ''}">Ocultar Stories? ${userListCache.hiddenStory === null ? '??' : (sortConfig.key === 'isStoryHidden' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
-                                                <th style="padding: 8px; text-align: center;" data-sort-key="followers">Seguidores ${sortConfig.key === 'followers' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                                <th style="padding: 8px; text-align: center;" data-sort-key="following">Seguindo ${sortConfig.key === 'following' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                                        <th style="padding: 8px;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                                        <th style="padding: 8px; text-align: center;" data-sort-key="isMuted" title="${userListCache.muted === null ? 'Visite o menu Contas Silenciadas para carregar estes dados.' : ''}">Silenciado? ${userListCache.muted === null ? '??' : (sortConfig.key === 'isMuted' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
+                                                        <th style="padding: 8px; text-align: center;" data-sort-key="isCloseFriend" title="${userListCache.closeFriends === null ? 'Visite o menu Amigos Próximos para carregar estes dados.' : ''}">Melhores Amigos? ${userListCache.closeFriends === null ? '??' : (sortConfig.key === 'isCloseFriend' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
+                                                        <th style="padding: 8px; text-align: center;" data-sort-key="isStoryHidden" title="${userListCache.hiddenStory === null ? 'Visite o menu Ocultar Story para carregar estes dados.' : ''}">Ocultar Stories? ${userListCache.hiddenStory === null ? '??' : (sortConfig.key === 'isStoryHidden' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
+                                                        <th style="padding: 8px; text-align: center;" data-sort-key="followers">Seguidores ${sortConfig.key === 'followers' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                                        <th style="padding: 8px; text-align: center;" data-sort-key="following">Seguindo ${sortConfig.key === 'following' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
                                                 <th style="padding: 8px; text-align: center;" data-sort-key="status">Status ${sortConfig.key === 'status' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
                                                 <th style="padding: 8px;" data-sort-key="categories">Categorias ${sortConfig.key === 'categories' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
                                             </tr>

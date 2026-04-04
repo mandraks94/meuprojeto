@@ -2598,6 +2598,18 @@
                             credentials: 'include'
                         });
                         if (res.status === 401) return;
+                        if (res.ok) {
+                            // Atualiza o cache local imediatamente
+                            if (toggleMode) { // Se é um toggle, verifica o estado atual e inverte
+                                if (userListCache.muted.has(username)) userListCache.muted.delete(username);
+                                else userListCache.muted.add(username);
+                            } else { // Se não é toggle (ex: reativar som), remove do cache
+                                userListCache.muted.delete(username);
+                            }
+                            // Atualiza os detalhes do mute
+                            userListCache.mutedDetails.set(username, targetType === 'all' ? 'Stories e Publicações' : (targetType === 'stories' ? 'Stories' : 'Publicações'));
+                            await dbHelper.saveCache('muted', Array.from(userListCache.muted).map(u => ({ username: u, status: userListCache.mutedDetails.get(u) })));
+                        }
                     } catch (e) { console.error(`Erro API Mute/Unmute ${username}`, e); }
                 }
                 await new Promise(r => setTimeout(r, 500));
@@ -4191,17 +4203,13 @@
                                         <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                                             <div style="display: flex; flex-wrap: wrap; gap: 10px;">
                                     <button id="atualizarSeguindoBtn" title="Atualizar Dados" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">🔄️ Atualizar</button>
-                                    <button id="silenciarSeguindoBtn" style="background: #8e44ad; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Silenciar/Reativar</button>
+                                            <button id="executarSeguindoBtn" style="background: #3498db; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">🚀 Executar</button>
                                     <button id="unfollowSeguindoBtn" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Unfollow</button>
                                     <button id="blockSeguindoBtn" style="background: #c0392b; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Bloquear</button>
-                                    <button id="manageCategoriesBtn" style="background: #3498db; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Gerenciar Categorias</button>
-                                    <button id="addToCategoryBtn" style="background: #9b59b6; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Categorias</button>
-                                    <button id="closeFriendsSeguindoBtn" style="background: #2ecc71; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Melhores Amigos</button>
-                                    <button id="hideStorySeguindoBtn" style="background: #f39c12; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Ocultar Story</button>
                                     <button id="loadStatsSeguindoBtn" style="background: #e67e22; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Carregar Stats (Página)</button>
                                 </div>
                                             <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px;">
-                                                <span style="font-size: 14px; font-weight: 500;">⚡ API</span>
+                                                <span style="font-size: 14px; font-weight: 500;">⚡ ${getText('useApi')}</span>
                                                 <label class="switch"><input type="checkbox" id="seguindoUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}><span class="slider"></span></label>
                                             </div>
                                         </div>
@@ -4249,21 +4257,13 @@
                             document.getElementById("atualizarSeguindoBtn").addEventListener("click", () => {
                                 showUpdateOptionsModal();
                             });
-
-                            document.getElementById("manageCategoriesBtn").addEventListener("click", () => {
-                                abrirModalGerenciarCategorias();
-                            });
-
-                            document.getElementById("addToCategoryBtn").addEventListener("click", () => {
-                                abrirModalAdicionarACategoria(Array.from(selectedUsers));
-                            });
                         };
                         attachStaticListeners();
 
                         const statusDiv = document.getElementById("statusSeguindo");
                         const container = document.getElementById("tabelaSeguindoContainer");
                         let seguindoList = [];
-                        let currentPaginatedUsers = [];
+                                let currentPaginatedUsers = []; // Armazena os usuários da página atual para "Carregar Stats"
                         const selectedUsers = new Set(); // Armazena todos os usuários selecionados entre as páginas
                         let allCategories = [];
                         let userCategoryMap = new Map();
@@ -4347,10 +4347,14 @@
                             // Lógica de atualização seletiva
                             if (shouldUpdate('closeFriends')) {
                                 await fetchAndCache('/accounts/close_friends/', extractCloseFriendsUsernames, 'closeFriends', 2);
-                            } else {
+                            } else if (userListCache.closeFriends === null) { // Se não deve atualizar e não está em cache, tenta carregar do DB
                                 await loadCacheFromDB('closeFriends');
                                 if (isUpdate) updateStatus(2, true, '(Cache)');
+                            } else {
+                                if (isUpdate) updateStatus(2, true, '(Cache)');
                             }
+
+
 
                             if (shouldUpdate('hiddenStory')) {
                                 await fetchAndCache('/accounts/hide_story_and_live_from/', extractHideStoryUsernames, 'hiddenStory', 3);
@@ -4369,8 +4373,10 @@
                             if (!shouldUpdate('following') && dbFollowing) {
                                 if (dbFollowing.details) {
                                     seguindoList = Array.from(dbFollowing.details.values());
-                                } else {
+                                } else if (dbFollowing instanceof Set) { // Handle older cache format where it's just a Set of usernames
                                     seguindoList = Array.from(dbFollowing).map(u => ({ username: u, photoUrl: 'https://via.placeholder.com/150' }));
+                                } else { // Fallback if dbFollowing is not a Set or has no details
+                                    seguindoList = [];
                                 }
                                 if (isUpdate) updateStatus(1, true, '(Cache)');
                             } else {
@@ -4380,6 +4386,7 @@
                                     await dbHelper.saveCache('following', seguindoList);
                                 } else {
                                     if (isUpdate) updateStatus(1, false);
+                                    seguindoList = []; // Ensure it's an empty array on failure
                                 }
                             }
 
@@ -4395,7 +4402,7 @@
                                 attachStaticListeners(); // Re-anexa os listeners estáticos
                             }
                             statusDiv.innerText = `Total: ${seguindoList.length} perfis seguidos.`;
-
+                            
                             let currentPage = 1; // Reinicia a paginação
                             const itemsPerPage = loadSettings().itemsPerPage;
 
@@ -4460,7 +4467,9 @@
                                 `;
 
                                 // Ordena a lista antes de paginar
-                                const sortedUsers = [...filteredUsers].sort((a, b) => {
+                                        const sortedUsers = [...filteredUsers].sort((a, b) => { // Certifica que filteredUsers é um array
+                                            // Se filteredUsers estiver vazio, não haverá erro aqui
+
                                     const getSortValue = (user, key) => {
                                         if (key === 'username') return user.username.toLowerCase();
                                         if (key === 'isMuted') return userListCache.muted ? (userListCache.muted.has(user.username) ? 1 : 2) : 3;
@@ -4496,6 +4505,10 @@
 
                                 const paginatedUsers = sortedUsers.slice(startIndex, endIndex);
                                 currentPaginatedUsers = paginatedUsers;
+                                        
+                                        if (paginatedUsers.length === 0) {
+                                            tableHtml += `<tr><td colspan="9" style="text-align: center; padding: 20px;">Nenhum usuário encontrado com os filtros aplicados.</td></tr>`;
+                                        } else {
 
                                 paginatedUsers.forEach((userObj) => {
                                     const { username, photoUrl } = userObj;
@@ -4570,7 +4583,8 @@
                                             <td style="padding: 8px; min-width: 100px;">${categorySpans}</td>
                                         </tr>
                                     `;
-                                });
+                                    });
+                                }
                                 tableHtml += `</tbody></table>`;
 
                                 const totalPages = Math.ceil(sortedUsers.length / itemsPerPage);
@@ -4637,13 +4651,20 @@
                                 Array.from(filterSelect.options).forEach(opt => {
                                     if (opt.value.startsWith('category_')) opt.remove();
                                 });
-                                allCategories.forEach(cat => {
+                                if (allCategories.length > 0) {
+                                    allCategories.forEach(cat => {
+                                        const option = document.createElement('option');
+                                        option.value = `category_${cat.id}`;
+                                        option.textContent = `Categoria: ${cat.name}`;
+                                        filterSelect.appendChild(option);
+                                    });
+                                } else {
                                     const option = document.createElement('option');
-                                    option.value = `category_${cat.id}`;
-                                    option.textContent = `Categoria: ${cat.name}`;
+                                    option.value = `no_categories`;
+                                    option.textContent = `Nenhuma categoria`;
+                                    option.disabled = true;
                                     filterSelect.appendChild(option);
-                                });
-
+                                }
                                 // Restaura o valor do filtro após repopular as opções para evitar que ele volte para "Todos"
                                 filterSelect.value = filterValue;
 
@@ -4667,24 +4688,22 @@
                                     seguindoList = seguindoList.filter(user => !users.includes(user.username));
                                     // Atualiza o cache do IndexedDB para refletir a remoção
                                     await dbHelper.saveCache('following', seguindoList);
-                                } else {
+                                } else if (dbStore && dbStore !== 'exec') {
+                                    // Toggle inteligente para botões individuais
                                     if (!userListCache[dbStore]) userListCache[dbStore] = new Set();
                                     users.forEach(u => {
-                                        if (userListCache[dbStore].has(u)) {
-                                            userListCache[dbStore].delete(u); // Toggle off
-                                        } else {
-                                            userListCache[dbStore].add(u); // Toggle on
-                                        }
+                                        if (userListCache[dbStore].has(u)) userListCache[dbStore].delete(u);
+                                        else userListCache[dbStore].add(u);
                                     });
-                                    // Salva o novo estado no DB
                                     await dbHelper.saveCache(dbStore, Array.from(userListCache[dbStore]));
                                 }
+                                // Sincroniza o mapa de categorias
+                                userCategoryMap = await dbHelper.loadAllUserCategories();
 
-                                // Re-renderiza a lista para refletir as mudanças (flags 0 -> 1)
                                 renderList(currentPage);
                                 selectedUsers.clear(); // Limpa seleção
                             };
-
+                            
                             const getFollowersAndFollowing = async (username) => {
                                 try {
                                     const response = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, {
@@ -4703,18 +4722,113 @@
                                 return null;
                             };
 
-                            document.getElementById('silenciarSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'mute', updateLocalState);
-                            document.getElementById('closeFriendsSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'closeFriends', updateLocalState);
-                            document.getElementById('hideStorySeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'hideStory', updateLocalState);
+                            document.getElementById('executarSeguindoBtn').onclick = () => abrirModalExecutarSeguindo(Array.from(selectedUsers), updateLocalState);
                             document.getElementById('unfollowSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'unfollow', updateLocalState);
                             document.getElementById('blockSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'block', updateLocalState);
+
+                            async function abrirModalExecutarSeguindo(selectedUsernames, updateCallback) {
+                                if (selectedUsernames.length === 0) return alert("Selecione pelo menos um usuário na tabela.");
+                                if (document.getElementById("executarModal")) return;
+
+                                const categories = await dbHelper.loadCategories();
+                                const execDiv = document.createElement("div");
+                                execDiv.id = "executarModal";
+                                execDiv.className = "submenu-modal";
+                                execDiv.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 400px; border: 1px solid #ccc; border-radius: 10px; z-index: 10002; max-height: 80vh; overflow-y: auto; padding: 20px;`;
+                                if (loadSettings().rgbBorder) execDiv.classList.add('rgb-border-effect');
+
+                                execDiv.innerHTML = `
+                                    <div class="modal-header" style="margin: -20px -20px 20px -20px;">
+                                        <span class="modal-title">Executar Ações (${selectedUsernames.length})</span>
+                                        <div class="modal-controls"><button id="fecharExecutarBtn">X</button></div>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 15px;">
+                                        <div class="toggle-item"><span>🔇 Silenciar</span><label class="switch"><input type="checkbox" id="execMuteToggle"><span class="slider"></span></label></div>
+                                        <div id="muteSubOptions" style="display: none; margin-left: 20px; flex-direction: column; gap: 10px; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 8px;">
+                                            <div class="toggle-item" style="background: transparent; border: none; padding: 0;"><span style="font-size: 14px;">Stories</span><label class="switch"><input type="checkbox" id="execMuteStories" checked><span class="slider"></span></label></div>
+                                            <div class="toggle-item" style="background: transparent; border: none; padding: 0;"><span style="font-size: 14px;">Publicações</span><label class="switch"><input type="checkbox" id="execMutePosts" checked><span class="slider"></span></label></div>
+                                        </div>
+                                        <div class="toggle-item"><span>🌟 Melhores Amigos</span><label class="switch"><input type="checkbox" id="execCFToggle"><span class="slider"></span></label></div>
+                                        <div class="toggle-item"><span>👁️ Ocultar Story</span><label class="switch"><input type="checkbox" id="execHideToggle"><span class="slider"></span></label></div>
+                                        <div class="toggle-item"><span>📁 Categorias</span><label class="switch"><input type="checkbox" id="execCatToggle"><span class="slider"></span></label></div>
+                                        <div id="catSubOptions" style="display: none; margin-left: 20px; flex-direction: column; gap: 10px; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 8px;">
+                                            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="catAction" value="add" checked> Adicionar</label>
+                                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="catAction" value="remove"> Remover</label>
+                                            </div>
+                                            <div style="max-height: 150px; overflow-y: auto; border: 1px solid #eee; padding: 5px; border-radius: 5px;">
+                                            ${categories.length === 0 ? '<p style="font-size: 12px; color: gray;">Nenhuma categoria cadastrada.</p>' :
+                                                categories.map(cat => `<div class="toggle-item" style="background: transparent; border: none; padding: 0;"><div style="display: flex; align-items: center; gap: 5px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: ${cat.color};"></span><span style="font-size: 14px;">${cat.name}</span></div><label class="switch"><input type="checkbox" class="execCatItem" value="${cat.id}"><span class="slider"></span></label></div>`).join('')
+                                            }
+                                            </div>
+                                        </div>
+                                        <button id="aplicarExecutarBtn" style="margin-top: 10px; background: #3498db; color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold;">Aplicar Ações</button>
+                                    </div>
+                                `;
+                                document.body.appendChild(execDiv);
+
+                                document.getElementById('execMuteToggle').onchange = (e) => document.getElementById('muteSubOptions').style.display = e.target.checked ? 'flex' : 'none';
+                                document.getElementById('execCatToggle').onchange = (e) => document.getElementById('catSubOptions').style.display = e.target.checked ? 'flex' : 'none'; // Show/hide category sub-options
+                                document.getElementById('fecharExecutarBtn').onclick = () => execDiv.remove();
+
+                                document.getElementById('aplicarExecutarBtn').onclick = async () => {
+                                    const doMute = document.getElementById('execMuteToggle').checked;
+                                    const doCF = document.getElementById('execCFToggle').checked;
+                                    const doHide = document.getElementById('execHideToggle').checked;
+                                    const doCat = document.getElementById('execCatToggle').checked;
+                                    const catAction = execDiv.querySelector('input[name="catAction"]:checked')?.value || 'add';
+
+                                    if (!doMute && !doCF && !doHide && !doCat) return alert("Selecione pelo menos uma ação.");
+                                    
+                                    // Mute options
+                                    const muteType = (document.getElementById('execMuteStories').checked && document.getElementById('execMutePosts').checked) ? 'all' : (document.getElementById('execMuteStories').checked ? 'stories' : 'posts');
+                                    const selectedCats = Array.from(execDiv.querySelectorAll('.execCatItem:checked')).map(i => i.value);
+                                    execDiv.remove(); // Fecha o modal de seleção de ações
+
+                                    // 1. Processar Categorias Primeiro (Rápido e Local)
+                                    if (doCat && selectedCats.length > 0) {
+                                        const allUserCategories = await dbHelper.loadAllUserCategories();
+                                        for (const u of selectedUsernames) {
+                                            const lowerUsername = u.toLowerCase();
+                                            const existing = allUserCategories.get(lowerUsername) || [];
+                                            let updated;
+
+                                            if (catAction === 'add') {
+                                                updated = Array.from(new Set([...existing, ...selectedCats]));
+                                            } else { // 'remove'
+                                                updated = existing.filter(catId => !selectedCats.includes(catId));
+                                            }
+                                            await dbHelper.saveUserCategories(lowerUsername, updated);
+                                        }
+                                        // Sincroniza o mapa local e atualiza a interface (tabela) imediatamente
+                                        userCategoryMap = await dbHelper.loadAllUserCategories();
+                                        renderList(currentPage);
+                                    }
+
+                                    if (doMute) {
+                                        await new Promise(resolve => unmuteUsers(selectedUsernames, resolve, true, muteType));
+                                        // userListCache.muted e mutedDetails já são atualizados dentro de unmuteUsers
+                                    }
+                                    if (doCF) {
+                                        await performActionOnProfile(selectedUsernames, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], () => {});
+                                        // userListCache.closeFriends já é atualizado dentro de performActionOnProfile
+                                    }
+                                    if (doHide) {
+                                        await toggleListMembership(selectedUsernames, '/accounts/hide_story_and_live_from/', 'hiddenStory', () => {});
+                                        // userListCache.hiddenStory já é atualizado dentro de toggleListMembership
+                                    }
+                                    
+                                    if (updateCallback) await updateCallback(selectedUsernames, 'exec');
+                                    showToast("Ações aplicadas com sucesso!");
+                                };
+                            }
 
                             document.getElementById('loadStatsSeguindoBtn').onclick = async () => {
                                 const btn = document.getElementById('loadStatsSeguindoBtn');
                                 btn.disabled = true;
                                 const originalText = btn.textContent;
                                 btn.textContent = 'Carregando...';
-
+                                
                                 for (let i = 0; i < currentPaginatedUsers.length; i++) {
                                     const user = currentPaginatedUsers[i];
                                     // If data exists, skip to next
@@ -4733,8 +4847,8 @@
                                 btn.textContent = originalText;
                                 renderList(currentPage);
                             };
-
-                            if (seguindoList.length > 0) renderList(currentPage);
+                            
+                            renderList(currentPage);
                         }
                         carregarSeguindo();
                     }
@@ -4819,6 +4933,7 @@
                                                 <label class="switch"><input type="checkbox" id="settingsUseApiToggle" ${settings.useApi ? 'checked' : ''}><span class="slider"></span></label>
                                             </div>
                                     <button id="settingsVoiceBtn" class="menu-item-button">🎙️ Comandos de Voz</button>
+                                            <button id="settingsManageCategoriesBtn" class="menu-item-button">📁 Gerenciar Categorias</button>
                                     <button id="settingsShortcutsBtn" class="menu-item-button">⌨️ ${getText('shortcuts')}</button>
                                     <button id="settingsParamsBtn" class="menu-item-button">🔧 ${getText('parameters')}</button>
                                     <button id="settingsLangBtn" class="menu-item-button">🌐 ${getText('language')}</button>
@@ -4854,6 +4969,11 @@
                         document.getElementById("settingsVoiceBtn").onclick = () => {
                             div.remove();
                             abrirModalComandosVoz();
+                        };
+
+                        document.getElementById("settingsManageCategoriesBtn").onclick = () => {
+                            div.remove();
+                            abrirModalGerenciarCategorias();
                         };
 
                         document.getElementById("settingsShortcutsBtn").onclick = () => {
@@ -6754,7 +6874,17 @@
                                         if (isCurrentlyCF) {
                                             body.append('remove', JSON.stringify([parseInt(uid)]));
                                         } else {
-                                            body.append('add', JSON.stringify([parseInt(uid)]));
+                                            body.append('add', JSON.stringify([parseInt(uid)])); // Adiciona o usuário
+                                        }
+
+                                        const res = await fetch(`https://www.instagram.com/api/v1/friendships/set_besties/`, { method: 'POST', headers: getApiHeaders(), body: body, credentials: "include" });
+                                        if (res.ok) {
+                                            success = true;
+                                            // Atualiza o cache local imediatamente
+                                            if (isCurrentlyCF) userListCache.closeFriends.delete(username);
+                                            else userListCache.closeFriends.add(username);
+                                            await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
+                                            console.log(`[IG Tools] API Success: ${username} (Close Friends)`);
                                         }
 
                                         body.append('source', 'audience_manager');
@@ -6762,9 +6892,6 @@
                                         body.append('_uuid', getDeviceId());
                                         body.append('_csrftoken', getCookie('csrftoken'));
 
-                                        const res = await fetch(`https://www.instagram.com/api/v1/friendships/set_besties/`, { method: 'POST', headers: getApiHeaders(), body: body, credentials: "include" });
-                                        if (res.ok) { success = true; console.log(`[IG Tools] API Success: ${username} (Close Friends)`); }
-                                        else console.error(`API Error ${username}:`, await res.text());
                                     }
                                 } catch (e) { console.error(`Erro API Action ${username}`, e); }
                             }
@@ -6794,10 +6921,6 @@
                     history.pushState(null, null, originalPath);
                     window.dispatchEvent(new Event("popstate"));
                     await new Promise(r => setTimeout(r, 1000));
-
-                    // Limpa os caches relevantes para forçar a recarga na próxima vez
-                    userListCache.closeFriends = null;
-                    userListCache.hiddenStory = null;
 
                     if (callback) callback();
                 }
@@ -6898,6 +7021,10 @@
                                                 if (res.ok) {
                                                     success = true;
                                                     console.log(`[IG Tools] API Success: ${username} (${endpoint})`);
+                                                    // Atualiza o cache local imediatamente
+                                                    if (isCurrentlyHidden) userListCache.hiddenStory.delete(username);
+                                                    else userListCache.hiddenStory.add(username);
+                                                    await dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
                                                 } else {
                                                     const errorText = await res.text();
                                                     console.error(`[IG Tools] API Error ${username} (${endpoint}):`, {
@@ -6944,9 +7071,6 @@
                         history.pushState(null, null, originalPath);
                         window.dispatchEvent(new Event("popstate"));
                         await new Promise(r => setTimeout(r, 1000));
-
-                        // Limpa o cache específico para forçar a recarga na próxima vez
-                        userListCache[cacheKey] = null;
 
                         if (callback) callback();
                     }

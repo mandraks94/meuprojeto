@@ -803,9 +803,13 @@
                                 background: white;
                                 color: black;
                             }
-                            .submenu-modal h2, .submenu-modal span, .submenu-modal th, .submenu-modal td, .submenu-modal li span, .submenu-modal label {
+                                    .submenu-modal h2, .submenu-modal span, .submenu-modal th, .submenu-modal td, .submenu-modal li span, .submenu-modal label {
                                 color: black !important;
                             }
+                                    .submenu-modal input, .submenu-modal select, .submenu-modal option {
+                                        background: white !important;
+                                        color: black !important;
+                                    }
                             .dark-mode .assistive-menu {
                                 background: black !important;
                                 border: 1px solid #333;
@@ -838,7 +842,7 @@
                             .dark-mode .submenu-modal h2 {
                                 color: white !important;
                             }
-                            .dark-mode .submenu-modal span, .dark-mode .submenu-modal th, .dark-mode .submenu-modal td, .dark-mode .submenu-modal li span, .dark-mode .submenu-modal a, .dark-mode .submenu-modal label, .dark-mode .submenu-modal input[type="file"] {
+                                    .dark-mode .submenu-modal span, .dark-mode .submenu-modal th, .dark-mode .submenu-modal td, .dark-mode .submenu-modal li span, .dark-mode .submenu-modal a, .dark-mode .submenu-modal label {
                                 color: white !important;
                             }
                             /* Correção para visibilidade de categorias no modo escuro */
@@ -1587,7 +1591,7 @@
                     <button id="closeFriendsAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
                 </div>
                 <div style="margin-bottom:15px;">
-                    <input type="text" id="closeFriendsSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                        <input type="text" id="closeFriendsSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
                 </div>
                 <div class="tab-container">
                     <button id="tabSelecionados" class="tab-button ${currentTab === 'selecionados' ? 'active' : ''}">Melhores Amigos</button>
@@ -2038,8 +2042,8 @@
                 <button id="hideStoryAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
             </div>
             <div style="margin-bottom:15px; display: flex; gap: 10px; align-items: center; padding: 0 15px;">
-                <input type="text" id="hideStorySearchInput" placeholder="Pesquisar..." style="flex: 1; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
-                <select id="hideStoryUserFilter" style="padding: 6px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                <input type="text" id="hideStorySearchInput" placeholder="Pesquisar..." style="flex: 1; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
+                <select id="hideStoryUserFilter" style="padding: 6px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
                     <option value="all">Todos</option>
                     <option value="following">Seguindo</option>
                     <option value="followers">Seguidores</option>
@@ -2465,7 +2469,7 @@
                 <button id="mutedAplicarBtn" style="background:#8e44ad;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Reativar Som</button>
             </div>
             <div style="margin-bottom:15px; padding: 0 15px;">
-                <input type="text" id="mutedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                <input type="text" id="mutedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
             </div>
             <div id="mutedListContent"></div>
         `;
@@ -2871,7 +2875,7 @@
                     <button id="blockedDesbloquearBtn" style="background:#2ecc71;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Desbloquear</button>
                 </div>
                 <div style="margin-bottom:15px;">
-                    <input type="text" id="blockedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
+                    <input type="text" id="blockedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
                 </div>
                 <ul id="blockedList" style='list-style:none;padding:0;max-height:40vh;overflow:auto;'>
             `;
@@ -4203,8 +4207,8 @@
                                         </div>
                             </div>
                             <div style="margin: 0 20px 20px 20px; display: flex; gap: 10px;">
-                                        <input type="text" id="seguindoSearchInput" placeholder="Pesquisar na lista de seguindo..." style="flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: inherit;">
-                                        <select id="seguindoFilterSelect" style="padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: inherit; width: 200px;">
+                                        <input type="text" id="seguindoSearchInput" placeholder="Pesquisar..." style="flex: 2; padding: 8px 12px; height: 40px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; outline: none; box-sizing: border-box;">
+                                        <select id="seguindoFilterSelect" style="flex: 1; padding: 0 10px; height: 40px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; cursor: pointer; outline: none; box-sizing: border-box;">
                                     <option value="all">Todos</option>
                                     <option value="muted_stories">Silenciado (Stories)</option>
                                     <option value="muted_posts">Silenciado (Publicações)</option>

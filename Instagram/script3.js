@@ -910,6 +910,16 @@
                             .info-tooltip .tooltip-text { visibility: hidden; width: 220px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100000; top: 100%; margin-top: 10px; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; font-size: 12px; font-weight: normal; line-height: 1.4; box-shadow: 0 2px 10px rgba(0,0,0,0.2); pointer-events: none; }
                             .info-tooltip .tooltip-text::after { content: ""; position: absolute; bottom: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: transparent transparent #333 transparent; }
                             .info-tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
+
+                            /* Toggle Switch Styles */
+                            .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+                            .switch input { opacity: 0; width: 0; height: 0; }
+                            .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
+                            .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
+                            input:checked + .slider { background-color: #0095f6; }
+                            input:checked + .slider:before { transform: translateX(20px); }
+                            .toggle-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; font-size: 16px; color: black; }
+                            .dark-mode .toggle-item { background: #262626 !important; color: white !important; border-color: #555 !important; }
                         `;
                     }
 
@@ -4174,7 +4184,8 @@
                                 <div class="modal-controls"><button id="seguindoMinimizarBtn" title="Minimizar">_</button><button id="fecharSeguindoBtn" title="Fechar">X</button></div>
                             </div>
                             <div style="padding: 15px;">
-                                <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; margin-bottom: 15px;">
+                                        <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
                                     <button id="atualizarSeguindoBtn" title="Atualizar Dados" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">🔄️ Atualizar</button>
                                     <button id="silenciarSeguindoBtn" style="background: #8e44ad; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Silenciar/Reativar</button>
                                     <button id="unfollowSeguindoBtn" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Unfollow</button>
@@ -4185,10 +4196,15 @@
                                     <button id="hideStorySeguindoBtn" style="background: #f39c12; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Ocultar Story</button>
                                     <button id="loadStatsSeguindoBtn" style="background: #e67e22; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Carregar Stats (Página)</button>
                                 </div>
+                                            <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px;">
+                                                <span style="font-size: 14px; font-weight: 500;">⚡ API</span>
+                                                <label class="switch"><input type="checkbox" id="seguindoUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}><span class="slider"></span></label>
+                                            </div>
+                                        </div>
                             </div>
                             <div style="margin: 0 20px 20px 20px; display: flex; gap: 10px;">
-                                <input type="text" id="seguindoSearchInput" placeholder="Pesquisar na lista de seguindo..." style="flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: black;">
-                                <select id="seguindoFilterSelect" style="padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: black; width: 200px;">
+                                        <input type="text" id="seguindoSearchInput" placeholder="Pesquisar na lista de seguindo..." style="flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: inherit;">
+                                        <select id="seguindoFilterSelect" style="padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: inherit; width: 200px;">
                                     <option value="all">Todos</option>
                                     <option value="muted_stories">Silenciado (Stories)</option>
                                     <option value="muted_posts">Silenciado (Publicações)</option>
@@ -4608,6 +4624,11 @@
                                     renderList(1);
                                 };
 
+                                document.getElementById('seguindoUseApiToggle').onchange = (e) => {
+                                    saveSettings({ useApi: e.target.checked });
+                                    showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
+                                };
+
                                 // Popula o filtro de categorias
                                 Array.from(filterSelect.options).forEach(opt => {
                                     if (opt.value.startsWith('category_')) opt.remove();
@@ -4777,10 +4798,22 @@
                             </div>
                             <div style="padding: 15px;">
                                 <div style="display: flex; flex-direction: column; gap: 10px;">
-                                    <button id="settingsDarkModeBtn" class="menu-item-button" style="background: ${settings.darkMode ? '#4c5c75' : ''};">🌙 ${getText('darkMode')}</button>
-                                    <button id="settingsRgbBorderBtn" class="menu-item-button" style="background: ${settings.rgbBorder ? '#4c5c75' : ''};">🌈 ${getText('rgbBorder')}</button>
-                                    <button id="settingsAnonymousStoriesBtn" class="menu-item-button" style="background: ${settings.anonymousStories ? '#4c5c75' : ''};">👻 ${getText('anonymousStories')}</button>
-                                    <button id="settingsUseApiBtn" class="menu-item-button" style="background: ${settings.useApi ? '#4c5c75' : ''};">⚡ ${getText('useApi')}</button>
+                                            <div class="toggle-item">
+                                                <span>🌙 ${getText('darkMode')}</span>
+                                                <label class="switch"><input type="checkbox" id="settingsDarkModeToggle" ${settings.darkMode ? 'checked' : ''}><span class="slider"></span></label>
+                                            </div>
+                                            <div class="toggle-item">
+                                                <span>🌈 ${getText('rgbBorder')}</span>
+                                                <label class="switch"><input type="checkbox" id="settingsRgbBorderToggle" ${settings.rgbBorder ? 'checked' : ''}><span class="slider"></span></label>
+                                            </div>
+                                            <div class="toggle-item">
+                                                <span>👻 ${getText('anonymousStories')}</span>
+                                                <label class="switch"><input type="checkbox" id="settingsAnonymousStoriesToggle" ${settings.anonymousStories ? 'checked' : ''}><span class="slider"></span></label>
+                                            </div>
+                                            <div class="toggle-item">
+                                                <span>⚡ ${getText('useApi')}</span>
+                                                <label class="switch"><input type="checkbox" id="settingsUseApiToggle" ${settings.useApi ? 'checked' : ''}><span class="slider"></span></label>
+                                            </div>
                                     <button id="settingsVoiceBtn" class="menu-item-button">🎙️ Comandos de Voz</button>
                                     <button id="settingsShortcutsBtn" class="menu-item-button">⌨️ ${getText('shortcuts')}</button>
                                     <button id="settingsParamsBtn" class="menu-item-button">🔧 ${getText('parameters')}</button>
@@ -4792,30 +4825,26 @@
 
                         document.getElementById("fecharSettingsBtn").onclick = () => div.remove();
 
-                        document.getElementById("settingsDarkModeBtn").onclick = () => {
-                            const newSetting = !loadSettings().darkMode;
-                            toggleDarkMode(newSetting);
-                            saveSettings({ darkMode: newSetting });
-                        };
+                                document.getElementById("settingsDarkModeToggle").onchange = (e) => {
+                                    toggleDarkMode(e.target.checked);
+                                    saveSettings({ darkMode: e.target.checked });
+                                };
 
-                        document.getElementById("settingsRgbBorderBtn").onclick = () => {
-                            const newSetting = !loadSettings().rgbBorder;
-                            toggleRgbBorder(newSetting);
-                            saveSettings({ rgbBorder: newSetting });
-                        };
+                                document.getElementById("settingsRgbBorderToggle").onchange = (e) => {
+                                    toggleRgbBorder(e.target.checked);
+                                    saveSettings({ rgbBorder: e.target.checked });
+                                };
 
-                        document.getElementById("settingsAnonymousStoriesBtn").onclick = () => {
-                            const newSetting = !loadSettings().anonymousStories;
-                            toggleAnonymousStories(newSetting);
-                            saveSettings({ anonymousStories: newSetting });
-                            console.log("[IG Tools] Stories Anônimo alterado para:", newSetting);
-                        };
+                                document.getElementById("settingsAnonymousStoriesToggle").onchange = (e) => {
+                                    toggleAnonymousStories(e.target.checked);
+                                    saveSettings({ anonymousStories: e.target.checked });
+                                    showToast(`Stories Anônimo: ${e.target.checked ? 'ON' : 'OFF'}`);
+                                };
 
-                        document.getElementById("settingsUseApiBtn").onclick = () => {
-                            const newSetting = !loadSettings().useApi;
-                            toggleUseApi(newSetting);
-                            saveSettings({ useApi: newSetting });
-                            console.log("[IG Tools] Modo API alterado para:", newSetting);
+                                document.getElementById("settingsUseApiToggle").onchange = (e) => {
+                                    toggleUseApi(e.target.checked);
+                                    saveSettings({ useApi: e.target.checked });
+                                    showToast(`Modo API: ${e.target.checked ? 'ON' : 'OFF'}`);
                         };
 
                         document.getElementById("settingsVoiceBtn").onclick = () => {

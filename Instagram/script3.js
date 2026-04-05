@@ -4402,7 +4402,7 @@
                                 attachStaticListeners(); // Re-anexa os listeners estáticos
                             }
                             statusDiv.innerText = `Total: ${seguindoList.length} perfis seguidos.`;
-                            
+
                             let currentPage = 1; // Reinicia a paginação
                             const itemsPerPage = loadSettings().itemsPerPage;
 
@@ -4505,7 +4505,7 @@
 
                                 const paginatedUsers = sortedUsers.slice(startIndex, endIndex);
                                 currentPaginatedUsers = paginatedUsers;
-                                        
+
                                         if (paginatedUsers.length === 0) {
                                             tableHtml += `<tr><td colspan="9" style="text-align: center; padding: 20px;">Nenhum usuário encontrado com os filtros aplicados.</td></tr>`;
                                         } else {
@@ -4703,7 +4703,7 @@
                                 renderList(currentPage);
                                 selectedUsers.clear(); // Limpa seleção
                             };
-                            
+
                             const getFollowersAndFollowing = async (username) => {
                                 try {
                                     const response = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, {
@@ -4779,7 +4779,7 @@
                                     const catAction = execDiv.querySelector('input[name="catAction"]:checked')?.value || 'add';
 
                                     if (!doMute && !doCF && !doHide && !doCat) return alert("Selecione pelo menos uma ação.");
-                                    
+
                                     // Mute options
                                     const muteType = (document.getElementById('execMuteStories').checked && document.getElementById('execMutePosts').checked) ? 'all' : (document.getElementById('execMuteStories').checked ? 'stories' : 'posts');
                                     const selectedCats = Array.from(execDiv.querySelectorAll('.execCatItem:checked')).map(i => i.value);
@@ -4817,7 +4817,7 @@
                                         await toggleListMembership(selectedUsernames, '/accounts/hide_story_and_live_from/', 'hiddenStory', () => {});
                                         // userListCache.hiddenStory já é atualizado dentro de toggleListMembership
                                     }
-                                    
+
                                     if (updateCallback) await updateCallback(selectedUsernames, 'exec');
                                     showToast("Ações aplicadas com sucesso!");
                                 };
@@ -4828,7 +4828,7 @@
                                 btn.disabled = true;
                                 const originalText = btn.textContent;
                                 btn.textContent = 'Carregando...';
-                                
+
                                 for (let i = 0; i < currentPaginatedUsers.length; i++) {
                                     const user = currentPaginatedUsers[i];
                                     // If data exists, skip to next
@@ -4847,7 +4847,7 @@
                                 btn.textContent = originalText;
                                 renderList(currentPage);
                             };
-                            
+
                             renderList(currentPage);
                         }
                         carregarSeguindo();

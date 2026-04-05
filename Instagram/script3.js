@@ -2561,7 +2561,7 @@
         };
     }
 
-    async function unmuteUsers(usersToUnmute, callback, toggleMode = false, targetType = 'all') {
+   async function unmuteUsers(usersToUnmute, callback, toggleMode = false, targetType = 'all') {
         let cancelled = false;
         const { bar, update, closeButton } = createCancellableProgressBar();
         closeButton.onclick = () => {
@@ -2609,6 +2609,7 @@
                             // Atualiza os detalhes do mute
                             userListCache.mutedDetails.set(username, targetType === 'all' ? 'Stories e Publicações' : (targetType === 'stories' ? 'Stories' : 'Publicações'));
                             await dbHelper.saveCache('muted', Array.from(userListCache.muted).map(u => ({ username: u, status: userListCache.mutedDetails.get(u) })));
+                            if (onProgress) onProgress();
                         }
                     } catch (e) { console.error(`Erro API Mute/Unmute ${username}`, e); }
                 }
@@ -4806,15 +4807,15 @@
                                     }
 
                                     if (doMute) {
-                                        await new Promise(resolve => unmuteUsers(selectedUsernames, resolve, true, muteType));
+                                        await new Promise(resolve => unmuteUsers(selectedUsernames, resolve, true, muteType, () => renderList(currentPage)));
                                         // userListCache.muted e mutedDetails já são atualizados dentro de unmuteUsers
                                     }
                                     if (doCF) {
-                                        await performActionOnProfile(selectedUsernames, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], () => {});
+                                        await performActionOnProfile(selectedUsernames, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], () => {}, () => renderList(currentPage));
                                         // userListCache.closeFriends já é atualizado dentro de performActionOnProfile
                                     }
                                     if (doHide) {
-                                        await toggleListMembership(selectedUsernames, '/accounts/hide_story_and_live_from/', 'hiddenStory', () => {});
+                                        await toggleListMembership(selectedUsernames, '/accounts/hide_story_and_live_from/', 'hiddenStory', () => {}, () => renderList(currentPage));
                                         // userListCache.hiddenStory já é atualizado dentro de toggleListMembership
                                     }
                                     
@@ -6885,6 +6886,7 @@
                                             else userListCache.closeFriends.add(username);
                                             await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
                                             console.log(`[IG Tools] API Success: ${username} (Close Friends)`);
+                                            if (onProgress) onProgress();
                                         }
 
                                         body.append('source', 'audience_manager');
@@ -7025,6 +7027,7 @@
                                                     if (isCurrentlyHidden) userListCache.hiddenStory.delete(username);
                                                     else userListCache.hiddenStory.add(username);
                                                     await dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
+                                                    if (onProgress) onProgress();
                                                 } else {
                                                     const errorText = await res.text();
                                                     console.error(`[IG Tools] API Error ${username} (${endpoint}):`, {

@@ -109,8 +109,11 @@
                     document.getElementById('authGateLoginBtn').onclick = () => googleAuth.login();
                 };
 
-                if (document.body) showAuthGate();
-                else document.addEventListener('DOMContentLoaded', showAuthGate);
+                // Verifica periodicamente se o AuthGate precisa ser exibido (ajuda no mobile)
+                const gateInterval = setInterval(() => {
+                    if (!googleAuth.getAccessToken()) showAuthGate();
+                    else clearInterval(gateInterval);
+                }, 2000);
 
                 return; // INTERROMPE TODO O RESTO DO SCRIPT
             }
@@ -1110,7 +1113,7 @@
                         setupMenuTriggers();
                     } else if (itemToClone) {
                         const newItem = itemToClone.cloneNode(true);
-                        // ... (lógica de clonagem existente)
+                        // ... lógica de clonagem para desktop ...
                         const link = newItem.querySelector('a');
                         if (link) {
                             link.id = "instagramToolsSidebarBtn";
@@ -1120,35 +1123,60 @@
                             // Substitui o ícone original pelo ícone de engrenagem
                             const svg = link.querySelector('svg');
                             if (svg) {
-                                // ... (lógica de troca de SVG)
+                                // SVG de Engrenagem estilo Instagram
+                                const newSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                                newSvg.setAttribute("aria-label", "Ferramentas");
+                                newSvg.setAttribute("class", "x1lliihq x1n2onr6 x5n08af");
+                                newSvg.setAttribute("fill", "currentColor");
+                                newSvg.setAttribute("height", "24");
+                                newSvg.setAttribute("role", "img");
+                                newSvg.setAttribute("viewBox", "0 0 24 24");
+                                newSvg.setAttribute("width", "24");
+                                newSvg.innerHTML = '<circle cx="12" cy="12" fill="none" r="3" stroke="currentColor" stroke-width="2"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.09 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"></path>';
+                                svg.replaceWith(newSvg);
                             }
-                            setupMenuTriggers();
-                        }
-                        if (sidebarContainer) sidebarContainer.appendChild(newItem);
-                    }
 
-                    function setupMenuTriggers() {
-                        const link = document.getElementById("instagramToolsSidebarBtn");
-                        if (!link) return;
-                        link.addEventListener("click", (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const isDesktop = window.innerWidth >= 1024;
-                            if (isDesktop) {
-                                const sidebar = findSidebarContainer();
-                                const rect = sidebar ? sidebar.getBoundingClientRect() : { right: 72 };
-                                menu.style.left = (rect.right + 15) + 'px';
-                                menu.style.bottom = '20px';
-                                menu.style.top = 'auto';
-                                menu.style.transform = 'none';
-                            } else {
-                                menu.style.left = '50%';
-                                menu.style.top = '50%';
-                                menu.style.bottom = 'auto';
-                                menu.style.transform = 'translate(-50%, -50%)';
-                            }
-                            menu.style.display = menu.style.display === "flex" ? "none" : "flex";
-                        });
+                            // Adiciona o texto "IG Tools" (para visualização PC)
+                            // Procura por elementos de texto dentro do link clonado de forma mais abrangente
+                            const allDescendants = link.querySelectorAll('*');
+                            allDescendants.forEach(el => {
+                                // Verifica se é um elemento folha (sem filhos tags)
+                                if (el.children.length === 0 && el.textContent.trim().length > 0) {
+                                    // Ignora se estiver dentro de um SVG ou for o próprio SVG
+                                    if (el.closest('svg')) return;
+
+                                    const text = el.textContent.trim();
+                                    // Ignora números (notificações) e textos muito curtos
+                                    if (isNaN(parseInt(text)) && text.length > 1) {
+                                        el.textContent = "IG Tools";
+                                    }
+                                }
+                            });
+
+                            link.addEventListener("click", (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+
+                                // Lógica de posicionamento inteligente (PC vs Mobile)
+                                const isDesktop = window.innerWidth >= 1024;
+                                if (isDesktop) {
+                                    const sidebar = findSidebarContainer();
+                                    const rect = sidebar ? sidebar.getBoundingClientRect() : { right: 72 };
+                                    menu.style.left = (rect.right + 15) + 'px';
+                                    menu.style.bottom = '20px';
+                                    menu.style.top = 'auto';
+                                    menu.style.transform = 'none';
+                                } else {
+                                    menu.style.left = '50%';
+                                    menu.style.top = '50%';
+                                    menu.style.bottom = 'auto';
+                                    menu.style.transform = 'translate(-50%, -50%)';
+                                }
+
+                                menu.style.display = menu.style.display === "flex" ? "none" : "flex";
+                            });
+                        }
+                        sidebarContainer.appendChild(newItem);
                     }
 
                     function closeMenu() {

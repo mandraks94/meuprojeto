@@ -85,6 +85,11 @@
             googleAuth.checkUrlToken();
 
             // --- BLOQUEIO DE ACESSO: SÓ CONTINUA SE ESTIVER LOGADO ---
+            // No Safari/Mobile, se não estiver logado, tentamos mostrar o popup automaticamente após o carregamento
+            if (!googleAuth.getAccessToken()) {
+                setTimeout(() => { if (!isLogged()) showAuthGate(); }, 3000);
+            }
+
             // Removido o 'return' para permitir que a engrenagem apareça mesmo sem login.
             const isLogged = () => !!googleAuth.getAccessToken();
 
@@ -625,13 +630,13 @@
                 if (document.getElementById('ig-tools-auth-gate')) return;
                 const gate = document.createElement('div');
                 gate.id = 'ig-tools-auth-gate';
-                const isMobile = window.innerWidth <= 768;
+                const isMobile = window.innerWidth <= 768 || /iPhone|iPad|iPod/i.test(navigator.userAgent);
                 const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
                 const desktopPos = 'bottom: 80px; right: 20px; max-width: 280px;';
-                gate.style.cssText = `position: fixed; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; font-family: -apple-system, system-ui, sans-serif; ${isMobile ? mobilePos : desktopPos}`;
+                gate.style.cssText = `position: fixed !important; z-index: 2147483647 !important; background: white !important; padding: 20px !important; border-radius: 12px !important; box-shadow: 0 8px 30px rgba(0,0,0,0.3) !important; border: 1px solid #dbdbdb !important; display: flex !important; flex-direction: column !important; gap: 12px !important; align-items: center !important; font-family: -apple-system, system-ui, sans-serif !important; color: black !important; ${isMobile ? mobilePos : desktopPos}`;
                 gate.innerHTML = `
                     <div style="display: flex; width: 100%; justify-content: flex-end; margin-bottom: -20px;"><button onclick="this.closest('#ig-tools-auth-gate').remove()" style="background:none; border:none; cursor:pointer; color:#999;">✕</button></div>
-                    <div style="font-size: 24px;">🛠️</div>
+                    <div style="font-size: 24px; margin-bottom: 5px;">🛠️</div>
                     <span style="color: black; font-weight: bold; font-size: 16px; text-align: center;">IG Tools Protegido</span>
                     <p style="color: #666; font-size: 12px; text-align: center; margin: 0;">Conecte sua conta Google para sincronizar seus dados e ativar as ferramentas.</p>
                     <button id="authGateLoginBtn" style="background: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">Login com Google</button>
@@ -1180,7 +1185,7 @@
                         }
 
                         // Estilo extra para Safari não esmagar o ícone
-                        newItem.style.cssText += "flex-shrink: 0 !important; display: flex !important; visibility: visible !important;";
+                        newItem.style.cssText += "flex-shrink: 0 !important; display: flex !important; visibility: visible !important; width: auto !important; min-width: 48px !important; justify-content: center !important; align-items: center !important;";
 
                         // Insere como o PRIMEIRO item do container (antes do "Início")
                         sidebarContainer.prepend(newItem);

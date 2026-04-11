@@ -1,10 +1,15 @@
 // ==UserScript==
-// @name         teste
+// @name         teste_1
 // @description  Adds download buttons to Instagram stories
 // @author       You
 // @version      1.0
 // @match        https://www.instagram.com/*
-// @grant        none
+// @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        unsafeWindow
+// @connect      www.googleapis.com
+// @connect      accounts.google.com
 // ==/UserScript==
 
 (function() {
@@ -13,6 +18,189 @@
 
     function initScript() {
         if (window.location.href.includes("instagram.com")) {
+
+            // Helper para Toast (Notificação Visual) - Movido para o topo para uso no fluxo de Login
+            function showToast(message) {
+                if (!document.body) { console.log("[IG Tools]", message); return; }
+                const toast = document.createElement('div');
+                toast.innerText = message;
+                toast.style.cssText = "position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px; z-index: 2147483647; font-size: 14px; pointer-events: none; transition: opacity 0.5s;";
+                document.body.appendChild(toast);
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    setTimeout(() => toast.remove(), 500);
+                }, 3000);
+            }
+
+            // --- CONFIGURAÇÃO GOOGLE DRIVE ---
+            const GDRIVE_CONFIG = {
+                clientId: '118908063115-j6fj7f069urt69vh5fa6ha1luh4fgvea.apps.googleusercontent.com',
+                scope: 'https://www.googleapis.com/auth/drive.appdata', // Usa a pasta oculta de dados do app
+                fileName: 'ig_tools_data.json'
+            };
+
+            // Interface de armazenamento segura (Fallback para localStorage caso o Tampermonkey falhe)
+            const storage = {
+                get: (key) => {
+                    try {
+                        return typeof GM_getValue !== 'undefined' ? GM_getValue(key) : localStorage.getItem('ig_tools_' + key);
+                    } catch (e) { return localStorage.getItem('ig_tools_' + key); }
+                },
+                set: (key, val) => {
+                    try {
+                        if (typeof GM_setValue !== 'undefined') GM_setValue(key, val);
+                        localStorage.setItem('ig_tools_' + key, val);
+                    } catch (e) { localStorage.setItem('ig_tools_' + key, val); }
+                }
+            };
+
+            const googleAuth = {
+                getAccessToken: () => storage.get('gdrive_token'),
+                setAccessToken: (token) => storage.set('gdrive_token', token),
+
+                login: function() {
+                    if (GDRIVE_CONFIG.clientId.includes('SEU_CLIENT_ID')) {
+                        alert("ERRO: Você precisa configurar seu Client ID do Google Cloud no código!");
+                        window.open('https://console.cloud.google.com/');
+                        return;
+                    }
+                    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GDRIVE_CONFIG.clientId}&redirect_uri=${encodeURIComponent(window.location.origin + '/')}&response_type=token&scope=${encodeURIComponent(GDRIVE_CONFIG.scope)}`;
+                    window.location.href = authUrl;
+                },
+
+                checkUrlToken: function() {
+                    const hash = window.location.hash;
+                    if (hash && hash.includes('access_token=')) {
+                        console.log("[IG Tools] Hash detectado após login.");
+                        const params = new URLSearchParams(hash.substring(1));
+                        const token = params.get('access_token');
+                        console.log("[IG Tools] Sucesso! Token recebido.");
+                        this.setAccessToken(token);
+                        localStorage.setItem('ig_tools_gdrive_token', token); // Garantia extra
+                        showToast("✅ Logado no Google Drive!");
+                        window.location.hash = ''; // Limpa a URL apenas após salvar
+                    }
+                }
+            };
+            googleAuth.checkUrlToken();
+
+            // --- BLOQUEIO DE ACESSO: SÓ CONTINUA SE ESTIVER LOGADO ---
+            if (!googleAuth.getAccessToken()) {
+                console.log("[IG Tools] Acesso negado: Login Google necessário.");
+
+                const showAuthGate = () => {
+                    if (document.getElementById('ig-tools-auth-gate')) return;
+                    const gate = document.createElement('div');
+                    gate.id = 'ig-tools-auth-gate';
+                    gate.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; max-width: 280px; font-family: -apple-system, system-ui, sans-serif;';
+                    gate.innerHTML = `
+                        <div style="font-size: 24px;">🛠️</div>
+                        <span style="color: black; font-weight: bold; font-size: 16px; text-align: center;">IG Tools Protegido</span>
+                        <p style="color: #666; font-size: 12px; text-align: center; margin: 0;">Faça login com sua conta Google para ativar as ferramentas de download e análise.</p>
+                        <button id="authGateLoginBtn" style="background: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; transition: background 0.2s;">Login com Google</button>
+                    `;
+                    document.body.appendChild(gate);
+                    document.getElementById('authGateLoginBtn').onclick = () => googleAuth.login();
+                };
+
+                if (document.body) showAuthGate();
+                else document.addEventListener('DOMContentLoaded', showAuthGate);
+
+                return; // INTERROMPE TODO O RESTO DO SCRIPT
+            }
+
+            const gDriveApi = {
+                execute: function(options) {
+                    const token = googleAuth.getAccessToken();
+                    if (!token) {
+                        showToast("⚠️ Faça login no Google nas Configurações");
+                        return Promise.reject("Sem token");
+                    }
+                    return new Promise((resolve, reject) => {
+                        if (typeof GM_xmlhttpRequest !== 'undefined') {
+                            GM_xmlhttpRequest({
+                                ...options,
+                                headers: {
+                                    ...options.headers,
+                                    'Authorization': `Bearer ${token}`
+                                },
+                                onload: (res) => {
+                                    console.log(`[IG Tools] API Response (${options.method} ${options.url}):`, res.status);
+                                    if (res.status >= 200 && res.status < 300) {
+                                        try {
+                                            // Se a resposta for vazia (ex: 204), retorna objeto vazio
+                                            const data = res.responseText ? JSON.parse(res.responseText) : {};
+                                            resolve(data);
+                                        } catch (e) {
+                                            // Se não for JSON (como o download de um arquivo), retorna o texto puro
+                                            resolve(res.responseText);
+                                        }
+                                    } else {
+                                        reject(res);
+                                    }
+                                },
+                                onerror: (err) => { console.error("[IG Tools] Network Error:", err); reject(err); }
+                            });
+                        } else {
+                            reject("GM_xmlhttpRequest missing");
+                        }
+                    });
+                },
+
+                getFileId: async function() {
+                    const data = await this.execute({
+                        method: 'GET',
+                        url: `https://www.googleapis.com/drive/v3/files?q=name='${GDRIVE_CONFIG.fileName}'&spaces=appDataFolder`
+                    });
+                    if (data.files && data.files.length > 0) {
+                        console.log("[IG Tools] Arquivo encontrado no Drive ID:", data.files[0].id);
+                        return data.files[0].id;
+                    }
+                    return null;
+                },
+
+                saveData: async function(allData) {
+                    let fileId = await this.getFileId();
+                    const method = fileId ? 'PATCH' : 'POST';
+                    const url = fileId
+                        ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`
+                        : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+
+                    if (!fileId) {
+                        // Criação inicial (Multipart)
+                        console.log("[IG Tools] Criando novo arquivo no Google Drive...");
+                        const metadata = { name: GDRIVE_CONFIG.fileName, parents: ['appDataFolder'] };
+                        const body = `--foo\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--foo\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(allData)}\r\n--foo--`;
+                        return this.execute({
+                            method,
+                            url,
+                            headers: { 'Content-Type': 'multipart/related; boundary=foo' },
+                            data: body
+                        });
+                    } else {
+                        // Atualização simples
+                        console.log("[IG Tools] Atualizando arquivo existente no Drive...");
+                        return this.execute({ method, url, data: JSON.stringify(allData) });
+                    }
+                },
+
+                loadData: async function() {
+                    const fileId = await this.getFileId();
+                    if (!fileId) return {};
+                    const response = await this.execute({
+                        method: 'GET',
+                        url: `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
+                    });
+                    try {
+                        // O execute retorna o texto se não for JSON, então parseamos aqui
+                        return typeof response === 'string' ? JSON.parse(response) : response;
+                    } catch (e) {
+                        console.error("[IG Tools] Erro ao parsear dados do arquivo:", e);
+                        return {};
+                    }
+                }
+            };
+
             const infoIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: text-bottom; margin-left: 5px;"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>`;
 
             // Helper para Cookie
@@ -97,21 +285,6 @@
                     console.error("Erro ao obter ID:", e);
                     return null;
                 }
-            }
-
-
-
-
-            // Helper para Toast (Notificação Visual)
-            function showToast(message) {
-                const toast = document.createElement('div');
-                toast.innerText = message;
-                toast.style.cssText = "position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px; z-index: 2147483647; font-size: 14px; pointer-events: none; transition: opacity 0.5s;";
-                document.body.appendChild(toast);
-                setTimeout(() => {
-                    toast.style.opacity = '0';
-                    setTimeout(() => toast.remove(), 500);
-                }, 3000);
             }
 
             // --- INTERCEPTOR STORIES ANÔNIMO ---
@@ -214,229 +387,106 @@
                 }
             }
 
-            // Helper para IndexedDB
+            // Helper consolidado para Google Drive (Substitui o IndexedDB completamente)
             const dbHelper = {
-                db: null,
-                openDB: function() {
-                    return new Promise((resolve, reject) => {
-                        const request = indexedDB.open('InstagramToolsDB', 8);
-                        request.onupgradeneeded = (event) => {
-                            const db = event.target.result;
-                            if (!db.objectStoreNames.contains('closeFriends')) {
-                                db.createObjectStore('closeFriends', { keyPath: 'id', autoIncrement: true });
-                            }
-                            if (!db.objectStoreNames.contains('hiddenStory')) {
-                                db.createObjectStore('hiddenStory', { keyPath: 'id', autoIncrement: true });
-                            }
-                            if (!db.objectStoreNames.contains('muted')) {
-                                db.createObjectStore('muted', { keyPath: 'id', autoIncrement: true });
-                            }
-                            if (!db.objectStoreNames.contains('unfollowHistory')) {
-                                db.createObjectStore('unfollowHistory', { keyPath: 'username' });
-                            }
-                            if (!db.objectStoreNames.contains('followers')) {
-                                db.createObjectStore('followers', { keyPath: 'id', autoIncrement: true });
-                            }
-                            if (!db.objectStoreNames.contains('following')) {
-                                db.createObjectStore('following', { keyPath: 'id', autoIncrement: true });
-                            }
-                            if (!db.objectStoreNames.contains('exceptions')) {
-                                db.createObjectStore('exceptions', { keyPath: 'username' });
-                            }
-                            if (!db.objectStoreNames.contains('categories')) {
-                                db.createObjectStore('categories', { keyPath: 'id' });
-                            }
-                            if (!db.objectStoreNames.contains('userCategories')) {
-                                db.createObjectStore('userCategories', { keyPath: 'username' });
-                            }
-                        };
-                        request.onsuccess = (event) => {
-                            this.db = event.target.result;
-                            resolve(this.db);
-                        };
-                        request.onerror = (event) => {
-                            reject(event.target.error);
-                        };
-                    });
+                _cache: null,
+                _init: async function() {
+                    if (!this._cache) {
+                    try {
+                        console.log("[IG Tools] Sincronizando com Google Drive...");
+                        this._cache = await gDriveApi.loadData();
+                        // Garante que o cache seja um objeto e não nulo/texto
+                        if (!this._cache || typeof this._cache !== 'object') {
+                            this._cache = {};
+                        }
+                        if (Object.keys(this._cache).length > 0) {
+                            console.log("[IG Tools] Dados carregados com sucesso.");
+                        }
+                    } catch (e) {
+                        console.error("[IG Tools] Erro ao carregar dados da nuvem:", e);
+                        this._cache = {};
+                    }
+                    }
+                    return this._cache;
                 },
+                openDB: function() { return this._init(); },
                 saveCache: async function(storeName, data) {
-                    if (!this.db) await this.openDB();
-                    const transaction = this.db.transaction([storeName], 'readwrite');
-                    const store = transaction.objectStore(storeName);
-                    // Clear existing data
-                    await new Promise((resolve) => {
-                        const clearRequest = store.clear();
-                        clearRequest.onsuccess = () => resolve();
-                        clearRequest.onerror = () => resolve(); // Continue even if clear fails
-                    });
-                    // Save new data
-                    const dataArray = Array.from(data);
-                    // Verifica se é uma lista de objetos ou strings
-                    const isObject = dataArray.length > 0 && typeof dataArray[0] === 'object';
-                    const record = { id: 1, usernames: isObject ? dataArray.map(u => u.username) : dataArray };
-                    if (isObject) record.users = dataArray; // Salva os detalhes completos se disponíveis
-
-                    await new Promise((resolve, reject) => {
-                        const addRequest = store.put(record);
-                        addRequest.onsuccess = () => resolve();
-                        addRequest.onerror = (event) => reject(event.target.error);
-                    });
+                    await this._init();
+                    this._cache[storeName] = Array.from(data);
+                    await gDriveApi.saveData(this._cache);
                 },
                 loadCache: async function(storeName) {
-                    if (!this.db) await this.openDB();
-                    const transaction = this.db.transaction([storeName], 'readonly');
-                    const store = transaction.objectStore(storeName);
-                    return new Promise((resolve) => {
-                        const request = store.getAll();
-                        request.onsuccess = () => {
-                            const results = request.result;
-                            if (results.length > 0) {
-                                const res = results[0];
-                                const set = new Set(res.usernames);
-                                if (res.users) {
-                                    set.details = new Map(res.users.map(u => [u.username, u]));
-                                }
-                                resolve(set);
-                            } else {
-                                resolve(null);
-                            }
-                        };
-                        request.onerror = () => resolve(null);
-                    });
+                    await this._init();
+                    const data = this._cache[storeName];
+                    if (!data) return null;
+                    const set = new Set(data.map(u => typeof u === 'string' ? u : u.username));
+                    if (data[0] && typeof data[0] === 'object') set.details = new Map(data.map(u => [u.username, u]));
+                    return set;
                 },
                 saveUnfollowHistory: async function(userData) {
-                    if (!this.db) await this.openDB();
-                    const transaction = this.db.transaction(['unfollowHistory'], 'readwrite');
-                    const store = transaction.objectStore('unfollowHistory');
-                    return new Promise((resolve, reject) => {
-                        // put() irá adicionar ou atualizar o registro
-                        const request = store.put(userData);
-                        request.onsuccess = () => resolve();
-                        request.onerror = (event) => reject(event.target.error);
-                    });
+                    await this._init();
+                    if (!this._cache.unfollowHistory) this._cache.unfollowHistory = [];
+                    this._cache.unfollowHistory.push(userData);
+                    await gDriveApi.saveData(this._cache);
                 },
                 deleteUnfollowHistory: async function(usernames) {
-                    if (!this.db) await this.openDB();
-                    const transaction = this.db.transaction(['unfollowHistory'], 'readwrite');
-                    const store = transaction.objectStore('unfollowHistory');
-                    return new Promise((resolve) => {
-                        let count = 0;
-                        if (usernames.length === 0) resolve();
-                        usernames.forEach(u => {
-                            const req = store.delete(u);
-                            req.onsuccess = () => { count++; if(count === usernames.length) resolve(); };
-                            req.onerror = () => { count++; if(count === usernames.length) resolve(); };
-                        });
-                    });
+                    await this._init();
+                    this._cache.unfollowHistory = (this._cache.unfollowHistory || []).filter(u => !usernames.includes(u.username));
+                    await gDriveApi.saveData(this._cache);
                 },
                 loadUnfollowHistory: async function() {
-                    if (!this.db) await this.openDB();
-                    const transaction = this.db.transaction(['unfollowHistory'], 'readonly');
-                    const store = transaction.objectStore('unfollowHistory');
-                    return new Promise((resolve) => {
-                        const request = store.getAll();
-                        request.onsuccess = () => {
-                            // Ordena por data decrescente
-                            const sorted = request.result.sort((a, b) => new Date(b.unfollowDate) - new Date(a.unfollowDate));
-                            resolve(sorted);
-                        };
-                        request.onerror = () => resolve([]); // Retorna array vazio em caso de erro
-                    });
+                    await this._init();
+                    return (this._cache.unfollowHistory || []).sort((a, b) => new Date(b.unfollowDate) - new Date(a.unfollowDate));
                 },
                 saveException: async function(username) {
-                    if (!this.db) await this.openDB();
-                    const tx = this.db.transaction(['exceptions'], 'readwrite');
-                    const store = tx.objectStore('exceptions');
-                    store.put({ username: username });
+                    await this._init();
+                    if (!this._cache.exceptions) this._cache.exceptions = [];
+                    if (!this._cache.exceptions.includes(username)) this._cache.exceptions.push(username);
+                    await gDriveApi.saveData(this._cache);
                 },
                 loadExceptions: async function() {
-                    if (!this.db) await this.openDB();
-                    const tx = this.db.transaction(['exceptions'], 'readonly');
-                    const store = tx.objectStore('exceptions');
-                    return new Promise(resolve => {
-                        const req = store.getAll();
-                        req.onsuccess = () => resolve(new Set(req.result.map(i => i.username)));
-                        req.onerror = () => resolve(new Set());
-                    });
-                },
-                clearCache: async function(storeName) {
-                    if (!this.db) await this.openDB();
-                    const transaction = this.db.transaction([storeName], 'readwrite');
-                    const store = transaction.objectStore(storeName);
-                    return new Promise((resolve) => {
-                        const req = store.clear();
-                        req.onsuccess = () => resolve();
-                        req.onerror = () => resolve();
-                    });
-                },
-                loadCacheRaw: async function(storeName) {
-                    if (!this.db) await this.openDB();
-                    const transaction = this.db.transaction([storeName], 'readonly');
-                    const store = transaction.objectStore(storeName);
-                    return new Promise((resolve) => {
-                        const request = store.getAll();
-                        request.onsuccess = () => resolve(request.result[0] || null);
-                        req.onerror = () => resolve();
-                    });
+                    await this._init();
+                    return new Set(this._cache.exceptions || []);
                 },
                 saveCategory: async function(category) {
-                    if (!this.db) await this.openDB();
-                    const tx = this.db.transaction(['categories'], 'readwrite');
-                    tx.objectStore('categories').put(category);
-                    return tx.complete;
+                    await this._init();
+                    if (!this._cache.categories) this._cache.categories = [];
+                    const idx = this._cache.categories.findIndex(c => c.id === category.id);
+                    if (idx > -1) this._cache.categories[idx] = category;
+                    else this._cache.categories.push(category);
+                    await gDriveApi.saveData(this._cache);
                 },
                 loadCategories: async function() {
-                    if (!this.db) await this.openDB();
-                    const tx = this.db.transaction(['categories'], 'readonly');
-                    return new Promise(resolve => {
-                        const req = tx.objectStore('categories').getAll();
-                        req.onsuccess = () => resolve(req.result.sort((a, b) => a.name.localeCompare(b.name)));
-                        req.onerror = () => resolve([]);
-                    });
+                    await this._init();
+                    return (this._cache.categories || []).sort((a, b) => a.name.localeCompare(b.name));
                 },
                 deleteCategory: async function(categoryId) {
-                    if (!this.db) await this.openDB();
-                    const tx = this.db.transaction(['categories', 'userCategories'], 'readwrite');
-                    tx.objectStore('categories').delete(categoryId);
-
-                    // Also remove this category from all users
-                    const userStore = tx.objectStore('userCategories');
-                    const cursorReq = userStore.openCursor();
-                    cursorReq.onsuccess = e => {
-                        const cursor = e.target.result;
-                        if (cursor) {
-                            const user = cursor.value;
-                            const updatedCategories = user.categories.filter(c => c !== categoryId);
-                            if (updatedCategories.length < user.categories.length) {
-                                user.categories = updatedCategories;
-                                cursor.update(user);
-                            }
-                            cursor.continue();
-                        }
-                    };
-                    return tx.complete;
+                    await this._init();
+                    this._cache.categories = (this._cache.categories || []).filter(c => c.id !== categoryId);
+                    if (this._cache.userCategories) {
+                        Object.keys(this._cache.userCategories).forEach(user => {
+                            this._cache.userCategories[user] = this._cache.userCategories[user].filter(id => id !== categoryId);
+                        });
+                    }
+                    await gDriveApi.saveData(this._cache);
                 },
                 saveUserCategories: async function(username, categoryIds) {
-                    if (!this.db) await this.openDB();
-                    const tx = this.db.transaction(['userCategories'], 'readwrite');
-                    const store = tx.objectStore('userCategories');
-                    store.put({ username: username.toLowerCase(), categories: categoryIds });
-                    return tx.complete;
+                    await this._init();
+                    if (!this._cache.userCategories) this._cache.userCategories = {};
+                    this._cache.userCategories[username.toLowerCase()] = categoryIds;
+                    await gDriveApi.saveData(this._cache);
                 },
                 loadAllUserCategories: async function() {
-                    if (!this.db) await this.openDB();
-                    const tx = this.db.transaction(['userCategories'], 'readonly');
-                    return new Promise(resolve => {
-                        const req = tx.objectStore('userCategories').getAll();
-                        req.onsuccess = () => {
-                            const map = new Map();
-                            req.result.forEach(item => {
-                                if (item.username) map.set(item.username.toLowerCase(), item.categories);
-                            });
-                            resolve(map);
-                        };
-                        req.onerror = () => resolve(new Map());
-                    });
+                    await this._init();
+                    const map = new Map();
+                    const data = this._cache.userCategories || {};
+                    Object.keys(data).forEach(user => map.set(user, data[user]));
+                    return map;
+                },
+                clearCache: async function(storeName) {
+                    await this._init();
+                    delete this._cache[storeName];
+                    await gDriveApi.saveData(this._cache);
                 }
             };
 
@@ -4932,6 +4982,10 @@
                                                 <span>⚡ ${getText('useApi')}</span>
                                                 <label class="switch"><input type="checkbox" id="settingsUseApiToggle" ${settings.useApi ? 'checked' : ''}><span class="slider"></span></label>
                                             </div>
+                                            <div class="toggle-item">
+                                                <span>☁️ Google Drive</span>
+                                                <button id="googleLoginBtn" style="padding: 5px 10px; border-radius: 5px; cursor: pointer;">Login</button>
+                                            </div>
                                     <button id="settingsVoiceBtn" class="menu-item-button">🎙️ Comandos de Voz</button>
                                             <button id="settingsManageCategoriesBtn" class="menu-item-button">📁 Gerenciar Categorias</button>
                                     <button id="settingsShortcutsBtn" class="menu-item-button">⌨️ ${getText('shortcuts')}</button>
@@ -4943,6 +4997,8 @@
                         document.body.appendChild(div);
 
                         document.getElementById("fecharSettingsBtn").onclick = () => div.remove();
+
+                        document.getElementById("googleLoginBtn").onclick = () => googleAuth.login();
 
                                 document.getElementById("settingsDarkModeToggle").onchange = (e) => {
                                     toggleDarkMode(e.target.checked);
@@ -5511,10 +5567,9 @@
                             const storeName = document.getElementById('dbStoreSelect').value;
                             if (!storeName) return alert("Selecione uma tabela.");
                             if (confirm(`Tem certeza que deseja limpar a tabela '${storeName}'? Isso não pode ser desfeito.`)) {
-                                const db = await dbHelper.openDB();
-                                const tx = db.transaction([storeName], 'readwrite');
-                                tx.objectStore(storeName).clear();
+                                await dbHelper.clearCache(storeName);
                                 alert(`Tabela '${storeName}' limpa com sucesso.`);
+                                div.remove(); abrirModalParametros(); // Recarrega
                             }
                         };
 
@@ -5522,52 +5577,30 @@
                             const storeName = document.getElementById('dbStoreSelect').value;
                             if (!storeName) return alert("Selecione uma tabela.");
 
-                            const db = await dbHelper.openDB();
-                            const tx = db.transaction([storeName], 'readonly');
-                            const store = tx.objectStore(storeName);
-                            const req = store.getAll();
+                            await dbHelper.openDB();
+                            const result = dbHelper._cache[storeName];
+                            if (!result || (Array.isArray(result) && result.length === 0)) return alert("Tabela vazia.");
 
-                            req.onsuccess = () => {
-                                const result = req.result;
-                                if (!result || result.length === 0) return alert("Tabela vazia.");
+                            const dataToExport = Array.isArray(result) ? result : [result];
+                            const firstItem = dataToExport[0];
+                            const keys = typeof firstItem === 'object' ? Object.keys(firstItem) : ['value'];
 
-                                let dataToExport = [];
+                            const csvContent = [
+                                keys.join(','),
+                                ...dataToExport.map(row => keys.map(k => {
+                                    let val = typeof row === 'object' ? row[k] : row;
+                                    return `"${String(val || '').replace(/"/g, '""')}"`;
+                                }).join(','))
+                            ].join('\n');
 
-                                // Lógica para extrair dados dependendo do formato da tabela
-                                if (result.length === 1 && result[0].usernames && Array.isArray(result[0].usernames)) {
-                                    // Formato de cache (followers, following)
-                                    if (result[0].users) {
-                                        dataToExport = result[0].users; // Objetos completos
-                                    } else {
-                                        dataToExport = result[0].usernames.map(u => ({ username: u }));
-                                    }
-                                } else {
-                                    // Formato de histórico ou exceções
-                                    dataToExport = result;
-                                }
-
-                                if (dataToExport.length === 0) return alert("Dados não formatáveis ou vazios.");
-
-                                // Gerar CSV
-                                const keys = Object.keys(dataToExport[0]);
-                                const csvContent = [
-                                    keys.join(','), // Cabeçalho
-                                    ...dataToExport.map(row => keys.map(k => {
-                                        let val = row[k];
-                                        if (typeof val === 'string') val = `"${val}"`; // Aspas para strings
-                                        return val;
-                                    }).join(','))
-                                ].join('\n');
-
-                                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                                const url = URL.createObjectURL(blob);
-                                const link = document.createElement("a");
-                                link.setAttribute("href", url);
-                                link.setAttribute("download", `${storeName}_backup.csv`);
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                            };
+                            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement("a");
+                            link.href = url;
+                            link.download = `${storeName}_gdrive_backup.csv`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
                         };
                     }
 

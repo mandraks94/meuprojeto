@@ -780,7 +780,10 @@
                                 parent = parent.parentElement;
                             }
                         }
-                        return document.querySelector('div.x78zum5.xaw8158.xh8yej3') || document.querySelector('div[role="navigation"] > div > div');
+                        // Seletores combinados para Desktop, iPad e Mobile Safari
+                        return document.querySelector('div.x78zum5.xaw8158.xh8yej3') || 
+                               document.querySelector('div[role="navigation"] > div > div') ||
+                               document.querySelector('div.x9f619.x1n2onr6.x1ja2u2z div.x78zum5.x6s0dn4.xl56j7k');
                     }
 
                     function findItemToClone(container, link) {
@@ -1069,8 +1072,8 @@
                     const homeLink = sidebarContainer ? (sidebarContainer.querySelector('a[href="/"]') || document.querySelector('a[href="/"]')) : null;
                     const itemToClone = (sidebarContainer && homeLink) ? findItemToClone(sidebarContainer, homeLink) : null;
 
-                    // Só cria o botão flutuante se REALMENTE não encontrar a barra de navegação (itemToClone)
-                    if (!itemToClone) {
+                    // Fallback para Mobile Safari: Se não encontrar onde injetar na barra, usa o FAB flutuante
+                    if (!itemToClone && !document.getElementById("instagramToolsMobileFab")) {
                         const fab = document.createElement("div");
                         fab.id = "instagramToolsMobileFab";
                         fab.style.cssText = `
@@ -1177,11 +1180,12 @@
                         }
 
                         // Estilo extra para Safari não esmagar o ícone
-                        newItem.style.flexShrink = "0";
-                        newItem.style.display = "flex";
+                        newItem.style.cssText += "flex-shrink: 0 !important; display: flex !important; visibility: visible !important;";
 
                         // Insere como o PRIMEIRO item do container (antes do "Início")
                         sidebarContainer.prepend(newItem);
+                        
+                        console.log("[IG Tools] Menu injetado na barra oficial.");
 
                         // Força um "reflow" no Safari para redesenhar a barra
                         sidebarContainer.offsetHeight;

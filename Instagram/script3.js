@@ -84,14 +84,42 @@
             };
             googleAuth.checkUrlToken();
 
-            // --- BLOQUEIO DE ACESSO: SÓ CONTINUA SE ESTIVER LOGADO ---
-            // No Safari/Mobile, se não estiver logado, tentamos mostrar o popup automaticamente após o carregamento
-            if (!googleAuth.getAccessToken()) {
-                setTimeout(() => { if (!isLogged()) showAuthGate(); }, 3000);
+            const isLogged = () => !!googleAuth.getAccessToken();
+
+            // Função para exibir o popup de login quando necessário
+            function showAuthGate() {
+                if (document.getElementById('ig-tools-auth-gate') || isLogged()) return;
+                
+                const gate = document.createElement('div');
+                gate.id = 'ig-tools-auth-gate';
+                const isMobile = window.innerWidth <= 768 || /iPhone|iPad|iPod|Safari/i.test(navigator.userAgent);
+                const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
+                const desktopPos = 'bottom: 80px; right: 20px; max-width: 280px;';
+                
+                // Estilos reforçados para Safari/Stay
+                gate.style.cssText = `position: fixed !important; z-index: 2147483647 !important; background: white !important; padding: 20px !important; border-radius: 12px !important; box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important; border: 1px solid #dbdbdb !important; display: flex !important; flex-direction: column !important; gap: 12px !important; align-items: center !important; font-family: -apple-system, system-ui, sans-serif !important; color: black !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; ${isMobile ? mobilePos : desktopPos}`;
+                
+                gate.innerHTML = `
+                    <div style="display: flex; width: 100%; justify-content: flex-end; margin-bottom: -20px;">
+                        <button id="closeAuthGateBtn" style="background:none; border:none; cursor:pointer; color:#999; padding: 10px; font-size: 18px;">✕</button>
+                    </div>
+                    <div style="font-size: 24px; margin-bottom: 5px;">🛠️</div>
+                    <span style="color: black !important; font-weight: bold !important; font-size: 16px !important; text-align: center !important; display: block !important;">IG Tools Protegido</span>
+                    <p style="color: #666 !important; font-size: 12px !important; text-align: center !important; margin: 0 !important; display: block !important;">Conecte sua conta Google para sincronizar seus dados e ativar as ferramentas.</p>
+                    <button id="authGateLoginBtn" style="background: #4285F4 !important; color: white !important; border: none !important; padding: 12px 20px !important; border-radius: 6px !important; cursor: pointer !important; font-weight: bold !important; width: 100% !important; display: block !important;">Login com Google</button>
+                `;
+                
+                document.body.appendChild(gate);
+                document.getElementById('authGateLoginBtn').onclick = () => googleAuth.login();
+                document.getElementById('closeAuthGateBtn').onclick = () => gate.remove();
             }
 
-            // Removido o 'return' para permitir que a engrenagem apareça mesmo sem login.
-            const isLogged = () => !!googleAuth.getAccessToken();
+            // --- BLOQUEIO DE ACESSO: SÓ CONTINUA SE ESTIVER LOGADO ---
+            // Tenta mostrar o popup periodicamente se não estiver logado
+            const authInterval = setInterval(() => {
+                if (!isLogged()) showAuthGate();
+                else clearInterval(authInterval);
+            }, 3000);
 
             const gDriveApi = {
                 execute: function(options) {
@@ -624,26 +652,6 @@
                     }
                 });
             }
-
-            // Função para exibir o popup de login quando necessário
-            const showAuthGate = () => {
-                if (document.getElementById('ig-tools-auth-gate')) return;
-                const gate = document.createElement('div');
-                gate.id = 'ig-tools-auth-gate';
-                const isMobile = window.innerWidth <= 768 || /iPhone|iPad|iPod/i.test(navigator.userAgent);
-                const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
-                const desktopPos = 'bottom: 80px; right: 20px; max-width: 280px;';
-                gate.style.cssText = `position: fixed !important; z-index: 2147483647 !important; background: white !important; padding: 20px !important; border-radius: 12px !important; box-shadow: 0 8px 30px rgba(0,0,0,0.3) !important; border: 1px solid #dbdbdb !important; display: flex !important; flex-direction: column !important; gap: 12px !important; align-items: center !important; font-family: -apple-system, system-ui, sans-serif !important; color: black !important; ${isMobile ? mobilePos : desktopPos}`;
-                gate.innerHTML = `
-                    <div style="display: flex; width: 100%; justify-content: flex-end; margin-bottom: -20px;"><button onclick="this.closest('#ig-tools-auth-gate').remove()" style="background:none; border:none; cursor:pointer; color:#999;">✕</button></div>
-                    <div style="font-size: 24px; margin-bottom: 5px;">🛠️</div>
-                    <span style="color: black; font-weight: bold; font-size: 16px; text-align: center;">IG Tools Protegido</span>
-                    <p style="color: #666; font-size: 12px; text-align: center; margin: 0;">Conecte sua conta Google para sincronizar seus dados e ativar as ferramentas.</p>
-                    <button id="authGateLoginBtn" style="background: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">Login com Google</button>
-                `;
-                document.body.appendChild(gate);
-                document.getElementById('authGateLoginBtn').onclick = () => googleAuth.login();
-            };
 
                 function injectMenu() {
                     if (document.getElementById("assistiveTouchMenu")) return;

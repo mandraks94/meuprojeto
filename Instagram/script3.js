@@ -98,8 +98,8 @@
                 const isMobile = window.innerWidth <= 768 || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
                 const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
                 const desktopPos = 'bottom: 20px; right: 20px; max-width: 280px;';
-
-                gate.style.cssText = `position: fixed !important; z-index: 9999999 !important; background: white !important; padding: 20px !important; border-radius: 12px !important; box-shadow: 0 8px 30px rgba(0,0,0,0.3) !important; border: 1px solid #dbdbdb !important; display: flex !important; flex-direction: column !important; gap: 12px !important; align-items: center !important; font-family: -apple-system, system-ui, sans-serif !important; ${isMobile ? mobilePos : desktopPos}`;
+                
+                gate.style.cssText = `position: fixed !important; z-index: 2147483647 !important; background: white !important; padding: 20px !important; border-radius: 12px !important; box-shadow: 0 8px 30px rgba(0,0,0,0.3) !important; border: 1px solid #dbdbdb !important; display: flex !important; flex-direction: column !important; gap: 12px !important; align-items: center !important; font-family: -apple-system, system-ui, sans-serif !important; box-sizing: border-box !important; ${isMobile ? mobilePos : desktopPos}`;
                     gate.innerHTML = `
                         <div style="font-size: 24px;">🛠️</div>
                         <span style="color: black; font-weight: bold; font-size: 16px; text-align: center;">IG Tools Protegido</span>

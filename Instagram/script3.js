@@ -85,8 +85,37 @@
             googleAuth.checkUrlToken();
 
             // --- BLOQUEIO DE ACESSO: SÓ CONTINUA SE ESTIVER LOGADO ---
-            // Removido o 'return' para permitir que a engrenagem apareça mesmo sem login.
-            const isLogged = () => !!googleAuth.getAccessToken();
+            if (!googleAuth.getAccessToken()) {
+                console.log("[IG Tools] Acesso negado: Login Google necessário.");
+
+                const showAuthGate = () => {
+                    if (document.getElementById('ig-tools-auth-gate')) return;
+                    const gate = document.createElement('div');
+                    gate.id = 'ig-tools-auth-gate';
+
+                // Estilo responsivo: centralizado no mobile, canto no desktop
+                const isMobile = window.innerWidth <= 768;
+                const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
+                const desktopPos = 'bottom: 20px; right: 20px; max-width: 280px;';
+
+                gate.style.cssText = `position: fixed; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; font-family: -apple-system, system-ui, sans-serif; ${isMobile ? mobilePos : desktopPos}`;
+
+                    gate.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; max-width: 280px; font-family: -apple-system, system-ui, sans-serif;';
+                    gate.innerHTML = `
+                        <div style="font-size: 24px;">🛠️</div>
+                        <span style="color: black; font-weight: bold; font-size: 16px; text-align: center;">IG Tools Protegido</span>
+                        <p style="color: #666; font-size: 12px; text-align: center; margin: 0;">Faça login com sua conta Google para ativar as ferramentas de download e análise.</p>
+                        <button id="authGateLoginBtn" style="background: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; transition: background 0.2s;">Login com Google</button>
+                    `;
+                    document.body.appendChild(gate);
+                    document.getElementById('authGateLoginBtn').onclick = () => googleAuth.login();
+                };
+
+                if (document.body) showAuthGate();
+                else document.addEventListener('DOMContentLoaded', showAuthGate);
+
+                return; // INTERROMPE TODO O RESTO DO SCRIPT
+            }
 
             const gDriveApi = {
                 execute: function(options) {
@@ -620,30 +649,9 @@
                 });
             }
 
-            // Função para exibir o popup de login quando necessário
-            const showAuthGate = () => {
-                if (document.getElementById('ig-tools-auth-gate')) return;
-                const gate = document.createElement('div');
-                gate.id = 'ig-tools-auth-gate';
-                const isMobile = window.innerWidth <= 768;
-                const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
-                const desktopPos = 'bottom: 80px; right: 20px; max-width: 280px;';
-                gate.style.cssText = `position: fixed; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; font-family: -apple-system, system-ui, sans-serif; ${isMobile ? mobilePos : desktopPos}`;
-                gate.innerHTML = `
-                    <div style="display: flex; width: 100%; justify-content: flex-end; margin-bottom: -20px;"><button onclick="this.closest('#ig-tools-auth-gate').remove()" style="background:none; border:none; cursor:pointer; color:#999;">✕</button></div>
-                    <div style="font-size: 24px;">🛠️</div>
-                    <span style="color: black; font-weight: bold; font-size: 16px; text-align: center;">IG Tools Protegido</span>
-                    <p style="color: #666; font-size: 12px; text-align: center; margin: 0;">Conecte sua conta Google para sincronizar seus dados e ativar as ferramentas.</p>
-                    <button id="authGateLoginBtn" style="background: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">Login com Google</button>
-                `;
-                document.body.appendChild(gate);
-                document.getElementById('authGateLoginBtn').onclick = () => googleAuth.login();
-            };
-
                 function injectMenu() {
                     if (document.getElementById("assistiveTouchMenu")) return;
                     if (document.getElementById("instagramToolsSidebarBtn")) return;
-                    if (document.getElementById("instagramToolsMobileFab")) return;
 
                     // --- LÓGICA DE COMANDOS DE VOZ ---
                     const voiceControl = {
@@ -1063,43 +1071,10 @@
                         document.body.dataset.menuClickListenerAttached = 'true';
                     }
 
-                    const homeLink = sidebarContainer ? sidebarContainer.querySelector('a[href="/"]') : null;
-                    const itemToClone = (sidebarContainer && homeLink) ? findItemToClone(sidebarContainer, homeLink) : null;
+                    const homeLink = sidebarContainer.querySelector('a[href="/"]');
+                    const itemToClone = findItemToClone(sidebarContainer, homeLink);
 
-                    // Fallback para Mobile/Safari: Cria botão flutuante (FAB) se não houver sidebar
-                    if (!itemToClone || window.innerWidth <= 768) {
-                        const fab = document.createElement("div");
-                        fab.id = "instagramToolsMobileFab";
-                        fab.style.cssText = `
-                            position: fixed; bottom: 20px; left: 20px; z-index: 2147483646;
-                            width: 45px; height: 45px; background: white; border-radius: 50%;
-                            box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex;
-                            align-items: center; justify-content: center; cursor: pointer;
-                            border: 1px solid #dbdbdb;
-                        `;
-                        fab.innerHTML = `<svg aria-label="Ferramentas" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" fill="none" r="3" stroke="currentColor" stroke-width="2"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.09 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"></path></svg>`;
-                        
-                        fab.addEventListener("click", (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (!isLogged()) {
-                                showAuthGate();
-                                return;
-                            }
-                            
-                            const menu = document.querySelector('.assistive-menu');
-                            if (menu) {
-                                menu.style.left = '50%';
-                                menu.style.top = '50%';
-                                menu.style.bottom = 'auto';
-                                menu.style.transform = 'translate(-50%, -50%)';
-                                menu.style.display = menu.style.display === "flex" ? "none" : "flex";
-                            }
-                        });
-                        document.body.appendChild(fab);
-                    }
 
-                    // Injeção na Sidebar (Desktop)
                     if (itemToClone) {
                         const newItem = itemToClone.cloneNode(true);
                         const link = newItem.querySelector('a');
@@ -1145,11 +1120,6 @@
                                 e.preventDefault();
                                 e.stopPropagation();
 
-                                if (!isLogged()) {
-                                    showAuthGate();
-                                    return;
-                                }
-
                                 // Lógica de posicionamento inteligente (PC vs Mobile)
                                 const isDesktop = window.innerWidth >= 1024;
                                 if (isDesktop) {
@@ -1171,6 +1141,7 @@
                         }
                         sidebarContainer.appendChild(newItem);
                     }
+
                     function closeMenu() {
                         menu.style.display = 'none';
                     }
@@ -7515,7 +7486,7 @@
                     }
                     voiceControl.init();
                 }
-                
+
                 async function downloadMedia(url, filename) {
                     alert(`Iniciando download de: ${filename}`);
                     try {

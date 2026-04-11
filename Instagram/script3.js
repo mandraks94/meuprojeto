@@ -490,6 +490,11 @@
                     Object.keys(data).forEach(user => map.set(user, data[user]));
                     return map;
                 },
+                saveAllUserCategories: async function(categoryMap) {
+                    await this._init();
+                    this._cache.userCategories = Object.fromEntries(categoryMap);
+                    await gDriveApi.saveData(this._cache);
+                },
                 clearCache: async function(storeName) {
                     await this._init();
                     delete this._cache[storeName];
@@ -981,6 +986,27 @@
                             input:checked + .slider:before { transform: translateX(20px); }
                             .toggle-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; font-size: 16px; color: black; }
                             .dark-mode .toggle-item { background: #262626 !important; color: white !important; border-color: #555 !important; }
+
+                            /* Loading Spinner */
+                            .loading-overlay {
+                                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                                background: rgba(255, 255, 255, 0.7);
+                                display: flex; flex-direction: column; justify-content: center; align-items: center;
+                                z-index: 10005; border-radius: 10px;
+                            }
+                            .dark-mode .loading-overlay { background: rgba(0, 0, 0, 0.7); }
+                            .spinner {
+                                width: 40px; height: 40px;
+                                border: 4px solid #f3f3f3;
+                                border-top: 4px solid #3498db;
+                                border-radius: 50%;
+                                animation: spin 1s linear infinite;
+                            }
+                            .loading-text { margin-top: 10px; font-weight: bold; color: #0095f6; font-size: 16px; font-family: sans-serif; }
+                            @keyframes spin {
+                                0% { transform: rotate(0deg); }
+                                100% { transform: rotate(360deg); }
+                            }
                         `;
                     }
 
@@ -4146,6 +4172,28 @@
 
                         const originalPath = window.location.pathname;
 
+                        const toggleLoading = (isLoading, progress = null) => {
+                            const modal = document.getElementById("seguindoModal");
+                            if (!modal) return;
+                            if (isLoading) {
+                                let overlay = modal.querySelector('.loading-overlay');
+                                if (!overlay) {
+                                    overlay = document.createElement('div');
+                                    overlay.className = 'loading-overlay';
+                                    overlay.innerHTML = '<div class="spinner"></div><div class="loading-text"></div>';
+                                    modal.appendChild(overlay);
+                                }
+                                const textDiv = overlay.querySelector('.loading-text');
+                                if (progress !== null) {
+                                    textDiv.innerText = `${Math.floor(progress)}%`;
+                                } else {
+                                    textDiv.innerText = '';
+                                }
+                            } else {
+                                modal.querySelector('.loading-overlay')?.remove();
+                            }
+                        };
+
                         const pathParts = window.location.pathname.split('/').filter(Boolean);
                         const username = pathParts[0];
                         const appID = '936619743392459';
@@ -4842,10 +4890,15 @@
                                     const selectedCats = Array.from(execDiv.querySelectorAll('.execCatItem:checked')).map(i => i.value);
                                     execDiv.remove(); // Fecha o modal de seleção de ações
 
+                                    toggleLoading(true);
+                                    try {
                                     // 1. Processar Categorias Primeiro (Rápido e Local)
                                     if (doCat && selectedCats.length > 0) {
+                                        const total = selectedUsernames.length;
                                         const allUserCategories = await dbHelper.loadAllUserCategories();
-                                        for (const u of selectedUsernames) {
+                                        for (let i = 0; i < total; i++) {
+                                            const u = selectedUsernames[i];
+                                            toggleLoading(true, (i / total) * 100);
                                             const lowerUsername = u.toLowerCase();
                                             const existing = allUserCategories.get(lowerUsername) || [];
                                             let updated;
@@ -4855,10 +4908,11 @@
                                             } else { // 'remove'
                                                 updated = existing.filter(catId => !selectedCats.includes(catId));
                                             }
-                                            await dbHelper.saveUserCategories(lowerUsername, updated);
+                                            allUserCategories.set(lowerUsername, updated);
                                         }
+                                        await dbHelper.saveAllUserCategories(allUserCategories);
                                         // Sincroniza o mapa local e atualiza a interface (tabela) imediatamente
-                                        userCategoryMap = await dbHelper.loadAllUserCategories();
+                                        userCategoryMap = allUserCategories;
                                         renderList(currentPage);
                                     }
 
@@ -4873,6 +4927,10 @@
                                     if (doHide) {
                                         await toggleListMembership(selectedUsernames, '/accounts/hide_story_and_live_from/', 'hiddenStory', () => {});
                                         // userListCache.hiddenStory já é atualizado dentro de toggleListMembership
+                                    }
+                                    toggleLoading(true, 100);
+                                    } finally {
+                                        toggleLoading(false);
                                     }
 
                                     if (updateCallback) await updateCallback(selectedUsernames, 'exec');
@@ -5763,13 +5821,15 @@
 
                             const allUserCategories = await dbHelper.loadAllUserCategories();
 
+                            toggleLoading(true, 0);
                             for (const username of usernames) {
                                 const existingCategories = allUserCategories.get(username.toLowerCase()) || [];
                                 const newCategories = new Set([...existingCategories, ...selectedCategoryIds]);
-                                await dbHelper.saveUserCategories(username, Array.from(newCategories));
+                                allUserCategories.set(username.toLowerCase(), Array.from(newCategories));
                             }
+                            await dbHelper.saveAllUserCategories(allUserCategories);
 
-                            showToast(`${usernames.length} usuário(s) atualizado(s) (Categorias Adicionadas)!`);
+                            showToast(`✅ ${usernames.length} usuário(s) atualizados com sucesso!`);
                             close();
                             // Recarrega o modal de "Seguindo" para refletir as mudanças
                             const seguindoModal = document.getElementById("seguindoModal");
@@ -5782,12 +5842,15 @@
                         document.getElementById("removeUserCategoriesBtn").onclick = async () => {
                             const selectedCategoryIds = Array.from(div.querySelectorAll('.category-checkbox:checked')).map(cb => cb.value);
                             const allUserCategories = await dbHelper.loadAllUserCategories();
+                            
+                            toggleLoading(true, 0);
                             for (const username of usernames) {
                                 const existingCategories = allUserCategories.get(username.toLowerCase()) || [];
                                 const newCategories = existingCategories.filter(id => !selectedCategoryIds.includes(id));
-                                await dbHelper.saveUserCategories(username, newCategories);
+                                allUserCategories.set(username.toLowerCase(), newCategories);
                             }
-                            showToast(`${usernames.length} usuário(s) atualizado(s) (Categorias Removidas)!`);
+                            await dbHelper.saveAllUserCategories(allUserCategories);
+                            showToast(`✅ Categorias removidas de ${usernames.length} usuário(s)!`);
                             close();
                             // Recarrega o modal de "Seguindo" para refletir as mudanças
                             const seguindoModal = document.getElementById("seguindoModal");
@@ -6857,7 +6920,9 @@
                         btn.disabled = true;
                         btn.textContent = 'Processando...';
 
+                        toggleLoading(true);
                         await config.func(selectedUsers, async () => {
+                            toggleLoading(false);
                             btn.disabled = false;
                             btn.textContent = config.text;
                             alert(`Ação "${config.text}" concluída para ${selectedUsers.length} usuário(s).`);

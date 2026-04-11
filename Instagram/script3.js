@@ -89,17 +89,18 @@
                 console.log("[IG Tools] Acesso negado: Login Google necessário.");
 
                 const showAuthGate = () => {
-                    if (!document.body) return; // Segurança extra para Safari
                     if (document.getElementById('ig-tools-auth-gate')) return;
                     const gate = document.createElement('div');
                     gate.id = 'ig-tools-auth-gate';
 
                 // Estilo responsivo: centralizado no mobile, canto no desktop
-                const isMobile = window.innerWidth <= 768 || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+                const isMobile = window.innerWidth <= 768;
                 const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
                 const desktopPos = 'bottom: 20px; right: 20px; max-width: 280px;';
-                
-                gate.style.cssText = `position: fixed !important; z-index: 2147483647 !important; background: white !important; padding: 20px !important; border-radius: 12px !important; box-shadow: 0 8px 30px rgba(0,0,0,0.3) !important; border: 1px solid #dbdbdb !important; display: flex !important; flex-direction: column !important; gap: 12px !important; align-items: center !important; font-family: -apple-system, system-ui, sans-serif !important; box-sizing: border-box !important; ${isMobile ? mobilePos : desktopPos}`;
+
+                gate.style.cssText = `position: fixed; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; font-family: -apple-system, system-ui, sans-serif; ${isMobile ? mobilePos : desktopPos}`;
+
+                    gate.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; max-width: 280px; font-family: -apple-system, system-ui, sans-serif;';
                     gate.innerHTML = `
                         <div style="font-size: 24px;">🛠️</div>
                         <span style="color: black; font-weight: bold; font-size: 16px; text-align: center;">IG Tools Protegido</span>
@@ -110,11 +111,8 @@
                     document.getElementById('authGateLoginBtn').onclick = () => googleAuth.login();
                 };
 
-                // Verifica periodicamente se o AuthGate precisa ser exibido (vital para Safari SPA)
-                const gateInterval = setInterval(() => {
-                    if (!googleAuth.getAccessToken()) showAuthGate();
-                    else clearInterval(gateInterval);
-                }, 2000);
+                if (document.body) showAuthGate();
+                else document.addEventListener('DOMContentLoaded', showAuthGate);
 
                 return; // INTERROMPE TODO O RESTO DO SCRIPT
             }
@@ -493,11 +491,6 @@
                     Object.keys(data).forEach(user => map.set(user, data[user]));
                     return map;
                 },
-                saveAllUserCategories: async function(categoryMap) {
-                    await this._init();
-                    this._cache.userCategories = Object.fromEntries(categoryMap);
-                    await gDriveApi.saveData(this._cache);
-                },
                 clearCache: async function(storeName) {
                     await this._init();
                     delete this._cache[storeName];
@@ -810,6 +803,7 @@
 
                     // Tenta encontrar o container da sidebar oficial usando o seletor fornecido
                     const sidebarContainer = findSidebarContainer();
+                    if (!sidebarContainer) return; // Aguarda o carregamento da sidebar
 
                     // Add dynamic styles
                     if (!document.getElementById("dynamicMenuStyle")) {
@@ -988,27 +982,6 @@
                             input:checked + .slider:before { transform: translateX(20px); }
                             .toggle-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; font-size: 16px; color: black; }
                             .dark-mode .toggle-item { background: #262626 !important; color: white !important; border-color: #555 !important; }
-
-                            /* Loading Spinner */
-                            .loading-overlay {
-                                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-                                background: rgba(255, 255, 255, 0.7);
-                                display: flex; flex-direction: column; justify-content: center; align-items: center;
-                                z-index: 10005; border-radius: 10px;
-                            }
-                            .dark-mode .loading-overlay { background: rgba(0, 0, 0, 0.7); }
-                            .spinner {
-                                width: 40px; height: 40px;
-                                border: 4px solid #f3f3f3;
-                                border-top: 4px solid #3498db;
-                                border-radius: 50%;
-                                animation: spin 1s linear infinite;
-                            }
-                            .loading-text { margin-top: 10px; font-weight: bold; color: #0095f6; font-size: 16px; font-family: sans-serif; }
-                            @keyframes spin {
-                                0% { transform: rotate(0deg); }
-                                100% { transform: rotate(360deg); }
-                            }
                         `;
                     }
 
@@ -1101,20 +1074,9 @@
                     const homeLink = sidebarContainer.querySelector('a[href="/"]');
                     const itemToClone = findItemToClone(sidebarContainer, homeLink);
 
-                    // Se estiver no mobile ou não encontrar item para clonar, cria botão fixo
-                    if (!itemToClone || window.innerWidth <= 768) {
-                        if (document.getElementById("instagramToolsSidebarBtn")) return;
-                        const mobileFab = document.createElement("div");
-                        mobileFab.innerHTML = `
-                            <a id="instagramToolsSidebarBtn" href="#" style="position:fixed; bottom:20px; left:20px; z-index:2147483646; background:#fff; width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 10px rgba(0,0,0,0.3); border:1px solid #dbdbdb; text-decoration:none;">
-                                <span style="font-size:20px;">⚙️</span>
-                            </a>
-                        `;
-                        document.body.appendChild(mobileFab);
-                        setupMenuTriggers();
-                    } else if (itemToClone) {
+
+                    if (itemToClone) {
                         const newItem = itemToClone.cloneNode(true);
-                        // ... (lógica de clonagem existente)
                         const link = newItem.querySelector('a');
                         if (link) {
                             link.id = "instagramToolsSidebarBtn";
@@ -1124,35 +1086,60 @@
                             // Substitui o ícone original pelo ícone de engrenagem
                             const svg = link.querySelector('svg');
                             if (svg) {
-                                // ... (lógica de troca de SVG)
+                                // SVG de Engrenagem estilo Instagram
+                                const newSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                                newSvg.setAttribute("aria-label", "Ferramentas");
+                                newSvg.setAttribute("class", "x1lliihq x1n2onr6 x5n08af");
+                                newSvg.setAttribute("fill", "currentColor");
+                                newSvg.setAttribute("height", "24");
+                                newSvg.setAttribute("role", "img");
+                                newSvg.setAttribute("viewBox", "0 0 24 24");
+                                newSvg.setAttribute("width", "24");
+                                newSvg.innerHTML = '<circle cx="12" cy="12" fill="none" r="3" stroke="currentColor" stroke-width="2"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.09 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"></path>';
+                                svg.replaceWith(newSvg);
                             }
-                            setupMenuTriggers();
-                        }
-                        if (sidebarContainer) sidebarContainer.appendChild(newItem);
-                    }
 
-                    function setupMenuTriggers() {
-                        const link = document.getElementById("instagramToolsSidebarBtn");
-                        if (!link) return;
-                        link.addEventListener("click", (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const isDesktop = window.innerWidth >= 1024;
-                            if (isDesktop) {
-                                const sidebar = findSidebarContainer();
-                                const rect = sidebar ? sidebar.getBoundingClientRect() : { right: 72 };
-                                menu.style.left = (rect.right + 15) + 'px';
-                                menu.style.bottom = '20px';
-                                menu.style.top = 'auto';
-                                menu.style.transform = 'none';
-                            } else {
-                                menu.style.left = '50%';
-                                menu.style.top = '50%';
-                                menu.style.bottom = 'auto';
-                                menu.style.transform = 'translate(-50%, -50%)';
-                            }
-                            menu.style.display = menu.style.display === "flex" ? "none" : "flex";
-                        });
+                            // Adiciona o texto "IG Tools" (para visualização PC)
+                            // Procura por elementos de texto dentro do link clonado de forma mais abrangente
+                            const allDescendants = link.querySelectorAll('*');
+                            allDescendants.forEach(el => {
+                                // Verifica se é um elemento folha (sem filhos tags)
+                                if (el.children.length === 0 && el.textContent.trim().length > 0) {
+                                    // Ignora se estiver dentro de um SVG ou for o próprio SVG
+                                    if (el.closest('svg')) return;
+
+                                    const text = el.textContent.trim();
+                                    // Ignora números (notificações) e textos muito curtos
+                                    if (isNaN(parseInt(text)) && text.length > 1) {
+                                        el.textContent = "IG Tools";
+                                    }
+                                }
+                            });
+
+                            link.addEventListener("click", (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+
+                                // Lógica de posicionamento inteligente (PC vs Mobile)
+                                const isDesktop = window.innerWidth >= 1024;
+                                if (isDesktop) {
+                                    const sidebar = findSidebarContainer();
+                                    const rect = sidebar ? sidebar.getBoundingClientRect() : { right: 72 };
+                                    menu.style.left = (rect.right + 15) + 'px';
+                                    menu.style.bottom = '20px';
+                                    menu.style.top = 'auto';
+                                    menu.style.transform = 'none';
+                                } else {
+                                    menu.style.left = '50%';
+                                    menu.style.top = '50%';
+                                    menu.style.bottom = 'auto';
+                                    menu.style.transform = 'translate(-50%, -50%)';
+                                }
+
+                                menu.style.display = menu.style.display === "flex" ? "none" : "flex";
+                            });
+                        }
+                        sidebarContainer.appendChild(newItem);
                     }
 
                     function closeMenu() {
@@ -4160,28 +4147,6 @@
 
                         const originalPath = window.location.pathname;
 
-                        const toggleLoading = (isLoading, progress = null) => {
-                            const modal = document.getElementById("seguindoModal");
-                            if (!modal) return;
-                            if (isLoading) {
-                                let overlay = modal.querySelector('.loading-overlay');
-                                if (!overlay) {
-                                    overlay = document.createElement('div');
-                                    overlay.className = 'loading-overlay';
-                                    overlay.innerHTML = '<div class="spinner"></div><div class="loading-text"></div>';
-                                    modal.appendChild(overlay);
-                                }
-                                const textDiv = overlay.querySelector('.loading-text');
-                                if (progress !== null) {
-                                    textDiv.innerText = `${Math.floor(progress)}%`;
-                                } else {
-                                    textDiv.innerText = '';
-                                }
-                            } else {
-                                modal.querySelector('.loading-overlay')?.remove();
-                            }
-                        };
-
                         const pathParts = window.location.pathname.split('/').filter(Boolean);
                         const username = pathParts[0];
                         const appID = '936619743392459';
@@ -4878,15 +4843,10 @@
                                     const selectedCats = Array.from(execDiv.querySelectorAll('.execCatItem:checked')).map(i => i.value);
                                     execDiv.remove(); // Fecha o modal de seleção de ações
 
-                                    toggleLoading(true);
-                                    try {
                                     // 1. Processar Categorias Primeiro (Rápido e Local)
                                     if (doCat && selectedCats.length > 0) {
-                                        const total = selectedUsernames.length;
                                         const allUserCategories = await dbHelper.loadAllUserCategories();
-                                        for (let i = 0; i < total; i++) {
-                                            const u = selectedUsernames[i];
-                                            toggleLoading(true, (i / total) * 100);
+                                        for (const u of selectedUsernames) {
                                             const lowerUsername = u.toLowerCase();
                                             const existing = allUserCategories.get(lowerUsername) || [];
                                             let updated;
@@ -4896,11 +4856,10 @@
                                             } else { // 'remove'
                                                 updated = existing.filter(catId => !selectedCats.includes(catId));
                                             }
-                                            allUserCategories.set(lowerUsername, updated);
+                                            await dbHelper.saveUserCategories(lowerUsername, updated);
                                         }
-                                        await dbHelper.saveAllUserCategories(allUserCategories);
                                         // Sincroniza o mapa local e atualiza a interface (tabela) imediatamente
-                                        userCategoryMap = allUserCategories;
+                                        userCategoryMap = await dbHelper.loadAllUserCategories();
                                         renderList(currentPage);
                                     }
 
@@ -4915,10 +4874,6 @@
                                     if (doHide) {
                                         await toggleListMembership(selectedUsernames, '/accounts/hide_story_and_live_from/', 'hiddenStory', () => {});
                                         // userListCache.hiddenStory já é atualizado dentro de toggleListMembership
-                                    }
-                                    toggleLoading(true, 100);
-                                    } finally {
-                                        toggleLoading(false);
                                     }
 
                                     if (updateCallback) await updateCallback(selectedUsernames, 'exec');
@@ -5809,15 +5764,13 @@
 
                             const allUserCategories = await dbHelper.loadAllUserCategories();
 
-                            toggleLoading(true, 0);
                             for (const username of usernames) {
                                 const existingCategories = allUserCategories.get(username.toLowerCase()) || [];
                                 const newCategories = new Set([...existingCategories, ...selectedCategoryIds]);
-                                allUserCategories.set(username.toLowerCase(), Array.from(newCategories));
+                                await dbHelper.saveUserCategories(username, Array.from(newCategories));
                             }
-                            await dbHelper.saveAllUserCategories(allUserCategories);
 
-                            showToast(`✅ ${usernames.length} usuário(s) atualizados com sucesso!`);
+                            showToast(`${usernames.length} usuário(s) atualizado(s) (Categorias Adicionadas)!`);
                             close();
                             // Recarrega o modal de "Seguindo" para refletir as mudanças
                             const seguindoModal = document.getElementById("seguindoModal");
@@ -5830,15 +5783,12 @@
                         document.getElementById("removeUserCategoriesBtn").onclick = async () => {
                             const selectedCategoryIds = Array.from(div.querySelectorAll('.category-checkbox:checked')).map(cb => cb.value);
                             const allUserCategories = await dbHelper.loadAllUserCategories();
-                            
-                            toggleLoading(true, 0);
                             for (const username of usernames) {
                                 const existingCategories = allUserCategories.get(username.toLowerCase()) || [];
                                 const newCategories = existingCategories.filter(id => !selectedCategoryIds.includes(id));
-                                allUserCategories.set(username.toLowerCase(), newCategories);
+                                await dbHelper.saveUserCategories(username, newCategories);
                             }
-                            await dbHelper.saveAllUserCategories(allUserCategories);
-                            showToast(`✅ Categorias removidas de ${usernames.length} usuário(s)!`);
+                            showToast(`${usernames.length} usuário(s) atualizado(s) (Categorias Removidas)!`);
                             close();
                             // Recarrega o modal de "Seguindo" para refletir as mudanças
                             const seguindoModal = document.getElementById("seguindoModal");
@@ -6908,9 +6858,7 @@
                         btn.disabled = true;
                         btn.textContent = 'Processando...';
 
-                        toggleLoading(true);
                         await config.func(selectedUsers, async () => {
-                            toggleLoading(false);
                             btn.disabled = false;
                             btn.textContent = config.text;
                             alert(`Ação "${config.text}" concluída para ${selectedUsers.length} usuário(s).`);

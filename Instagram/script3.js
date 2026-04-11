@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         teste_1
+// @name         Instagram com Google Driver
 // @description  Adds download buttons to Instagram stories
 // @author       You
 // @version      1.0

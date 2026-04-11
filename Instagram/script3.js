@@ -92,7 +92,6 @@
                     if (document.getElementById('ig-tools-auth-gate')) return;
                     const gate = document.createElement('div');
                     gate.id = 'ig-tools-auth-gate';
-<<<<<<< HEAD
 
                 // Estilo responsivo: centralizado no mobile, canto no desktop
                 const isMobile = window.innerWidth <= 768;
@@ -100,9 +99,6 @@
                 const desktopPos = 'bottom: 20px; right: 20px; max-width: 280px;';
 
                 gate.style.cssText = `position: fixed; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; font-family: -apple-system, system-ui, sans-serif; ${isMobile ? mobilePos : desktopPos}`;
-
-=======
->>>>>>> c50805ac381868e1995047ae12048a6400712a04
                     gate.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; max-width: 280px; font-family: -apple-system, system-ui, sans-serif;';
                     gate.innerHTML = `
                         <div style="font-size: 24px;">🛠️</div>

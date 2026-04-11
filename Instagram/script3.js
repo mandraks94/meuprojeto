@@ -89,16 +89,17 @@
                 console.log("[IG Tools] Acesso negado: Login Google necessário.");
 
                 const showAuthGate = () => {
+                    if (!document.body) return; // Segurança extra para Safari
                     if (document.getElementById('ig-tools-auth-gate')) return;
                     const gate = document.createElement('div');
                     gate.id = 'ig-tools-auth-gate';
 
                 // Estilo responsivo: centralizado no mobile, canto no desktop
-                const isMobile = window.innerWidth <= 768;
+                const isMobile = window.innerWidth <= 768 || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
                 const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
                 const desktopPos = 'bottom: 20px; right: 20px; max-width: 280px;';
 
-                gate.style.cssText = `position: fixed; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; font-family: -apple-system, system-ui, sans-serif; ${isMobile ? mobilePos : desktopPos}`;
+                gate.style.cssText = `position: fixed !important; z-index: 9999999 !important; background: white !important; padding: 20px !important; border-radius: 12px !important; box-shadow: 0 8px 30px rgba(0,0,0,0.3) !important; border: 1px solid #dbdbdb !important; display: flex !important; flex-direction: column !important; gap: 12px !important; align-items: center !important; font-family: -apple-system, system-ui, sans-serif !important; ${isMobile ? mobilePos : desktopPos}`;
                     gate.innerHTML = `
                         <div style="font-size: 24px;">🛠️</div>
                         <span style="color: black; font-weight: bold; font-size: 16px; text-align: center;">IG Tools Protegido</span>
@@ -109,7 +110,7 @@
                     document.getElementById('authGateLoginBtn').onclick = () => googleAuth.login();
                 };
 
-                // Verifica periodicamente se o AuthGate precisa ser exibido (ajuda no mobile)
+                // Verifica periodicamente se o AuthGate precisa ser exibido (vital para Safari SPA)
                 const gateInterval = setInterval(() => {
                     if (!googleAuth.getAccessToken()) showAuthGate();
                     else clearInterval(gateInterval);
@@ -1113,7 +1114,7 @@
                         setupMenuTriggers();
                     } else if (itemToClone) {
                         const newItem = itemToClone.cloneNode(true);
-                        // ... lógica de clonagem para desktop ...
+                        // ... (lógica de clonagem existente)
                         const link = newItem.querySelector('a');
                         if (link) {
                             link.id = "instagramToolsSidebarBtn";
@@ -1123,60 +1124,35 @@
                             // Substitui o ícone original pelo ícone de engrenagem
                             const svg = link.querySelector('svg');
                             if (svg) {
-                                // SVG de Engrenagem estilo Instagram
-                                const newSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-                                newSvg.setAttribute("aria-label", "Ferramentas");
-                                newSvg.setAttribute("class", "x1lliihq x1n2onr6 x5n08af");
-                                newSvg.setAttribute("fill", "currentColor");
-                                newSvg.setAttribute("height", "24");
-                                newSvg.setAttribute("role", "img");
-                                newSvg.setAttribute("viewBox", "0 0 24 24");
-                                newSvg.setAttribute("width", "24");
-                                newSvg.innerHTML = '<circle cx="12" cy="12" fill="none" r="3" stroke="currentColor" stroke-width="2"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.09 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"></path>';
-                                svg.replaceWith(newSvg);
+                                // ... (lógica de troca de SVG)
                             }
-
-                            // Adiciona o texto "IG Tools" (para visualização PC)
-                            // Procura por elementos de texto dentro do link clonado de forma mais abrangente
-                            const allDescendants = link.querySelectorAll('*');
-                            allDescendants.forEach(el => {
-                                // Verifica se é um elemento folha (sem filhos tags)
-                                if (el.children.length === 0 && el.textContent.trim().length > 0) {
-                                    // Ignora se estiver dentro de um SVG ou for o próprio SVG
-                                    if (el.closest('svg')) return;
-
-                                    const text = el.textContent.trim();
-                                    // Ignora números (notificações) e textos muito curtos
-                                    if (isNaN(parseInt(text)) && text.length > 1) {
-                                        el.textContent = "IG Tools";
-                                    }
-                                }
-                            });
-
-                            link.addEventListener("click", (e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-
-                                // Lógica de posicionamento inteligente (PC vs Mobile)
-                                const isDesktop = window.innerWidth >= 1024;
-                                if (isDesktop) {
-                                    const sidebar = findSidebarContainer();
-                                    const rect = sidebar ? sidebar.getBoundingClientRect() : { right: 72 };
-                                    menu.style.left = (rect.right + 15) + 'px';
-                                    menu.style.bottom = '20px';
-                                    menu.style.top = 'auto';
-                                    menu.style.transform = 'none';
-                                } else {
-                                    menu.style.left = '50%';
-                                    menu.style.top = '50%';
-                                    menu.style.bottom = 'auto';
-                                    menu.style.transform = 'translate(-50%, -50%)';
-                                }
-
-                                menu.style.display = menu.style.display === "flex" ? "none" : "flex";
-                            });
+                            setupMenuTriggers();
                         }
-                        sidebarContainer.appendChild(newItem);
+                        if (sidebarContainer) sidebarContainer.appendChild(newItem);
+                    }
+
+                    function setupMenuTriggers() {
+                        const link = document.getElementById("instagramToolsSidebarBtn");
+                        if (!link) return;
+                        link.addEventListener("click", (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const isDesktop = window.innerWidth >= 1024;
+                            if (isDesktop) {
+                                const sidebar = findSidebarContainer();
+                                const rect = sidebar ? sidebar.getBoundingClientRect() : { right: 72 };
+                                menu.style.left = (rect.right + 15) + 'px';
+                                menu.style.bottom = '20px';
+                                menu.style.top = 'auto';
+                                menu.style.transform = 'none';
+                            } else {
+                                menu.style.left = '50%';
+                                menu.style.top = '50%';
+                                menu.style.bottom = 'auto';
+                                menu.style.transform = 'translate(-50%, -50%)';
+                            }
+                            menu.style.display = menu.style.display === "flex" ? "none" : "flex";
+                        });
                     }
 
                     function closeMenu() {

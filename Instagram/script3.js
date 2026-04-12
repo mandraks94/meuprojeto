@@ -802,20 +802,22 @@
                         btn.innerHTML = "⚙️";
                         btn.style.cssText = `
                             position: fixed;
-                            bottom: 85px;
-                            right: 20px;
-                            z-index: 2147483646;
-                            background: #fff;
-                            border: 1px solid #dbdbdb;
+                            top: 50%;
+                            left: 50%;
+                            transform: translate(-50%, -50%);
+                            z-index: 2147483645;
+                            background: #0095f6;
+                            border: none;
                             border-radius: 50%;
-                            width: 50px;
-                            height: 50px;
-                            font-size: 24px;
+                            width: 120px;
+                            height: 120px;
+                            font-size: 60px;
                             cursor: pointer;
-                            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                            box-shadow: 0 0 30px rgba(0,0,0,0.5);
                             display: flex;
                             align-items: center;
                             justify-content: center;
+                            opacity: 0.9;
                         `;
                         btn.onclick = (e) => {
                             e.preventDefault();
@@ -7732,13 +7734,19 @@
         }
     }
 
-    // Inicialização: Mais agressiva para garantir o ícone no Safari
-    const observer = new MutationObserver((m, obs) => {
-        if (document.body && document.querySelector('main')) { 
-            initScript(); 
-            obs.disconnect(); 
+    // Inicialização idêntica ao script.js (mais estável no Safari)
+    const observer = new MutationObserver((mutations, obs) => {
+        const mainContainer = document.querySelector('main[role="main"], div[data-main-nav="true"]');
+        if (mainContainer) {
+            initScript();
+            obs.disconnect();
         }
     });
-    observer.observe(document.documentElement, { childList: true, subtree: true });
-    if (document.body) initScript();
+
+    const mainContainer = document.querySelector('main[role="main"], div[data-main-nav="true"]');
+    if (mainContainer) {
+        initScript();
+    } else {
+        observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
+    }
 })();

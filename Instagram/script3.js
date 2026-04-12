@@ -97,11 +97,11 @@
                 const isMobile = window.innerWidth <= 768;
                 const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
                 const desktopPos = 'bottom: 20px; right: 20px; max-width: 280px;';
-
-                gate.style.cssText = `position: fixed; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; font-family: -apple-system, system-ui, sans-serif; ${isMobile ? mobilePos : desktopPos}`;
-
-                    gate.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; max-width: 280px; font-family: -apple-system, system-ui, sans-serif;';
-                    gate.innerHTML = `
+                
+                const commonStyle = 'position: fixed; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; font-family: -apple-system, system-ui, sans-serif;';
+                gate.style.cssText = commonStyle + (isMobile ? mobilePos : desktopPos);
+                
+                gate.innerHTML = `
                         <div style="font-size: 24px;">🛠️</div>
                         <span style="color: black; font-weight: bold; font-size: 16px; text-align: center;">IG Tools Protegido</span>
                         <p style="color: #666; font-size: 12px; text-align: center; margin: 0;">Faça login com sua conta Google para ativar as ferramentas de download e análise.</p>
@@ -7686,20 +7686,18 @@
     }
 
     // Inicialização: Tenta rodar assim que o body estiver pronto
-    // Isso garante que o prompt de login apareça mesmo que o layout do IG demore a carregar
-    if (document.body) {
+    const mainObserver = new MutationObserver((mutations, obs) => {
+        const mainContainer = document.querySelector('main[role="main"], div[data-main-nav="true"]');
+        if (mainContainer) {
+            console.log("[IG Tools] Interface detectada, iniciando.");
+            initScript();
+            obs.disconnect();
+        }
+    });
+
+    if (document.querySelector('main[role="main"]')) {
         initScript();
     } else {
-        const observer = new MutationObserver((mutations, obs) => {
-            if (document.body) {
-                console.log("[IG Tools] Body detectado, iniciando.");
-                initScript();
-                obs.disconnect();
-            }
-        });
-        observer.observe(document.documentElement, {
-            childList: true,
-            subtree: true
-        });
+        mainObserver.observe(document.body || document.documentElement, { childList: true, subtree: true });
     }
 })();

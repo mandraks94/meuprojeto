@@ -1085,12 +1085,12 @@
                     document.body.appendChild(menu);
                     }
 
-                    // Tenta encontrar o container da sidebar oficial
+                    // Tenta encontrar o container da sidebar oficial ou injeta o botão flutuante
                     const sidebarContainer = findSidebarContainer();
-                    if (!sidebarContainer) {
-                        // Se não encontrar a sidebar (comum em resoluções específicas do Safari), força o botão flutuante
+                    const sidebarBtn = document.getElementById("instagramToolsSidebarBtn");
+                    
+                    if (!sidebarContainer && !document.getElementById("ig-tools-fallback-btn")) {
                         createFallbackFloatingButton(menu);
-                        return;
                     }
 
                     // Fechar submenu ao clicar fora (Comportamento nativo)
@@ -1108,13 +1108,12 @@
                         document.body.dataset.menuClickListenerAttached = 'true';
                     }
 
+                    if (sidebarContainer && !sidebarBtn) {
                     const homeLink = sidebarContainer.querySelector('a[href="/"]');
                     const itemToClone = findItemToClone(sidebarContainer, homeLink);
-
-
                     if (itemToClone) {
                         const newItem = itemToClone.cloneNode(true);
-                        const link = newItem.querySelector('a');
+                        const link = newItem.querySelector('a') || newItem;
                         if (link) {
                             link.id = "instagramToolsSidebarBtn";
                             link.href = "#";
@@ -1177,6 +1176,7 @@
                             });
                         }
                         sidebarContainer.appendChild(newItem);
+                    }
                     }
 
                     function closeMenu() {
@@ -7720,15 +7720,25 @@
                 container.appendChild(btn);
             }
         } // Esta chave fecha o if (window.location.href.includes("instagram.com"))
+
+        // Sincroniza a injeção do menu como no script.js
+        if (!window._igToolsIntervalStarted) {
+            window._igToolsIntervalStarted = true;
+            setInterval(() => {
+                if (window.location.href.includes("instagram.com") && googleAuth.getAccessToken()) {
+                    injectMenu();
+                }
+            }, 2000);
+        }
     }
 
     // Inicialização: Mais agressiva para garantir o ícone no Safari
-    if (document.body) {
-        initScript();
-    } else {
-        const observer = new MutationObserver((m, obs) => {
-            if (document.body) { initScript(); obs.disconnect(); }
-        });
-        observer.observe(document.documentElement, { childList: true, subtree: true });
-    }
+    const observer = new MutationObserver((m, obs) => {
+        if (document.body && document.querySelector('main')) { 
+            initScript(); 
+            obs.disconnect(); 
+        }
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    if (document.body) initScript();
 })();

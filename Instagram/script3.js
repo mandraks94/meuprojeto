@@ -78,7 +78,8 @@
                         this.setAccessToken(token);
                         localStorage.setItem('ig_tools_gdrive_token', token); // Garantia extra
                         showToast("✅ Logado no Google Drive!");
-                        window.location.hash = ''; // Limpa a URL apenas após salvar
+                        // Limpa a URL sem recarregar para evitar problemas no Safari
+                        history.replaceState(null, document.title, window.location.pathname + window.location.search);
                     }
                 }
             };
@@ -779,16 +780,49 @@
 
                     // --- Funções auxiliares ---
                     function findSidebarContainer() {
-                        const homeLink = document.querySelector('a[href="/"]');
-                        const exploreLink = document.querySelector('a[href="/explore/"]');
+                        // Busca a sidebar por links conhecidos ou seletores de grid
+                        const homeLink = document.querySelector('a[href="/"][role="link"]');
+                        const exploreLink = document.querySelector('a[href="/explore/"][role="link"]');
                         if (homeLink && exploreLink) {
                             let parent = homeLink.parentElement;
-                            while (parent) {
+                            while (parent && parent !== document.body) {
                                 if (parent.contains(exploreLink)) return parent;
                                 parent = parent.parentElement;
                             }
                         }
                         return document.querySelector('div.x78zum5.xaw8158.xh8yej3');
+                    }
+
+                    function createFallbackFloatingButton(menuElement) {
+                        if (document.getElementById("ig-tools-fallback-btn")) return;
+                        console.log("[IG Tools] Sidebar não detectada, injetando botão flutuante de emergência.");
+                        
+                        const btn = document.createElement("button");
+                        btn.id = "ig-tools-fallback-btn";
+                        btn.innerHTML = "⚙️";
+                        btn.style.cssText = `
+                            position: fixed;
+                            bottom: 85px;
+                            right: 20px;
+                            z-index: 2147483646;
+                            background: #fff;
+                            border: 1px solid #dbdbdb;
+                            border-radius: 50%;
+                            width: 50px;
+                            height: 50px;
+                            font-size: 24px;
+                            cursor: pointer;
+                            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                        `;
+                        btn.onclick = (e) => {
+                            e.preventDefault();
+                            const isVisible = menuElement.style.display === "flex";
+                            menuElement.style.display = isVisible ? "none" : "flex";
+                        };
+                        document.body.appendChild(btn);
                     }
 
                     function findItemToClone(container, link) {
@@ -801,11 +835,6 @@
                         return null;
                     }
 
-                    // Tenta encontrar o container da sidebar oficial usando o seletor fornecido
-                    const sidebarContainer = findSidebarContainer();
-                    if (!sidebarContainer) return; // Aguarda o carregamento da sidebar
-
-                    // Add dynamic styles
                     if (!document.getElementById("dynamicMenuStyle")) {
                     const style = document.createElement("style");
                     style.id = "dynamicMenuStyle";
@@ -1054,6 +1083,14 @@
                     `;
 
                     document.body.appendChild(menu);
+                    }
+
+                    // Tenta encontrar o container da sidebar oficial
+                    const sidebarContainer = findSidebarContainer();
+                    if (!sidebarContainer) {
+                        // Se não encontrar a sidebar (comum em resoluções específicas do Safari), força o botão flutuante
+                        createFallbackFloatingButton(menu);
+                        return;
                     }
 
                     // Fechar submenu ao clicar fora (Comportamento nativo)
@@ -7685,19 +7722,13 @@
         } // Esta chave fecha o if (window.location.href.includes("instagram.com"))
     }
 
-    // Inicialização: Tenta rodar assim que o body estiver pronto
-    const mainObserver = new MutationObserver((mutations, obs) => {
-        const mainContainer = document.querySelector('main[role="main"], div[data-main-nav="true"]');
-        if (mainContainer) {
-            console.log("[IG Tools] Interface detectada, iniciando.");
-            initScript();
-            obs.disconnect();
-        }
-    });
-
-    if (document.querySelector('main[role="main"]')) {
+    // Inicialização: Mais agressiva para garantir o ícone no Safari
+    if (document.body) {
         initScript();
     } else {
-        mainObserver.observe(document.body || document.documentElement, { childList: true, subtree: true });
+        const observer = new MutationObserver((m, obs) => {
+            if (document.body) { initScript(); obs.disconnect(); }
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
     }
 })();

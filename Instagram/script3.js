@@ -84,46 +84,20 @@
             };
             googleAuth.checkUrlToken();
 
-            // --- BLOQUEIO DE ACESSO: SÓ CONTINUA SE ESTIVER LOGADO ---
-            if (!googleAuth.getAccessToken()) {
-                console.log("[IG Tools] Acesso negado: Login Google necessário.");
-
-                const showAuthGate = () => {
-                    if (document.getElementById('ig-tools-auth-gate')) return;
-                    const gate = document.createElement('div');
-                    gate.id = 'ig-tools-auth-gate';
-
-                // Estilo responsivo: centralizado no mobile, canto no desktop
-                const isMobile = window.innerWidth <= 768;
-                const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
-                const desktopPos = 'bottom: 20px; right: 20px; max-width: 280px;';
-
-                gate.style.cssText = `position: fixed; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; font-family: -apple-system, system-ui, sans-serif; ${isMobile ? mobilePos : desktopPos}`;
-
-                    gate.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; max-width: 280px; font-family: -apple-system, system-ui, sans-serif;';
-                    gate.innerHTML = `
-                        <div style="font-size: 24px;">🛠️</div>
-                        <span style="color: black; font-weight: bold; font-size: 16px; text-align: center;">IG Tools Protegido</span>
-                        <p style="color: #666; font-size: 12px; text-align: center; margin: 0;">Faça login com sua conta Google para ativar as ferramentas de download e análise.</p>
-                        <button id="authGateLoginBtn" style="background: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; transition: background 0.2s;">Login com Google</button>
-                    `;
-                    document.body.appendChild(gate);
-                    document.getElementById('authGateLoginBtn').onclick = () => googleAuth.login();
-                };
-
-                if (document.body) showAuthGate();
-                else document.addEventListener('DOMContentLoaded', showAuthGate);
-
-                return; // INTERROMPE TODO O RESTO DO SCRIPT
+            // Helper para verificar autenticação antes de abrir recursos restritos
+            function requireAuth() {
+                if (!googleAuth.getAccessToken()) {
+                    showToast("⚠️ Recurso bloqueado. Vá em Configurações e conecte sua conta Google.");
+                    return false;
+                }
+                return true;
             }
 
             const gDriveApi = {
                 execute: function(options) {
                     const token = googleAuth.getAccessToken();
-                    if (!token) {
-                        showToast("⚠️ Faça login no Google nas Configurações");
-                        return Promise.reject("Sem token");
-                    }
+                    if (!token) return Promise.reject("Sem token");
+
                     return new Promise((resolve, reject) => {
                         if (typeof GM_xmlhttpRequest !== 'undefined') {
                             GM_xmlhttpRequest({
@@ -399,11 +373,17 @@
             const dbHelper = {
                 _cache: null,
                 _init: async function() {
-                    if (!this._cache) {
+                    if (this._cache) return this._cache;
+
+                    const token = googleAuth.getAccessToken();
+                    if (!token) {
+                        this._cache = {};
+                        return this._cache;
+                    }
+
                     try {
                         console.log("[IG Tools] Sincronizando com Google Drive...");
                         this._cache = await gDriveApi.loadData();
-                        // Garante que o cache seja um objeto e não nulo/texto
                         if (!this._cache || typeof this._cache !== 'object') {
                             this._cache = {};
                         }
@@ -413,7 +393,6 @@
                     } catch (e) {
                         console.error("[IG Tools] Erro ao carregar dados da nuvem:", e);
                         this._cache = {};
-                    }
                     }
                     return this._cache;
                 },
@@ -1380,27 +1359,32 @@
                     document
                         .getElementById("bloqueadosBtn")
                         .addEventListener("click", (e) => {
+                            if (!requireAuth()) return;
                             closeMenu();
                             iniciarProcessoBloqueados();
                         });
 
                     document.getElementById("naoSegueDeVoltaBtn").addEventListener("click", () => {
+                        if (!requireAuth()) return;
                         closeMenu();
                         iniciarProcessoNaoSegueDeVolta();
                     });
 
                     document.getElementById("seguindoBtn").addEventListener("click", () => {
+                        if (!requireAuth()) return;
                         closeMenu();
                         iniciarProcessoSeguindo();
                     });
 
                     document.getElementById("seguindoBtn").addEventListener("click", () => {
+                        if (!requireAuth()) return;
                         closeMenu();
                         iniciarProcessoSeguindo();
                     });
 
                     // --- NOVO MENU: AMIGOS PRÓXIMOS ---
     document.getElementById("closeFriendsBtn").addEventListener("click", () => {
+        if (!requireAuth()) return;
         closeMenu();
         console.log("Botão Amigos Próximos clicado");
         // Direcionar para a página de amigos próximos se não estiver lá
@@ -1429,6 +1413,7 @@
 
     // --- NOVO MENU: OCULTAR STORY ---
                     document.getElementById("hideStoryBtn").addEventListener("click", () => {
+        if (!requireAuth()) return;
         closeMenu();
         console.log("Botão Ocultar Story clicado");
         // Direcionar para a página de ocultar story se não estiver lá
@@ -1454,6 +1439,7 @@
     });
 
     document.getElementById("mutedAccountsBtn").addEventListener("click", () => {
+        if (!requireAuth()) return;
         closeMenu();
         console.log("Botão Contas Silenciadas clicado");
         if (window.location.pathname !== "/accounts/muted_accounts/") {
@@ -1477,16 +1463,21 @@
     });
 
                         document.getElementById("interacoesBtn").addEventListener("click", () => {
+                            if (!requireAuth()) return;
                             closeMenu();
                             abrirModalInteracoes();
                         });
 
     // --- NOVO MENU: REELS ---
     document.getElementById("reelsMenuBtn").addEventListener("click", () => {
+        if (!requireAuth()) return;
         closeMenu();
         abrirModalReels();
     });
-    document.getElementById("baixarStoryBtn").addEventListener("click", () => { baixarStoryAtual(); });
+    document.getElementById("baixarStoryBtn").addEventListener("click", () => { 
+        if (!requireAuth()) return;
+        baixarStoryAtual(); 
+    });
 
     document.getElementById("settingsBtn").addEventListener("click", () => {
         closeMenu();
@@ -1494,6 +1485,7 @@
     });
 
     document.getElementById("engajamentoBtn").addEventListener("click", () => {
+        if (!requireAuth()) return;
         closeMenu();
         abrirModalEngajamento();
     });

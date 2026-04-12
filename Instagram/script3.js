@@ -84,42 +84,38 @@
             };
             googleAuth.checkUrlToken();
 
-            const isLogged = () => !!googleAuth.getAccessToken();
-
-            // Função para exibir o popup de login quando necessário
-            function showAuthGate() {
-                if (document.getElementById('ig-tools-auth-gate') || isLogged()) return;
-                
-                const gate = document.createElement('div');
-                gate.id = 'ig-tools-auth-gate';
-                const isMobile = window.innerWidth <= 768 || /iPhone|iPad|iPod|Safari/i.test(navigator.userAgent);
-                const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
-                const desktopPos = 'bottom: 80px; right: 20px; max-width: 280px;';
-                
-                // Estilos reforçados para Safari/Stay
-                gate.style.cssText = `position: fixed !important; z-index: 2147483647 !important; background: white !important; padding: 20px !important; border-radius: 12px !important; box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important; border: 1px solid #dbdbdb !important; display: flex !important; flex-direction: column !important; gap: 12px !important; align-items: center !important; font-family: -apple-system, system-ui, sans-serif !important; color: black !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; ${isMobile ? mobilePos : desktopPos}`;
-                
-                gate.innerHTML = `
-                    <div style="display: flex; width: 100%; justify-content: flex-end; margin-bottom: -20px;">
-                        <button id="closeAuthGateBtn" style="background:none; border:none; cursor:pointer; color:#999; padding: 10px; font-size: 18px;">✕</button>
-                    </div>
-                    <div style="font-size: 24px; margin-bottom: 5px;">🛠️</div>
-                    <span style="color: black !important; font-weight: bold !important; font-size: 16px !important; text-align: center !important; display: block !important;">IG Tools Protegido</span>
-                    <p style="color: #666 !important; font-size: 12px !important; text-align: center !important; margin: 0 !important; display: block !important;">Conecte sua conta Google para sincronizar seus dados e ativar as ferramentas.</p>
-                    <button id="authGateLoginBtn" style="background: #4285F4 !important; color: white !important; border: none !important; padding: 12px 20px !important; border-radius: 6px !important; cursor: pointer !important; font-weight: bold !important; width: 100% !important; display: block !important;">Login com Google</button>
-                `;
-                
-                document.body.appendChild(gate);
-                document.getElementById('authGateLoginBtn').onclick = () => googleAuth.login();
-                document.getElementById('closeAuthGateBtn').onclick = () => gate.remove();
-            }
-
             // --- BLOQUEIO DE ACESSO: SÓ CONTINUA SE ESTIVER LOGADO ---
-            // Tenta mostrar o popup periodicamente se não estiver logado
-            const authInterval = setInterval(() => {
-                if (!isLogged()) showAuthGate();
-                else clearInterval(authInterval);
-            }, 3000);
+            if (!googleAuth.getAccessToken()) {
+                console.log("[IG Tools] Acesso negado: Login Google necessário.");
+
+                const showAuthGate = () => {
+                    if (document.getElementById('ig-tools-auth-gate')) return;
+                    const gate = document.createElement('div');
+                    gate.id = 'ig-tools-auth-gate';
+
+                // Estilo responsivo: centralizado no mobile, canto no desktop
+                const isMobile = window.innerWidth <= 768;
+                const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
+                const desktopPos = 'bottom: 20px; right: 20px; max-width: 280px;';
+
+                gate.style.cssText = `position: fixed; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; font-family: -apple-system, system-ui, sans-serif; ${isMobile ? mobilePos : desktopPos}`;
+
+                    gate.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; max-width: 280px; font-family: -apple-system, system-ui, sans-serif;';
+                    gate.innerHTML = `
+                        <div style="font-size: 24px;">🛠️</div>
+                        <span style="color: black; font-weight: bold; font-size: 16px; text-align: center;">IG Tools Protegido</span>
+                        <p style="color: #666; font-size: 12px; text-align: center; margin: 0;">Faça login com sua conta Google para ativar as ferramentas de download e análise.</p>
+                        <button id="authGateLoginBtn" style="background: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; transition: background 0.2s;">Login com Google</button>
+                    `;
+                    document.body.appendChild(gate);
+                    document.getElementById('authGateLoginBtn').onclick = () => googleAuth.login();
+                };
+
+                if (document.body) showAuthGate();
+                else document.addEventListener('DOMContentLoaded', showAuthGate);
+
+                return; // INTERROMPE TODO O RESTO DO SCRIPT
+            }
 
             const gDriveApi = {
                 execute: function(options) {
@@ -656,7 +652,6 @@
                 function injectMenu() {
                     if (document.getElementById("assistiveTouchMenu")) return;
                     if (document.getElementById("instagramToolsSidebarBtn")) return;
-                    if (document.getElementById("instagramToolsMobileFab")) return;
 
                     // --- LÓGICA DE COMANDOS DE VOZ ---
                     const voiceControl = {
@@ -793,10 +788,7 @@
                                 parent = parent.parentElement;
                             }
                         }
-                        // Seletores combinados para Desktop, iPad e Mobile Safari
-                        return document.querySelector('div.x78zum5.xaw8158.xh8yej3') || 
-                               document.querySelector('div[role="navigation"] > div > div') ||
-                               document.querySelector('div.x9f619.x1n2onr6.x1ja2u2z div.x78zum5.x6s0dn4.xl56j7k');
+                        return document.querySelector('div.x78zum5.xaw8158.xh8yej3');
                     }
 
                     function findItemToClone(container, link) {
@@ -1079,46 +1071,10 @@
                         document.body.dataset.menuClickListenerAttached = 'true';
                     }
 
-                    // Encontra o link de perfil (geralmente o último ou penúltimo) para usar como referência
-                    const profileLink = sidebarContainer ? sidebarContainer.querySelector('a[href*="/"]:not([href="/"]):not([href="/explore/"]):not([href="/reels/"]):not([href="/direct/inbox/"])') : null;
-                    
-                    const homeLink = sidebarContainer ? (sidebarContainer.querySelector('a[href="/"]') || document.querySelector('a[href="/"]')) : null;
-                    const itemToClone = (sidebarContainer && homeLink) ? findItemToClone(sidebarContainer, homeLink) : null;
+                    const homeLink = sidebarContainer.querySelector('a[href="/"]');
+                    const itemToClone = findItemToClone(sidebarContainer, homeLink);
 
-                    // Fallback para Mobile Safari: Se não encontrar onde injetar na barra, usa o FAB flutuante
-                    if (!itemToClone && !document.getElementById("instagramToolsMobileFab")) {
-                        const fab = document.createElement("div");
-                        fab.id = "instagramToolsMobileFab";
-                        fab.style.cssText = `
-                            position: fixed; bottom: 20px; left: 20px; z-index: 2147483646;
-                            width: 45px; height: 45px; background: white; border-radius: 50%;
-                            box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex;
-                            align-items: center; justify-content: center; cursor: pointer;
-                            border: 1px solid #dbdbdb;
-                        `;
-                        fab.innerHTML = `<svg aria-label="Ferramentas" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" fill="none" r="3" stroke="currentColor" stroke-width="2"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.09 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"></path></svg>`;
-                        
-                        fab.addEventListener("click", (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (!isLogged()) {
-                                showAuthGate();
-                                return;
-                            }
-                            
-                            const menu = document.querySelector('.assistive-menu');
-                            if (menu) {
-                                menu.style.left = '50%';
-                                menu.style.top = '50%';
-                                menu.style.bottom = 'auto';
-                                menu.style.transform = 'translate(-50%, -50%)';
-                                menu.style.display = menu.style.display === "flex" ? "none" : "flex";
-                            }
-                        });
-                        document.body.appendChild(fab);
-                    }
 
-                    // Injeção na Sidebar (Desktop)
                     if (itemToClone) {
                         const newItem = itemToClone.cloneNode(true);
                         const link = newItem.querySelector('a');
@@ -1164,14 +1120,6 @@
                                 e.preventDefault();
                                 e.stopPropagation();
 
-                                // Garante que o menu flutuante não seja cortado por overflow
-                                menu.style.zIndex = "2147483647";
-
-                                if (!isLogged()) {
-                                    showAuthGate();
-                                    return;
-                                }
-
                                 // Lógica de posicionamento inteligente (PC vs Mobile)
                                 const isDesktop = window.innerWidth >= 1024;
                                 if (isDesktop) {
@@ -1191,18 +1139,9 @@
                                 menu.style.display = menu.style.display === "flex" ? "none" : "flex";
                             });
                         }
-
-                        // Estilo extra para Safari não esmagar o ícone
-                        newItem.style.cssText += "flex-shrink: 0 !important; display: flex !important; visibility: visible !important; width: auto !important; min-width: 48px !important; justify-content: center !important; align-items: center !important;";
-
-                        // Insere como o PRIMEIRO item do container (antes do "Início")
-                        sidebarContainer.prepend(newItem);
-                        
-                        console.log("[IG Tools] Menu injetado na barra oficial.");
-
-                        // Força um "reflow" no Safari para redesenhar a barra
-                        sidebarContainer.offsetHeight;
+                        sidebarContainer.appendChild(newItem);
                     }
+
                     function closeMenu() {
                         menu.style.display = 'none';
                     }
@@ -7547,7 +7486,7 @@
                     }
                     voiceControl.init();
                 }
-                
+
                 async function downloadMedia(url, filename) {
                     alert(`Iniciando download de: ${filename}`);
                     try {

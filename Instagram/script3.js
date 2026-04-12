@@ -95,11 +95,11 @@
                     gate.id = 'ig-tools-auth-gate';
 
                 // Estilo responsivo: centralizado no mobile, canto no desktop
-                const isMobile = window.innerWidth <= 768;
-                const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
+                const isMobile = window.innerWidth <= 768 || /iPhone|iPad|iPod/i.test(navigator.userAgent);
+                const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 340px;';
                 const desktopPos = 'bottom: 20px; right: 20px; max-width: 280px;';
                 
-                const commonStyle = 'position: fixed; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; font-family: -apple-system, system-ui, sans-serif;';
+                const commonStyle = 'position: fixed !important; z-index: 2147483647 !important; background: white !important; padding: 20px !important; border-radius: 12px !important; box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important; border: 1px solid #dbdbdb !important; display: flex !important; flex-direction: column !important; gap: 12px !important; align-items: center !important; font-family: -apple-system, system-ui, sans-serif !important;';
                 gate.style.cssText = commonStyle + (isMobile ? mobilePos : desktopPos);
                 
                 gate.innerHTML = `
@@ -7734,19 +7734,17 @@
         }
     }
 
-    // Inicialização idêntica ao script.js (mais estável no Safari)
-    const observer = new MutationObserver((mutations, obs) => {
-        const mainContainer = document.querySelector('main[role="main"], div[data-main-nav="true"]');
-        if (mainContainer) {
-            initScript();
-            obs.disconnect();
-        }
-    });
-
-    const mainContainer = document.querySelector('main[role="main"], div[data-main-nav="true"]');
-    if (mainContainer) {
+    // No Safari Mobile, precisamos rodar o script assim que o body estiver disponível
+    // para mostrar o modal de login, sem esperar pelo carregamento completo do Instagram.
+    if (document.body) {
         initScript();
     } else {
-        observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
+        const observer = new MutationObserver((mutations, obs) => {
+            if (document.body) {
+                initScript();
+                obs.disconnect();
+            }
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
     }
 })();

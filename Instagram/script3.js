@@ -84,44 +84,14 @@
             };
             googleAuth.checkUrlToken();
 
-            // --- BLOQUEIO DE ACESSO: SÓ CONTINUA SE ESTIVER LOGADO ---
-            if (!googleAuth.getAccessToken()) {
-                console.log("[IG Tools] Acesso negado: Login Google necessário.");
-
-                const showAuthGate = () => {
-                    if (document.getElementById('ig-tools-auth-gate')) return;
-                    const gate = document.createElement('div');
-                    gate.id = 'ig-tools-auth-gate';
-
-                // Estilo responsivo: centralizado no mobile, canto no desktop
-                const isMobile = window.innerWidth <= 768;
-                const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
-                const desktopPos = 'bottom: 20px; right: 20px; max-width: 280px;';
-
-                gate.style.cssText = `position: fixed; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; font-family: -apple-system, system-ui, sans-serif; ${isMobile ? mobilePos : desktopPos}`;
-
-                    gate.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; max-width: 280px; font-family: -apple-system, system-ui, sans-serif;';
-                    gate.innerHTML = `
-                        <div style="font-size: 24px;">🛠️</div>
-                        <span style="color: black; font-weight: bold; font-size: 16px; text-align: center;">IG Tools Protegido</span>
-                        <p style="color: #666; font-size: 12px; text-align: center; margin: 0;">Faça login com sua conta Google para ativar as ferramentas de download e análise.</p>
-                        <button id="authGateLoginBtn" style="background: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; transition: background 0.2s;">Login com Google</button>
-                    `;
-                    document.body.appendChild(gate);
-                    document.getElementById('authGateLoginBtn').onclick = () => googleAuth.login();
-                };
-
-                if (document.body) showAuthGate();
-                else document.addEventListener('DOMContentLoaded', showAuthGate);
-
-                return; // INTERROMPE TODO O RESTO DO SCRIPT
-            }
+            // Removido bloqueio mandatório de login do Google. 
+            // Agora o acesso é livre e a sincronização é opcional via Configurações.
 
             const gDriveApi = {
                 execute: function(options) {
                     const token = googleAuth.getAccessToken();
                     if (!token) {
-                        showToast("⚠️ Faça login no Google nas Configurações");
+                        console.log("[IG Tools] Sincronização Google Drive desativada (Sem Token).");
                         return Promise.reject("Sem token");
                     }
                     return new Promise((resolve, reject) => {

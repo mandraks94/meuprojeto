@@ -4875,22 +4875,13 @@
                                     const selectedCats = Array.from(execDiv.querySelectorAll('.execCatItem:checked')).map(i => i.value);
                                     execDiv.remove(); // Fecha o modal de seleção de ações
 
-                                    let cancelled = false;
-                                    const { bar, update, closeButton } = createCancellableProgressBar();
-                                    closeButton.onclick = () => { cancelled = true; bar.remove(); };
-
                                     // 1. Processar Categorias Primeiro (Rápido e Local)
                                     if (doCat && selectedCats.length > 0) {
                                         await dbHelper._init(); // Garante que o cache está carregado
                                         if (!dbHelper._cache.userCategories) dbHelper._cache.userCategories = {};
                                         
-                                        const total = selectedUsernames.length;
-                                        for (let i = 0; i < total; i++) {
-                                            if (cancelled) break;
-                                            const u = selectedUsernames[i];
+                                        for (const u of selectedUsernames) {
                                             const lowerUsername = u.toLowerCase();
-                                            update(i + 1, total, `Processando categorias: ${u}...`);
-
                                             const existing = dbHelper._cache.userCategories[lowerUsername] || [];
                                             let updated;
 
@@ -4900,19 +4891,12 @@
                                                 updated = existing.filter(catId => !selectedCats.includes(catId));
                                             }
                                             dbHelper._cache.userCategories[lowerUsername] = updated;
-                                            if (total < 20) await new Promise(r => setTimeout(r, 50));
                                         }
                                         // Envia o lote inteiro para o Google Cloud em uma única chamada
-                                        if (!cancelled) {
-                                            update(total, total, "Sincronizando com Google Cloud...");
-                                            await gDriveApi.saveData(dbHelper._cache);
-                                        }
+                                        await gDriveApi.saveData(dbHelper._cache);
                                         userCategoryMap = await dbHelper.loadAllUserCategories();
                                         renderList(currentPage);
                                     }
-
-                                    if (cancelled) return;
-                                    bar.remove();
 
                                     if (doMute) {
                                         await new Promise(resolve => unmuteUsers(selectedUsernames, resolve, true, muteType));
@@ -4927,6 +4911,7 @@
                                         // userListCache.hiddenStory já é atualizado dentro de toggleListMembership
                                     }
 
+                                    bar.remove();
                                     if (updateCallback) await updateCallback(selectedUsernames, 'exec');
                                     showToast("Ações aplicadas com sucesso!");
                                 };
@@ -5817,6 +5802,7 @@
                             const { bar, update, closeButton } = createCancellableProgressBar();
                             let cancelled = false;
                             closeButton.onclick = () => { cancelled = true; bar.remove(); };
+                            update(0, usernames.length, "Iniciando...");
 
                             await dbHelper._init();
                             if (!dbHelper._cache.userCategories) dbHelper._cache.userCategories = {};
@@ -5831,11 +5817,11 @@
                                 const updated = Array.from(new Set([...existing, ...selectedCategoryIds]));
                                 dbHelper._cache.userCategories[u] = updated;
                                 
-                                if (total < 20) await new Promise(r => setTimeout(r, 50));
+                                await new Promise(r => setTimeout(r, 10)); // Yield para o navegador renderizar
                             }
 
                             if (!cancelled) {
-                                update(total, total, "Enviando para Google Cloud...");
+                                update(total, total, "Sincronizando com Google Cloud...");
                                 await gDriveApi.saveData(dbHelper._cache);
                                 showToast(`${usernames.length} usuário(s) atualizado(s)!`);
                             }
@@ -5857,6 +5843,7 @@
                             const { bar, update, closeButton } = createCancellableProgressBar();
                             let cancelled = false;
                             closeButton.onclick = () => { cancelled = true; bar.remove(); };
+                            update(0, usernames.length, "Iniciando...");
 
                             await dbHelper._init();
                             if (!dbHelper._cache.userCategories) dbHelper._cache.userCategories = {};
@@ -5871,11 +5858,11 @@
                                 const updated = existing.filter(id => !selectedCategoryIds.includes(id));
                                 dbHelper._cache.userCategories[u] = updated;
                                 
-                                if (total < 20) await new Promise(r => setTimeout(r, 50));
+                                await new Promise(r => setTimeout(r, 10));
                             }
 
                             if (!cancelled) {
-                                update(total, total, "Enviando para Google Cloud...");
+                                update(total, total, "Sincronizando com Google Cloud...");
                                 await gDriveApi.saveData(dbHelper._cache);
                                 showToast(`${usernames.length} usuário(s) atualizado(s)!`);
                             }

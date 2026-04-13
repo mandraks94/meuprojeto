@@ -4837,10 +4837,12 @@
 
                                     // 1. Processar Categorias Primeiro (Rápido e Local)
                                     if (doCat && selectedCats.length > 0) {
-                                        const allUserCategories = await dbHelper.loadAllUserCategories();
+                                        await dbHelper._init(); // Garante que o cache está carregado
+                                        if (!dbHelper._cache.userCategories) dbHelper._cache.userCategories = {};
+                                        
                                         for (const u of selectedUsernames) {
                                             const lowerUsername = u.toLowerCase();
-                                            const existing = allUserCategories.get(lowerUsername) || [];
+                                            const existing = dbHelper._cache.userCategories[lowerUsername] || [];
                                             let updated;
 
                                             if (catAction === 'add') {
@@ -4848,9 +4850,10 @@
                                             } else { // 'remove'
                                                 updated = existing.filter(catId => !selectedCats.includes(catId));
                                             }
-                                            await dbHelper.saveUserCategories(lowerUsername, updated);
+                                            dbHelper._cache.userCategories[lowerUsername] = updated;
                                         }
-                                        // Sincroniza o mapa local e atualiza a interface (tabela) imediatamente
+                                        // Envia o lote inteiro para o Google Cloud em uma única chamada
+                                        await gDriveApi.saveData(dbHelper._cache);
                                         userCategoryMap = await dbHelper.loadAllUserCategories();
                                         renderList(currentPage);
                                     }
@@ -6916,7 +6919,6 @@
                                             // Atualiza o cache local imediatamente
                                             if (isCurrentlyCF) userListCache.closeFriends.delete(username);
                                             else userListCache.closeFriends.add(username);
-                                            await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
                                             console.log(`[IG Tools] API Success: ${username} (Close Friends)`);
                                         }
 
@@ -6936,6 +6938,8 @@
                                 await new Promise(r => setTimeout(r, loadSettings().requestDelay || 500));
                             }
                         }
+                        // Persistência única no Drive após processar todos os usuários do lote
+                        await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
                         bar.remove();
                         history.pushState(null, null, originalPath); window.dispatchEvent(new Event("popstate"));
                         if (callback) callback();
@@ -7057,7 +7061,6 @@
                                                     // Atualiza o cache local imediatamente
                                                     if (isCurrentlyHidden) userListCache.hiddenStory.delete(username);
                                                     else userListCache.hiddenStory.add(username);
-                                                    await dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
                                                 } else {
                                                     const errorText = await res.text();
                                                     console.error(`[IG Tools] API Error ${username} (${endpoint}):`, {
@@ -7081,6 +7084,8 @@
                                     await new Promise(r => setTimeout(r, loadSettings().requestDelay || 500));
                                 }
                             }
+                            // Persistência única no Drive ao final
+                            await dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
                             bar.remove();
                             history.pushState(null, null, originalPath); window.dispatchEvent(new Event("popstate"));
                             if (callback) callback();

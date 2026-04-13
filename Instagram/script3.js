@@ -5,11 +5,13 @@
 // @version      1.0
 // @match        https://www.instagram.com/*
 // @grant        GM_xmlhttpRequest
+// @grant        GM.xmlHttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        unsafeWindow
 // @connect      www.googleapis.com
 // @connect      accounts.google.com
+// @run-at       document-end
 // ==/UserScript==
 
 (function() {

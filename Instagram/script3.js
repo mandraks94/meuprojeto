@@ -95,6 +95,42 @@
                 return true;
             }
 
+            /**
+             * Cria uma barra de progresso com um botão de cancelar.
+             * Movido para fora do injectMenu para garantir escopo global no script.
+             */
+            function createCancellableProgressBar() {
+                document.getElementById("cancellableProgressBar")?.remove();
+
+                const bar = document.createElement("div");
+                bar.id = "cancellableProgressBar";
+                bar.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);width:80%;height:35px;background:#f0f0f0;z-index:2147483647;color:black;font-weight:bold;font-size:14px;text-align:center;line-height:35px;display:flex;align-items:center;justify-content:space-between;padding:0 15px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);border:1px solid #ccc;overflow:hidden;";
+
+                const fill = document.createElement("div");
+                fill.style.cssText = "height:100%;width:0%;background:#4caf50;position:absolute;left:0;top:0;z-index:0;transition:width 0.3s ease;";
+
+                const text = document.createElement("div");
+                text.style.cssText = "position:relative;z-index:1;flex:1;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
+                text.innerText = "Iniciando...";
+
+                const closeButton = document.createElement("button");
+                closeButton.innerText = "Cancelar";
+                closeButton.style.cssText = "position:relative;z-index:1;background:#e74c3c;color:white;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;font-size:12px;margin-left:10px;";
+
+                bar.appendChild(fill);
+                bar.appendChild(text);
+                bar.appendChild(closeButton);
+                document.body.appendChild(bar);
+
+                const update = (current, total, message = '') => {
+                    const percent = total > 0 ? Math.min((current / total) * 100, 100) : 0;
+                    fill.style.width = `${percent}%`;
+                    text.innerText = `${message} ${Math.floor(percent)}% (${current}/${total})`;
+                };
+
+                return { bar, update, closeButton };
+            }
+
             const gDriveApi = {
                 execute: function(options) {
                     const token = googleAuth.getAccessToken();
@@ -2616,6 +2652,7 @@
     async function unmuteUsers(usersToUnmute, callback, toggleMode = false, targetType = 'all') {
         let cancelled = false;
         const { bar, update, closeButton } = createCancellableProgressBar();
+        update(0, usersToUnmute.length, "Iniciando...");
         closeButton.onclick = () => {
             cancelled = true;
             bar.remove();
@@ -3050,6 +3087,7 @@
     async function unblockUsers(usersToUnblock, onComplete) {
         let cancelled = false;
         const { bar, update, closeButton } = createCancellableProgressBar();
+        update(0, usersToUnblock.length, "Iniciando...");
         closeButton.onclick = () => {
             cancelled = true;
             bar.remove();
@@ -4837,13 +4875,22 @@
                                     const selectedCats = Array.from(execDiv.querySelectorAll('.execCatItem:checked')).map(i => i.value);
                                     execDiv.remove(); // Fecha o modal de seleção de ações
 
+                                    let cancelled = false;
+                                    const { bar, update, closeButton } = createCancellableProgressBar();
+                                    closeButton.onclick = () => { cancelled = true; bar.remove(); };
+
                                     // 1. Processar Categorias Primeiro (Rápido e Local)
                                     if (doCat && selectedCats.length > 0) {
                                         await dbHelper._init(); // Garante que o cache está carregado
                                         if (!dbHelper._cache.userCategories) dbHelper._cache.userCategories = {};
                                         
-                                        for (const u of selectedUsernames) {
+                                        const total = selectedUsernames.length;
+                                        for (let i = 0; i < total; i++) {
+                                            if (cancelled) break;
+                                            const u = selectedUsernames[i];
                                             const lowerUsername = u.toLowerCase();
+                                            update(i + 1, total, `Processando categorias: ${u}...`);
+
                                             const existing = dbHelper._cache.userCategories[lowerUsername] || [];
                                             let updated;
 
@@ -4853,12 +4900,19 @@
                                                 updated = existing.filter(catId => !selectedCats.includes(catId));
                                             }
                                             dbHelper._cache.userCategories[lowerUsername] = updated;
+                                            if (total < 20) await new Promise(r => setTimeout(r, 50));
                                         }
                                         // Envia o lote inteiro para o Google Cloud em uma única chamada
-                                        await gDriveApi.saveData(dbHelper._cache);
+                                        if (!cancelled) {
+                                            update(total, total, "Sincronizando com Google Cloud...");
+                                            await gDriveApi.saveData(dbHelper._cache);
+                                        }
                                         userCategoryMap = await dbHelper.loadAllUserCategories();
                                         renderList(currentPage);
                                     }
+
+                                    if (cancelled) return;
+                                    bar.remove();
 
                                     if (doMute) {
                                         await new Promise(resolve => unmuteUsers(selectedUsernames, resolve, true, muteType));
@@ -5758,16 +5812,35 @@
 
                         document.getElementById("addUserCategoriesBtn").onclick = async () => {
                             const selectedCategoryIds = Array.from(div.querySelectorAll('.category-checkbox:checked')).map(cb => cb.value);
+                            if (selectedCategoryIds.length === 0) return alert("Selecione ao menos uma categoria.");
 
-                            const allUserCategories = await dbHelper.loadAllUserCategories();
+                            const { bar, update, closeButton } = createCancellableProgressBar();
+                            let cancelled = false;
+                            closeButton.onclick = () => { cancelled = true; bar.remove(); };
 
-                            for (const username of usernames) {
-                                const existingCategories = allUserCategories.get(username.toLowerCase()) || [];
-                                const newCategories = new Set([...existingCategories, ...selectedCategoryIds]);
-                                await dbHelper.saveUserCategories(username, Array.from(newCategories));
+                            await dbHelper._init();
+                            if (!dbHelper._cache.userCategories) dbHelper._cache.userCategories = {};
+
+                            const total = usernames.length;
+                            for (let i = 0; i < total; i++) {
+                                if (cancelled) break;
+                                const u = usernames[i].toLowerCase();
+                                update(i + 1, total, `Adicionando categorias a ${u}...`);
+                                
+                                const existing = dbHelper._cache.userCategories[u] || [];
+                                const updated = Array.from(new Set([...existing, ...selectedCategoryIds]));
+                                dbHelper._cache.userCategories[u] = updated;
+                                
+                                if (total < 20) await new Promise(r => setTimeout(r, 50));
                             }
 
-                            showToast(`${usernames.length} usuário(s) atualizado(s) (Categorias Adicionadas)!`);
+                            if (!cancelled) {
+                                update(total, total, "Enviando para Google Cloud...");
+                                await gDriveApi.saveData(dbHelper._cache);
+                                showToast(`${usernames.length} usuário(s) atualizado(s)!`);
+                            }
+
+                            bar.remove();
                             close();
                             // Recarrega o modal de "Seguindo" para refletir as mudanças
                             const seguindoModal = document.getElementById("seguindoModal");
@@ -5779,13 +5852,35 @@
 
                         document.getElementById("removeUserCategoriesBtn").onclick = async () => {
                             const selectedCategoryIds = Array.from(div.querySelectorAll('.category-checkbox:checked')).map(cb => cb.value);
-                            const allUserCategories = await dbHelper.loadAllUserCategories();
-                            for (const username of usernames) {
-                                const existingCategories = allUserCategories.get(username.toLowerCase()) || [];
-                                const newCategories = existingCategories.filter(id => !selectedCategoryIds.includes(id));
-                                await dbHelper.saveUserCategories(username, newCategories);
+                            if (selectedCategoryIds.length === 0) return alert("Selecione ao menos uma categoria.");
+
+                            const { bar, update, closeButton } = createCancellableProgressBar();
+                            let cancelled = false;
+                            closeButton.onclick = () => { cancelled = true; bar.remove(); };
+
+                            await dbHelper._init();
+                            if (!dbHelper._cache.userCategories) dbHelper._cache.userCategories = {};
+
+                            const total = usernames.length;
+                            for (let i = 0; i < total; i++) {
+                                if (cancelled) break;
+                                const u = usernames[i].toLowerCase();
+                                update(i + 1, total, `Removendo categorias de ${u}...`);
+                                
+                                const existing = dbHelper._cache.userCategories[u] || [];
+                                const updated = existing.filter(id => !selectedCategoryIds.includes(id));
+                                dbHelper._cache.userCategories[u] = updated;
+                                
+                                if (total < 20) await new Promise(r => setTimeout(r, 50));
                             }
-                            showToast(`${usernames.length} usuário(s) atualizado(s) (Categorias Removidas)!`);
+
+                            if (!cancelled) {
+                                update(total, total, "Enviando para Google Cloud...");
+                                await gDriveApi.saveData(dbHelper._cache);
+                                showToast(`${usernames.length} usuário(s) atualizado(s)!`);
+                            }
+
+                            bar.remove();
                             close();
                             // Recarrega o modal de "Seguindo" para refletir as mudanças
                             const seguindoModal = document.getElementById("seguindoModal");
@@ -6868,6 +6963,7 @@
                     const originalPath = window.location.pathname;
                     let cancelled = false;
                     const { bar, update, closeButton } = createCancellableProgressBar();
+                    update(0, users.length, "Preparando...");
                     closeButton.onclick = () => {
                         cancelled = true;
                         bar.remove();
@@ -6968,6 +7064,7 @@
                         const originalPath = window.location.pathname;
                         let cancelled = false;
                         const { bar, update, closeButton } = createCancellableProgressBar();
+                        update(0, users.length, "Iniciando...");
                         closeButton.onclick = () => {
                             cancelled = true;
                             bar.remove();

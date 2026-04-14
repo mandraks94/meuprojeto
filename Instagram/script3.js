@@ -1,17 +1,15 @@
 // ==UserScript==
-// @name         Instagram com Google Driver
+// @name         Instagram com Google Driver_1
 // @description  Adds download buttons to Instagram stories
 // @author       You
 // @version      1.0
 // @match        https://www.instagram.com/*
 // @grant        GM_xmlhttpRequest
-// @grant        GM.xmlHttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        unsafeWindow
 // @connect      www.googleapis.com
 // @connect      accounts.google.com
-// @run-at       document-end
 // ==/UserScript==
 
 (function() {
@@ -86,56 +84,45 @@
             };
             googleAuth.checkUrlToken();
 
-            // Helper para verificar autenticação antes de abrir recursos restritos
-            function requireAuth() {
-                if (!googleAuth.getAccessToken()) {
-                    showToast("⚠️ Recurso bloqueado. Vá em Configurações e conecte sua conta Google.");
-                    return false;
-                }
-                return true;
-            }
+            // --- BLOQUEIO DE ACESSO: SÓ CONTINUA SE ESTIVER LOGADO ---
+            if (!googleAuth.getAccessToken()) {
+                console.log("[IG Tools] Acesso negado: Login Google necessário.");
 
-            /**
-             * Cria uma barra de progresso com um botão de cancelar.
-             * Movido para fora do injectMenu para garantir escopo global no script.
-             */
-            function createCancellableProgressBar() {
-                document.getElementById("cancellableProgressBar")?.remove();
+                const showAuthGate = () => {
+                    if (document.getElementById('ig-tools-auth-gate')) return;
+                    const gate = document.createElement('div');
+                    gate.id = 'ig-tools-auth-gate';
 
-                const bar = document.createElement("div");
-                bar.id = "cancellableProgressBar";
-                bar.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);width:80%;height:35px;background:#f0f0f0;z-index:2147483647;color:black;font-weight:bold;font-size:14px;text-align:center;line-height:35px;display:flex;align-items:center;justify-content:space-between;padding:0 15px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);border:1px solid #ccc;overflow:hidden;";
+                // Estilo responsivo: centralizado no mobile, canto no desktop
+                const isMobile = window.innerWidth <= 768;
+                const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
+                const desktopPos = 'bottom: 20px; right: 20px; max-width: 280px;';
 
-                const fill = document.createElement("div");
-                fill.style.cssText = "height:100%;width:0%;background:#4caf50;position:absolute;left:0;top:0;z-index:0;transition:width 0.3s ease;";
-
-                const text = document.createElement("div");
-                text.style.cssText = "position:relative;z-index:1;flex:1;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
-                text.innerText = "Iniciando...";
-
-                const closeButton = document.createElement("button");
-                closeButton.innerText = "Cancelar";
-                closeButton.style.cssText = "position:relative;z-index:1;background:#e74c3c;color:white;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;font-size:12px;margin-left:10px;";
-
-                bar.appendChild(fill);
-                bar.appendChild(text);
-                bar.appendChild(closeButton);
-                document.body.appendChild(bar);
-
-                const update = (current, total, message = '') => {
-                    const percent = total > 0 ? Math.min((current / total) * 100, 100) : 0;
-                    fill.style.width = `${percent}%`;
-                    text.innerText = `${message} ${Math.floor(percent)}% (${current}/${total})`;
+                gate.style.cssText = `position: fixed; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; font-family: -apple-system, system-ui, sans-serif; ${isMobile ? mobilePos : desktopPos}`;
+                    gate.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; max-width: 280px; font-family: -apple-system, system-ui, sans-serif;';
+                    gate.innerHTML = `
+                        <div style="font-size: 24px;">🛠️</div>
+                        <span style="color: black; font-weight: bold; font-size: 16px; text-align: center;">IG Tools Protegido</span>
+                        <p style="color: #666; font-size: 12px; text-align: center; margin: 0;">Faça login com sua conta Google para ativar as ferramentas de download e análise.</p>
+                        <button id="authGateLoginBtn" style="background: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; transition: background 0.2s;">Login com Google</button>
+                    `;
+                    document.body.appendChild(gate);
+                    document.getElementById('authGateLoginBtn').onclick = () => googleAuth.login();
                 };
 
-                return { bar, update, closeButton };
+                if (document.body) showAuthGate();
+                else document.addEventListener('DOMContentLoaded', showAuthGate);
+
+                return; // INTERROMPE TODO O RESTO DO SCRIPT
             }
 
             const gDriveApi = {
                 execute: function(options) {
                     const token = googleAuth.getAccessToken();
-                    if (!token) return Promise.reject("Sem token");
-
+                    if (!token) {
+                        showToast("⚠️ Faça login no Google nas Configurações");
+                        return Promise.reject("Sem token");
+                    }
                     return new Promise((resolve, reject) => {
                         if (typeof GM_xmlhttpRequest !== 'undefined') {
                             GM_xmlhttpRequest({
@@ -411,17 +398,11 @@
             const dbHelper = {
                 _cache: null,
                 _init: async function() {
-                    if (this._cache) return this._cache;
-
-                    const token = googleAuth.getAccessToken();
-                    if (!token) {
-                        this._cache = {};
-                        return this._cache;
-                    }
-
+                    if (!this._cache) {
                     try {
                         console.log("[IG Tools] Sincronizando com Google Drive...");
                         this._cache = await gDriveApi.loadData();
+                        // Garante que o cache seja um objeto e não nulo/texto
                         if (!this._cache || typeof this._cache !== 'object') {
                             this._cache = {};
                         }
@@ -431,6 +412,7 @@
                     } catch (e) {
                         console.error("[IG Tools] Erro ao carregar dados da nuvem:", e);
                         this._cache = {};
+                    }
                     }
                     return this._cache;
                 },
@@ -507,6 +489,11 @@
                     const data = this._cache.userCategories || {};
                     Object.keys(data).forEach(user => map.set(user, data[user]));
                     return map;
+                },
+                saveAllUserCategories: async function(categoryMap) {
+                    await this._init();
+                    this._cache.userCategories = Object.fromEntries(categoryMap);
+                    await gDriveApi.saveData(this._cache);
                 },
                 clearCache: async function(storeName) {
                     await this._init();
@@ -999,6 +986,27 @@
                             input:checked + .slider:before { transform: translateX(20px); }
                             .toggle-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; font-size: 16px; color: black; }
                             .dark-mode .toggle-item { background: #262626 !important; color: white !important; border-color: #555 !important; }
+
+                            /* Loading Spinner */
+                            .loading-overlay {
+                                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                                background: rgba(255, 255, 255, 0.7);
+                                display: flex; flex-direction: column; justify-content: center; align-items: center;
+                                z-index: 10005; border-radius: 10px;
+                            }
+                            .dark-mode .loading-overlay { background: rgba(0, 0, 0, 0.7); }
+                            .spinner {
+                                width: 40px; height: 40px;
+                                border: 4px solid #f3f3f3;
+                                border-top: 4px solid #3498db;
+                                border-radius: 50%;
+                                animation: spin 1s linear infinite;
+                            }
+                            .loading-text { margin-top: 10px; font-weight: bold; color: #0095f6; font-size: 16px; font-family: sans-serif; }
+                            @keyframes spin {
+                                0% { transform: rotate(0deg); }
+                                100% { transform: rotate(360deg); }
+                            }
                         `;
                     }
 
@@ -1397,32 +1405,27 @@
                     document
                         .getElementById("bloqueadosBtn")
                         .addEventListener("click", (e) => {
-                            if (!requireAuth()) return;
                             closeMenu();
                             iniciarProcessoBloqueados();
                         });
 
                     document.getElementById("naoSegueDeVoltaBtn").addEventListener("click", () => {
-                        if (!requireAuth()) return;
                         closeMenu();
                         iniciarProcessoNaoSegueDeVolta();
                     });
 
                     document.getElementById("seguindoBtn").addEventListener("click", () => {
-                        if (!requireAuth()) return;
                         closeMenu();
                         iniciarProcessoSeguindo();
                     });
 
                     document.getElementById("seguindoBtn").addEventListener("click", () => {
-                        if (!requireAuth()) return;
                         closeMenu();
                         iniciarProcessoSeguindo();
                     });
 
                     // --- NOVO MENU: AMIGOS PRÓXIMOS ---
     document.getElementById("closeFriendsBtn").addEventListener("click", () => {
-        if (!requireAuth()) return;
         closeMenu();
         console.log("Botão Amigos Próximos clicado");
         // Direcionar para a página de amigos próximos se não estiver lá
@@ -1451,7 +1454,6 @@
 
     // --- NOVO MENU: OCULTAR STORY ---
                     document.getElementById("hideStoryBtn").addEventListener("click", () => {
-        if (!requireAuth()) return;
         closeMenu();
         console.log("Botão Ocultar Story clicado");
         // Direcionar para a página de ocultar story se não estiver lá
@@ -1477,7 +1479,6 @@
     });
 
     document.getElementById("mutedAccountsBtn").addEventListener("click", () => {
-        if (!requireAuth()) return;
         closeMenu();
         console.log("Botão Contas Silenciadas clicado");
         if (window.location.pathname !== "/accounts/muted_accounts/") {
@@ -1501,21 +1502,16 @@
     });
 
                         document.getElementById("interacoesBtn").addEventListener("click", () => {
-                            if (!requireAuth()) return;
                             closeMenu();
                             abrirModalInteracoes();
                         });
 
     // --- NOVO MENU: REELS ---
     document.getElementById("reelsMenuBtn").addEventListener("click", () => {
-        if (!requireAuth()) return;
         closeMenu();
         abrirModalReels();
     });
-    document.getElementById("baixarStoryBtn").addEventListener("click", () => { 
-        if (!requireAuth()) return;
-        baixarStoryAtual(); 
-    });
+    document.getElementById("baixarStoryBtn").addEventListener("click", () => { baixarStoryAtual(); });
 
     document.getElementById("settingsBtn").addEventListener("click", () => {
         closeMenu();
@@ -1523,7 +1519,6 @@
     });
 
     document.getElementById("engajamentoBtn").addEventListener("click", () => {
-        if (!requireAuth()) return;
         closeMenu();
         abrirModalEngajamento();
     });
@@ -2652,7 +2647,6 @@
     async function unmuteUsers(usersToUnmute, callback, toggleMode = false, targetType = 'all') {
         let cancelled = false;
         const { bar, update, closeButton } = createCancellableProgressBar();
-        update(0, usersToUnmute.length, "Iniciando...");
         closeButton.onclick = () => {
             cancelled = true;
             bar.remove();
@@ -3087,7 +3081,6 @@
     async function unblockUsers(usersToUnblock, onComplete) {
         let cancelled = false;
         const { bar, update, closeButton } = createCancellableProgressBar();
-        update(0, usersToUnblock.length, "Iniciando...");
         closeButton.onclick = () => {
             cancelled = true;
             bar.remove();
@@ -4179,6 +4172,28 @@
 
                         const originalPath = window.location.pathname;
 
+                        const toggleLoading = (isLoading, progress = null) => {
+                            const modal = document.getElementById("seguindoModal");
+                            if (!modal) return;
+                            if (isLoading) {
+                                let overlay = modal.querySelector('.loading-overlay');
+                                if (!overlay) {
+                                    overlay = document.createElement('div');
+                                    overlay.className = 'loading-overlay';
+                                    overlay.innerHTML = '<div class="spinner"></div><div class="loading-text"></div>';
+                                    modal.appendChild(overlay);
+                                }
+                                const textDiv = overlay.querySelector('.loading-text');
+                                if (progress !== null) {
+                                    textDiv.innerText = `${Math.floor(progress)}%`;
+                                } else {
+                                    textDiv.innerText = '';
+                                }
+                            } else {
+                                modal.querySelector('.loading-overlay')?.remove();
+                            }
+                        };
+
                         const pathParts = window.location.pathname.split('/').filter(Boolean);
                         const username = pathParts[0];
                         const appID = '936619743392459';
@@ -4875,14 +4890,17 @@
                                     const selectedCats = Array.from(execDiv.querySelectorAll('.execCatItem:checked')).map(i => i.value);
                                     execDiv.remove(); // Fecha o modal de seleção de ações
 
+                                    toggleLoading(true);
+                                    try {
                                     // 1. Processar Categorias Primeiro (Rápido e Local)
                                     if (doCat && selectedCats.length > 0) {
-                                        await dbHelper._init(); // Garante que o cache está carregado
-                                        if (!dbHelper._cache.userCategories) dbHelper._cache.userCategories = {};
-                                        
-                                        for (const u of selectedUsernames) {
+                                        const total = selectedUsernames.length;
+                                        const allUserCategories = await dbHelper.loadAllUserCategories();
+                                        for (let i = 0; i < total; i++) {
+                                            const u = selectedUsernames[i];
+                                            toggleLoading(true, (i / total) * 100);
                                             const lowerUsername = u.toLowerCase();
-                                            const existing = dbHelper._cache.userCategories[lowerUsername] || [];
+                                            const existing = allUserCategories.get(lowerUsername) || [];
                                             let updated;
 
                                             if (catAction === 'add') {
@@ -4890,11 +4908,11 @@
                                             } else { // 'remove'
                                                 updated = existing.filter(catId => !selectedCats.includes(catId));
                                             }
-                                            dbHelper._cache.userCategories[lowerUsername] = updated;
+                                            allUserCategories.set(lowerUsername, updated);
                                         }
-                                        // Envia o lote inteiro para o Google Cloud em uma única chamada
-                                        await gDriveApi.saveData(dbHelper._cache);
-                                        userCategoryMap = await dbHelper.loadAllUserCategories();
+                                        await dbHelper.saveAllUserCategories(allUserCategories);
+                                        // Sincroniza o mapa local e atualiza a interface (tabela) imediatamente
+                                        userCategoryMap = allUserCategories;
                                         renderList(currentPage);
                                     }
 
@@ -4910,8 +4928,11 @@
                                         await toggleListMembership(selectedUsernames, '/accounts/hide_story_and_live_from/', 'hiddenStory', () => {});
                                         // userListCache.hiddenStory já é atualizado dentro de toggleListMembership
                                     }
+                                    toggleLoading(true, 100);
+                                    } finally {
+                                        toggleLoading(false);
+                                    }
 
-                                    bar.remove();
                                     if (updateCallback) await updateCallback(selectedUsernames, 'exec');
                                     showToast("Ações aplicadas com sucesso!");
                                 };
@@ -5797,36 +5818,18 @@
 
                         document.getElementById("addUserCategoriesBtn").onclick = async () => {
                             const selectedCategoryIds = Array.from(div.querySelectorAll('.category-checkbox:checked')).map(cb => cb.value);
-                            if (selectedCategoryIds.length === 0) return alert("Selecione ao menos uma categoria.");
 
-                            const { bar, update, closeButton } = createCancellableProgressBar();
-                            let cancelled = false;
-                            closeButton.onclick = () => { cancelled = true; bar.remove(); };
-                            update(0, usernames.length, "Iniciando...");
+                            const allUserCategories = await dbHelper.loadAllUserCategories();
 
-                            await dbHelper._init();
-                            if (!dbHelper._cache.userCategories) dbHelper._cache.userCategories = {};
-
-                            const total = usernames.length;
-                            for (let i = 0; i < total; i++) {
-                                if (cancelled) break;
-                                const u = usernames[i].toLowerCase();
-                                update(i + 1, total, `Adicionando categorias a ${u}...`);
-                                
-                                const existing = dbHelper._cache.userCategories[u] || [];
-                                const updated = Array.from(new Set([...existing, ...selectedCategoryIds]));
-                                dbHelper._cache.userCategories[u] = updated;
-                                
-                                await new Promise(r => setTimeout(r, 10)); // Yield para o navegador renderizar
+                            toggleLoading(true, 0);
+                            for (const username of usernames) {
+                                const existingCategories = allUserCategories.get(username.toLowerCase()) || [];
+                                const newCategories = new Set([...existingCategories, ...selectedCategoryIds]);
+                                allUserCategories.set(username.toLowerCase(), Array.from(newCategories));
                             }
+                            await dbHelper.saveAllUserCategories(allUserCategories);
 
-                            if (!cancelled) {
-                                update(total, total, "Sincronizando com Google Cloud...");
-                                await gDriveApi.saveData(dbHelper._cache);
-                                showToast(`${usernames.length} usuário(s) atualizado(s)!`);
-                            }
-
-                            bar.remove();
+                            showToast(`✅ ${usernames.length} usuário(s) atualizados com sucesso!`);
                             close();
                             // Recarrega o modal de "Seguindo" para refletir as mudanças
                             const seguindoModal = document.getElementById("seguindoModal");
@@ -5838,36 +5841,16 @@
 
                         document.getElementById("removeUserCategoriesBtn").onclick = async () => {
                             const selectedCategoryIds = Array.from(div.querySelectorAll('.category-checkbox:checked')).map(cb => cb.value);
-                            if (selectedCategoryIds.length === 0) return alert("Selecione ao menos uma categoria.");
+                            const allUserCategories = await dbHelper.loadAllUserCategories();
 
-                            const { bar, update, closeButton } = createCancellableProgressBar();
-                            let cancelled = false;
-                            closeButton.onclick = () => { cancelled = true; bar.remove(); };
-                            update(0, usernames.length, "Iniciando...");
-
-                            await dbHelper._init();
-                            if (!dbHelper._cache.userCategories) dbHelper._cache.userCategories = {};
-
-                            const total = usernames.length;
-                            for (let i = 0; i < total; i++) {
-                                if (cancelled) break;
-                                const u = usernames[i].toLowerCase();
-                                update(i + 1, total, `Removendo categorias de ${u}...`);
-                                
-                                const existing = dbHelper._cache.userCategories[u] || [];
-                                const updated = existing.filter(id => !selectedCategoryIds.includes(id));
-                                dbHelper._cache.userCategories[u] = updated;
-                                
-                                await new Promise(r => setTimeout(r, 10));
+                            toggleLoading(true, 0);
+                            for (const username of usernames) {
+                                const existingCategories = allUserCategories.get(username.toLowerCase()) || [];
+                                const newCategories = existingCategories.filter(id => !selectedCategoryIds.includes(id));
+                                allUserCategories.set(username.toLowerCase(), newCategories);
                             }
-
-                            if (!cancelled) {
-                                update(total, total, "Sincronizando com Google Cloud...");
-                                await gDriveApi.saveData(dbHelper._cache);
-                                showToast(`${usernames.length} usuário(s) atualizado(s)!`);
-                            }
-
-                            bar.remove();
+                            await dbHelper.saveAllUserCategories(allUserCategories);
+                            showToast(`✅ Categorias removidas de ${usernames.length} usuário(s)!`);
                             close();
                             // Recarrega o modal de "Seguindo" para refletir as mudanças
                             const seguindoModal = document.getElementById("seguindoModal");
@@ -6937,7 +6920,9 @@
                         btn.disabled = true;
                         btn.textContent = 'Processando...';
 
+                        toggleLoading(true);
                         await config.func(selectedUsers, async () => {
+                            toggleLoading(false);
                             btn.disabled = false;
                             btn.textContent = config.text;
                             alert(`Ação "${config.text}" concluída para ${selectedUsers.length} usuário(s).`);
@@ -6950,7 +6935,6 @@
                     const originalPath = window.location.pathname;
                     let cancelled = false;
                     const { bar, update, closeButton } = createCancellableProgressBar();
-                    update(0, users.length, "Preparando...");
                     closeButton.onclick = () => {
                         cancelled = true;
                         bar.remove();
@@ -7004,6 +6988,7 @@
                                             // Atualiza o cache local imediatamente
                                             if (isCurrentlyCF) userListCache.closeFriends.delete(username);
                                             else userListCache.closeFriends.add(username);
+                                            await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
                                             console.log(`[IG Tools] API Success: ${username} (Close Friends)`);
                                         }
 
@@ -7023,8 +7008,6 @@
                                 await new Promise(r => setTimeout(r, loadSettings().requestDelay || 500));
                             }
                         }
-                        // Persistência única no Drive após processar todos os usuários do lote
-                        await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
                         bar.remove();
                         history.pushState(null, null, originalPath); window.dispatchEvent(new Event("popstate"));
                         if (callback) callback();
@@ -7051,7 +7034,6 @@
                         const originalPath = window.location.pathname;
                         let cancelled = false;
                         const { bar, update, closeButton } = createCancellableProgressBar();
-                        update(0, users.length, "Iniciando...");
                         closeButton.onclick = () => {
                             cancelled = true;
                             bar.remove();
@@ -7147,6 +7129,7 @@
                                                     // Atualiza o cache local imediatamente
                                                     if (isCurrentlyHidden) userListCache.hiddenStory.delete(username);
                                                     else userListCache.hiddenStory.add(username);
+                                                    await dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
                                                 } else {
                                                     const errorText = await res.text();
                                                     console.error(`[IG Tools] API Error ${username} (${endpoint}):`, {
@@ -7170,8 +7153,6 @@
                                     await new Promise(r => setTimeout(r, loadSettings().requestDelay || 500));
                                 }
                             }
-                            // Persistência única no Drive ao final
-                            await dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
                             bar.remove();
                             history.pushState(null, null, originalPath); window.dispatchEvent(new Event("popstate"));
                             if (callback) callback();

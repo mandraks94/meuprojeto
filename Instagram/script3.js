@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Instagram com Google Driver_1
+// @name         teste
 // @description  Adds download buttons to Instagram stories
 // @author       You
 // @version      1.0
@@ -1304,9 +1304,13 @@
                     }
 
                     function startScroll(totalCount, onProgress) {
-                        const scrollDiv = document.querySelector(
-                            "body > div.x1n2onr6.xzkaem6 > div:nth-child(2) > div > div > div.x9f619.x1n2onr6.x1ja2u2z > div > div.x1uvtmcs.x4k7w5x.x1h91t0o.x1beo9mf.xaigb6o.x12ejxvf.x3igimt.xarpa2k.xedcshv.x1lytzrv.x1t2pt76.x7ja8zs.x1n2onr6.x1qrby5j.x1jfb8zj > div > div > div > div > div.x7r02ix.xf1ldfh.x131esax.xdajt7p.xxfnqb6.xb88tzc.xw2csxc.x1odjw0f.x5fp0pe > div > div > div.xyi19xy.x1ccrb07.xtf3nb5.x1pc53ja.x1lliihq.x1iyjqo2.xs83m0k.xz65tgg.x1rife3k.x1n2onr6"
-                        );
+                        // Busca dinâmica do contêiner de scroll (Desktop/Mobile)
+                        let scrollDiv = document.querySelector('div[role="dialog"] ._aano') ||
+                                        document.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]');
+
+                        if (!scrollDiv) {
+                            scrollDiv = document.querySelector('div.xyi19xy.x1ccrb07.xtf3nb5.x1pc53ja.x1lliihq.x1iyjqo2.xs83m0k.xz65tgg.x1rife3k.x1n2onr6');
+                        }
 
                         if (!scrollDiv) {
                             alert("Div com scroll não encontrada.");
@@ -1414,15 +1418,10 @@
                         iniciarProcessoNaoSegueDeVolta();
                     });
 
-                    document.getElementById("seguindoBtn").addEventListener("click", () => {
-                        closeMenu();
-                        iniciarProcessoSeguindo();
-                    });
-
-                    document.getElementById("seguindoBtn").addEventListener("click", () => {
-                        closeMenu();
-                        iniciarProcessoSeguindo();
-                    });
+                document.getElementById("seguindoBtn").addEventListener("click", () => {
+                    closeMenu();
+                    iniciarProcessoSeguindo();
+                });
 
                     // --- NOVO MENU: AMIGOS PRÓXIMOS ---
     document.getElementById("closeFriendsBtn").addEventListener("click", () => {
@@ -1525,69 +1524,61 @@
 
     function extractCloseFriendsUsernames(doc = document) {
         return new Promise((resolve) => {
-            const maxAttempts = 15;
-            let attempts = 0;
+            const users = new Map();
+            let scrollInterval;
+            let noNewUsersCount = 0;
+            const maxIdleCount = 3;
 
-            function tryExtract() {
-                attempts++;
-                const users = [];
-                // Select all elements with data-bloks-name="bk.components.Flexbox" that contain spans with data-bloks-name="bk.components.Text"
-                const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')).filter(el =>
-                    el.querySelector('span[data-bloks-name="bk.components.Text"]')
-                );
+            let cancelled = false;
+            const { bar, update, closeButton } = createCancellableProgressBar();
+            closeButton.onclick = () => { cancelled = true; finishExtraction(); };
+            update(0, 0, "Carregando Amigos Próximos...");
 
-                if (userElements.length === 0) {
-                    console.log("No user elements found for close friends usernames, attempt", attempts);
-                    if (attempts < maxAttempts) {
-                        setTimeout(tryExtract, 800);
-                    } else {
-                        resolve(users);
+            function finishExtraction() {
+                clearInterval(scrollInterval);
+                if (bar) bar.remove();
+                resolve(cancelled ? [] : Array.from(users.values()));
+            }
+
+            function performScrollAndExtract() {
+                const initialUserCount = users.size;
+                // Seleciona apenas elementos que parecem cards de usuários para economizar CPU
+                const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]'))
+                                          .filter(el => el.querySelector('img') && el.innerText.includes('\n'));
+
+                userElements.forEach(userElement => {
+                    let username = "";
+                    const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
+                    username = usernameSpan ? usernameSpan.innerText.trim() : userElement.innerText.trim().split('\n')[0];
+
+                    if (username && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
+                        const imgTag = userElement.querySelector('img');
+                        users.set(username, { username, photoUrl: imgTag ? imgTag.src : '' });
                     }
+                });
+
+                update(users.size, users.size, `Encontrado(s) ${users.size}...`);
+
+                if (users.size === initialUserCount) noNewUsersCount++;
+                else noNewUsersCount = 0;
+
+                if (noNewUsersCount >= maxIdleCount && users.size > 0) {
+                    finishExtraction();
                     return;
                 }
 
-                console.log("User elements found:", userElements.length);
-
-                for (let i = 0; i < userElements.length; i++) {
-                    const userElement = userElements[i];
-                    let username = "";
-                    let photoUrl = "";
-                    const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
-                    if (usernameSpan) {
-                        username = usernameSpan.innerText.trim();
-                    } else {
-                        username = userElement.innerText.trim().split('\n')[0];
-                    }
-                    // Try to find an img tag or div with background-image for photo inside userElement
-                    const imgTag = userElement.querySelector('img');
-                    if (imgTag && imgTag.src) {
-                        photoUrl = imgTag.src;
-                    } else {
-                        // Try to find div with background-image style
-                        const bgDiv = userElement.querySelector('div[style*="background-image"]');
-                        if (bgDiv) {
-                            const bgStyle = bgDiv.style.backgroundImage;
-                            const match = bgStyle.match(/url\\(["']?(.*?)["']?\\)/);
-                            if (match && match[1]) {
-                                photoUrl = match[1];
-                            }
-                        }
-                    }
-                    if (
-                        username.length > 0 &&
-                        !username.includes(" ") &&
-                        photoUrl && // Apenas adiciona se tiver foto
-                        !users.some(u => u.username === username) &&
-                        /^[a-zA-Z0-9_.]+$/.test(username)
-                    ) {
-                        users.push({ username, photoUrl });
-                    }
+                // Rolagem inteligente (Desktop e Mobile)
+                const scrollContainer = doc.querySelector('div[role="dialog"] ._aano') ||
+                                        doc.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]') ||
+                                        doc.documentElement;
+                if (scrollContainer && scrollContainer !== doc.documentElement) {
+                    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                } else {
+                    window.scrollTo(0, document.body.scrollHeight);
                 }
-                console.log("Extracted users:", users);
-                resolve(users);
             }
 
-            tryExtract();
+            scrollInterval = setInterval(performScrollAndExtract, 1000);
         });
     }
 
@@ -1673,6 +1664,16 @@
                     <button id="closeFriendsDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
                     <button id="closeFriendsAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
                 </div>
+                <div style="padding: 0 15px 15px 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <button id="closeFriendsRefreshBtn" style="background: #1abc9c; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar Lista</button>
+                    <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; flex: 1; justify-content: flex-end; border: none; background: transparent;">
+                        <span style="font-size: 13px; font-weight: 500;">⚡ API</span>
+                        <label class="switch">
+                            <input type="checkbox" id="closeFriendsUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
                 <div style="margin-bottom:15px;">
                         <input type="text" id="closeFriendsSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
                 </div>
@@ -1748,6 +1749,17 @@
                 modal.dataset.minimized = !isMinimized;
                 btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
                 modal.style.maxHeight = isMinimized ? '85vh' : 'none';
+            };
+
+            document.getElementById("closeFriendsRefreshBtn").onclick = () => {
+                div.remove();
+                modalAberto = false;
+                abrirModalAmigosProximos();
+            };
+
+            document.getElementById("closeFriendsUseApiToggle").onchange = (e) => {
+                saveSettings({ useApi: e.target.checked });
+                showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
             };
 
             document.getElementById("closeFriendsMarcarTodosBtn").onclick = () => {
@@ -2058,8 +2070,15 @@
                      return;
                  }
 
-                 // Simula a rolagem da janela principal
-                 window.scrollTo(0, document.body.scrollHeight);
+                // Rolagem dinâmica (Desktop e Mobile)
+                const scrollContainer = doc.querySelector('div[role="dialog"] ._aano') ||
+                                        doc.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]') ||
+                                        doc.documentElement;
+                if (scrollContainer && scrollContainer !== doc.documentElement) {
+                    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                } else {
+                    window.scrollTo(0, document.body.scrollHeight);
+                }
              }
 
              // Inicia o processo de rolagem e extração
@@ -2082,8 +2101,8 @@
             dbHelper.loadCache('following'),
             dbHelper.loadCache('followers')
         ]);
-        const followingSet = new Set(followingCache ? Array.from(followingCache).map(u => u.toLowerCase()) : []);
-        const followersSet = new Set(followersCache ? Array.from(followersCache).map(u => u.toLowerCase()) : []);
+        const followingSet = new Set(followingCache ? Array.from(followingCache).map(u => String(u).toLowerCase()) : []);
+        const followersSet = new Set(followersCache ? Array.from(followersCache).map(u => String(u).toLowerCase()) : []);
 
         const officialStates = new Map();
         users.forEach(u => {
@@ -2124,6 +2143,16 @@
                 <button id="hideStoryDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
                 <button id="hideStoryAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
             </div>
+            <div style="padding: 0 15px 15px 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <button id="hideStoryRefreshBtn" style="background: #1abc9c; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar (Scroll)</button>
+                <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; flex: 1; justify-content: flex-end; border: none; background: transparent;">
+                    <span style="font-size: 13px; font-weight: 500;">⚡ API</span>
+                    <label class="switch">
+                        <input type="checkbox" id="hideStoryUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
             <div style="margin-bottom:15px; display: flex; gap: 10px; align-items: center; padding: 0 15px;">
                 <input type="text" id="hideStorySearchInput" placeholder="Pesquisar..." style="flex: 1; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
                 <select id="hideStoryUserFilter" style="padding: 6px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
@@ -2149,8 +2178,8 @@
                 const tabMatch = (currentTab === 'ocultados' ? modalStates.get(u.username) : !modalStates.get(u.username));
 
                 let filterMatch = true;
-                if (userFilterType === 'following') filterMatch = followingSet.has(u.username.toLowerCase());
-                if (userFilterType === 'followers') filterMatch = followersSet.has(u.username.toLowerCase());
+                if (userFilterType === 'following') filterMatch = followingSet.has(String(u.username).toLowerCase());
+                if (userFilterType === 'followers') filterMatch = followersSet.has(String(u.username).toLowerCase());
 
                 return isMatch && tabMatch && filterMatch;
             });
@@ -2225,6 +2254,16 @@
         document.getElementById("hideStoryDesmarcarTodosBtn").onclick = () => {
             users.forEach(u => modalStates.set(u.username, false));
             renderList(currentPage);
+        };
+
+        document.getElementById("hideStoryRefreshBtn").onclick = () => {
+            div.remove();
+            modalAbertoStory = false;
+            abrirModalOcultarStory();
+        };
+        document.getElementById("hideStoryUseApiToggle").onchange = (e) => {
+            saveSettings({ useApi: e.target.checked });
+            showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
         };
 
             document.getElementById("hideStoryAplicarBtn").onclick = async () => {
@@ -2488,8 +2527,15 @@
                     return;
                 }
 
-                // Simula a rolagem da janela principal
-                window.scrollTo(0, document.body.scrollHeight);
+                // Rolagem dinâmica (Desktop e Mobile)
+                const scrollContainer = doc.querySelector('div[role="dialog"] ._aano') ||
+                                        doc.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]') ||
+                                        doc.documentElement;
+                if (scrollContainer && scrollContainer !== doc.documentElement) {
+                    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                } else {
+                    window.scrollTo(0, document.body.scrollHeight);
+                }
             }
 
             // Inicia o processo de rolagem e extração
@@ -2550,6 +2596,16 @@
                 <button id="mutedMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
                 <button id="mutedDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
                 <button id="mutedAplicarBtn" style="background:#8e44ad;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Reativar Som</button>
+            </div>
+            <div style="padding: 0 15px 15px 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <button id="mutedRefreshBtn" style="background: #1abc9c; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar (Scroll)</button>
+                <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; flex: 1; justify-content: flex-end; border: none; background: transparent;">
+                    <span style="font-size: 13px; font-weight: 500;">⚡ API</span>
+                    <label class="switch">
+                        <input type="checkbox" id="mutedUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
             </div>
             <div style="margin-bottom:15px; padding: 0 15px;">
                 <input type="text" id="mutedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
@@ -2641,6 +2697,16 @@
         document.getElementById("mutedDesmarcarTodosBtn").onclick = () => {
             users.forEach(u => modalStates.set(u.username, false));
             renderList(currentPage);
+        };
+
+        document.getElementById("mutedRefreshBtn").onclick = () => {
+            div.remove();
+            modalAbertoMuted = false;
+            abrirModalContasSilenciadas();
+        };
+        document.getElementById("mutedUseApiToggle").onchange = (e) => {
+            saveSettings({ useApi: e.target.checked });
+            showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
         };
     }
 
@@ -2969,6 +3035,16 @@
                     <button id="blockedDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
                     <button id="blockedDesbloquearBtn" style="background:#2ecc71;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Desbloquear</button>
                 </div>
+                <div style="padding: 0 15px 15px 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <button id="blockedRefreshBtn" style="background: #1abc9c; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar (Scroll)</button>
+                    <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; flex: 1; justify-content: flex-end; border: none; background: transparent;">
+                        <span style="font-size: 13px; font-weight: 500;">⚡ API</span>
+                        <label class="switch">
+                            <input type="checkbox" id="blockedUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
                 <div style="margin-bottom:15px;">
                     <input type="text" id="blockedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
                 </div>
@@ -3021,6 +3097,16 @@
                 modal.dataset.minimized = !isMinimized;
                 btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
                 modal.style.maxHeight = isMinimized ? '85vh' : 'none';
+            };
+
+            document.getElementById("blockedRefreshBtn").onclick = () => {
+                div.remove();
+                modalAbertoBlocked = false;
+                iniciarProcessoBloqueados();
+            };
+            document.getElementById("blockedUseApiToggle").onchange = (e) => {
+                saveSettings({ useApi: e.target.checked });
+                showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
             };
 
             document.getElementById("blockedMarcarTodosBtn").onclick = () => {
@@ -3627,8 +3713,15 @@
 
                             // Adiciona abas
                             const tabsHtml = `
-                                <div style="margin-bottom: 15px;">
-                                    <button id="btnUpdateApi" style="background: #0095f6; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar Dados (Baixar e Salvar no DB)</button>
+                                <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                                    <button id="btnUpdateApi" style="background: #0095f6; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar Dados</button>
+                                    <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; border: 1px solid #dbdbdb;">
+                                        <span style="font-size: 14px; font-weight: 500;">⚡ ${getText('useApi')}</span>
+                                        <label class="switch">
+                                            <input type="checkbox" id="naoSegueUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}>
+                                            <span class="slider"></span>
+                                        </label>
+                                    </div>
                                 </div>
                                 <div class="cards-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px;">
                                     <div id="tabNaoSegueDeVolta" class="card-tab active" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
@@ -3796,6 +3889,11 @@
                                     renderCurrentTab();
                                 });
                             });
+
+                            document.getElementById('naoSegueUseApiToggle').onchange = (e) => {
+                                saveSettings({ useApi: e.target.checked });
+                                showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
+                            };
 
                             // Lógica do Botão Atualizar
                             document.getElementById("btnUpdateApi").onclick = () => {
@@ -5604,7 +5702,7 @@
                         dbHelper.openDB().then(db => {
                             const select = document.getElementById('dbStoreSelect');
                             select.innerHTML = '<option value="">Selecione uma tabela...</option>';
-                            const storeNames = Array.from(db.objectStoreNames);
+                            const storeNames = Object.keys(db); // No script3, o db carregado é o objeto JSON do Drive
                             storeNames.forEach(name => {
                                 const option = document.createElement('option');
                                 option.value = name;
@@ -6982,6 +7080,11 @@
                                             body.append('add', JSON.stringify([parseInt(uid)])); // Adiciona o usuário
                                         }
 
+                                        body.append('source', 'audience_manager');
+                                        body.append('_uid', getCookie('ds_user_id'));
+                                        body.append('_uuid', getDeviceId());
+                                        body.append('_csrftoken', getCookie('csrftoken'));
+
                                         const res = await fetch(`https://www.instagram.com/api/v1/friendships/set_besties/`, { method: 'POST', headers: getApiHeaders(), body: body, credentials: "include" });
                                         if (res.ok) {
                                             success = true;
@@ -6991,11 +7094,6 @@
                                             await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
                                             console.log(`[IG Tools] API Success: ${username} (Close Friends)`);
                                         }
-
-                                        body.append('source', 'audience_manager');
-                                        body.append('_uid', getCookie('ds_user_id'));
-                                        body.append('_uuid', getDeviceId());
-                                        body.append('_csrftoken', getCookie('csrftoken'));
 
                                     }
                                 } catch (e) { console.error(`Erro API Action ${username}`, e); }

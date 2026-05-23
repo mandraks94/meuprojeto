@@ -5230,6 +5230,7 @@
                                             <div style="display: flex; gap: 10px; margin-bottom: 10px;">
                                                 <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="catAction" value="add" checked> Adicionar</label>
                                                 <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="catAction" value="remove"> Remover</label>
+                                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="catAction" value="replace"> Substituir</label>
                                             </div>
                                             <div style="max-height: 150px; overflow-y: auto; border: 1px solid #eee; padding: 5px; border-radius: 5px;">
                                             ${categories.length === 0 ? '<p style="font-size: 12px; color: gray;">Nenhuma categoria cadastrada.</p>' :
@@ -5275,8 +5276,10 @@
 
                                             if (catAction === 'add') {
                                                 updated = Array.from(new Set([...existing, ...selectedCats]));
-                                            } else { // 'remove'
+                                            } else if (catAction === 'remove') {
                                                 updated = existing.filter(catId => !selectedCats.includes(catId));
+                                            } else if (catAction === 'replace') {
+                                                updated = selectedCats;
                                             }
                                             allUserCategories.set(lowerUsername, updated);
                                         }

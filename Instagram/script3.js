@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         teste
+// @name         Instagram
 // @description  Adds download buttons to Instagram stories
 // @author       You
 // @version      1.0

@@ -5264,9 +5264,11 @@
                                     toggleLoading(true);
                                     try { // Wrap the async operations in a try-finally to ensure loading is toggled off
                                     // 1. Processar Categorias Primeiro (Rápido e Local)
-                                    if (doCat && selectedCats.length > 0) {
+                                    if (doCat) {
                                         const total = selectedUsernames.length;
-                                        let allUserCategories = await dbHelper.loadAllUserCategories(); // Use let to reassign
+                                        const oldUserCategoryMap = new Map(userCategoryMap); // Captura estado anterior
+                                        let allUserCategories = await dbHelper.loadAllUserCategories();
+
                                         for (let i = 0; i < total; i++) {
                                             const u = selectedUsernames[i];
                                             toggleLoading(true, (i / total) * 100);
@@ -5284,11 +5286,70 @@
                                             allUserCategories.set(lowerUsername, updated);
                                         }
                                         await dbHelper.saveAllUserCategories(allUserCategories); // Save the updated map
-                                        // Sincroniza o mapa local e atualiza a interface (tabela) imediatamente
                                         userCategoryMap = allUserCategories;
-                                        renderList(currentPage);
-                                    }
 
+                                        // 2. Sincronizar Ações Automáticas (Adicionar ou Remover conforme a mudança de categorias)
+                                        const toCF = []; const fromCF = [];
+                                        const toMute = []; const fromMute = [];
+                                        const toHide = []; const fromHide = [];
+
+                                        const catsMap = new Map(categories.map(c => [c.id, c]));
+
+                                        for (const u of selectedUsernames) {
+                                            const lowerU = u.toLowerCase();
+                                            const newCats = userCategoryMap.get(lowerU) || [];
+                                            const oldCats = oldUserCategoryMap.get(lowerU) || [];
+                                            
+                                            // Determina o estado desejado baseado em TODAS as categorias atuais do usuário
+                                            let wantsCF = false; let wantsMute = false; let wantsHide = false;
+                                            newCats.forEach(cid => {
+                                                const cat = catsMap.get(cid);
+                                                if (cat?.actions) {
+                                                    if (cat.actions.cf) wantsCF = true;
+                                                    if (cat.actions.mute) wantsMute = true;
+                                                    if (cat.actions.hide) wantsHide = true;
+                                                }
+                                            });
+
+                                            const isCurrentlyCF = userListCache.closeFriends?.has(u);
+                                            const isCurrentlyMuted = userListCache.muted?.has(u);
+                                            const isCurrentlyHidden = userListCache.hiddenStory?.has(u);
+
+                                            // Sincronização Close Friends
+                                            if (wantsCF && !isCurrentlyCF) toCF.push(u);
+                                            else if (!wantsCF && isCurrentlyCF) {
+                                                // Só remove se ele estava em uma categoria que exigia CF antes
+                                                if (oldCats.some(cid => catsMap.get(cid)?.actions?.cf)) fromCF.push(u);
+                                            }
+
+                                            // Sincronização Mute
+                                            if (wantsMute && !isCurrentlyMuted) toMute.push(u);
+                                            else if (!wantsMute && isCurrentlyMuted) {
+                                                if (oldCats.some(cid => catsMap.get(cid)?.actions?.mute)) fromMute.push(u);
+                                            }
+
+                                            // Sincronização Ocultar Story
+                                            if (wantsHide && !isCurrentlyHidden) toHide.push(u);
+                                            else if (!wantsHide && isCurrentlyHidden) {
+                                                if (oldCats.some(cid => catsMap.get(cid)?.actions?.hide)) fromHide.push(u);
+                                            }
+                                        }
+
+                                        if (toCF.length || fromCF.length || toMute.length || fromMute.length || toHide.length || fromHide.length) {
+                                            showToast("⚡ Sincronizando ações automáticas das categorias...");
+                                            
+                                            // Ações de Inclusão
+                                            if (toCF.length) await performActionOnProfile(toCF, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], () => {});
+                                            if (toMute.length) await new Promise(resolve => unmuteUsers(toMute, resolve, true, 'all'));
+                                            if (toHide.length) await toggleListMembership(toHide, '/accounts/hide_story_and_live_from/', 'hiddenStory', () => {});
+
+                                            // Ações de Remoção (Inversão)
+                                            if (fromCF.length) await performActionOnProfile(fromCF, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], () => {});
+                                            if (fromMute.length) await new Promise(resolve => unmuteUsers(fromMute, resolve, true, 'all'));
+                                            if (fromHide.length) await toggleListMembership(fromHide, '/accounts/hide_story_and_live_from/', 'hiddenStory', () => {});
+                                        }
+                                    }
+                                    
                                     if (doMute) {
                                         await new Promise(resolve => unmuteUsers(selectedUsernames, resolve, true, muteType));
                                         // userListCache.muted e mutedDetails já são atualizados dentro de unmuteUsers
@@ -6101,10 +6162,18 @@
                                 <div style="padding: 20px;">
                                     <div style="margin-bottom: 20px;">
                                         <h4 style="margin:0 0 10px 0;">Nova Categoria</h4>
-                                        <div style="display:flex; gap: 10px;">
-                                            <input type="text" id="newCategoryName" placeholder="Nome da Categoria" style="flex: 1; padding: 8px; color: black;">
-                                            <input type="color" id="newCategoryColor" value="#3498db" style="padding: 0; border: none; background: transparent; width: 40px; height: 40px; cursor: pointer;">
-                                            <button id="addCategoryBtn" style="padding: 8px 12px; background: #2ecc71; color: white; border: none; border-radius: 5px;">Adicionar</button>
+                                        <div style="display:flex; flex-direction:column; gap: 10px;">
+                                            <div style="display:flex; gap: 10px;">
+                                                <input type="text" id="newCategoryName" placeholder="Nome da Categoria" style="flex: 1; padding: 8px; color: black;">
+                                                <input type="color" id="newCategoryColor" value="#3498db" style="padding: 0; border: none; background: transparent; width: 40px; height: 40px; cursor: pointer;">
+                                            </div>
+                                            <div style="display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: black; background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #dbdbdb;">
+                                                <span style="width: 100%; font-weight: bold; margin-bottom: 2px;">Ações Automáticas:</span>
+                                                <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" id="newCatActionCF"> 🌟 Amigos Próximos</label>
+                                                <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" id="newCatActionMute"> 🔇 Silenciar</label>
+                                                <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" id="newCatActionHide"> 👁️ Ocultar Story</label>
+                                            </div>
+                                            <button id="addCategoryBtn" style="padding: 8px 12px; background: #2ecc71; color: white; border: none; border-radius: 5px; font-weight: bold;">Adicionar</button>
                                         </div>
                                     </div>
                                     <div>
@@ -6116,9 +6185,12 @@
                                                     <div>
                                                         <span style="display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: ${cat.color}; margin-right: 8px; vertical-align: middle;"></span>
                                                         <span style="font-weight: bold;">${cat.name}</span>
+                                                        <span style="font-size: 10px; color: #888; margin-left: 5px;" title="Ações Automáticas">
+                                                            ${cat.actions?.cf ? '🌟' : ''} ${cat.actions?.mute ? '🔇' : ''} ${cat.actions?.hide ? '👁️' : ''}
+                                                        </span>
                                                     </div>
                                                     <div style="display: flex; gap: 5px;">
-                                                        <button class="edit-category-btn" data-id="${cat.id}" data-name="${cat.name}" data-color="${cat.color}" style="background: #f39c12; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; line-height: 24px;" title="Renomear">✎</button>
+                                                        <button class="edit-category-btn" data-id="${cat.id}" style="background: #f39c12; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; line-height: 24px;" title="Editar">✎</button>
                                                         <button class="delete-category-btn" data-id="${cat.id}" style="background: #e74c3c; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; line-height: 24px;" title="Excluir">X</button>
                                                     </div>
                                                 </div>
@@ -6141,7 +6213,12 @@
                                 await dbHelper.saveCategory({
                                     id: `cat_${Date.now()}`,
                                     name: name,
-                                    color: colorInput.value
+                                    color: colorInput.value,
+                                    actions: {
+                                        cf: document.getElementById('newCatActionCF').checked,
+                                        mute: document.getElementById('newCatActionMute').checked,
+                                        hide: document.getElementById('newCatActionHide').checked
+                                    }
                                 });
                                 nameInput.value = ''; // Clear input after adding
                                 render(); // Re-render the modal content
@@ -6150,13 +6227,39 @@
                             div.querySelectorAll('.edit-category-btn').forEach(btn => {
                                 btn.onclick = async (e) => {
                                     const id = e.target.dataset.id;
-                                    const currentName = e.target.dataset.name;
-                                    const color = e.target.dataset.color;
-                                    const newName = prompt("Novo nome da categoria:", currentName);
-                                    if (newName && newName.trim() !== "" && newName.trim() !== currentName) { // Trim newName
-                                        await dbHelper.saveCategory({ id, name: newName.trim(), color });
+                                    const categories = await dbHelper.loadCategories();
+                                    const cat = categories.find(c => c.id === id);
+                                    if (!cat) return;
+
+                                    const nameInput = document.getElementById("newCategoryName");
+                                    const colorInput = document.getElementById("newCategoryColor");
+                                    const cfCheck = document.getElementById('newCatActionCF');
+                                    const muteCheck = document.getElementById('newCatActionMute');
+                                    const hideCheck = document.getElementById('newCatActionHide');
+                                    const addBtn = document.getElementById('addCategoryBtn');
+
+                                    nameInput.value = cat.name;
+                                    colorInput.value = cat.color;
+                                    cfCheck.checked = !!cat.actions?.cf;
+                                    muteCheck.checked = !!cat.actions?.mute;
+                                    hideCheck.checked = !!cat.actions?.hide;
+
+                                    addBtn.innerText = "Salvar Alterações";
+                                    addBtn.style.background = "#3498db";
+
+                                    const originalOnclick = addBtn.onclick;
+                                    addBtn.onclick = async () => {
+                                        await dbHelper.saveCategory({
+                                            id: id,
+                                            name: nameInput.value.trim(),
+                                            color: colorInput.value,
+                                            actions: { cf: cfCheck.checked, mute: muteCheck.checked, hide: hideCheck.checked }
+                                        });
+                                        nameInput.value = ''; addBtn.innerText = "Adicionar"; addBtn.style.background = "#2ecc71";
+                                        cfCheck.checked = false; muteCheck.checked = false; hideCheck.checked = false;
+                                        addBtn.onclick = originalOnclick;
                                         render();
-                                    }
+                                    };
                                 };
                             });
 

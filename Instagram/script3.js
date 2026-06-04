@@ -6167,11 +6167,17 @@
                                                 <input type="text" id="newCategoryName" placeholder="Nome da Categoria" style="flex: 1; padding: 8px; color: black;">
                                                 <input type="color" id="newCategoryColor" value="#3498db" style="padding: 0; border: none; background: transparent; width: 40px; height: 40px; cursor: pointer;">
                                             </div>
-                                            <div style="display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: black; background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #dbdbdb;">
+                                            <div class="auto-actions-box">
                                                 <span style="width: 100%; font-weight: bold; margin-bottom: 2px;">Ações Automáticas:</span>
-                                                <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" id="newCatActionCF"> 🌟 Amigos Próximos</label>
-                                                <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" id="newCatActionMute"> 🔇 Silenciar</label>
-                                                <label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" id="newCatActionHide"> 👁️ Ocultar Story</label>
+                                                <div style="display:flex; align-items:center; gap:8px;">
+                                                    <span>🌟 Amigos Próximos</span><label class="switch"><input type="checkbox" id="newCatActionCF"><span class="slider"></span></label>
+                                                </div>
+                                                <div style="display:flex; align-items:center; gap:8px;">
+                                                    <span>🔇 Silenciar</span><label class="switch"><input type="checkbox" id="newCatActionMute"><span class="slider"></span></label>
+                                                </div>
+                                                <div style="display:flex; align-items:center; gap:8px;">
+                                                    <span>👁️ Ocultar Story</span><label class="switch"><input type="checkbox" id="newCatActionHide"><span class="slider"></span></label>
+                                                </div>
                                             </div>
                                             <button id="addCategoryBtn" style="padding: 8px 12px; background: #2ecc71; color: white; border: none; border-radius: 5px; font-weight: bold;">Adicionar</button>
                                         </div>

@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         teste
+// @name         Instagram
 // @description  Adds download buttons to Instagram stories
 // @author       You
 // @version      1.0
@@ -4377,13 +4377,13 @@
                                             });
                                             if (res.ok) {
                                                 // Histórico e UI
-                                                getProfilePic(username).then(photoUrl => { 
-                                                    dbHelper.saveUnfollowHistory({ username, photoUrl, unfollowDate: new Date().toISOString() }); 
+                                                getProfilePic(username).then(photoUrl => {
+                                                    dbHelper.saveUnfollowHistory({ username, photoUrl, unfollowDate: new Date().toISOString() });
                                                 });
-                                                
+
                                                 if (selectedUsersSet) selectedUsersSet.delete(username);
                                                 if (updateCountCb) updateCountCb();
-                                                
+
                                                 // Remove da lista de "Não segue de volta" em memória
                                                 const naoSegueList = lists['tabNaoSegueDeVolta'];
                                                 if (naoSegueList) {
@@ -5299,7 +5299,7 @@
                                             const lowerU = u.toLowerCase();
                                             const newCats = userCategoryMap.get(lowerU) || [];
                                             const oldCats = oldUserCategoryMap.get(lowerU) || [];
-                                            
+
                                             // Determina o estado desejado baseado em TODAS as categorias atuais do usuário
                                             let wantsCF = false; let wantsMute = false; let wantsHide = false;
                                             newCats.forEach(cid => {
@@ -5337,7 +5337,7 @@
 
                                         if (toCF.length || fromCF.length || toMute.length || fromMute.length || toHide.length || fromHide.length) {
                                             showToast("⚡ Sincronizando ações automáticas das categorias...");
-                                            
+
                                             // Ações de Inclusão
                                             if (toCF.length) await performActionOnProfile(toCF, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], () => {});
                                             if (toMute.length) await new Promise(resolve => unmuteUsers(toMute, resolve, true, 'all'));
@@ -5349,7 +5349,7 @@
                                             if (fromHide.length) await toggleListMembership(fromHide, '/accounts/hide_story_and_live_from/', 'hiddenStory', () => {});
                                         }
                                     }
-                                    
+
                                     if (doMute) {
                                         await new Promise(resolve => unmuteUsers(selectedUsernames, resolve, true, muteType));
                                         // userListCache.muted e mutedDetails já são atualizados dentro de unmuteUsers
@@ -5863,7 +5863,7 @@
                             <div style="padding: 20px;">
                                 <form id="shortcut-form" style="display: flex; flex-direction: column; gap: 15px;">
                                     <input type="text" id="shortcut-key" placeholder="Clique aqui e pressione as teclas do atalho" required readonly style="padding: 8px; color: black; border: 1px solid #ccc; border-radius: 5px; cursor: pointer; background: #fff;">
-                                    
+
                                     <div style="display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; background: #f8f9fa; border-radius: 8px; border: 1px solid #dbdbdb; font-size: 11px; color: black;">
                                         <span style="width: 100%; font-weight: bold; margin-bottom: 2px;">Modo de Captura:</span>
                                         <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="radio" name="captureType" value="xpath" checked> XPath Inteligente</label>
@@ -5935,7 +5935,7 @@
                                 else if (captureType === 'fullXpath') result = getAbsoluteXPath(target);
                                 else if (captureType === 'selector') result = getCssSelector(target);
                                 else if (captureType === 'html') result = target.outerHTML;
-                                
+
                                 document.getElementById('shortcut-xpath').value = result;
                                 showToast("✅ Capturado com sucesso!");
                             });

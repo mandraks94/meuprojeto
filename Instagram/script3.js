@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Instagram com Google Driver
+// @name         Instagram
 // @description  Adds download buttons to Instagram stories
 // @author       You
 // @version      1.0
@@ -30,6 +30,31 @@
                     toast.style.opacity = '0';
                     setTimeout(() => toast.remove(), 500);
                 }, 3000);
+            }
+
+            // Helper para Loading (Centralizado para evitar erros de redeclaração)
+            function toggleLoading(isLoading, progress = null, message = "Carregando...") {
+                const modal = document.querySelector('.submenu-modal'); // Detecta o modal ativo
+                if (!modal) return;
+                if (isLoading) {
+                    let overlay = modal.querySelector('.loading-overlay');
+                    if (!overlay) {
+                        overlay = document.createElement('div');
+                        overlay.className = 'loading-overlay';
+                        overlay.innerHTML = `<div class="spinner"></div><div class="loading-text">${message}</div>`;
+                        modal.appendChild(overlay);
+                    }
+                    const textDiv = overlay.querySelector('.loading-text');
+                    if (textDiv) {
+                        if (progress !== null) {
+                            textDiv.innerText = `${message} ${Math.floor(progress)}%`;
+                        } else {
+                            textDiv.innerText = message;
+                        }
+                    }
+                } else {
+                    modal.querySelector('.loading-overlay')?.remove();
+                }
             }
 
             // --- CONFIGURAÇÃO GOOGLE DRIVE ---
@@ -84,14 +109,43 @@
             };
             googleAuth.checkUrlToken();
 
-            // Removido bloqueio mandatório de login do Google. 
-            // Agora o acesso é livre e a sincronização é opcional via Configurações.
+            // --- BLOQUEIO DE ACESSO: SÓ CONTINUA SE ESTIVER LOGADO ---
+            if (!googleAuth.getAccessToken()) {
+                console.log("[IG Tools] Acesso negado: Login Google necessário.");
+
+                const showAuthGate = () => {
+                    if (document.getElementById('ig-tools-auth-gate')) return;
+                    const gate = document.createElement('div');
+                    gate.id = 'ig-tools-auth-gate';
+
+                // Estilo responsivo: centralizado no mobile, canto no desktop
+                const isMobile = window.innerWidth <= 768;
+                const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
+                const desktopPos = 'bottom: 20px; right: 20px; max-width: 280px;';
+
+                gate.style.cssText = `position: fixed; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; font-family: -apple-system, system-ui, sans-serif; ${isMobile ? mobilePos : desktopPos}`;
+                    gate.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; max-width: 280px; font-family: -apple-system, system-ui, sans-serif;';
+                    gate.innerHTML = `
+                        <div style="font-size: 24px;">🛠️</div>
+                        <span style="color: black; font-weight: bold; font-size: 16px; text-align: center;">IG Tools Protegido</span>
+                        <p style="color: #666; font-size: 12px; text-align: center; margin: 0;">Faça login com sua conta Google para ativar as ferramentas de download e análise.</p>
+                        <button id="authGateLoginBtn" style="background: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; transition: background 0.2s;">Login com Google</button>
+                    `;
+                    document.body.appendChild(gate);
+                    document.getElementById('authGateLoginBtn').onclick = () => googleAuth.login();
+                };
+
+                if (document.body) showAuthGate();
+                else document.addEventListener('DOMContentLoaded', showAuthGate);
+
+                return; // INTERROMPE TODO O RESTO DO SCRIPT
+            }
 
             const gDriveApi = {
                 execute: function(options) {
                     const token = googleAuth.getAccessToken();
                     if (!token) {
-                        console.log("[IG Tools] Sincronização Google Drive desativada (Sem Token).");
+                        showToast("⚠️ Faça login no Google nas Configurações");
                         return Promise.reject("Sem token");
                     }
                     return new Promise((resolve, reject) => {
@@ -365,6 +419,105 @@
                 }
             }
 
+            function getFullXPath(element) {
+                if (!element || element.nodeType !== 1) return "";
+
+                // Prioridade 1: Atributos de acessibilidade (mais estáveis no Instagram)
+                const ariaLabel = element.getAttribute('aria-label');
+                if (ariaLabel) {
+                    return `//${element.tagName.toLowerCase()}[@aria-label="${ariaLabel}"]`;
+                }
+
+                // Prioridade 2: ID (ignorando IDs dinâmicos do sistema "mount_")
+                if (element.id && !element.id.startsWith('mount_') && !element.id.includes('mount_')) {
+                    return `//*[@id="${element.id}"]`;
+                }
+
+                if (element === document.body) return "/html/body";
+
+                const parent = element.parentNode;
+                if (!parent || parent.nodeType !== 1) return "/" + element.tagName.toLowerCase();
+
+                const siblings = Array.from(parent.children).filter(s => s.tagName === element.tagName);
+                const index = siblings.indexOf(element) + 1;
+                const tagName = element.tagName.toLowerCase();
+                const pathSegment = siblings.length > 1 ? `${tagName}[${index}]` : tagName;
+
+                return getFullXPath(parent) + "/" + pathSegment;
+            }
+
+            function getAbsoluteXPath(element) {
+                if (!element || element.nodeType !== 1) return "";
+                if (element === document.body) return "/html/body";
+                const parent = element.parentNode;
+                const siblings = Array.from(parent.children).filter(s => s.tagName === element.tagName);
+                const index = siblings.indexOf(element) + 1;
+                const tagName = element.tagName.toLowerCase();
+                const pathSegment = siblings.length > 1 ? `${tagName}[${index}]` : tagName;
+                return getAbsoluteXPath(parent) + "/" + pathSegment;
+            }
+
+            function getCssSelector(el) {
+                if (!(el instanceof Element)) return "";
+                const path = [];
+                while (el.nodeType === Node.ELEMENT_NODE) {
+                    let selector = el.nodeName.toLowerCase();
+                    if (el.id && !el.id.startsWith('mount_') && !el.id.includes('mount_')) {
+                        selector += '#' + el.id;
+                        path.unshift(selector);
+                        break;
+                    } else {
+                        let sib = el, nth = 1;
+                        while (sib = sib.previousElementSibling) {
+                            if (sib.nodeName.toLowerCase() == selector) nth++;
+                        }
+                        if (nth != 1) selector += ":nth-of-type(" + nth + ")";
+                    }
+                    path.unshift(selector);
+                    el = el.parentNode;
+                }
+                return path.join(" > ");
+            }
+
+            let isPickingElement = false;
+            let lastHoveredElement = null;
+            function startElementPicker(callback) {
+                if (isPickingElement) return;
+                isPickingElement = true;
+                showToast("🖱️ Clique em um elemento da página para capturar o XPath (ESC para cancelar)");
+
+                const onMouseOver = (e) => {
+                    if (!isPickingElement) return;
+                    e.stopPropagation();
+                    if (lastHoveredElement) lastHoveredElement.classList.remove('ig-tools-highlight');
+                    // Destaca o elemento interativo mais próximo
+                    lastHoveredElement = e.target.closest('button, a, div[role="button"]') || e.target;
+                    lastHoveredElement.classList.add('ig-tools-highlight');
+                };
+
+                const onClick = (e) => {
+                    if (!isPickingElement) return;
+                    e.preventDefault(); e.stopPropagation();
+                    // Se clicar em um ícone (SVG), captura o botão/link pai
+                    const target = e.target.closest('button, a, div[role="button"]') || e.target;
+                    stopPicker();
+                    callback(target);
+                };
+
+                const onKeyDown = (e) => { if (e.key === 'Escape') stopPicker(); };
+
+                function stopPicker() {
+                    isPickingElement = false;
+                    if (lastHoveredElement) lastHoveredElement.classList.remove('ig-tools-highlight');
+                    document.removeEventListener('mouseover', onMouseOver, true);
+                    document.removeEventListener('click', onClick, true);
+                    document.removeEventListener('keydown', onKeyDown, true);
+                }
+                document.addEventListener('mouseover', onMouseOver, true);
+                document.addEventListener('click', onClick, true);
+                document.addEventListener('keydown', onKeyDown, true);
+            }
+
             // Helper consolidado para Google Drive (Substitui o IndexedDB completamente)
             const dbHelper = {
                 _cache: null,
@@ -390,15 +543,28 @@
                 openDB: function() { return this._init(); },
                 saveCache: async function(storeName, data) {
                     await this._init();
-                    this._cache[storeName] = Array.from(data);
+                    // Ensure data is an array of objects with username and photoUrl
+                    let formattedData = [];
+                    if (data instanceof Set) {
+                        formattedData = Array.from(data).map(u => ({ username: u, photoUrl: null })); // Default photoUrl
+                    } else if (Array.isArray(data)) {
+                        formattedData = data.map(item => {
+                            if (typeof item === 'string') return { username: item, photoUrl: null };
+                            return item; // Assume it's already an object with username and photoUrl
+                        });
+                    } else {
+                        console.warn("[IG Tools] saveCache received unexpected data type:", data);
+                        formattedData = [];
+                    }
+                    this._cache[storeName] = formattedData;
                     await gDriveApi.saveData(this._cache);
                 },
                 loadCache: async function(storeName) {
                     await this._init();
-                    const data = this._cache[storeName];
+                    const data = this._cache[storeName]; // This will be an array of objects
                     if (!data) return null;
-                    const set = new Set(data.map(u => typeof u === 'string' ? u : u.username));
-                    if (data[0] && typeof data[0] === 'object') set.details = new Map(data.map(u => [u.username, u]));
+                    const set = new Set(data.map(u => u.username));
+                    set.details = new Map(data.map(u => [u.username, u]));
                     return set;
                 },
                 saveUnfollowHistory: async function(userData) {
@@ -460,6 +626,24 @@
                     const data = this._cache.userCategories || {};
                     Object.keys(data).forEach(user => map.set(user, data[user]));
                     return map;
+                },
+                saveAllUserCategories: async function(categoryMap) {
+                    await this._init();
+                    // Convert Map to a plain object for JSON serialization
+                    this._cache.userCategories = Object.fromEntries(categoryMap);
+                    await gDriveApi.saveData(this._cache);
+                },
+                loadCacheRaw: async function(storeName) {
+                    await this._init();
+                    const data = this._cache[storeName];
+                    if (!data) return null;
+                    Object.keys(data).forEach(user => map.set(user, data[user]));
+                    return map;
+                },
+                saveAllUserCategories: async function(categoryMap) {
+                    await this._init();
+                    this._cache.userCategories = Object.fromEntries(categoryMap);
+                    await gDriveApi.saveData(this._cache);
                 },
                 clearCache: async function(storeName) {
                     await this._init();
@@ -572,7 +756,7 @@
                     const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
                     const element = result.singleNodeValue;
                     if (element) {
-                        element.click();
+                        simulateClick(element);
                         return true;
                     }
                     console.warn("Atalho: Nenhum elemento encontrado para o XPath:", xpath);
@@ -938,6 +1122,27 @@
                                 border-width: 2px !important;
                                 animation: rgb-border-animation 5s linear infinite;
                             }
+
+                            /* Loading Spinner */
+                            .loading-overlay {
+                                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                                background: rgba(255, 255, 255, 0.7);
+                                display: flex; flex-direction: column; justify-content: center; align-items: center;
+                                z-index: 10005; border-radius: 10px;
+                            }
+                            .dark-mode .loading-overlay { background: rgba(0, 0, 0, 0.7); }
+                            .spinner {
+                                width: 40px; height: 40px;
+                                border: 4px solid #f3f3f3;
+                                border-top: 4px solid #3498db;
+                                border-radius: 50%;
+                                animation: spin 1s linear infinite;
+                            }
+                            .loading-text { margin-top: 10px; font-weight: bold; color: #0095f6; font-size: 16px; font-family: sans-serif; }
+                            @keyframes spin {
+                                0% { transform: rotate(0deg); }
+                                100% { transform: rotate(360deg); }
+                            }
                             .info-tooltip { position: relative; display: inline-block; cursor: help; color: #8e8e8e; vertical-align: middle; }
                             .info-tooltip .tooltip-text { visibility: hidden; width: 220px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100000; top: 100%; margin-top: 10px; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; font-size: 12px; font-weight: normal; line-height: 1.4; box-shadow: 0 2px 10px rgba(0,0,0,0.2); pointer-events: none; }
                             .info-tooltip .tooltip-text::after { content: ""; position: absolute; bottom: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: transparent transparent #333 transparent; }
@@ -952,6 +1157,27 @@
                             input:checked + .slider:before { transform: translateX(20px); }
                             .toggle-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; font-size: 16px; color: black; }
                             .dark-mode .toggle-item { background: #262626 !important; color: white !important; border-color: #555 !important; }
+
+                            /* Loading Spinner */
+                            .loading-overlay {
+                                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                                background: rgba(255, 255, 255, 0.7);
+                                display: flex; flex-direction: column; justify-content: center; align-items: center;
+                                z-index: 10005; border-radius: 10px;
+                            }
+                            .dark-mode .loading-overlay { background: rgba(0, 0, 0, 0.7); }
+                            .spinner {
+                                width: 40px; height: 40px;
+                                border: 4px solid #f3f3f3;
+                                border-top: 4px solid #3498db;
+                                border-radius: 50%;
+                                animation: spin 1s linear infinite;
+                            }
+                            .loading-text { margin-top: 10px; font-weight: bold; color: #0095f6; font-size: 16px; font-family: sans-serif; }
+                            @keyframes spin {
+                                0% { transform: rotate(0deg); }
+                                100% { transform: rotate(360deg); }
+                            }
                         `;
                     }
 
@@ -1249,9 +1475,13 @@
                     }
 
                     function startScroll(totalCount, onProgress) {
-                        const scrollDiv = document.querySelector(
-                            "body > div.x1n2onr6.xzkaem6 > div:nth-child(2) > div > div > div.x9f619.x1n2onr6.x1ja2u2z > div > div.x1uvtmcs.x4k7w5x.x1h91t0o.x1beo9mf.xaigb6o.x12ejxvf.x3igimt.xarpa2k.xedcshv.x1lytzrv.x1t2pt76.x7ja8zs.x1n2onr6.x1qrby5j.x1jfb8zj > div > div > div > div > div.x7r02ix.xf1ldfh.x131esax.xdajt7p.xxfnqb6.xb88tzc.xw2csxc.x1odjw0f.x5fp0pe > div > div > div.xyi19xy.x1ccrb07.xtf3nb5.x1pc53ja.x1lliihq.x1iyjqo2.xs83m0k.xz65tgg.x1rife3k.x1n2onr6"
-                        );
+                        // Busca dinâmica do contêiner de scroll (Desktop/Mobile)
+                        let scrollDiv = document.querySelector('div[role="dialog"] ._aano') ||
+                                        document.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]');
+
+                        if (!scrollDiv) {
+                            scrollDiv = document.querySelector('div.xyi19xy.x1ccrb07.xtf3nb5.x1pc53ja.x1lliihq.x1iyjqo2.xs83m0k.xz65tgg.x1rife3k.x1n2onr6');
+                        }
 
                         if (!scrollDiv) {
                             alert("Div com scroll não encontrada.");
@@ -1359,15 +1589,10 @@
                         iniciarProcessoNaoSegueDeVolta();
                     });
 
-                    document.getElementById("seguindoBtn").addEventListener("click", () => {
-                        closeMenu();
-                        iniciarProcessoSeguindo();
-                    });
-
-                    document.getElementById("seguindoBtn").addEventListener("click", () => {
-                        closeMenu();
-                        iniciarProcessoSeguindo();
-                    });
+                document.getElementById("seguindoBtn").addEventListener("click", () => {
+                    closeMenu();
+                    iniciarProcessoSeguindo();
+                });
 
                     // --- NOVO MENU: AMIGOS PRÓXIMOS ---
     document.getElementById("closeFriendsBtn").addEventListener("click", () => {
@@ -1470,69 +1695,61 @@
 
     function extractCloseFriendsUsernames(doc = document) {
         return new Promise((resolve) => {
-            const maxAttempts = 15;
-            let attempts = 0;
+            const users = new Map();
+            let scrollInterval;
+            let noNewUsersCount = 0;
+            const maxIdleCount = 3;
 
-            function tryExtract() {
-                attempts++;
-                const users = [];
-                // Select all elements with data-bloks-name="bk.components.Flexbox" that contain spans with data-bloks-name="bk.components.Text"
-                const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')).filter(el =>
-                    el.querySelector('span[data-bloks-name="bk.components.Text"]')
-                );
+            let cancelled = false;
+            const { bar, update, closeButton } = createCancellableProgressBar();
+            closeButton.onclick = () => { cancelled = true; finishExtraction(); };
+            update(0, 0, "Carregando Amigos Próximos...");
 
-                if (userElements.length === 0) {
-                    console.log("No user elements found for close friends usernames, attempt", attempts);
-                    if (attempts < maxAttempts) {
-                        setTimeout(tryExtract, 800);
-                    } else {
-                        resolve(users);
+            function finishExtraction() {
+                clearInterval(scrollInterval);
+                if (bar) bar.remove();
+                resolve(cancelled ? [] : Array.from(users.values()));
+            }
+
+            function performScrollAndExtract() {
+                const initialUserCount = users.size;
+                // Seleciona apenas elementos que parecem cards de usuários para economizar CPU
+                const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]'))
+                                          .filter(el => el.querySelector('img') && el.innerText.includes('\n'));
+
+                userElements.forEach(userElement => {
+                    let username = "";
+                    const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
+                    username = usernameSpan ? usernameSpan.innerText.trim() : userElement.innerText.trim().split('\n')[0];
+
+                    if (username && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
+                        const imgTag = userElement.querySelector('img');
+                        users.set(username, { username, photoUrl: imgTag ? imgTag.src : '' });
                     }
+                });
+
+                update(users.size, users.size, `Encontrado(s) ${users.size}...`);
+
+                if (users.size === initialUserCount) noNewUsersCount++;
+                else noNewUsersCount = 0;
+
+                if (noNewUsersCount >= maxIdleCount && users.size > 0) {
+                    finishExtraction();
                     return;
                 }
 
-                console.log("User elements found:", userElements.length);
-
-                for (let i = 0; i < userElements.length; i++) {
-                    const userElement = userElements[i];
-                    let username = "";
-                    let photoUrl = "";
-                    const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
-                    if (usernameSpan) {
-                        username = usernameSpan.innerText.trim();
-                    } else {
-                        username = userElement.innerText.trim().split('\n')[0];
-                    }
-                    // Try to find an img tag or div with background-image for photo inside userElement
-                    const imgTag = userElement.querySelector('img');
-                    if (imgTag && imgTag.src) {
-                        photoUrl = imgTag.src;
-                    } else {
-                        // Try to find div with background-image style
-                        const bgDiv = userElement.querySelector('div[style*="background-image"]');
-                        if (bgDiv) {
-                            const bgStyle = bgDiv.style.backgroundImage;
-                            const match = bgStyle.match(/url\\(["']?(.*?)["']?\\)/);
-                            if (match && match[1]) {
-                                photoUrl = match[1];
-                            }
-                        }
-                    }
-                    if (
-                        username.length > 0 &&
-                        !username.includes(" ") &&
-                        photoUrl && // Apenas adiciona se tiver foto
-                        !users.some(u => u.username === username) &&
-                        /^[a-zA-Z0-9_.]+$/.test(username)
-                    ) {
-                        users.push({ username, photoUrl });
-                    }
+                // Rolagem inteligente (Desktop e Mobile)
+                const scrollContainer = doc.querySelector('div[role="dialog"] ._aano') ||
+                                        doc.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]') ||
+                                        doc.documentElement;
+                if (scrollContainer && scrollContainer !== doc.documentElement) {
+                    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                } else {
+                    window.scrollTo(0, document.body.scrollHeight);
                 }
-                console.log("Extracted users:", users);
-                resolve(users);
             }
 
-            tryExtract();
+            scrollInterval = setInterval(performScrollAndExtract, 1000);
         });
     }
 
@@ -1541,7 +1758,6 @@
 
         modalAberto = true; // Marca que modal foi aberto para evitar loop infinito
 
-        // Extract users asynchronously (username and photoUrl)
         const users = await extractCloseFriendsUsernames();
 
         // Monta a div
@@ -1607,7 +1823,7 @@
             let html = `
                 <div class="modal-header">
                     <span class="modal-title">
-                        Amigos Próximos
+                        Amigos Próximos <span id="cfSelectedCount" style="font-size:12px; font-weight:normal; color:#0095f6;">(${Array.from(modalStates.values()).filter(v => v).length} selecionados)</span>
                         <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie sua lista de Melhores Amigos. Selecione quem pode ver seus stories exclusivos (círculo verde).</span></div>
                     </span>
                     <div class="modal-controls"><button id="closeFriendsMinimizarBtn" title="Minimizar">_</button><button id="closeFriendsFecharBtn" title="Fechar">X</button></div>
@@ -1617,6 +1833,16 @@
                     <button id="closeFriendsMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
                     <button id="closeFriendsDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
                     <button id="closeFriendsAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
+                </div>
+                <div style="padding: 0 15px 15px 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <button id="closeFriendsRefreshBtn" style="background: #1abc9c; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar Lista</button>
+                    <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; flex: 1; justify-content: flex-end; border: none; background: transparent;">
+                        <span style="font-size: 13px; font-weight: 500;">⚡ API</span>
+                        <label class="switch">
+                            <input type="checkbox" id="closeFriendsUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
                 </div>
                 <div style="margin-bottom:15px;">
                         <input type="text" id="closeFriendsSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
@@ -1695,6 +1921,17 @@
                 modal.style.maxHeight = isMinimized ? '85vh' : 'none';
             };
 
+            document.getElementById("closeFriendsRefreshBtn").onclick = () => {
+                div.remove();
+                modalAberto = false;
+                abrirModalAmigosProximos();
+            };
+
+            document.getElementById("closeFriendsUseApiToggle").onchange = (e) => {
+                saveSettings({ useApi: e.target.checked });
+                showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
+            };
+
             document.getElementById("closeFriendsMarcarTodosBtn").onclick = () => {
                 // Filtra os usuários da aba atual e depois pega apenas os da página visível
                 const filteredUsers = users.filter(({ username }) => {
@@ -1764,6 +2001,10 @@
             document.querySelectorAll('.closeFriendCheckbox').forEach(cb => {
                 cb.addEventListener('change', () => {
                     modalStates.set(cb.dataset.username, cb.checked);
+                    const countEl = document.getElementById('cfSelectedCount');
+                    if (countEl) {
+                        countEl.innerText = `(${Array.from(modalStates.values()).filter(v => v).length} selecionados)`;
+                    }
                 });
             });
 
@@ -1788,6 +2029,7 @@
                 };
                 const isCancelled = () => cancelled;
 
+                toggleLoading(true, 0, "Aplicando alterações...");
                 // --- LÓGICA API VS HUMANA ---
                 if (loadSettings().useApi) {
                     update(0, changedUsers.length, "Obtendo IDs e aplicando via API...");
@@ -1819,6 +2061,7 @@
                             });
                             alert("Alterações aplicadas via API com sucesso!");
                         } catch (e) { console.error(e); alert("Erro ao aplicar via API."); }
+                        toggleLoading(false);
                     }
                     bar.remove(); isApplyingChanges = false; return;
                 }
@@ -1863,6 +2106,7 @@
                     await new Promise(resolve => setTimeout(resolve, 2000));
                     // Atualiza o estado inicial para o próximo "Aplicar"
                     initialStates.set(username, isChecked);
+                    toggleLoading(true, ((i + 1) / changedUsers.length) * 100, "Aplicando alterações...");
                 }
 
                 bar.remove();
@@ -1905,6 +2149,7 @@
                     if (originalHandler) {
                         await originalHandler.apply(this, arguments);
                     }
+                    toggleLoading(false);
                     isApplyingChanges = false;
                 };
             }
@@ -1932,6 +2177,7 @@
                  bar.remove();
                  finishExtraction();
              };
+             // The update message is already set by the caller
              update(0, 0, "Buscando e rolando a lista de usuários com story oculto...");
 
              function finishExtraction() {
@@ -2003,8 +2249,15 @@
                      return;
                  }
 
-                 // Simula a rolagem da janela principal
-                 window.scrollTo(0, document.body.scrollHeight);
+                // Rolagem dinâmica (Desktop e Mobile)
+                const scrollContainer = doc.querySelector('div[role="dialog"] ._aano') ||
+                                        doc.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]') ||
+                                        doc.documentElement;
+                if (scrollContainer && scrollContainer !== doc.documentElement) {
+                    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                } else {
+                    window.scrollTo(0, document.body.scrollHeight);
+                }
              }
 
              // Inicia o processo de rolagem e extração
@@ -2015,7 +2268,6 @@
     async function abrirModalOcultarStory() {
         if (modalAbertoStory) return;
         modalAbertoStory = true;
-
         const users = await extractHideStoryUsernames();
         if (users.length === 0) {
             modalAbertoStory = false;
@@ -2027,8 +2279,8 @@
             dbHelper.loadCache('following'),
             dbHelper.loadCache('followers')
         ]);
-        const followingSet = new Set(followingCache ? Array.from(followingCache).map(u => u.toLowerCase()) : []);
-        const followersSet = new Set(followersCache ? Array.from(followersCache).map(u => u.toLowerCase()) : []);
+        const followingSet = new Set(followingCache ? Array.from(followingCache).map(u => String(u).toLowerCase()) : []);
+        const followersSet = new Set(followersCache ? Array.from(followersCache).map(u => String(u).toLowerCase()) : []);
 
         const officialStates = new Map();
         users.forEach(u => {
@@ -2055,19 +2307,29 @@
             padding: 20px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         `;
-
         let currentTab = 'ocultados';
         let userFilterType = 'all'; // 'all', 'following', 'followers'
 
         div.innerHTML = `
             <div class="modal-header">
-                <span class="modal-title">Ocultar Story <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Selecione usuários para ocultar seus stories.</span></div></span>
+                <span class="modal-title">Ocultar Story <span id="hsSelectedCount" style="font-size:12px; font-weight:normal; color:#f39c12;">(${Array.from(modalStates.values()).filter(v => v).length} selecionados)</span> <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Selecione usuários para ocultar seus stories.</span></div></span>
+                <span class="modal-title">Ocultar Story <span id="hsSelectedCount" style="font-size:12px; font-weight:normal; color:#f39c12;">(${Array.from(modalStates.values()).filter(v => v).length} selecionados)</span> <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Selecione usuários para ocultar seus stories.</span></div></span>
                 <div class="modal-controls"><button id="hideStoryMinimizarBtn">_</button><button id="hideStoryFecharBtn">X</button></div>
             </div>
             <div style="padding: 15px;">
                 <button id="hideStoryMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
                 <button id="hideStoryDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
                 <button id="hideStoryAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
+            </div>
+            <div style="padding: 0 15px 15px 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <button id="hideStoryRefreshBtn" style="background: #1abc9c; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar (Scroll)</button>
+                <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; flex: 1; justify-content: flex-end; border: none; background: transparent;">
+                    <span style="font-size: 13px; font-weight: 500;">⚡ API</span>
+                    <label class="switch">
+                        <input type="checkbox" id="hideStoryUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
             </div>
             <div style="margin-bottom:15px; display: flex; gap: 10px; align-items: center; padding: 0 15px;">
                 <input type="text" id="hideStorySearchInput" placeholder="Pesquisar..." style="flex: 1; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
@@ -2091,11 +2353,11 @@
 
             let filteredUsers = users.filter(u => {
                 const isMatch = u.username.toLowerCase().includes(searchTerm);
-                const tabMatch = (currentTab === 'ocultados' ? modalStates.get(u.username) : !modalStates.get(u.username));
+                const tabMatch = (currentTab === 'ocultados' ? modalStates.get(u.username) : !modalStates.get(u.username)); // Corrected to use modalStates
 
                 let filterMatch = true;
-                if (userFilterType === 'following') filterMatch = followingSet.has(u.username.toLowerCase());
-                if (userFilterType === 'followers') filterMatch = followersSet.has(u.username.toLowerCase());
+                if (userFilterType === 'following') filterMatch = followingSet.has(String(u.username).toLowerCase());
+                if (userFilterType === 'followers') filterMatch = followersSet.has(String(u.username).toLowerCase());
 
                 return isMatch && tabMatch && filterMatch;
             });
@@ -2133,7 +2395,13 @@
 
             // Reatribui eventos
             document.querySelectorAll(".hideStoryCheckbox").forEach(cb => {
-                cb.onchange = () => modalStates.set(cb.dataset.username, cb.checked);
+                cb.onchange = () => {
+                    modalStates.set(cb.dataset.username, cb.checked);
+                    const countEl = document.getElementById('hsSelectedCount');
+                    if (countEl) {
+                        countEl.innerText = `(${Array.from(modalStates.values()).filter(v => v).length} selecionados)`;
+                    }
+                };
             });
             const prevBtn = document.getElementById("prevPageBtn");
             if (prevBtn) prevBtn.onclick = () => {
@@ -2172,6 +2440,16 @@
             renderList(currentPage);
         };
 
+        document.getElementById("hideStoryRefreshBtn").onclick = () => {
+            div.remove();
+            modalAbertoStory = false;
+            abrirModalOcultarStory();
+        };
+        document.getElementById("hideStoryUseApiToggle").onchange = (e) => {
+            saveSettings({ useApi: e.target.checked });
+            showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
+        };
+
             document.getElementById("hideStoryAplicarBtn").onclick = async () => {
                 isApplyingChangesStory = true;
                 const changedUsers = Array.from(modalStates.entries()).filter(([username, checked]) => officialStates.get(username) !== checked).map(([username, checked]) => ({ dataset: { username }, checked }));
@@ -2191,6 +2469,7 @@
         };
         const isCancelled = () => cancelled;
 
+                toggleLoading(true, 0, "Aplicando alterações...");
                 // --- LÓGICA API VS HUMANA ---
                 if (loadSettings().useApi) {
                     update(0, changedUsers.length, "Obtendo IDs e aplicando via API...");
@@ -2213,6 +2492,7 @@
                         await new Promise(r => setTimeout(r, 500));
                     }
                     bar.remove(); isApplyingChangesStory = false; renderList(currentPage); alert("Processo via API concluído."); return;
+                    toggleLoading(false);
                 }
 
                 if (window.location.pathname !== "/accounts/hide_story_and_live_from/") {
@@ -2254,6 +2534,7 @@
                     await new Promise(resolve => setTimeout(resolve, 2000));
                     officialStates.set(changedUsers[i].dataset.username, changedUsers[i].checked);
                     // Redesenha a página atual para refletir a mudança em tempo real
+                    toggleLoading(true, ((i + 1) / changedUsers.length) * 100, "Aplicando alterações...");
                     renderList(currentPage);
                 }
         bar.remove();
@@ -2295,6 +2576,7 @@
                     if (originalHandler) {
                         await originalHandler.apply(this, arguments);
                     }
+                    toggleLoading(false);
                     isApplyingChangesStory = false;
                 };
             }
@@ -2433,8 +2715,15 @@
                     return;
                 }
 
-                // Simula a rolagem da janela principal
-                window.scrollTo(0, document.body.scrollHeight);
+                // Rolagem dinâmica (Desktop e Mobile)
+                const scrollContainer = doc.querySelector('div[role="dialog"] ._aano') ||
+                                        doc.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]') ||
+                                        doc.documentElement;
+                if (scrollContainer && scrollContainer !== doc.documentElement) {
+                    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                } else {
+                    window.scrollTo(0, document.body.scrollHeight);
+                }
             }
 
             // Inicia o processo de rolagem e extração
@@ -2450,10 +2739,10 @@
         });
     }
 
+
     async function abrirModalContasSilenciadas() {
         if (modalAbertoMuted) return;
         modalAbertoMuted = true;
-
         const users = await extractMutedAccountsUsernames();
 
         // Armazena a lista no cache global
@@ -2485,16 +2774,26 @@
             padding: 20px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         `;
-
         div.innerHTML = `
             <div class="modal-header">
-                <span class="modal-title">Contas Silenciadas <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie contas silenciadas.</span></div></span>
+                <span class="modal-title">Contas Silenciadas <span id="mutedSelectedCount" style="font-size:12px; font-weight:normal; color:#8e44ad;">(${Array.from(modalStates.values()).filter(v => v).length} selecionados)</span> <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie contas silenciadas.</span></div></span>
+                <span class="modal-title">Contas Silenciadas <span id="mutedSelectedCount" style="font-size:12px; font-weight:normal; color:#8e44ad;">(${Array.from(modalStates.values()).filter(v => v).length} selecionados)</span> <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie contas silenciadas.</span></div></span>
                 <div class="modal-controls"><button id="mutedMinimizarBtn">_</button><button id="mutedFecharBtn">X</button></div>
             </div>
             <div style="padding: 15px;">
                 <button id="mutedMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
                 <button id="mutedDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
                 <button id="mutedAplicarBtn" style="background:#8e44ad;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Reativar Som</button>
+            </div>
+            <div style="padding: 0 15px 15px 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <button id="mutedRefreshBtn" style="background: #1abc9c; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar (Scroll)</button>
+                <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; flex: 1; justify-content: flex-end; border: none; background: transparent;">
+                    <span style="font-size: 13px; font-weight: 500;">⚡ API</span>
+                    <label class="switch">
+                        <input type="checkbox" id="mutedUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
             </div>
             <div style="margin-bottom:15px; padding: 0 15px;">
                 <input type="text" id="mutedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
@@ -2557,7 +2856,13 @@
             listContainer.innerHTML = html;
 
             document.querySelectorAll(".mutedCheckbox").forEach(cb => {
-                cb.onchange = () => modalStates.set(cb.dataset.username, cb.checked);
+                cb.onchange = () => {
+                    modalStates.set(cb.dataset.username, cb.checked);
+                    const countEl = document.getElementById('mutedSelectedCount');
+                    if (countEl) {
+                        countEl.innerText = `(${Array.from(modalStates.values()).filter(v => v).length} selecionados)`;
+                    }
+                };
             });
             const prevBtn = document.getElementById("prevPageBtn");
             if (prevBtn) prevBtn.onclick = () => { currentPage--; renderList(currentPage); };
@@ -2587,6 +2892,16 @@
             users.forEach(u => modalStates.set(u.username, false));
             renderList(currentPage);
         };
+
+        document.getElementById("mutedRefreshBtn").onclick = () => {
+            div.remove();
+            modalAbertoMuted = false;
+            abrirModalContasSilenciadas();
+        };
+        document.getElementById("mutedUseApiToggle").onchange = (e) => {
+            saveSettings({ useApi: e.target.checked });
+            showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
+        };
     }
 
     async function unmuteUsers(usersToUnmute, callback, toggleMode = false, targetType = 'all') {
@@ -2598,6 +2913,7 @@
             alert("Processo interrompido.");
         };
         const isCancelled = () => cancelled;
+        toggleLoading(true, 0, "Reativando som...");
 
         const originalPath = window.location.pathname;
 
@@ -2606,6 +2922,7 @@
             for (let i = 0; i < usersToUnmute.length; i++) {
                 if (isCancelled()) break;
                 const username = usersToUnmute[i];
+                toggleLoading(true, ((i + 1) / usersToUnmute.length) * 100, "Processando via API...");
                 update(i + 1, usersToUnmute.length, `Processando ${username} via API...`);
                 const uid = await getUserId(username);
                 if (uid) {
@@ -2641,7 +2958,7 @@
                     } catch (e) { console.error(`Erro API Mute/Unmute ${username}`, e); }
                 }
                 await new Promise(r => setTimeout(r, 500));
-            }
+            } // End of for loop
             bar.remove(); if (callback) callback(); return;
         }
 
@@ -2845,6 +3162,7 @@
                 }
 
                 // Simula a rolagem da janela principal
+                 toggleLoading(false); // Remove loading after extraction
                 window.scrollTo(0, document.body.scrollHeight);
             }
 
@@ -2869,6 +3187,7 @@
         if (window.location.pathname !== "/accounts/blocked_accounts/") {
             history.pushState(null, null, "/accounts/blocked_accounts/");
             window.dispatchEvent(new Event("popstate"));
+            toggleLoading(true, null, "Carregando lista de contas bloqueadas...");
             await new Promise(resolve => setTimeout(resolve, 3000)); // Espera a página carregar
         }
 
@@ -2903,7 +3222,7 @@
             let html = `
                 <div class="modal-header">
                     <span class="modal-title">
-                        Contas Bloqueadas
+                        Contas Bloqueadas <span id="blockedSelectedCount" style="font-size:12px; font-weight:normal; color:#e74c3c;">(${Array.from(modalStates.values()).filter(v => v).length} selecionados)</span>
                         <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Lista de usuários que você bloqueou. Você pode desbloqueá-los em massa aqui.</span></div>
                     </span>
                     <div class="modal-controls"><button id="blockedMinimizarBtn" title="Minimizar">_</button><button id="blockedFecharBtn" title="Fechar">X</button></div>
@@ -2913,6 +3232,16 @@
                     <button id="blockedMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
                     <button id="blockedDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
                     <button id="blockedDesbloquearBtn" style="background:#2ecc71;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Desbloquear</button>
+                </div>
+                <div style="padding: 0 15px 15px 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <button id="blockedRefreshBtn" style="background: #1abc9c; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar (Scroll)</button>
+                    <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; flex: 1; justify-content: flex-end; border: none; background: transparent;">
+                        <span style="font-size: 13px; font-weight: 500;">⚡ API</span>
+                        <label class="switch">
+                            <input type="checkbox" id="blockedUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
                 </div>
                 <div style="margin-bottom:15px;">
                     <input type="text" id="blockedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
@@ -2968,6 +3297,16 @@
                 modal.style.maxHeight = isMinimized ? '85vh' : 'none';
             };
 
+            document.getElementById("blockedRefreshBtn").onclick = () => {
+                div.remove();
+                modalAbertoBlocked = false;
+                iniciarProcessoBloqueados();
+            };
+            document.getElementById("blockedUseApiToggle").onchange = (e) => {
+                saveSettings({ useApi: e.target.checked });
+                showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
+            };
+
             document.getElementById("blockedMarcarTodosBtn").onclick = () => {
                 document.querySelectorAll("#blockedList .blockedCheckbox").forEach(cb => { cb.checked = true; modalStates.set(cb.dataset.username, true); });
             };
@@ -2992,7 +3331,11 @@
             if (nextBtn) nextBtn.onclick = () => { currentPage++; renderPage(currentPage); };
 
             document.querySelectorAll(".blockedCheckbox").forEach(cb => {
-                cb.addEventListener("change", () => modalStates.set(cb.dataset.username, cb.checked));
+                cb.addEventListener("change", () => {
+                    modalStates.set(cb.dataset.username, cb.checked);
+                    const countEl = document.getElementById('blockedSelectedCount');
+                    if (countEl) countEl.innerText = `(${Array.from(modalStates.values()).filter(v => v).length} selecionados)`;
+                });
             });
 
             document.getElementById("blockedDesbloquearBtn").onclick = async () => {
@@ -3008,6 +3351,7 @@
                 const desbloquearBtn = document.getElementById("blockedDesbloquearBtn");
                 desbloquearBtn.disabled = true;
                 desbloquearBtn.textContent = "Processando...";
+                toggleLoading(true, 0, "Desbloqueando...");
 
                 await unblockUsers(usersToUnblock, () => {
                     desbloquearBtn.disabled = false;
@@ -3017,6 +3361,7 @@
                     div.remove();
                     modalAbertoBlocked = false;
                     iniciarProcessoBloqueados();
+                    toggleLoading(false);
                 });
             };
         }
@@ -3031,6 +3376,7 @@
             bar.remove();
             alert("Processo de desbloqueio interrompido.");
         };
+        toggleLoading(true, 0, "Desbloqueando...");
 
         // --- LÓGICA API ---
         if (loadSettings().useApi) {
@@ -3038,6 +3384,7 @@
                 if (cancelled) break;
                 const username = usersToUnblock[i];
                 update(i + 1, usersToUnblock.length, `Desbloqueando ${username} via API...`);
+                toggleLoading(true, ((i + 1) / usersToUnblock.length) * 100, "Desbloqueando via API...");
                 const uid = await getUserId(username);
                 if (uid) {
                     try {
@@ -3061,6 +3408,7 @@
                         const row = document.querySelector(`tr[data-username="${username}"]`);
                         if (row) row.remove();
                     } catch (e) { console.error(`Erro API Unblock ${username}`, e); }
+                    toggleLoading(false);
                 }
                 await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
             }
@@ -3078,6 +3426,7 @@
             if (cancelled) break;
             const username = usersToUnblock[i];
             update(i + 1, usersToUnblock.length, "Desbloqueando:");
+            toggleLoading(true, ((i + 1) / usersToUnblock.length) * 100, "Desbloqueando...");
 
             // 1. Encontrar o card do usuário na lista de bloqueados
             const userCard = Array.from(document.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]'))
@@ -3108,6 +3457,7 @@
         }
 
         bar.remove();
+        toggleLoading(false);
         if (onComplete) onComplete();
     }
 
@@ -3115,8 +3465,10 @@
         if (index >= users.length) {
             alert("Bloqueio concluído.");
             if (callback) callback();
+            toggleLoading(false); // Fecha o loading ao terminar o bloqueio em massa
             return;
         }
+        toggleLoading(true, ((index + 1) / users.length) * 100, `Bloqueando ${users[index]}...`);
         const username = users[index];
         const statusDiv = document.getElementById("statusNaoSegue") || document.getElementById("statusSeguindo");
         if (statusDiv) statusDiv.innerText = `Bloqueando ${username} (${index + 1}/${users.length})...`;
@@ -3353,7 +3705,6 @@
                             alert("Por favor, vá para a página de perfil de um usuário para usar esta função.");
                             return;
                         }
-
                         // 1. Criar o modal de progresso
                         const div = document.createElement("div");
                         div.id = "naoSegueDeVoltaDiv";
@@ -3377,7 +3728,7 @@
                         div.innerHTML = `
                             <div class="modal-header">
                                 <span class="modal-title">
-                                    Análise de Seguidores
+                                    Análise de Seguidores <span id="naoSegueSelectedCount" style="font-size: 12px; font-weight: normal; margin-left: 10px; color: #0095f6;">(0 selecionados)</span>
                                     <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Veja quem você segue mas não te segue de volta. Também mostra novos seguidores e histórico de unfollows.</span></div>
                                 </span>
                                 <div class="modal-controls">
@@ -3389,6 +3740,7 @@
                             <div id="tabelaContainer" style="display: block; margin-top: 15px;"></div>
                         `;
                         document.body.appendChild(div);
+                        toggleLoading(false); // Remove loading after modal is created
 
                         document.getElementById("fecharSubmenuBtn").addEventListener("click", () => {
                             processoCancelado = true; // Sinaliza que o processo deve ser cancelado
@@ -3414,6 +3766,7 @@
                         };
 
                         const statusDiv = document.getElementById("statusNaoSegue");
+                        const selectedUsers = new Set();
 
                         // Cache para armazenar os dados e evitar novas buscas
                         const cachedData = {
@@ -3429,6 +3782,13 @@
                         };
 
                         // Variável compartilhada para as listas, acessível pelo unfollowUsers
+                        const updateSelectedCountDisplay = () => {
+                            const countEl = document.getElementById('naoSegueSelectedCount');
+                            if (countEl) {
+                                countEl.innerText = `(${selectedUsers.size} selecionados)`;
+                            }
+                        };
+
                         let lists = {};
 
                         // Função para extrair lista de usuários via API (muito mais rápido)
@@ -3510,7 +3870,7 @@
 
                         // Função principal que carrega os dados UMA VEZ
                         async function carregarDadosIniciais() {
-                            statusDiv.innerText = 'Carregando dados do Banco de Dados (IndexedDB)...';
+                            statusDiv.innerText = 'Carregando dados do Banco de Dados...';
 
                             // 1. Carrega dados do DB (Sem requisições API)
                             let dbFollowers = await dbHelper.loadCache('followers');
@@ -3572,8 +3932,18 @@
 
                             // Adiciona abas
                             const tabsHtml = `
-                                <div style="margin-bottom: 15px;">
-                                    <button id="btnUpdateApi" style="background: #0095f6; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar Dados (Baixar e Salvar no DB)</button>
+                                <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                                    <button id="btnUpdateApi" style="background: #0095f6; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar Dados</button>
+                                    <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; border: 1px solid #dbdbdb;">
+                                        <span style="font-size: 14px; font-weight: 500;">⚡ ${getText('useApi')}</span>
+                                        <label class="switch">
+                                            <input type="checkbox" id="naoSegueUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}>
+                                            <span class="slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 15px; padding: 0 5px;">
+                                    <input type="text" id="naoSegueSearchInput" placeholder="Pesquisar usuários nesta lista..." style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; box-sizing: border-box; outline: none;">
                                 </div>
                                 <div class="cards-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px;">
                                     <div id="tabNaoSegueDeVolta" class="card-tab active" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
@@ -3616,7 +3986,7 @@
                                 'tabHistorico': listHistorico
                             };
 
-                            let currentTabId = null;
+                            let currentTabId = 'tabNaoSegueDeVolta';
                             let currentList = lists[currentTabId];
 
                             async function renderCurrentTab() {
@@ -3644,6 +4014,16 @@
                                     currentList = lists[currentTabId];
                                 }
 
+                                // Filtragem por busca
+                                const searchTerm = document.getElementById('naoSegueSearchInput')?.value.toLowerCase() || '';
+                                let filteredList = currentList;
+                                if (searchTerm && Array.isArray(currentList)) {
+                                    filteredList = currentList.filter(u => {
+                                        const username = (u && typeof u === 'object') ? u.username : String(u);
+                                        return username.toLowerCase().includes(searchTerm);
+                                    });
+                                }
+
                                 const tableId = currentTabId === 'tabHistorico' ? 'historicoTable' : 'naoSegueDeVoltaTable';
                                 contentDiv.innerHTML = `
                                     <div style="margin-bottom: 10px;">
@@ -3665,33 +4045,50 @@
                                     </div>
                                 `;
 
-                                preencherTabela(currentList, true, currentTabId === 'tabHistorico');
+                                preencherTabela(filteredList, true, currentTabId === 'tabHistorico', selectedUsers, updateSelectedCountDisplay);
 
-                                const selecionarTodosNaTabela = () => document.querySelectorAll(`#${tableId} .unfollowCheckbox`).forEach(cb => cb.checked = true);
-                                const desmarcarTodosNaTabela = () => document.querySelectorAll(`#${tableId} .unfollowCheckbox`).forEach(cb => cb.checked = false);
+                                const selecionarTodosNaTabela = () => {
+                                    document.querySelectorAll(`#${tableId} .unfollowCheckbox`).forEach(cb => {
+                                        cb.checked = true;
+                                        selectedUsers.add(cb.dataset.username);
+                                    });
+                                    updateSelectedCountDisplay();
+                                };
+                                const desmarcarTodosNaTabela = () => {
+                                    document.querySelectorAll(`#${tableId} .unfollowCheckbox`).forEach(cb => {
+                                        cb.checked = false;
+                                        selectedUsers.delete(cb.dataset.username);
+                                    });
+                                    updateSelectedCountDisplay();
+                                };
 
                                 document.getElementById("selecionarTodosBtn").onclick = selecionarTodosNaTabela;
                                 document.getElementById("desmarcarTodosBtn").onclick = desmarcarTodosNaTabela;
 
 
                                 if (document.getElementById("unfollowBtn")) {
-                                    document.getElementById("unfollowBtn").onclick = unfollowSelecionados;
+                                    document.getElementById("unfollowBtn").onclick = () => unfollowSelecionados(selectedUsers, updateSelectedCountDisplay);
                                 }
                                 if (document.getElementById("bloquearBtn")) {
-                                    document.getElementById("bloquearBtn").onclick = bloquearSelecionados;
+                                    document.getElementById("bloquearBtn").onclick = () => bloquearSelecionados(selectedUsers, updateSelectedCountDisplay);
                                 }
                                 if (document.getElementById("corrigirBtn")) {
                                     document.getElementById("corrigirBtn").onclick = async () => {
-                                        const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(cb => cb.dataset.username);
+                                        const selecionados = Array.from(selectedUsers);
                                         if (selecionados.length === 0) return alert("Selecione os usuários que você já segue para corrigir.");
 
                                         if (confirm(`Marcar ${selecionados.length} usuários como 'Já Sigo'? Eles não aparecerão mais nesta lista.`)) {
+                                            const { bar, update, closeButton } = createCancellableProgressBar();
+                                            let cancelled = false;
+                                            closeButton.onclick = () => { cancelled = true; bar.remove(); alert("Processo interrompido."); };
+
+                                            update(0, selecionados.length, "Corrigindo...");
                                             for (const u of selecionados) {
                                                 await dbHelper.saveException(u);
                                                 cachedData.exceptions.add(u);
                                             }
                                             // Recalcula a lista
-                                            cachedData.naoSegueDeVolta = [...cachedData.seguindo].filter(user => !cachedData.seguidores.has(user) && !cachedData.exceptions.has(user));
+                                            cachedData.naoSegueDeVolta = [...cachedData.seguindo].filter(user => !cachedData.seguidores.has(user) && !cachedData.exceptions.has(user)); // Recalculate
                                             lists['tabNaoSegueDeVolta'] = toObjects(cachedData.naoSegueDeVolta);
                                             currentList = lists['tabNaoSegueDeVolta'];
                                             document.getElementById('countNaoSegue').innerText = currentList.length;
@@ -3700,8 +4097,8 @@
                                     };
                                 }
                                 if (document.getElementById("seguirNovamenteBtn")) {
-                                    document.getElementById("seguirNovamenteBtn").onclick = () => {
-                                        const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(cb => cb.dataset.username);
+                                    document.getElementById("seguirNovamenteBtn").onclick = async () => { // Make it async
+                                        const selecionados = Array.from(selectedUsers);
                                         if (selecionados.length === 0) return alert("Selecione usuários para seguir.");
 
                                         const btn = document.getElementById("seguirNovamenteBtn");
@@ -3712,7 +4109,7 @@
                                             btn.disabled = false;
                                             btn.textContent = "Seguir Novamente";
                                             // Remove os usuários do histórico após seguir
-                                            await dbHelper.deleteUnfollowHistory(selecionados);
+                                            await dbHelper.deleteUnfollowHistory(selecionados); // This will clear from DB
                                             showToast(`${selecionados.length} usuário(s) removido(s) do histórico.`);
                                             renderCurrentTab(); // Atualiza a visualização da aba
                                         });
@@ -3720,7 +4117,7 @@
                                 }
                                 if (document.getElementById("limparHistoricoBtn")) {
                                     document.getElementById("limparHistoricoBtn").onclick = async () => {
-                                        const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(cb => cb.dataset.username);
+                                        const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(cb => cb.dataset.username); // Use selectedUsers
                                         if (selecionados.length === 0) return alert("Selecione itens para limpar.");
                                         if(confirm(`Excluir ${selecionados.length} itens do histórico?`)) {
                                             await dbHelper.deleteUnfollowHistory(selecionados);
@@ -3732,6 +4129,12 @@
 
                             renderCurrentTab();
 
+                            // Listener para o campo de busca
+                            const searchInput = document.getElementById("naoSegueSearchInput");
+                            if (searchInput) {
+                                searchInput.addEventListener('input', () => renderCurrentTab());
+                            }
+
                             // Event listeners para as abas
                             const tabs = ['tabNaoSegueDeVolta', 'tabNovosSeguidores', 'tabNovosSeguindo', 'tabSeguidoresPerdidos', 'tabNaoSigoDeVolta', 'tabHistorico'];
 
@@ -3741,6 +4144,11 @@
                                     renderCurrentTab();
                                 });
                             });
+
+                            document.getElementById('naoSegueUseApiToggle').onchange = (e) => {
+                                saveSettings({ useApi: e.target.checked });
+                                showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
+                            };
 
                             // Lógica do Botão Atualizar
                             document.getElementById("btnUpdateApi").onclick = () => {
@@ -3773,6 +4181,7 @@
                                     if (!updateFollowers && !updateFollowing) return alert("Selecione pelo menos uma opção.");
 
                                     await executarAtualizacao(updateFollowers, updateFollowing);
+                                    selectedUsers.clear(); // Clear selection after update
                                 };
                             }
 
@@ -3787,6 +4196,7 @@
                                         return;
                                     }
                                 }
+                                toggleLoading(true, null, "Atualizando dados...");
 
                                 const userId = cachedData.profileInfo.data.user.id;
                                 const totalFollowing = cachedData.profileInfo.data.user.edge_follow.count;
@@ -3798,7 +4208,7 @@
                                 // 1. Baixar Seguindo
                                 if (updateFollowing) {
                                     apiFollowing = await fetchUserListAPI(userId, 'following', totalFollowing);
-                                    if (processoCancelado || !apiFollowing) return;
+                                    if (processoCancelado || !apiFollowing) { toggleLoading(false); return; } // Fecha se cancelar
                                 } else {
                                     apiFollowing = cachedData.seguindo;
                                 }
@@ -3806,7 +4216,7 @@
                                 // 2. Baixar Seguidores
                                 if (updateFollowers) {
                                     apiFollowers = await fetchUserListAPI(userId, 'followers', totalFollowers);
-                                    if (processoCancelado || !apiFollowers) return;
+                                    if (processoCancelado || !apiFollowers) { toggleLoading(false); return; } // Fecha se cancelar
                                 } else {
                                     apiFollowers = cachedData.seguidores;
                                 }
@@ -3868,6 +4278,7 @@
                                 statusDiv.innerText = "Dados atualizados e salvos no IndexDB com sucesso!";
                                 currentList = lists[currentTabId];
                                 renderCurrentTab();
+                                toggleLoading(false);
                             }
                         }
 
@@ -3886,10 +4297,8 @@
                             });
                         }
 
-                        function bloquearSelecionados() {
-                            const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(
-                                (checkbox) => checkbox.dataset.username
-                            );
+                        function bloquearSelecionados(usersSet, updateCountCb) {
+                            const selecionados = Array.from(usersSet);
                             if (selecionados.length === 0) {
                                 alert("Nenhum usuário selecionado para Bloquear.");
                                 return;
@@ -3901,18 +4310,18 @@
                             blockUsers(selecionados, 0, () => {
                                 btn.disabled = false;
                                 btn.textContent = "Bloquear";
+                                usersSet.clear();
+                                if (updateCountCb) updateCountCb();
                             });
                         }
 
-                        function unfollowSelecionados() {
+                        function unfollowSelecionados(usersSet, updateCountCb) {
                             if (isUnfollowing) {
                                 alert("Processo de unfollow já em andamento.");
                                 return;
                             }
 
-                            const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(
-                                (checkbox) => checkbox.dataset.username
-                            );
+                            const selecionados = Array.from(usersSet);
 
                             if (selecionados.length === 0) {
                                 alert("Nenhum usuário selecionado para Unfollow.");
@@ -3924,16 +4333,20 @@
                             unfollowBtn.textContent = "Processando...";
                             isUnfollowing = true;
 
+                            toggleLoading(true, 0, "Iniciando Unfollows...");
                             unfollowUsers(selecionados, 0, () => {
+                                toggleLoading(false); // Fecha o loading ao terminar o processo de Unfollow
                                 unfollowBtn.disabled = false;
                                 unfollowBtn.textContent = "Unfollow";
                                 isUnfollowing = false;
+                                usersSet.clear();
+                                if (document.getElementById('naoSegueSelectedCount')) document.getElementById('naoSegueSelectedCount').innerText = `(0 selecionados)`;
                                 const tabHistorico = document.getElementById('tabHistorico');
                                 if (tabHistorico) tabHistorico.click();
                             });
                         }
 
-                        function unfollowUsers(users, index, callback) {
+                        function unfollowUsers(users, index, callback, selectedUsersSet, updateCountCb) {
                             if (index >= users.length || processoCancelado) {
                                 if (!processoCancelado) {
                                     console.log("Todos os usuários processados. Unfollow concluído.");
@@ -3949,6 +4362,7 @@
                             // --- LÓGICA API VS HUMANA ---
                             if (loadSettings().useApi) {
                                 statusDiv.innerText = `Deixando de seguir ${username} (${index + 1}/${users.length}) via API...`;
+                                toggleLoading(true, ((index + 1) / users.length) * 100, `Deixando de seguir ${username}...`);
                                 (async () => {
                                     const uid = await getUserId(username);
                                     if (uid) {
@@ -3961,26 +4375,44 @@
                                                 body: body.toString(),
                                                 credentials: 'include'
                                             });
-                                            if (res.status === 401) return;
-                                            // Atualizações de UI e Cache
-                                            getProfilePic(username).then(photoUrl => { dbHelper.saveUnfollowHistory({ username, photoUrl, unfollowDate: new Date().toISOString() }); });
-                                            // Atualiza lista se estiver no menu 'Não segue de volta'
-                                            if (typeof lists !== 'undefined' && lists['tabNaoSegueDeVolta']) {
-                                                const list = lists['tabNaoSegueDeVolta'];
-                                                const userIndex = list.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
-                                                if (userIndex > -1) list.splice(userIndex, 1);
-                                                const countSpan = document.getElementById('countNaoSegue');
-                                                if (countSpan) countSpan.innerText = list.length;
+                                            if (res.ok) {
+                                                // Histórico e UI
+                                                getProfilePic(username).then(photoUrl => {
+                                                    dbHelper.saveUnfollowHistory({ username, photoUrl, unfollowDate: new Date().toISOString() });
+                                                });
+
+                                                if (selectedUsersSet) selectedUsersSet.delete(username);
+                                                if (updateCountCb) updateCountCb();
+
+                                                // Remove da lista de "Não segue de volta" em memória
+                                                const naoSegueList = lists['tabNaoSegueDeVolta'];
+                                                if (naoSegueList) {
+                                                    const userIndex = naoSegueList.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
+                                                    if (userIndex > -1) naoSegueList.splice(userIndex, 1);
+                                                    const countSpan = document.getElementById('countNaoSegue');
+                                                    if (countSpan) countSpan.innerText = naoSegueList.length;
+                                                }
+
+                                                // Atualiza o cache de 'following' no DB
+                                                const lowerUser = username.toLowerCase();
+                                                if (cachedData.seguindo && cachedData.seguindo.has(lowerUser)) {
+                                                    cachedData.seguindo.delete(lowerUser);
+                                                    const newFollowingList = Array.from(cachedData.seguindo).map(u =>
+                                                        cachedData.userDetails.get(u) || { username: u, photoUrl: null }
+                                                    );
+                                                    dbHelper.saveCache('following', newFollowingList).catch(e => console.error("Erro ao atualizar cache following:", e));
+                                                }
+                                                const row = document.querySelector(`tr[data-username="${username}"]`);
+                                                if (row) row.remove();
                                             }
-                                            const row = document.querySelector(`tr[data-username="${username}"]`);
-                                            if (row) row.remove();
                                         } catch (e) { console.error(`Erro API Unfollow ${username}`, e); }
                                     }
-                                    setTimeout(() => unfollowUsers(users, index + 1, callback), loadSettings().unfollowDelay);
+                                    setTimeout(() => unfollowUsers(users, index + 1, callback, selectedUsersSet, updateCountCb), loadSettings().unfollowDelay);
                                 })();
                                 return;
                             }
 
+                            toggleLoading(true, ((index + 1) / users.length) * 100, `Deixando de seguir ${username}...`);
                             history.pushState(null, null, `/${username}/`);
                             window.dispatchEvent(new Event("popstate"));
 
@@ -4012,6 +4444,10 @@
                                                     unfollowDate: new Date().toISOString()
                                                 }).catch(err => console.error(`Falha ao salvar ${username} no histórico:`, err));
                                             });
+
+                                            // Remove from selected set and update count
+                                            if (selectedUsersSet) selectedUsersSet.delete(username);
+                                            if (updateCountCb) updateCountCb();
 
                                             // Remove da lista de "Não segue de volta" em memória
                                             const naoSegueList = lists['tabNaoSegueDeVolta'];
@@ -4058,7 +4494,7 @@
                             }, 4000); // Atraso para a página do perfil carregar
                         }
 
-                        function followUsers(users, index, callback) {
+                        function followUsers(users, index, callback, selectedUsersSet, updateCountCb) {
                             if (index >= users.length || processoCancelado) {
                                 if (!processoCancelado) {
                                     alert("Processo concluído.");
@@ -4068,6 +4504,7 @@
                             }
 
                             const username = users[index];
+                            toggleLoading(true, ((index + 1) / users.length) * 100, `Seguindo ${username}...`);
                             statusDiv.innerText = `Seguindo ${username} (${index + 1}/${users.length})...`;
 
                             if (loadSettings().useApi) {
@@ -4084,6 +4521,9 @@
                                                 credentials: 'include'
                                             });
                                             if (res.status === 401) return;
+                                            // Remove from selected set and update count
+                                            if (selectedUsersSet) selectedUsersSet.delete(username);
+                                            if (updateCountCb) updateCountCb();
                                         } catch (e) { console.error(`Erro API Follow ${username}`, e); }
                                     }
                                     setTimeout(() => followUsers(users, index + 1, callback), loadSettings().requestDelay || 1000);
@@ -4100,6 +4540,9 @@
 
                                 if (followBtn) {
                                     followBtn.click();
+                                    // Remove from selected set and update count
+                                    if (selectedUsersSet) selectedUsersSet.delete(username);
+                                    if (updateCountCb) updateCountCb();
                                     setTimeout(() => followUsers(users, index + 1, callback), 2000);
                                 } else {
                                     console.log(`Botão Seguir não encontrado para ${username}`);
@@ -4122,6 +4565,7 @@
                         const appID = '936619743392459';
                         if (!username || (pathParts.length > 1 && !['followers', 'following'].includes(pathParts[1]))) {
                             alert("Por favor, vá para a página de perfil de um usuário para usar esta função.");
+                            toggleLoading(false);
                             return;
                         }
 
@@ -4222,7 +4666,7 @@
                         div.innerHTML = `
                             <div class="modal-header">
                                 <span class="modal-title">
-                                    Gerenciador de "Seguindo"
+                                    Gerenciador de "Seguindo" <span id="seguindoSelectedCount" style="font-size:12px; font-weight:normal; color:#3498db;">(0 selecionados)</span>
                                     <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie quem você segue. Filtre por quem é Melhor Amigo, Silenciado ou tem Story Oculto.</span></div>
                                 </span>
                                 <div class="modal-controls"><button id="seguindoMinimizarBtn" title="Minimizar">_</button><button id="fecharSeguindoBtn" title="Fechar">X</button></div>
@@ -4232,7 +4676,7 @@
                                             <div style="display: flex; flex-wrap: wrap; gap: 10px;">
                                     <button id="atualizarSeguindoBtn" title="Atualizar Dados" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">🔄️ Atualizar</button>
                                             <button id="executarSeguindoBtn" style="background: #3498db; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">🚀 Executar</button>
-                                    <button id="unfollowSeguindoBtn" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Unfollow</button>
+                                    <button id="unfollowSeguindoBtn" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Deixar de Seguir</button>
                                     <button id="blockSeguindoBtn" style="background: #c0392b; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Bloquear</button>
                                     <button id="loadStatsSeguindoBtn" style="background: #e67e22; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Carregar Stats (Página)</button>
                                 </div>
@@ -4343,6 +4787,13 @@
                                 userListCache[key] = data;
                                 if (key === 'muted' && data.details) {
                                     userListCache.mutedDetails = new Map();
+                                    // Ensure mutedDetails is populated correctly from the stored array of objects
+                                    data.details.forEach((u, username) => userListCache.mutedDetails.set(username, u.status));
+                                } else if (key === 'muted' && Array.isArray(data)) {
+                                    // Fallback for older format or if details property is missing
+                                    userListCache.mutedDetails = new Map();
+                                    // Assuming each item in data is { username, status }
+                                    data.forEach(item => userListCache.mutedDetails.set(item.username, item.status));
                                     data.details.forEach((u, username) => userListCache.mutedDetails.set(username, u.status));
                                 }
                             } else { userListCache[key] = new Set(); }
@@ -4633,11 +5084,9 @@
                                 document.querySelectorAll('#seguindoModal .user-checkbox').forEach(checkbox => {
                                     checkbox.addEventListener('change', (e) => {
                                         const username = e.target.dataset.username;
-                                        if (e.target.checked) {
-                                            selectedUsers.add(username);
-                                        } else {
-                                            selectedUsers.delete(username);
-                                        }
+                                        if (e.target.checked) selectedUsers.add(username);
+                                        else selectedUsers.delete(username);
+                                        if (document.getElementById('seguindoSelectedCount')) document.getElementById('seguindoSelectedCount').innerText = `(${selectedUsers.size} selecionados)`;
                                     });
                                 });
 
@@ -4649,12 +5098,10 @@
                                         document.querySelectorAll('#tabelaSeguindoContainer .user-checkbox').forEach(checkbox => {
                                             checkbox.checked = isChecked;
                                             const username = checkbox.dataset.username;
-                                            if (isChecked) {
-                                                selectedUsers.add(username);
-                                            } else {
-                                                selectedUsers.delete(username);
-                                            }
+                                            if (isChecked) selectedUsers.add(username);
+                                            else selectedUsers.delete(username);
                                         });
+                                        if (document.getElementById('seguindoSelectedCount')) document.getElementById('seguindoSelectedCount').innerText = `(${selectedUsers.size} selecionados)`;
                                     });
                                 }
 
@@ -4783,6 +5230,7 @@
                                             <div style="display: flex; gap: 10px; margin-bottom: 10px;">
                                                 <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="catAction" value="add" checked> Adicionar</label>
                                                 <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="catAction" value="remove"> Remover</label>
+                                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="catAction" value="replace"> Substituir</label>
                                             </div>
                                             <div style="max-height: 150px; overflow-y: auto; border: 1px solid #eee; padding: 5px; border-radius: 5px;">
                                             ${categories.length === 0 ? '<p style="font-size: 12px; color: gray;">Nenhuma categoria cadastrada.</p>' :
@@ -4813,24 +5261,93 @@
                                     const selectedCats = Array.from(execDiv.querySelectorAll('.execCatItem:checked')).map(i => i.value);
                                     execDiv.remove(); // Fecha o modal de seleção de ações
 
+                                    toggleLoading(true);
+                                    try { // Wrap the async operations in a try-finally to ensure loading is toggled off
                                     // 1. Processar Categorias Primeiro (Rápido e Local)
-                                    if (doCat && selectedCats.length > 0) {
-                                        const allUserCategories = await dbHelper.loadAllUserCategories();
-                                        for (const u of selectedUsernames) {
+                                    if (doCat) {
+                                        const total = selectedUsernames.length;
+                                        const oldUserCategoryMap = new Map(userCategoryMap); // Captura estado anterior
+                                        let allUserCategories = await dbHelper.loadAllUserCategories();
+
+                                        for (let i = 0; i < total; i++) {
+                                            const u = selectedUsernames[i];
+                                            toggleLoading(true, (i / total) * 100);
                                             const lowerUsername = u.toLowerCase();
                                             const existing = allUserCategories.get(lowerUsername) || [];
                                             let updated;
 
                                             if (catAction === 'add') {
                                                 updated = Array.from(new Set([...existing, ...selectedCats]));
-                                            } else { // 'remove'
+                                            } else if (catAction === 'remove') {
                                                 updated = existing.filter(catId => !selectedCats.includes(catId));
+                                            } else if (catAction === 'replace') {
+                                                updated = selectedCats;
                                             }
-                                            await dbHelper.saveUserCategories(lowerUsername, updated);
+                                            allUserCategories.set(lowerUsername, updated);
                                         }
-                                        // Sincroniza o mapa local e atualiza a interface (tabela) imediatamente
-                                        userCategoryMap = await dbHelper.loadAllUserCategories();
-                                        renderList(currentPage);
+                                        await dbHelper.saveAllUserCategories(allUserCategories); // Save the updated map
+                                        userCategoryMap = allUserCategories;
+
+                                        // 2. Sincronizar Ações Automáticas (Adicionar ou Remover conforme a mudança de categorias)
+                                        const toCF = []; const fromCF = [];
+                                        const toMute = []; const fromMute = [];
+                                        const toHide = []; const fromHide = [];
+
+                                        const catsMap = new Map(categories.map(c => [c.id, c]));
+
+                                        for (const u of selectedUsernames) {
+                                            const lowerU = u.toLowerCase();
+                                            const newCats = userCategoryMap.get(lowerU) || [];
+                                            const oldCats = oldUserCategoryMap.get(lowerU) || [];
+
+                                            // Determina o estado desejado baseado em TODAS as categorias atuais do usuário
+                                            let wantsCF = false; let wantsMute = false; let wantsHide = false;
+                                            newCats.forEach(cid => {
+                                                const cat = catsMap.get(cid);
+                                                if (cat?.actions) {
+                                                    if (cat.actions.cf) wantsCF = true;
+                                                    if (cat.actions.mute) wantsMute = true;
+                                                    if (cat.actions.hide) wantsHide = true;
+                                                }
+                                            });
+
+                                            const isCurrentlyCF = userListCache.closeFriends?.has(u);
+                                            const isCurrentlyMuted = userListCache.muted?.has(u);
+                                            const isCurrentlyHidden = userListCache.hiddenStory?.has(u);
+
+                                            // Sincronização Close Friends
+                                            if (wantsCF && !isCurrentlyCF) toCF.push(u);
+                                            else if (!wantsCF && isCurrentlyCF) {
+                                                // Só remove se ele estava em uma categoria que exigia CF antes
+                                                if (oldCats.some(cid => catsMap.get(cid)?.actions?.cf)) fromCF.push(u);
+                                            }
+
+                                            // Sincronização Mute
+                                            if (wantsMute && !isCurrentlyMuted) toMute.push(u);
+                                            else if (!wantsMute && isCurrentlyMuted) {
+                                                if (oldCats.some(cid => catsMap.get(cid)?.actions?.mute)) fromMute.push(u);
+                                            }
+
+                                            // Sincronização Ocultar Story
+                                            if (wantsHide && !isCurrentlyHidden) toHide.push(u);
+                                            else if (!wantsHide && isCurrentlyHidden) {
+                                                if (oldCats.some(cid => catsMap.get(cid)?.actions?.hide)) fromHide.push(u);
+                                            }
+                                        }
+
+                                        if (toCF.length || fromCF.length || toMute.length || fromMute.length || toHide.length || fromHide.length) {
+                                            showToast("⚡ Sincronizando ações automáticas das categorias...");
+
+                                            // Ações de Inclusão
+                                            if (toCF.length) await performActionOnProfile(toCF, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], () => {});
+                                            if (toMute.length) await new Promise(resolve => unmuteUsers(toMute, resolve, true, 'all'));
+                                            if (toHide.length) await toggleListMembership(toHide, '/accounts/hide_story_and_live_from/', 'hiddenStory', () => {});
+
+                                            // Ações de Remoção (Inversão)
+                                            if (fromCF.length) await performActionOnProfile(fromCF, ['Adicionar à lista Amigos Próximos', 'Amigo próximo'], () => {});
+                                            if (fromMute.length) await new Promise(resolve => unmuteUsers(fromMute, resolve, true, 'all'));
+                                            if (fromHide.length) await toggleListMembership(fromHide, '/accounts/hide_story_and_live_from/', 'hiddenStory', () => {});
+                                        }
                                     }
 
                                     if (doMute) {
@@ -4845,6 +5362,10 @@
                                         await toggleListMembership(selectedUsernames, '/accounts/hide_story_and_live_from/', 'hiddenStory', () => {});
                                         // userListCache.hiddenStory já é atualizado dentro de toggleListMembership
                                     }
+                                    toggleLoading(true, 100);
+                                    } finally { // Ensure loading is toggled off even if an error occurs
+                                        toggleLoading(false);
+                                    }
 
                                     if (updateCallback) await updateCallback(selectedUsernames, 'exec');
                                     showToast("Ações aplicadas com sucesso!");
@@ -4858,16 +5379,20 @@
                                 btn.textContent = 'Carregando...';
 
                                 for (let i = 0; i < currentPaginatedUsers.length; i++) {
+                                    if (processoCancelado) break; // Allow cancellation during stats loading
                                     const user = currentPaginatedUsers[i];
                                     // If data exists, skip to next
                                     if (user.followers !== undefined && user.following !== undefined) continue;
 
                                     btn.textContent = `Carregando (${i + 1}/${currentPaginatedUsers.length})...`;
                                     const stats = await getFollowersAndFollowing(user.username);
-                                    if (stats) {
+                                    if (stats) { // Only update if stats were successfully fetched
                                         user.followers = stats.followers;
                                         user.following = stats.following;
                                     }
+                                    // Update the specific user in the main seguindoList as well
+                                    const mainUser = seguindoList.find(u => u.username === user.username);
+                                    if (mainUser) Object.assign(mainUser, stats);
                                     await new Promise(r => setTimeout(r, 500));
                                 }
                                 await dbHelper.saveCache('following', seguindoList);
@@ -4997,6 +5522,11 @@
                                 document.getElementById("settingsUseApiToggle").onchange = (e) => {
                                     toggleUseApi(e.target.checked);
                                     saveSettings({ useApi: e.target.checked });
+                                    // Also update the API toggle in other modals if they are open
+                                    const cfApiToggle = document.getElementById('closeFriendsUseApiToggle');
+                                    if (cfApiToggle) cfApiToggle.checked = e.target.checked;
+                                    const hsApiToggle = document.getElementById('hideStoryUseApiToggle');
+                                    if (hsApiToggle) hsApiToggle.checked = e.target.checked;
                                     showToast(`Modo API: ${e.target.checked ? 'ON' : 'OFF'}`);
                         };
 
@@ -5078,7 +5608,9 @@
                             item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #efefef;';
 
                             const keyText = formatShortcutForDisplay(shortcut);
-                            const actionText = shortcut.xpath ? `XPath: ${shortcut.xpath.substring(0, 25)}...` : `Link: ${shortcut.link.substring(0, 25)}...`;
+                            const actionText = shortcut.xpath
+                                ? `XPath: ${shortcut.xpath.substring(0, 25)}${shortcut.xpath.length > 25 ? '...' : ''}`
+                                : (shortcut.link ? `Link: ${shortcut.link.substring(0, 25)}${shortcut.link.length > 25 ? '...' : ''}` : 'Nenhuma ação definida');
 
                             item.innerHTML = `
                                 <div>
@@ -5330,8 +5862,20 @@
                             </div>
                             <div style="padding: 20px;">
                                 <form id="shortcut-form" style="display: flex; flex-direction: column; gap: 15px;">
-                                    <input type="text" id="shortcut-key" placeholder="Clique aqui e pressione o atalho" required readonly style="padding: 8px; color: black; border: 1px solid #ccc; border-radius: 5px; cursor: pointer;">
-                                    <input type="text" id="shortcut-xpath" placeholder="Full XPath (opcional)" style="padding: 8px; color: black; border: 1px solid #ccc; border-radius: 5px;">
+                                    <input type="text" id="shortcut-key" placeholder="Clique aqui e pressione as teclas do atalho" required readonly style="padding: 8px; color: black; border: 1px solid #ccc; border-radius: 5px; cursor: pointer; background: #fff;">
+
+                                    <div style="display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; background: #f8f9fa; border-radius: 8px; border: 1px solid #dbdbdb; font-size: 11px; color: black;">
+                                        <span style="width: 100%; font-weight: bold; margin-bottom: 2px;">Modo de Captura:</span>
+                                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="radio" name="captureType" value="xpath" checked> XPath Inteligente</label>
+                                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="radio" name="captureType" value="fullXpath"> XPath Full</label>
+                                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="radio" name="captureType" value="selector"> Seletor CSS</label>
+                                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="radio" name="captureType" value="html"> OuterHTML</label>
+                                    </div>
+
+                                    <div style="display:flex; gap:10px;">
+                                        <input type="text" id="shortcut-xpath" placeholder="O resultado aparecerá aqui após capturar..." style="flex:1; padding: 8px; color: black; border: 1px solid #ccc; border-radius: 5px;">
+                                        <button type="button" id="btnPickElement" style="background:#8e44ad; color:white; border:none; padding:8px 12px; border-radius:5px; cursor:pointer;" title="Selecionar elemento na página">🎯</button>
+                                    </div>
                                     <input type="text" id="shortcut-link" placeholder="Link de Acesso (opcional)" style="padding: 8px; color: black; border: 1px solid #ccc; border-radius: 5px;">
                                     <button type="submit" style="background:#0095f6;color:white;border:none;padding:10px;border-radius:5px;cursor:pointer;">Salvar Atalho</button>
                                 </form>
@@ -5347,14 +5891,14 @@
                         const keyInput = document.getElementById('shortcut-key');
                         let capturedShortcut = null;
 
-                        const handleShortcutKeyDown = (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-
+                        const handleShortcutKeyDown = (e) => { // Make sure this is defined
                             // Ignora se for apenas uma tecla modificadora
                             if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
                                 return;
                             }
+
+                            e.preventDefault();
+                            e.stopPropagation();
 
                             capturedShortcut = {
                                 key: e.key.toLowerCase(),
@@ -5364,13 +5908,12 @@
                             };
 
                             keyInput.value = formatShortcutForDisplay(capturedShortcut);
-                            document.removeEventListener('keydown', handleShortcutKeyDown, true);
+                            // Mantém o listener até o blur para permitir trocar a tecla
                             keyInput.style.borderColor = '#ccc';
-                            document.getElementById('shortcut-xpath').focus();
                         };
 
                         keyInput.addEventListener('focus', () => {
-                            keyInput.value = 'Pressione o atalho...';
+                            keyInput.value = 'Pressione as teclas do atalho...';
                             keyInput.style.borderColor = '#0095f6';
                             // Usa 'true' para capturar o evento antes de outros listeners
                             document.addEventListener('keydown', handleShortcutKeyDown, true);
@@ -5378,11 +5921,25 @@
 
                         keyInput.addEventListener('blur', () => {
                             keyInput.style.borderColor = '#ccc';
-                            if (keyInput.value === 'Pressione o atalho...') {
+                            document.removeEventListener('keydown', handleShortcutKeyDown, true);
+                            if (keyInput.value === 'Pressione as teclas do atalho...') {
                                 keyInput.value = capturedShortcut ? formatShortcutForDisplay(capturedShortcut) : '';
                             }
-                            document.removeEventListener('keydown', handleShortcutKeyDown, true);
                         });
+
+                        document.getElementById('btnPickElement').onclick = () => {
+                            const captureType = div.querySelector('input[name="captureType"]:checked').value;
+                            startElementPicker((target) => {
+                                let result = "";
+                                if (captureType === 'xpath') result = getFullXPath(target);
+                                else if (captureType === 'fullXpath') result = getAbsoluteXPath(target);
+                                else if (captureType === 'selector') result = getCssSelector(target);
+                                else if (captureType === 'html') result = target.outerHTML;
+
+                                document.getElementById('shortcut-xpath').value = result;
+                                showToast("✅ Capturado com sucesso!");
+                            });
+                        };
 
                         document.getElementById("fecharShortcutsBtn").onclick = () => {
                             document.removeEventListener('keydown', handleShortcutKeyDown, true);
@@ -5515,9 +6072,9 @@
 
                         // Popula o Select com as tabelas do DB
                         dbHelper.openDB().then(db => {
-                            const select = document.getElementById('dbStoreSelect');
+                            const select = document.getElementById('dbStoreSelect'); // db is the _cache object here
                             select.innerHTML = '<option value="">Selecione uma tabela...</option>';
-                            const storeNames = Array.from(db.objectStoreNames);
+                            const storeNames = Object.keys(db); // No script3, o db carregado é o objeto JSON do Drive
                             storeNames.forEach(name => {
                                 const option = document.createElement('option');
                                 option.value = name;
@@ -5544,7 +6101,7 @@
                         document.getElementById("btnClearDB").onclick = async () => {
                             const storeName = document.getElementById('dbStoreSelect').value;
                             if (!storeName) return alert("Selecione uma tabela.");
-                            if (confirm(`Tem certeza que deseja limpar a tabela '${storeName}'? Isso não pode ser desfeito.`)) {
+                            if (confirm(`Tem certeza que deseja limpar a tabela '${storeName}'? Isso não pode ser desfeito.`)) { // Use dbHelper.clearCache
                                 await dbHelper.clearCache(storeName);
                                 alert(`Tabela '${storeName}' limpa com sucesso.`);
                                 div.remove(); abrirModalParametros(); // Recarrega
@@ -5555,7 +6112,7 @@
                             const storeName = document.getElementById('dbStoreSelect').value;
                             if (!storeName) return alert("Selecione uma tabela.");
 
-                            await dbHelper.openDB();
+                            await dbHelper.openDB(); // Ensure cache is loaded
                             const result = dbHelper._cache[storeName];
                             if (!result || (Array.isArray(result) && result.length === 0)) return alert("Tabela vazia.");
 
@@ -5563,7 +6120,7 @@
                             const firstItem = dataToExport[0];
                             const keys = typeof firstItem === 'object' ? Object.keys(firstItem) : ['value'];
 
-                            const csvContent = [
+                            const csvContent = [ // Correct CSV generation
                                 keys.join(','),
                                 ...dataToExport.map(row => keys.map(k => {
                                     let val = typeof row === 'object' ? row[k] : row;
@@ -5605,10 +6162,24 @@
                                 <div style="padding: 20px;">
                                     <div style="margin-bottom: 20px;">
                                         <h4 style="margin:0 0 10px 0;">Nova Categoria</h4>
-                                        <div style="display:flex; gap: 10px;">
-                                            <input type="text" id="newCategoryName" placeholder="Nome da Categoria" style="flex: 1; padding: 8px; color: black;">
-                                            <input type="color" id="newCategoryColor" value="#3498db" style="padding: 0; border: none; background: transparent; width: 40px; height: 40px; cursor: pointer;">
-                                            <button id="addCategoryBtn" style="padding: 8px 12px; background: #2ecc71; color: white; border: none; border-radius: 5px;">Adicionar</button>
+                                        <div style="display:flex; flex-direction:column; gap: 10px;">
+                                            <div style="display:flex; gap: 10px;">
+                                                <input type="text" id="newCategoryName" placeholder="Nome da Categoria" style="flex: 1; padding: 8px; color: black;">
+                                                <input type="color" id="newCategoryColor" value="#3498db" style="padding: 0; border: none; background: transparent; width: 40px; height: 40px; cursor: pointer;">
+                                            </div>
+                                            <div class="auto-actions-box">
+                                                <span style="width: 100%; font-weight: bold; margin-bottom: 2px;">Ações Automáticas:</span>
+                                                <div style="display:flex; align-items:center; gap:8px;">
+                                                    <span>🌟 Amigos Próximos</span><label class="switch"><input type="checkbox" id="newCatActionCF"><span class="slider"></span></label>
+                                                </div>
+                                                <div style="display:flex; align-items:center; gap:8px;">
+                                                    <span>🔇 Silenciar</span><label class="switch"><input type="checkbox" id="newCatActionMute"><span class="slider"></span></label>
+                                                </div>
+                                                <div style="display:flex; align-items:center; gap:8px;">
+                                                    <span>👁️ Ocultar Story</span><label class="switch"><input type="checkbox" id="newCatActionHide"><span class="slider"></span></label>
+                                                </div>
+                                            </div>
+                                            <button id="addCategoryBtn" style="padding: 8px 12px; background: #2ecc71; color: white; border: none; border-radius: 5px; font-weight: bold;">Adicionar</button>
                                         </div>
                                     </div>
                                     <div>
@@ -5620,9 +6191,12 @@
                                                     <div>
                                                         <span style="display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: ${cat.color}; margin-right: 8px; vertical-align: middle;"></span>
                                                         <span style="font-weight: bold;">${cat.name}</span>
+                                                        <span style="font-size: 10px; color: #888; margin-left: 5px;" title="Ações Automáticas">
+                                                            ${cat.actions?.cf ? '🌟' : ''} ${cat.actions?.mute ? '🔇' : ''} ${cat.actions?.hide ? '👁️' : ''}
+                                                        </span>
                                                     </div>
                                                     <div style="display: flex; gap: 5px;">
-                                                        <button class="edit-category-btn" data-id="${cat.id}" data-name="${cat.name}" data-color="${cat.color}" style="background: #f39c12; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; line-height: 24px;" title="Renomear">✎</button>
+                                                        <button class="edit-category-btn" data-id="${cat.id}" style="background: #f39c12; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; line-height: 24px;" title="Editar">✎</button>
                                                         <button class="delete-category-btn" data-id="${cat.id}" style="background: #e74c3c; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; line-height: 24px;" title="Excluir">X</button>
                                                     </div>
                                                 </div>
@@ -5639,27 +6213,59 @@
                                 const nameInput = document.getElementById("newCategoryName");
                                 const colorInput = document.getElementById("newCategoryColor");
                                 const name = nameInput.value.trim();
+                                const categories = await dbHelper.loadCategories(); // Reload categories to check for duplicates
                                 if (!name) return alert("O nome da categoria não pode ser vazio.");
 
                                 await dbHelper.saveCategory({
                                     id: `cat_${Date.now()}`,
                                     name: name,
-                                    color: colorInput.value
+                                    color: colorInput.value,
+                                    actions: {
+                                        cf: document.getElementById('newCatActionCF').checked,
+                                        mute: document.getElementById('newCatActionMute').checked,
+                                        hide: document.getElementById('newCatActionHide').checked
+                                    }
                                 });
-                                nameInput.value = '';
+                                nameInput.value = ''; // Clear input after adding
                                 render(); // Re-render the modal content
                             };
 
                             div.querySelectorAll('.edit-category-btn').forEach(btn => {
                                 btn.onclick = async (e) => {
                                     const id = e.target.dataset.id;
-                                    const currentName = e.target.dataset.name;
-                                    const color = e.target.dataset.color;
-                                    const newName = prompt("Novo nome da categoria:", currentName);
-                                    if (newName && newName.trim() !== "" && newName !== currentName) {
-                                        await dbHelper.saveCategory({ id, name: newName.trim(), color });
+                                    const categories = await dbHelper.loadCategories();
+                                    const cat = categories.find(c => c.id === id);
+                                    if (!cat) return;
+
+                                    const nameInput = document.getElementById("newCategoryName");
+                                    const colorInput = document.getElementById("newCategoryColor");
+                                    const cfCheck = document.getElementById('newCatActionCF');
+                                    const muteCheck = document.getElementById('newCatActionMute');
+                                    const hideCheck = document.getElementById('newCatActionHide');
+                                    const addBtn = document.getElementById('addCategoryBtn');
+
+                                    nameInput.value = cat.name;
+                                    colorInput.value = cat.color;
+                                    cfCheck.checked = !!cat.actions?.cf;
+                                    muteCheck.checked = !!cat.actions?.mute;
+                                    hideCheck.checked = !!cat.actions?.hide;
+
+                                    addBtn.innerText = "Salvar Alterações";
+                                    addBtn.style.background = "#3498db";
+
+                                    const originalOnclick = addBtn.onclick;
+                                    addBtn.onclick = async () => {
+                                        await dbHelper.saveCategory({
+                                            id: id,
+                                            name: nameInput.value.trim(),
+                                            color: colorInput.value,
+                                            actions: { cf: cfCheck.checked, mute: muteCheck.checked, hide: hideCheck.checked }
+                                        });
+                                        nameInput.value = ''; addBtn.innerText = "Adicionar"; addBtn.style.background = "#2ecc71";
+                                        cfCheck.checked = false; muteCheck.checked = false; hideCheck.checked = false;
+                                        addBtn.onclick = originalOnclick;
                                         render();
-                                    }
+                                    };
                                 };
                             });
 
@@ -5734,13 +6340,15 @@
 
                             const allUserCategories = await dbHelper.loadAllUserCategories();
 
+                            toggleLoading(true, 0);
                             for (const username of usernames) {
                                 const existingCategories = allUserCategories.get(username.toLowerCase()) || [];
                                 const newCategories = new Set([...existingCategories, ...selectedCategoryIds]);
-                                await dbHelper.saveUserCategories(username, Array.from(newCategories));
+                                allUserCategories.set(username.toLowerCase(), Array.from(newCategories));
                             }
+                            await dbHelper.saveAllUserCategories(allUserCategories);
 
-                            showToast(`${usernames.length} usuário(s) atualizado(s) (Categorias Adicionadas)!`);
+                            showToast(`✅ ${usernames.length} usuário(s) atualizados com sucesso!`);
                             close();
                             // Recarrega o modal de "Seguindo" para refletir as mudanças
                             const seguindoModal = document.getElementById("seguindoModal");
@@ -5753,12 +6361,15 @@
                         document.getElementById("removeUserCategoriesBtn").onclick = async () => {
                             const selectedCategoryIds = Array.from(div.querySelectorAll('.category-checkbox:checked')).map(cb => cb.value);
                             const allUserCategories = await dbHelper.loadAllUserCategories();
+
+                            toggleLoading(true, 0);
                             for (const username of usernames) {
                                 const existingCategories = allUserCategories.get(username.toLowerCase()) || [];
                                 const newCategories = existingCategories.filter(id => !selectedCategoryIds.includes(id));
-                                await dbHelper.saveUserCategories(username, newCategories);
+                                allUserCategories.set(username.toLowerCase(), newCategories);
                             }
-                            showToast(`${usernames.length} usuário(s) atualizado(s) (Categorias Removidas)!`);
+                            await dbHelper.saveAllUserCategories(allUserCategories);
+                            showToast(`✅ Categorias removidas de ${usernames.length} usuário(s)!`);
                             close();
                             // Recarrega o modal de "Seguindo" para refletir as mudanças
                             const seguindoModal = document.getElementById("seguindoModal");
@@ -5767,6 +6378,7 @@
                                 // Adia a chamada para o próximo ciclo de eventos para garantir que o DOM seja atualizado
                                 // antes da verificação de existência do modal em iniciarProcessoSeguindo().
                                 setTimeout(() => iniciarProcessoSeguindo(), 0);
+                                toggleLoading(false);
                             }
                         };
                     }
@@ -5785,6 +6397,7 @@
                     function abrirModalReels() {
                         if (document.getElementById("reelsSubmenuModal")) return;
 
+                        toggleLoading(true, null, "Carregando menu de Reels...");
                         const div = document.createElement("div");
                         div.id = "reelsSubmenuModal";
                         div.className = "submenu-modal";
@@ -5811,6 +6424,7 @@
                                 <button id="rolagemReelsBtn" class="menu-item-button">▶️ Rolagem Automática</button>
                             </div>
                         `;
+                        toggleLoading(false);
                         document.body.appendChild(div);
 
                         document.getElementById("fecharReelsSubmenuBtn").onclick = () => div.remove();
@@ -5934,6 +6548,7 @@
                             return;
                         }
 
+                        toggleLoading(true, null, "Iniciando análise de Reels...");
                         const statusModal = document.createElement("div");
                         statusModal.id = "reelsAnalysisStatusModal";
                         statusModal.className = "submenu-modal";
@@ -5988,6 +6603,7 @@
                             }
 
                             statusModal.remove();
+                            toggleLoading(false);
                             abrirModalTabelaReels(reelsList);
 
                         } catch (error) {
@@ -6000,6 +6616,7 @@
                     function abrirModalTabelaReels(reelsList) {
                         const div = document.createElement("div");
                         div.id = "reelsTableModal";
+                        toggleLoading(true, null, "Gerando tabela de Reels...");
                         div.className = "submenu-modal";
                         div.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 900px; max-height: 90vh; border: 1px solid #ccc; border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;`;
 
@@ -6068,6 +6685,7 @@
                             });
 
                             document.getElementById("fecharReelsTableBtn").onclick = () => div.remove();
+                            toggleLoading(false);
                         };
 
                         document.body.appendChild(div);
@@ -6079,6 +6697,7 @@
                     async function abrirModalEngajamento() {
                         if (document.getElementById("engajamentoModal")) return;
 
+                        toggleLoading(true, null, "Carregando dashboard de engajamento...");
                         const div = document.createElement("div");
                         div.id = "engajamentoModal";
                         div.className = "submenu-modal";
@@ -6161,6 +6780,7 @@
                                 </div>
                             </div>
                         `;
+                        toggleLoading(false);
                         document.body.appendChild(div);
                         document.getElementById("fecharEngajamentoBtn").onclick = () => div.remove();
 
@@ -6377,13 +6997,6 @@
                 function abrirModalInteracoes() {
                     if (document.getElementById("interacoesModal")) return;
 
-                    // Helper para pegar cookie
-                    const getCookie = (name) => {
-                        const value = `; ${document.cookie}`;
-                        const parts = value.split(`; ${name}=`);
-                        if (parts.length === 2) return parts.pop().split(';').shift();
-                    };
-
                     const div = document.createElement("div");
                     div.id = "interacoesModal";
                     div.className = "submenu-modal";
@@ -6403,6 +7016,7 @@
                                 <button id="fecharInteracoesBtn" title="Fechar">X</button>
                             </div>
                         </div>
+                        <div class="loading-overlay" style="display: none;"><div class="spinner"></div><div class="loading-text"></div></div>
                         <div style="padding: 15px;">
                             <div style="display: flex; gap: 10px; margin-bottom: 20px;">
                                 <div style="flex: 1; position: relative;">
@@ -6426,6 +7040,7 @@
                             </div>
                         </div>
                     `;
+                    toggleLoading(false);
                     document.body.appendChild(div);
 
                     document.getElementById("fecharInteracoesBtn").onclick = () => div.remove();
@@ -6487,6 +7102,7 @@
                         const btn = document.getElementById("verificarInteracoesBtn");
                         btn.disabled = true;
                         btn.textContent = "Verificando...";
+                        toggleLoading(true, null, "Verificando interações...");
 
                         const resultadosDiv = document.getElementById("interacoesResultados");
                         const profileDiv = document.getElementById("interacoesUserProfile");
@@ -6609,6 +7225,7 @@
                         } catch (e) {
                             console.error(e);
                             resultadosDiv.innerHTML = `<p style="color:red;">Erro ao buscar dados: ${e.message}</p>`;
+                            toggleLoading(false);
                         } finally { btn.disabled = false; btn.textContent = "Verificar"; }
                     };
 
@@ -6816,6 +7433,7 @@
                             block: {
                                 buttonId: 'blockSeguindoBtn',
                                 text: 'Bloquear',
+                                // dbStore: 'blocked', // Should be 'blocked' not 'following'
                                 dbStore: 'following',
                                 func: (users, cb) => { if(confirm(`Bloquear ${users.length} usuários?`)) blockUsers(users, 0, cb); else { const b = document.getElementById('blockSeguindoBtn'); b.disabled = false; b.textContent = 'Bloquear'; } }
                         }
@@ -6828,13 +7446,15 @@
                         btn.disabled = true;
                         btn.textContent = 'Processando...';
 
+                        toggleLoading(true, 0, "Processando...");
                         await config.func(selectedUsers, async () => {
+                            toggleLoading(false);
                             btn.disabled = false;
                             btn.textContent = config.text;
                             alert(`Ação "${config.text}" concluída para ${selectedUsers.length} usuário(s).`);
                             // Atualiza o estado localmente e re-renderiza
                             if (updateCallback && config.dbStore) await updateCallback(selectedUsers, config.dbStore);
-                        });
+                        }, selectedUsers, updateCallback); // Pass selectedUsers and updateCallback
                     }
 
                 async function performActionOnProfile(users, menuTexts, callback) {
@@ -6847,6 +7467,7 @@
                         alert("Processo interrompido.");
                     };
                     const isCancelled = () => cancelled;
+                    toggleLoading(true, 0, "Processando perfis...");
 
                     // Função interna para ação humana (navegação e clique)
                     const executeHumanAction = async (username) => {
@@ -6864,6 +7485,7 @@
                              menuTexts.some(text => el.innerText.includes(text))
                         );
                         if (actionOption) { simulateClick(actionOption); console.log(`Ação executada para ${username}.`); }
+                        // If the action is to add to close friends, and it was successful, add to cache
                         else { console.warn(`Opção não encontrada para ${username}.`); simulateClick(followingButton); }
                         await new Promise(resolve => setTimeout(resolve, 2000));
                     };
@@ -6874,6 +7496,7 @@
                             if (isCancelled()) break;
                             const username = users[i];
                             update(i + 1, users.length, `Processando ${username}...`);
+                            toggleLoading(true, ((i + 1) / users.length) * 100, `Processando ${username}...`);
                             const uid = await getUserId(username);
                             let success = false;
                             if (uid) {
@@ -6887,21 +7510,21 @@
                                         } else {
                                             body.append('add', JSON.stringify([parseInt(uid)])); // Adiciona o usuário
                                         }
+                                        // Headers are already set by getApiHeaders
+                                        body.append('source', 'audience_manager');
+                                        body.append('_uid', getCookie('ds_user_id'));
+                                        body.append('_uuid', getDeviceId());
+                                        body.append('_csrftoken', getCookie('csrftoken'));
 
                                         const res = await fetch(`https://www.instagram.com/api/v1/friendships/set_besties/`, { method: 'POST', headers: getApiHeaders(), body: body, credentials: "include" });
                                         if (res.ok) {
-                                            success = true;
+                                            success = true; // Mark as successful if API call is OK
                                             // Atualiza o cache local imediatamente
                                             if (isCurrentlyCF) userListCache.closeFriends.delete(username);
                                             else userListCache.closeFriends.add(username);
                                             await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
                                             console.log(`[IG Tools] API Success: ${username} (Close Friends)`);
                                         }
-
-                                        body.append('source', 'audience_manager');
-                                        body.append('_uid', getCookie('ds_user_id'));
-                                        body.append('_uuid', getDeviceId());
-                                        body.append('_csrftoken', getCookie('csrftoken'));
 
                                     }
                                 } catch (e) { console.error(`Erro API Action ${username}`, e); }
@@ -6917,7 +7540,7 @@
                         bar.remove();
                         history.pushState(null, null, originalPath); window.dispatchEvent(new Event("popstate"));
                         if (callback) callback();
-                        return;
+                    return; // Exit after API processing
                     }
 
                     for (let i = 0; i < users.length; i++) {
@@ -6925,6 +7548,7 @@
                         update(i + 1, users.length, "Processando:");
                         await executeHumanAction(users[i]);
                     }
+                    // After human actions, update the cache based on the final state
 
                     bar.remove();
 
@@ -6933,7 +7557,7 @@
                     window.dispatchEvent(new Event("popstate"));
                     await new Promise(r => setTimeout(r, 1000));
 
-                    if (callback) callback();
+                    if (callback) callback(users); // Pass the list of users that were processed
                 }
 
                     async function toggleListMembership(users, pageUrl, cacheKey, callback) {
@@ -6946,6 +7570,7 @@
                             alert("Processo interrompido.");
                         };
                         const isCancelled = () => cancelled;
+                        toggleLoading(true, 0, "Processando lista...");
 
                         // Função interna para ação humana
                         const executeHumanToggle = async (username) => {
@@ -7000,6 +7625,7 @@
                             for (let i = 0; i < users.length; i++) {
                                 if (isCancelled()) break;
                                 const username = users[i];
+                                toggleLoading(true, ((i + 1) / users.length) * 100, `Processando ${username}...`);
                                 update(i + 1, users.length, `Processando ${username}...`);
                                 const uid = await getUserId(username);
                                 let success = false;
@@ -7062,7 +7688,7 @@
                             bar.remove();
                             history.pushState(null, null, originalPath); window.dispatchEvent(new Event("popstate"));
                             if (callback) callback();
-                            return;
+                            return; // Exit after API processing
                         }
 
                         // Navega para a página correta
@@ -7083,7 +7709,7 @@
                         window.dispatchEvent(new Event("popstate"));
                         await new Promise(r => setTimeout(r, 1000));
 
-                        if (callback) callback();
+                        if (callback) callback(users); // Pass the list of users that were processed
                     }
 
 
@@ -7109,7 +7735,7 @@
                         }
                     }
 
-                    function preencherTabela(userList, showCheckbox = true, isHistory = false) {
+                    function preencherTabela(userList, showCheckbox = true, isHistory = false, selectedSet = null, onCountChange = null) {
                         const tableId = isHistory ? "historicoTable" : "naoSegueDeVoltaTable";
                         const table = document.getElementById(tableId);
                         if (!table) return;
@@ -7162,9 +7788,17 @@
                                     </td>` +
                                     (isHistory ? `<td style="border: 1px solid #ccc; padding: 10px;">${unfollowDate}</td>` : '') +
                                     (showCheckbox ? `<td style="border: 1px solid #ccc; padding: 10px;">
-                                        <input type="checkbox" class="unfollowCheckbox" data-username="${username}" />
+                                        <input type="checkbox" class="unfollowCheckbox" data-username="${username}" ${selectedSet && selectedSet.has(username) ? 'checked' : ''} />
                                     </td>` : '') + `
                                 `;
+
+                                if (showCheckbox && selectedSet) {
+                                    tr.querySelector('.unfollowCheckbox').addEventListener('change', (e) => {
+                                        if (e.target.checked) selectedSet.add(username);
+                                        else selectedSet.delete(username);
+                                        if (onCountChange) onCountChange();
+                                    });
+                                }
 
                                 // Tratamento de erro de imagem (link expirado)
                                 const img = tr.querySelector('img');
@@ -7188,6 +7822,14 @@
                                             }
                                         });
                                     };
+                                }
+
+                                if (showCheckbox && selectedSet) {
+                                    tr.querySelector('.unfollowCheckbox').addEventListener('change', (e) => {
+                                        if (e.target.checked) selectedSet.add(username);
+                                        else selectedSet.delete(username); // Corrected to remove from set
+                                        if (onCountChange) onCountChange();
+                                    });
                                 }
 
                                 tbody.appendChild(tr);
@@ -7266,16 +7908,13 @@
                         renderTable(currentPage); // Renderiza a primeira página
                     }
 
-                    function unfollowSelecionados() {
+                    function unfollowSelecionados(usersSet, updateCountCb) { // Added usersSet and updateCountCb
                         if (isUnfollowing) {
                             alert("Processo de unfollow já em andamento.");
                             return;
                         }
 
-                        const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(
-                            (checkbox) => checkbox.dataset.username
-                        );
-
+                            const selecionados = Array.from(usersSet);
                         if (selecionados.length === 0) {
                             alert("Nenhum usuário selecionado para Unfollow.");
                             return;
@@ -7287,13 +7926,16 @@
                         unfollowBtn.textContent = "Processando...";
                         isUnfollowing = true;
 
-                        // Iniciar processo de unfollow
-                        unfollowUsers(selecionados, 0, () => {
+                        toggleLoading(true, 0, "Deixando de seguir...");
+                        unfollowUsers(selecionados, 0, (processedUsers) => {
+                            toggleLoading(false);
                             // Reabilitar botão ao finalizar
                             unfollowBtn.disabled = false;
                             unfollowBtn.textContent = "Unfollow";
                             isUnfollowing = false;
-                        });
+                            usersSet.clear(); // Clear selection after action
+                            updateCountCb(); // Update count
+                        }, usersSet, updateCountCb); // Pass selectedUsersSet and updateCountCb
                     }
 
                     function unfollowUsers(users, index, callback) {
@@ -7305,6 +7947,7 @@
                         }
 
                         if (loadSettings().useApi) {
+                            toggleLoading(true, ((index + 1) / users.length) * 100, `Deixando de seguir ${users[index]}...`);
                             const username = users[index];
                             (async () => {
                                 const uid = await getUserId(username);
@@ -7314,7 +7957,12 @@
                                             method: 'POST',
                                             headers: getApiHeaders()
                                         });
-                                        getProfilePic(username).then(photoUrl => { dbHelper.saveUnfollowHistory({ username, photoUrl, unfollowDate: new Date().toISOString() }); });
+                                        getProfilePic(username).then(photoUrl => { dbHelper.saveUnfollowHistory({ username, photoUrl, unfollowDate: new Date().toISOString() }); }); // Pass selectedUsersSet and updateCountCb
+                                        // Remove from selected set and update count
+                                        if (selectedUsersSet) selectedUsersSet.delete(username);
+                                        if (updateCountCb) updateCountCb();
+                                        const row = document.querySelector(`tr[data-username="${username}"]`);
+                                        if (row) row.remove();
                                     } catch (e) { console.error(`Erro API Unfollow ${username}`, e); }
                                 }
                                 setTimeout(() => unfollowUsers(users, index + 1, callback), loadSettings().unfollowDelay);
@@ -7324,6 +7972,7 @@
 
                         const username = users[index];
                         console.log(`Iniciando unfollow para: ${username}, índice: ${index} de ${users.length - 1}`);
+                        toggleLoading(true, ((index + 1) / users.length) * 100, `Deixando de seguir ${username}...`);
                         // Navegar para o perfil
                         history.pushState(null, null, `/${username}/`);
                         window.dispatchEvent(new Event("popstate"));
@@ -7397,11 +8046,13 @@
                                                 unfollowDate: new Date().toISOString()
                                             }).catch(err => console.error(`Falha ao salvar ${username} no histórico:`, err));
                                         });
+                                        // Remove from selected set and update count
+                                        if (selectedUsersSet) selectedUsersSet.delete(username);
+                                        if (updateCountCb) updateCountCb();
 
-                                        // Aguardar antes do próximo
+
                                         setTimeout(() => {
-                                            console.log(`Avançando para o próximo usuário, índice: ${index + 1}`);
-                                            unfollowUsers(users, index + 1, callback);
+                                            unfollowUsers(users, index + 1, callback, selectedUsersSet, updateCountCb);
                                         }, unfollowDelay);
                                         // Remove the row after unfollow
                                         setTimeout(() => {

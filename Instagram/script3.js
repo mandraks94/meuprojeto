@@ -10,6 +10,8 @@
 // @grant        unsafeWindow
 // @connect      www.googleapis.com
 // @connect      accounts.google.com
+// @connect      script.google.com
+// @connect      script.googleusercontent.com
 // ==/UserScript==
 
 (function() {
@@ -652,6 +654,184 @@
                 }
             };
 
+            // --- FUNÇÕES SILENCIOSAS DE SEGUIDORES E NOTIFICAÇÃO POR E-MAIL ---
+            async function fetchUserListAPISilent(userId, type) {
+                const userList = [];
+                let nextMaxId = '';
+                let hasNextPage = true;
+                const appID = '936619743392459';
+                const settings = loadSettings();
+                // O Instagram limita requisições de seguidores a um máximo de 50/100 itens.
+                // Forçamos o lote para 50 para evitar erros HTTP 400 Bad Request.
+                const batchSize = 50;
+                const delay = settings.requestDelay || 250;
+
+                try {
+                    while (hasNextPage) {
+                        const queryParams = new URLSearchParams({ count: batchSize });
+                        if (nextMaxId) {
+                            queryParams.append('max_id', nextMaxId);
+                        }
+                        const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?${queryParams.toString()}`, {
+                            headers: getApiHeaders()
+                        });
+                        if (!response.ok) throw new Error(`Erro na API: ${response.status}`);
+                        const data = await response.json();
+                        if (!data || !data.users) throw new Error("Resposta inválida da API do Instagram");
+
+                        data.users.forEach(user => {
+                            userList.push({
+                                username: user.username,
+                                photoUrl: user.profile_pic_url
+                            });
+                        });
+
+                        if (data.next_max_id) {
+                            nextMaxId = data.next_max_id;
+                        } else {
+                            hasNextPage = false;
+                        }
+                        await new Promise(r => setTimeout(r, delay));
+                    }
+                } catch (error) {
+                    console.error(`[IG Tools] Erro silencioso ao buscar ${type}:`, error);
+                    return null; // Retorna null para sinalizar falha ou busca incompleta
+                }
+                return userList;
+            }
+
+            function sendUnfollowEmailNotification(unfollowers, recipient, webhookUrl) {
+                if (!webhookUrl) {
+                    console.error("[IG Tools] Webhook URL de e-mail não configurada.");
+                    return Promise.reject("Webhook URL não configurada");
+                }
+                console.log("[IG Tools] Enviando notificação de unfollow por e-mail...");
+                return new Promise((resolve, reject) => {
+                    GM_xmlhttpRequest({
+                        method: "POST",
+                        url: webhookUrl,
+                        anonymous: true,
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        data: JSON.stringify({
+                            recipient: recipient,
+                            unfollowers: unfollowers
+                        }),
+                        onload: function(response) {
+                            console.log("[IG Tools] Resposta do webhook de e-mail:", response.status, response.responseText);
+                            if (response.status >= 200 && response.status < 300) {
+                                resolve(response.responseText);
+                            } else {
+                                reject("Erro no envio do e-mail: " + response.status);
+                            }
+                        },
+                        onerror: function(err) {
+                            console.error("[IG Tools] Erro ao enviar e-mail via webhook:", err);
+                            reject(err);
+                        }
+                    });
+                });
+            }
+
+            async function executarVerificacaoAgendadaUnfollow() {
+                const settings = loadSettings();
+                if (!settings.unfollowEmailEnabled || !settings.unfollowEmailWebhookUrl) {
+                    return;
+                }
+
+                // Verifica se passou pelo menos 1 hora (3600000 ms)
+                const horaEmMs = 3600000;
+                const agora = Date.now();
+                if (agora - settings.lastUnfollowEmailCheck < horaEmMs) {
+                    console.log("[IG Tools] Verificação agendada de unfollow: Menos de 1 hora se passou desde a última verificação.");
+                    return;
+                }
+
+                const userId = getCookie('ds_user_id');
+                if (!userId) {
+                    console.log("[IG Tools] Verificação agendada de unfollow: Usuário não está logado no Instagram.");
+                    return;
+                }
+
+                // Atualiza o timestamp temporariamente para evitar múltiplas execuções simultâneas
+                saveSettings({ lastUnfollowEmailCheck: agora });
+                console.log("[IG Tools] Iniciando verificação agendada de unfollow em segundo plano...");
+
+                try {
+                    // 1. Carrega seguidores anteriores do Google Drive
+                    const dbFollowers = await dbHelper.loadCache('followers');
+                    if (!dbFollowers) {
+                        console.log("[IG Tools] Primeiro carregamento de seguidores. Salvando lista atual no Google Drive sem enviar e-mail.");
+                        const currentFollowersList = await fetchUserListAPISilent(userId, 'followers');
+                        if (currentFollowersList && currentFollowersList.length > 0) {
+                            await dbHelper.saveCache('followers', currentFollowersList);
+                        }
+                        return;
+                    }
+
+                    // 2. Busca seguidores atuais do Instagram
+                    const currentFollowersList = await fetchUserListAPISilent(userId, 'followers');
+                    if (!currentFollowersList) {
+                        console.warn("[IG Tools] A busca de seguidores atuais falhou ou foi parcial. Abortando verificação para evitar falsos positivos.");
+                        // Restaura o timestamp para permitir nova tentativa em breve
+                        saveSettings({ lastUnfollowEmailCheck: 0 });
+                        return;
+                    }
+
+                    // Cria um Set dos seguidores atuais para busca rápida
+                    const currentFollowersSet = new Set(currentFollowersList.map(u => u.username.toLowerCase()));
+
+                    // 3. Compara: Quem estava no cache do Drive (dbFollowers) mas não está na lista atual?
+                    const unfollowers = [];
+                    dbFollowers.forEach(prevUsername => {
+                        const lowerPrev = prevUsername.toLowerCase();
+                        if (!currentFollowersSet.has(lowerPrev)) {
+                            const details = dbFollowers.details?.get(prevUsername) || { username: prevUsername, photoUrl: null };
+                            unfollowers.push({
+                                username: details.username || prevUsername,
+                                photoUrl: details.photoUrl || null
+                            });
+                        }
+                    });
+
+                    // 4. Se houver unfollowers, envia a notificação por e-mail e salva no histórico
+                    if (unfollowers.length > 0) {
+                        console.log(`[IG Tools] Detectados ${unfollowers.length} unfollowers! Enviando e-mail...`);
+                        try {
+                            await sendUnfollowEmailNotification(
+                                unfollowers,
+                                settings.unfollowEmailRecipient || '',
+                                settings.unfollowEmailWebhookUrl
+                            );
+                            
+                            // Adiciona ao histórico de unfollows local/Drive
+                            for (const unfollower of unfollowers) {
+                                await dbHelper.saveUnfollowHistory({
+                                    username: unfollower.username,
+                                    photoUrl: unfollower.photoUrl,
+                                    unfollowDate: new Date().toISOString()
+                                });
+                            }
+                            console.log("[IG Tools] Notificação de e-mail enviada e histórico atualizado.");
+                        } catch (emailErr) {
+                            console.error("[IG Tools] Falha ao enviar e-mail de notificação:", emailErr);
+                        }
+                    } else {
+                        console.log("[IG Tools] Nenhum unfollow detectado nesta verificação.");
+                    }
+
+                    // 5. Salva a nova lista de seguidores atualizada no Google Drive
+                    await dbHelper.saveCache('followers', currentFollowersList);
+                    console.log("[IG Tools] Lista de seguidores atualizada salva no Google Drive.");
+
+                } catch (err) {
+                    console.error("[IG Tools] Erro na verificação agendada de unfollow:", err);
+                    // Reseta o timestamp em caso de erro crítico
+                    saveSettings({ lastUnfollowEmailCheck: 0 });
+                }
+            }
+
             // --- LÓGICA DE CONFIGURAÇÕES ---
             function loadSettings() {
                 const defaults = {
@@ -664,7 +844,11 @@
                     requestBatchSize: 50,
                     maxRequests: 0,
                     anonymousStories: false,
-                    useApi: true
+                    useApi: true,
+                    unfollowEmailEnabled: false,
+                    unfollowEmailRecipient: '',
+                    unfollowEmailWebhookUrl: '',
+                    lastUnfollowEmailCheck: 0
                 };
                 try {
                     const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
@@ -5049,7 +5233,10 @@
                                             <td style="padding: 8px; display:flex; align-items:center; gap:10px;">
                                                 <img src="${photoUrl}" alt="${username}" style="width:40px; height:40px; border-radius:50%;">
                                                 <div style="display:flex; flex-direction:column;">
-                                                    <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600;">${username}</a>
+                                                    <div style="display:flex; align-items:center; gap:6px;">
+                                                        <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600;">${username}</a>
+                                                        <span class="seguindo-privacy-badge" data-username="${username}"></span>
+                                                    </div>
                                                     ${mutedDetailText ? `<span style="font-size:11px; color:gray;">${mutedDetailText}</span>` : ''}
                                                 </div>
                                             </td>
@@ -5074,6 +5261,44 @@
                                 paginationHtml += `</div>`;
 
                                 container.innerHTML = tableHtml + paginationHtml;
+
+                                // Carrega os badges de privacidade para a lista do modal Seguindo
+                                container.querySelectorAll('.seguindo-privacy-badge').forEach(async (badgeSpan) => {
+                                    const u = badgeSpan.getAttribute('data-username');
+                                    if (!u) return;
+
+                                    const renderBadge = (isPrivate) => {
+                                        badgeSpan.style.cssText = `
+                                            display: inline-flex;
+                                            align-items: center;
+                                            justify-content: center;
+                                            padding: 2px 6px;
+                                            font-size: 10px;
+                                            font-weight: bold;
+                                            border-radius: 4px;
+                                            color: #ffffff;
+                                            line-height: 1;
+                                        `;
+                                        if (isPrivate) {
+                                            badgeSpan.innerText = 'P';
+                                            badgeSpan.style.backgroundColor = '#e1306c';
+                                            badgeSpan.title = 'Perfil Privado';
+                                        } else {
+                                            badgeSpan.innerText = 'A';
+                                            badgeSpan.style.backgroundColor = '#28a745';
+                                            badgeSpan.title = 'Perfil Público';
+                                        }
+                                    };
+
+                                    if (privacyCache.has(u)) {
+                                        renderBadge(privacyCache.get(u));
+                                    } else {
+                                        const isPrivate = await checkProfilePrivacy(u);
+                                        if (isPrivate !== null) {
+                                            renderBadge(isPrivate);
+                                        }
+                                    }
+                                });
 
                                 const prevBtn = document.getElementById("prevPageBtn");
                                 if (prevBtn) prevBtn.onclick = () => renderList(--currentPage);
@@ -6052,6 +6277,25 @@
 
                                 <hr style="border: 1px solid #eee; width: 100%;">
 
+                                <h3 style="margin: 0; font-size: 16px;">Notificações de Unfollow por E-mail</h3>
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <label for="unfollowEmailEnabledToggle">Ativar Envio de E-mail</label>
+                                        <label class="switch"><input type="checkbox" id="unfollowEmailEnabledToggle" ${settings.unfollowEmailEnabled ? 'checked' : ''}><span class="slider"></span></label>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                                        <label for="unfollowEmailRecipientInput">E-mail Destinatário</label>
+                                        <input type="email" id="unfollowEmailRecipientInput" value="${settings.unfollowEmailRecipient || ''}" placeholder="seu-email@gmail.com" style="width: 100%; padding: 8px; color: black; box-sizing: border-box; border: 1px solid #ccc; border-radius: 5px;">
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                                        <label for="unfollowEmailWebhookInput">URL Webhook Google Apps Script</label>
+                                        <input type="text" id="unfollowEmailWebhookInput" value="${settings.unfollowEmailWebhookUrl || ''}" placeholder="https://script.google.com/macros/s/.../exec" style="width: 100%; padding: 8px; color: black; box-sizing: border-box; border: 1px solid #ccc; border-radius: 5px;">
+                                    </div>
+                                    <button id="testUnfollowEmailBtn" style="background: #27ae60; color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 5px; transition: background 0.2s;">📧 Testar Envio (Enviar E-mail de Teste)</button>
+                                </div>
+
+                                <hr style="border: 1px solid #eee; width: 100%;">
+
                                 <h3 style="margin: 0; font-size: 16px;">Gerenciamento de Banco de Dados (IndexedDB)</h3>
                                 <div style="display: flex; flex-direction: column; gap: 10px;">
                                     <select id="dbStoreSelect" style="padding: 5px; color: black;">
@@ -6084,6 +6328,32 @@
                         });
 
                         document.getElementById("fecharParamsBtn").onclick = () => div.remove();
+                        
+                        document.getElementById("testUnfollowEmailBtn").onclick = async () => {
+                             const recipient = document.getElementById("unfollowEmailRecipientInput").value.trim();
+                             const webhookUrl = document.getElementById("unfollowEmailWebhookInput").value.trim();
+                             if (!recipient || !webhookUrl) {
+                                 alert("Por favor, preencha o E-mail Destinatário e a URL do Webhook antes de testar.");
+                                 return;
+                             }
+                             
+                             const btn = document.getElementById("testUnfollowEmailBtn");
+                             const originalText = btn.innerText;
+                             btn.innerText = "⏳ Enviando...";
+                             btn.disabled = true;
+                             
+                             try {
+                                 const testUnfollowers = [{ username: 'teste_alerta', photoUrl: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' }];
+                                 await sendUnfollowEmailNotification(testUnfollowers, recipient, webhookUrl);
+                                 alert("E-mail de teste enviado com sucesso! Verifique a sua caixa de entrada.");
+                             } catch (err) {
+                                 alert("Erro ao enviar e-mail de teste: " + err);
+                             } finally {
+                                 btn.innerText = originalText;
+                                 btn.disabled = false;
+                             }
+                         };
+
                         document.getElementById("saveParamsBtn").onclick = () => {
                             const newSettings = {
                                 unfollowDelay: parseInt(document.getElementById("unfollowDelayInput").value, 10),
@@ -6091,7 +6361,10 @@
                                 requestBatchSize: parseInt(document.getElementById("requestBatchSizeInput").value, 10),
                                 maxRequests: parseInt(document.getElementById("maxRequestsInput").value, 10),
                                 itemsPerPage: parseInt(document.getElementById("itemsPerPageInput").value, 10),
-                                language: document.getElementById("languageSelect").value
+                                language: document.getElementById("languageSelect").value,
+                                unfollowEmailEnabled: document.getElementById("unfollowEmailEnabledToggle").checked,
+                                unfollowEmailRecipient: document.getElementById("unfollowEmailRecipientInput").value.trim(),
+                                unfollowEmailWebhookUrl: document.getElementById("unfollowEmailWebhookInput").value.trim()
                             };
                             saveSettings(newSettings);
                             alert("Parâmetros salvos!");
@@ -8148,6 +8421,10 @@
                 injectMenu();
                 initShortcutListener();
 
+                // Inicializa a verificação agendada de unfollow por e-mail
+                setTimeout(executarVerificacaoAgendadaUnfollow, 10000); // Executa 10s após inicialização
+                setInterval(executarVerificacaoAgendadaUnfollow, 600000); // Checa a cada 10 minutos (para ver se passou 1h)
+
                 // Re-inject menu on navigation
                 const push = history.pushState;
                 history.pushState = function () {
@@ -8167,8 +8444,182 @@
 
                 // Garante que o menu seja injetado periodicamente caso o DOM mude (SPA)
                 setInterval(() => {
-                    if (window.location.href.includes("instagram.com")) injectMenu();
+                    if (window.location.href.includes("instagram.com")) {
+                        injectMenu();
+                        document.querySelectorAll('article:not([data-privacy-processed="true"])').forEach(processArticlePrivacy);
+                    }
                 }, 1000);
+
+            // --- VERIFICAÇÃO DE PRIVACIDADE DO PERFIL ---
+            const privacyCache = new Map();
+            const privacyPending = new Map();
+            const privacyErrorCooldown = new Map();
+            const privacyQueue = [];
+            let isProcessingQueue = false;
+            let globalRateLimitResetTime = 0;
+
+            async function processPrivacyQueue() {
+                if (isProcessingQueue) return;
+                isProcessingQueue = true;
+
+                while (privacyQueue.length > 0) {
+                    const task = privacyQueue.shift();
+                    try {
+                        const result = await task.fn();
+                        task.resolve(result);
+                    } catch (e) {
+                        task.reject(e);
+                    }
+                    // Cooldown de 1.5 segundos entre as requisições para evitar rate limit (429)
+                    await new Promise(r => setTimeout(r, 1500));
+                }
+
+                isProcessingQueue = false;
+            }
+
+            function checkProfilePrivacy(username) {
+                if (privacyCache.has(username)) {
+                    return Promise.resolve(privacyCache.get(username));
+                }
+                if (Date.now() < globalRateLimitResetTime) {
+                    return Promise.resolve(null);
+                }
+                if (privacyErrorCooldown.has(username) && Date.now() - privacyErrorCooldown.get(username) < 60000) {
+                    return Promise.resolve(null);
+                }
+                if (privacyPending.has(username)) {
+                    return privacyPending.get(username);
+                }
+
+                const promise = new Promise((resolve, reject) => {
+                    privacyQueue.push({
+                        fn: async () => {
+                            if (Date.now() < globalRateLimitResetTime) {
+                                return null;
+                            }
+                            try {
+                                const appID = '936619743392459';
+                                const response = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, {
+                                    headers: { 'X-IG-App-ID': appID }
+                                });
+                                if (!response.ok) {
+                                    if (response.status === 429) {
+                                        console.warn("[IG Tools] Taxa de requisições excedida (429). Pausando consultas por 2 minutos.");
+                                        globalRateLimitResetTime = Date.now() + 120000; // Bloqueia por 2 minutos
+                                    }
+                                    throw new Error(`HTTP ${response.status}`);
+                                }
+                                const data = await response.json();
+                                const isPrivate = data.data?.user?.is_private;
+                                if (isPrivate !== undefined) {
+                                    privacyCache.set(username, isPrivate);
+                                    privacyErrorCooldown.delete(username);
+                                    return isPrivate;
+                                }
+                                throw new Error("Dados inválidos da API");
+                            } catch (e) {
+                                console.error(`[IG Tools] Erro ao obter privacidade para ${username}:`, e);
+                                privacyErrorCooldown.set(username, Date.now());
+                                return null;
+                            }
+                        },
+                        resolve,
+                        reject
+                    });
+                });
+
+                privacyPending.set(username, promise);
+                promise.finally(() => {
+                    privacyPending.delete(username);
+                });
+
+                processPrivacyQueue();
+                return promise;
+            }
+
+            function getPostAuthorElement(article) {
+                const header = article.querySelector('header');
+                if (header) {
+                    const links = header.querySelectorAll('a[href]');
+                    for (const link of links) {
+                        const href = link.getAttribute('href');
+                        if (!href) continue;
+                        const cleanPath = href.split('?')[0].split('#')[0];
+                        const parts = cleanPath.split('/').filter(Boolean);
+                        if (parts.length === 1) {
+                            const username = parts[0];
+                            if (/^[a-zA-Z0-9._]+$/.test(username)) {
+                                const text = link.textContent.trim();
+                                if (text === username) {
+                                    return { username, element: link };
+                                }
+                            }
+                        }
+                    }
+                }
+                const links = article.querySelectorAll('a[href]');
+                for (const link of links) {
+                    const href = link.getAttribute('href');
+                    if (!href) continue;
+                    const cleanPath = href.split('?')[0].split('#')[0];
+                    const parts = cleanPath.split('/').filter(Boolean);
+                    if (parts.length === 1) {
+                        const username = parts[0];
+                        if (/^[a-zA-Z0-9._]+$/.test(username)) {
+                            const text = link.textContent.trim();
+                            if (text === username) {
+                                return { username, element: link };
+                            }
+                        }
+                    }
+                }
+                return null;
+            }
+
+            async function processArticlePrivacy(article) {
+                if (article.getAttribute('data-privacy-processed') === 'true') return;
+
+                const authorInfo = getPostAuthorElement(article);
+                if (!authorInfo) return;
+
+                const { username, element } = authorInfo;
+                article.setAttribute('data-privacy-processed', 'true');
+
+                const isPrivate = await checkProfilePrivacy(username);
+                if (isPrivate === null) {
+                    article.removeAttribute('data-privacy-processed');
+                    return;
+                }
+
+                if (element.querySelector('.ig-privacy-badge')) return;
+
+                const badge = document.createElement('span');
+                badge.className = 'ig-privacy-badge';
+                badge.style.cssText = `
+                    margin-left: 6px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 2px 6px;
+                    font-size: 11px;
+                    font-weight: bold;
+                    border-radius: 4px;
+                    color: #ffffff;
+                    vertical-align: middle;
+                `;
+
+                if (isPrivate) {
+                    badge.innerText = 'P';
+                    badge.style.backgroundColor = '#e1306c';
+                    badge.title = 'Perfil Privado';
+                } else {
+                    badge.innerText = 'A';
+                    badge.style.backgroundColor = '#28a745';
+                    badge.title = 'Perfil Público';
+                }
+
+                element.appendChild(badge);
+            }
 
             // --- DOWNLOAD DE MÍDIA DO FEED E REELS ---
             function addFeedDownloadButtons() {
@@ -8181,6 +8632,9 @@
                                 article.setAttribute('data-download-processed', 'true');
                                 addDownloadButtonToMedia(article);
                             });
+
+                            // Processa o status de privacidade para posts
+                            document.querySelectorAll('article:not([data-privacy-processed="true"])').forEach(processArticlePrivacy);
                         }
                     });
                 });
@@ -8189,6 +8643,9 @@
                     childList: true,
                     subtree: true
                 });
+
+                // Varredura inicial de privacidade
+                document.querySelectorAll('article:not([data-privacy-processed="true"])').forEach(processArticlePrivacy);
             }
 
             function addDownloadButtonToMedia(article) {

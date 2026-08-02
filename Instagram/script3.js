@@ -1899,14 +1899,13 @@
 
             function performScrollAndExtract() {
                 const initialUserCount = users.size;
-                // Seleciona apenas elementos que parecem cards de usuários para economizar CPU
-                const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]'))
-                                          .filter(el => el.querySelector('img') && el.innerText.includes('\n'));
+                const userElements = Array.from(doc.querySelectorAll('div.wbloks_1, div[data-bloks-name="bk.components.Flexbox"]'))
+                    .filter(el => el.querySelector('div[aria-label*="caixa de seleção"], div[role="button"][aria-label*="caixa de seleção"]') || (el.querySelector('img') && el.innerText && el.innerText.includes('\n')));
 
                 userElements.forEach(userElement => {
-                    let username = "";
-                    const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
-                    username = usernameSpan ? usernameSpan.innerText.trim() : userElement.innerText.trim().split('\n')[0];
+                    const spans = Array.from(userElement.querySelectorAll('span'));
+                    let username = spans.length > 0 ? spans[0].innerText.trim() : (userElement.innerText ? userElement.innerText.trim().split('\n')[0] : '');
+                    username = username.replace(/^@/, '');
 
                     if (username && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
                         const imgTag = userElement.querySelector('img');
@@ -1919,7 +1918,7 @@
                 if (users.size === initialUserCount) noNewUsersCount++;
                 else noNewUsersCount = 0;
 
-                if (noNewUsersCount >= maxIdleCount && users.size > 0) {
+                if (noNewUsersCount >= (users.size > 0 ? maxIdleCount : 5)) {
                     finishExtraction();
                     return;
                 }
@@ -1927,6 +1926,9 @@
                 // Rolagem inteligente (Desktop e Mobile)
                 const scrollContainer = doc.querySelector('div[role="dialog"] ._aano') ||
                                         doc.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]') ||
+                                        doc.querySelector('main div[style*="overflow-y: auto"]') ||
+                                        doc.querySelector('div[style*="overflow-y: auto"]') ||
+                                        doc.querySelector('._aano') ||
                                         doc.documentElement;
                 if (scrollContainer && scrollContainer !== doc.documentElement) {
                     scrollContainer.scrollTop = scrollContainer.scrollHeight;
@@ -1972,13 +1974,14 @@
 
         // Cache official checkbox states for performance
         const officialCheckboxStates = new Map();
-        const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
+        const flexboxes = Array.from(document.querySelectorAll('div.wbloks_1, [data-bloks-name="bk.components.Flexbox"]'));
         flexboxes.forEach(flex => {
-            const userText = flex.innerText && flex.innerText.trim().split('\n')[0];
+            const spans = Array.from(flex.querySelectorAll('span'));
+            const userText = spans.length > 0 ? spans[0].innerText.trim() : (flex.innerText && flex.innerText.trim().split('\n')[0]);
             if (userText) {
-                const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção'));
+                const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"], div[aria-label*="caixa de seleção"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção') || el.getAttribute('role') === 'button');
                 if (officialCheckboxContainer) {
-                    const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"]');
+                    const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"], div.wbloks_1') || officialCheckboxContainer;
                     const style = window.getComputedStyle(iconDiv);
                     const bgColor = style.backgroundColor;
                     const mask = style.maskImage || style.webkitMaskImage;
@@ -2378,24 +2381,18 @@
                  const initialUserCount = users.size;
 
                  // Seletor para os elementos que contêm o nome de usuário
-                 const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')).filter(el =>
-                     el.querySelector('span[data-bloks-name="bk.components.Text"]')
-                 );
-
-                 if (userElements.length === 0 && users.size === 0) {
-                     console.log("Nenhum usuário encontrado ainda, tentando novamente...");
-                     return; // Continua tentando se a lista estiver vazia
-                 }
+                 const userElements = Array.from(doc.querySelectorAll('div.wbloks_1, div[data-bloks-name="bk.components.Flexbox"]'))
+                     .filter(el => el.querySelector('div[aria-label*="caixa de seleção"], div[role="button"][aria-label*="caixa de seleção"]') || (el.querySelector('img') && el.innerText && el.innerText.includes('\n')));
 
                  userElements.forEach(userElement => {
-                     const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
-                     const username = usernameSpan ? usernameSpan.innerText.trim() : '';
-                     const imgTag = userElement.querySelector('img');
+                     const spans = Array.from(userElement.querySelectorAll('span'));
+                     let username = spans.length > 0 ? spans[0].innerText.trim() : (userElement.innerText ? userElement.innerText.trim().split('\n')[0] : '');
+                     username = username.replace(/^@/, '');
 
                      let isChecked = false;
-                     const checkboxContainer = userElement.querySelector('div[role="button"][tabindex="0"]');
+                     const checkboxContainer = userElement.querySelector('div[aria-label*="caixa de seleção"], div[role="button"][aria-label*="caixa de seleção"]') || userElement.querySelector('div[role="button"][tabindex="0"]');
                      if (checkboxContainer) {
-                         const icon = checkboxContainer.querySelector('[data-bloks-name="ig.components.Icon"]');
+                         const icon = checkboxContainer.querySelector('[data-bloks-name="ig.components.Icon"], div.wbloks_1') || checkboxContainer;
                          if (icon) {
                              const style = window.getComputedStyle(icon);
                              const bg = style.backgroundColor;
@@ -2407,9 +2404,10 @@
                          }
                      }
 
-                     // Adiciona o usuário apenas se tiver um nome válido, uma foto e ainda não estiver na lista
-                     if (username && imgTag && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
-                         const photoUrl = imgTag.src;
+                     // Adiciona o usuário apenas se tiver um nome válido e ainda não estiver na lista
+                     if (username && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
+                         const imgTag = userElement.querySelector('img');
+                         const photoUrl = imgTag ? imgTag.src : '';
                          users.set(username, { username, photoUrl, isChecked });
                      } else if (users.has(username)) {
                          const u = users.get(username);
@@ -2429,7 +2427,7 @@
                      noNewUsersCount = 0; // Reseta o contador se encontrar novos usuários
                  }
 
-                 if (noNewUsersCount >= maxIdleCount) {
+                 if (noNewUsersCount >= (users.size > 0 ? maxIdleCount : 5)) {
                      console.log("Nenhum novo usuário encontrado após várias tentativas. Finalizando.");
                      finishExtraction();
                      return;
@@ -2438,6 +2436,9 @@
                 // Rolagem dinâmica (Desktop e Mobile)
                 const scrollContainer = doc.querySelector('div[role="dialog"] ._aano') ||
                                         doc.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]') ||
+                                        doc.querySelector('main div[style*="overflow-y: auto"]') ||
+                                        doc.querySelector('div[style*="overflow-y: auto"]') ||
+                                        doc.querySelector('._aano') ||
                                         doc.documentElement;
                 if (scrollContainer && scrollContainer !== doc.documentElement) {
                     scrollContainer.scrollTop = scrollContainer.scrollHeight;
@@ -2728,18 +2729,19 @@
             };
             let isApplyingChangesStory = false;
             setTimeout(() => {
-                const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
+                const flexboxes = Array.from(document.querySelectorAll('div.wbloks_1, [data-bloks-name="bk.components.Flexbox"]'));
                 flexboxes.forEach(flex => {
-                    const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção'));
+                    const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"], div[aria-label*="caixa de seleção"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção') || el.getAttribute('role') === 'button');
                     if (!officialCheckboxContainer) return;
                     if (officialCheckboxContainer._customSyncListenerStory) return;
                     officialCheckboxContainer._customSyncListenerStory = true;
                     officialCheckboxContainer.addEventListener("click", function () {
                         if (isApplyingChangesStory) return;
-                        const userText = flex.innerText && flex.innerText.trim().split('\n')[0];
+                        const spans = Array.from(flex.querySelectorAll('span'));
+                        const userText = spans.length > 0 ? spans[0].innerText.trim() : (flex.innerText && flex.innerText.trim().split('\n')[0]);
                         const customCheckbox = document.querySelector(`.hideStoryCheckbox[data-username="${userText}"]`);
                         if (customCheckbox) {
-                            const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"]');
+                            const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"], div.wbloks_1') || officialCheckboxContainer;
                             let isChecked = false;
                             if (iconDiv) {
                                 const style = window.getComputedStyle(iconDiv);
@@ -2826,44 +2828,21 @@
                 const initialUserCount = users.size;
 
                 // Seletor para os elementos que contêm o nome de usuário
-                const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')).filter(el =>
-                    el.querySelector('span[data-bloks-name="bk.components.Text"]')
-                );
-
-                if (userElements.length === 0 && users.size === 0) {
-                    console.log("Nenhum usuário encontrado ainda, tentando novamente...");
-                    return; // Continua tentando se a lista estiver vazia
-                }
+                const userElements = Array.from(doc.querySelectorAll('div.wbloks_1, div[data-bloks-name="bk.components.Flexbox"]'))
+                    .filter(el => el.querySelector('div[aria-label*="Ver perfil"]') || (el.querySelector('img') && el.innerText && el.innerText.includes('\n')));
 
                 userElements.forEach(userElement => {
-                    const usernameSpan = userElement.querySelector('span[data-bloks-name="bk.components.Text"]');
-                    const username = usernameSpan ? usernameSpan.innerText.trim() : '';
-                    const imgTag = userElement.querySelector('img');
+                    const spans = Array.from(userElement.querySelectorAll('span'));
+                    let username = spans.length > 0 ? spans[0].innerText.trim() : (userElement.innerText ? userElement.innerText.trim().split('\n')[0] : '');
+                    username = username.replace(/^@/, '');
+                    if (username === 'Ver perfil') return;
 
-                    let isChecked = false;
-                    const checkboxContainer = userElement.querySelector('div[role="button"][tabindex="0"]');
-                    if (checkboxContainer) {
-                        const icon = checkboxContainer.querySelector('[data-bloks-name="ig.components.Icon"]');
-                        if (icon) {
-                            const style = window.getComputedStyle(icon);
-                            const bg = style.backgroundColor;
-                            const mask = style.maskImage || style.webkitMaskImage;
-                            const bgImg = style.backgroundImage;
-                            if (bg === 'rgb(0, 149, 246)' || bg === 'rgb(74, 93, 249)' || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled'))) {
-                                isChecked = true;
-                            }
-                        }
-                    }
+                    if (username && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
+                        const imgTag = userElement.querySelector('img');
+                        const photoUrl = imgTag ? imgTag.src : '';
 
-                    // Adiciona o usuário apenas se tiver um nome válido, uma foto e ainda não estiver na lista
-                    if (username && imgTag && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
-                        const photoUrl = imgTag.src;
-
-                        // Tenta extrair o status do texto do elemento
+                        // Extrai o status do texto do elemento (ex: "Posts e story silenciados")
                         let status = "Silenciado";
-
-                        // Procura especificamente pelo span de status
-                        const spans = Array.from(userElement.querySelectorAll('span[data-bloks-name="bk.components.Text"]'));
                         const statusSpan = spans.find(s => {
                             const t = s.innerText.toLowerCase();
                             return (t.includes('silenci') || t.includes('muted')) && t !== username.toLowerCase();
@@ -2876,13 +2855,7 @@
                             if (statusLine) status = statusLine;
                         }
 
-                        users.set(username, { username, photoUrl, isChecked, status });
-                    } else if (users.has(username)) {
-                        const u = users.get(username);
-                        if (!u.isChecked && isChecked) {
-                            u.isChecked = true;
-                            users.set(username, u);
-                        }
+                        users.set(username, { username, photoUrl, isChecked: false, status });
                     }
                 });
 
@@ -2895,7 +2868,7 @@
                     noNewUsersCount = 0; // Reseta o contador se encontrar novos usuários
                 }
 
-                if (noNewUsersCount >= maxIdleCount) {
+                if (noNewUsersCount >= (users.size > 0 ? maxIdleCount : 5)) {
                     console.log("Nenhum novo usuário encontrado após várias tentativas. Finalizando.");
                     finishExtraction();
                     return;
@@ -2904,6 +2877,9 @@
                 // Rolagem dinâmica (Desktop e Mobile)
                 const scrollContainer = doc.querySelector('div[role="dialog"] ._aano') ||
                                         doc.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]') ||
+                                        doc.querySelector('main div[style*="overflow-y: auto"]') ||
+                                        doc.querySelector('div[style*="overflow-y: auto"]') ||
+                                        doc.querySelector('._aano') ||
                                         doc.documentElement;
                 if (scrollContainer && scrollContainer !== doc.documentElement) {
                     scrollContainer.scrollTop = scrollContainer.scrollHeight;
@@ -4813,14 +4789,19 @@
                                     userListCache.mutedDetails = new Map(users.map(u => [u.username, u.status]));
                                 } else {
                                     const officialStates = new Map();
-                                    const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
+                                    const flexboxes = Array.from(document.querySelectorAll('div.wbloks_1, [data-bloks-name="bk.components.Flexbox"]'));
                                     flexboxes.forEach(flex => {
-                                        const userText = flex.innerText && flex.innerText.trim().split('\n')[0];
+                                        const spans = Array.from(flex.querySelectorAll('span'));
+                                        const userText = spans.length > 0 ? spans[0].innerText.trim() : (flex.innerText && flex.innerText.trim().split('\n')[0]);
                                         if (userText) {
-                                            const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção'));
+                                            const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"], div[aria-label*="caixa de seleção"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção') || el.getAttribute('role') === 'button');
                                             if (officialCheckboxContainer) {
-                                                const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"]');
-                                                const isChecked = iconDiv && (window.getComputedStyle(iconDiv).backgroundColor === "rgb(74, 93, 249)" || iconDiv.style.backgroundImage.includes('circle-check__filled'));
+                                                const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"], div.wbloks_1') || officialCheckboxContainer;
+                                                const style = window.getComputedStyle(iconDiv);
+                                                const bgColor = style.backgroundColor;
+                                                const mask = style.maskImage || style.webkitMaskImage;
+                                                const bgImg = style.backgroundImage;
+                                                const isChecked = (bgColor === "rgb(0, 149, 246)" || bgColor === "rgb(74, 93, 249)" || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled')));
                                                 officialStates.set(userText, isChecked);
                                             }
                                         }

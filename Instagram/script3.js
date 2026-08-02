@@ -5218,7 +5218,7 @@
                                                 <div style="display:flex; flex-direction:column;">
                                                     <div style="display:flex; align-items:center; gap:6px;">
                                                         <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600;">${username}</a>
-                                                        <span class="seguindo-privacy-badge" data-username="${username}"></span>
+                                                        ${loadSettings().validateProfileStatus ? `<span class="seguindo-privacy-badge" data-username="${username}"></span>` : ''}
                                                     </div>
                                                     ${mutedDetailText ? `<span style="font-size:11px; color:gray;">${mutedDetailText}</span>` : ''}
                                                 </div>
@@ -5246,42 +5246,44 @@
                                 container.innerHTML = tableHtml + paginationHtml;
 
                                 // Carrega os badges de privacidade para a lista do modal Seguindo
-                                container.querySelectorAll('.seguindo-privacy-badge').forEach(async (badgeSpan) => {
-                                    const u = badgeSpan.getAttribute('data-username');
-                                    if (!u) return;
+                                if (loadSettings().validateProfileStatus) {
+                                    container.querySelectorAll('.seguindo-privacy-badge').forEach(async (badgeSpan) => {
+                                        const u = badgeSpan.getAttribute('data-username');
+                                        if (!u) return;
 
-                                    const renderBadge = (isPrivate) => {
-                                        badgeSpan.style.cssText = `
-                                            display: inline-flex;
-                                            align-items: center;
-                                            justify-content: center;
-                                            padding: 2px 6px;
-                                            font-size: 10px;
-                                            font-weight: bold;
-                                            border-radius: 4px;
-                                            color: #ffffff;
-                                            line-height: 1;
-                                        `;
-                                        if (isPrivate) {
-                                            badgeSpan.innerText = 'P';
-                                            badgeSpan.style.backgroundColor = '#e1306c';
-                                            badgeSpan.title = 'Perfil Privado';
+                                        const renderBadge = (isPrivate) => {
+                                            badgeSpan.style.cssText = `
+                                                display: inline-flex;
+                                                align-items: center;
+                                                justify-content: center;
+                                                padding: 2px 6px;
+                                                font-size: 10px;
+                                                font-weight: bold;
+                                                border-radius: 4px;
+                                                color: #ffffff;
+                                                line-height: 1;
+                                            `;
+                                            if (isPrivate) {
+                                                badgeSpan.innerText = 'P';
+                                                badgeSpan.style.backgroundColor = '#e1306c';
+                                                badgeSpan.title = 'Perfil Privado';
+                                            } else {
+                                                badgeSpan.innerText = 'A';
+                                                badgeSpan.style.backgroundColor = '#28a745';
+                                                badgeSpan.title = 'Perfil Público';
+                                            }
+                                        };
+
+                                        if (privacyCache.has(u)) {
+                                            renderBadge(privacyCache.get(u));
                                         } else {
-                                            badgeSpan.innerText = 'A';
-                                            badgeSpan.style.backgroundColor = '#28a745';
-                                            badgeSpan.title = 'Perfil Público';
+                                            const isPrivate = await checkProfilePrivacy(u);
+                                            if (isPrivate !== null) {
+                                                renderBadge(isPrivate);
+                                            }
                                         }
-                                    };
-
-                                    if (privacyCache.has(u)) {
-                                        renderBadge(privacyCache.get(u));
-                                    } else {
-                                        const isPrivate = await checkProfilePrivacy(u);
-                                        if (isPrivate !== null) {
-                                            renderBadge(isPrivate);
-                                        }
-                                    }
-                                });
+                                    });
+                                }
 
                                 const prevBtn = document.getElementById("prevPageBtn");
                                 if (prevBtn) prevBtn.onclick = () => renderList(--currentPage);
@@ -8470,6 +8472,9 @@
             }
 
             function checkProfilePrivacy(username) {
+                if (!loadSettings().validateProfileStatus) {
+                    return Promise.resolve(null);
+                }
                 if (privacyCache.has(username)) {
                     return Promise.resolve(privacyCache.get(username));
                 }

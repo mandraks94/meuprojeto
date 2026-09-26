@@ -510,6 +510,107 @@
                 }
             }
 
+            async function executeGraphqlBlockMany(targetUserIds = []) {
+                const idList = (Array.isArray(targetUserIds) ? targetUserIds : [targetUserIds]).filter(Boolean).map(String);
+                if (idList.length === 0) {
+                    console.warn("[IG Tools Block] Nenhum ID fornecido para bloqueio.");
+                    return { response: { ok: false, status: 0 }, success: false, result: null, text: 'empty_ids' };
+                }
+
+                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                const jazoest = computeJazoest(fbDtsg) || '26629';
+                const spin = getSpinParams();
+
+                const variables = {
+                    surface: null,
+                    target_user_ids: idList
+                };
+
+                const body = new URLSearchParams();
+                body.append('__comet_req', '7');
+                if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                if (jazoest) body.append('jazoest', jazoest);
+                if (lsd) body.append('lsd', lsd);
+                if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                body.append('__spin_b', spin.spin_b || 'trunk');
+                if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                body.append('__crn', 'comet.igweb.PolarisProfilePostsTabRoute');
+                body.append('fb_api_caller_class', 'RelayModern');
+                body.append('fb_api_req_friendly_name', 'usePolarisBlockManyMutation');
+                body.append('server_timestamps', 'true');
+                body.append('variables', JSON.stringify(variables));
+                body.append('doc_id', '39139849082272635');
+
+                const headers = {
+                    ...getApiHeaders(true),
+                    'X-ASBD-ID': '359341',
+                    'X-Bloks-Version-Id': '62077fc559de123afe03ebeb18194a88ba5d4e6874d9a07873752f3792adb8a0',
+                    'X-CSRFToken': getCookie('csrftoken') || '',
+                    'X-FB-Friendly-Name': 'usePolarisBlockManyMutation',
+                    'X-FB-LSD': lsd,
+                    'X-IG-App-ID': '936619743392459',
+                    'X-IG-Max-Touch-Points': '0',
+                    'X-Root-Field-Name': 'xdt_block_many',
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                };
+
+                try {
+                    console.log(`[IG Tools Block] Enviando mutação GraphQL para UIDs:`, idList, variables);
+                    const response = await fetch('https://www.instagram.com/graphql/query', {
+                        method: 'POST',
+                        headers,
+                        body: body.toString(),
+                        credentials: 'include',
+                        cache: 'no-store'
+                    });
+
+                    const rawText = await response.text();
+                    let cleanedText = rawText.trim();
+                    if (cleanedText.startsWith('for (;;);')) {
+                        cleanedText = cleanedText.slice(9).trim();
+                    }
+
+                    let data = null;
+                    try {
+                        data = JSON.parse(cleanedText);
+                    } catch (e) {
+                        const lines = cleanedText.split('\n');
+                        for (const line of lines) {
+                            try {
+                                const parsed = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                                if (parsed?.data || parsed?.errors) {
+                                    data = parsed;
+                                    break;
+                                }
+                            } catch (_) { }
+                        }
+                    }
+
+                    console.log('[IG Tools Block] Resposta GraphQL:', {
+                        status: response.status,
+                        ok: response.ok,
+                        data,
+                        rawPreview: rawText.slice(0, 200)
+                    });
+
+                    const hasData = !!(data?.data?.xdt_block_many || data?.data);
+                    const hasErrors = Array.isArray(data?.errors) && data.errors.length > 0 && !hasData;
+                    const success = response.ok && !hasErrors && hasData;
+
+                    return {
+                        response,
+                        success,
+                        result: { status: success ? 'ok' : 'fail', data },
+                        text: rawText,
+                        data
+                    };
+                } catch (e) {
+                    console.error('[IG Tools Block] Erro na requisição GraphQL:', e);
+                    return { response: { ok: false, status: 0 }, success: false, result: null, text: String(e) };
+                }
+            }
+
             async function executeGraphqlSetBesties(adds = [], removes = []) {
                 const addList = (Array.isArray(adds) ? adds : [adds]).filter(Boolean).map(String);
                 const removeList = (Array.isArray(removes) ? removes : [removes]).filter(Boolean).map(String);
@@ -9338,9 +9439,77 @@
                         block: {
                             buttonId: 'blockSeguindoBtn',
                             text: 'Bloquear',
-                            // dbStore: 'blocked', // Should be 'blocked' not 'following'
                             dbStore: 'following',
-                            func: (users, cb) => { if (confirm(`Bloquear ${users.length} usuários?`)) blockUsers(users, 0, cb); else { const b = document.getElementById('blockSeguindoBtn'); b.disabled = false; b.textContent = 'Bloquear'; } }
+                            func: async (users, cb) => {
+                                if (!confirm(`Bloquear ${users.length} usuário(s)? Atenção: o Instagram deixará de seguir e bloqueará estes perfis.`)) {
+                                    const b = document.getElementById('blockSeguindoBtn');
+                                    if (b) { b.disabled = false; b.textContent = 'Bloquear'; }
+                                    toggleLoading(false);
+                                    return;
+                                }
+
+                                if (loadSettings().useApi) {
+                                    const blockDelay = loadSettings().unfollowDelay || 1500;
+                                    for (let i = 0; i < users.length; i++) {
+                                        const username = users[i];
+                                        const percent = Math.round(((i + 1) / users.length) * 100);
+                                        toggleLoading(true, percent, `Bloqueando ${username} (${i + 1}/${users.length})...`);
+
+                                        let uid = getCachedUserId(username);
+                                        if (!uid && typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                            const item = seguindoList.find(x => (typeof x === 'object' ? x?.username : x)?.toLowerCase() === username.toLowerCase());
+                                            if (item && typeof item === 'object') {
+                                                const foundId = item.id || item.pk || item.pk_id;
+                                                if (foundId) {
+                                                    uid = String(foundId);
+                                                    setCachedUserId(username, uid);
+                                                }
+                                            }
+                                        }
+                                        if (!uid) {
+                                            uid = await getUserId(username);
+                                        }
+
+                                        if (!uid) {
+                                            console.warn(`[IG Tools] Não foi possível obter o ID de ${username}`);
+                                            showToast(`⚠️ ID de ${username} não encontrado`);
+                                            continue;
+                                        }
+
+                                        try {
+                                            console.log(`[IG Tools] Enviando bloqueio via API para ${username} (UID: ${uid})...`);
+                                            const apiResult = await executeGraphqlBlockMany([uid]);
+                                            console.log(`[IG Tools] Resultado bloqueio para ${username}:`, apiResult);
+
+                                            if (apiResult.success || apiResult.result?.status === 'ok') {
+                                                showToast(`🚫 Bloqueou ${username}`);
+
+                                                if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                                    seguindoList = seguindoList.filter(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() !== username.toLowerCase());
+                                                    await dbHelper.saveCache('following', seguindoList).catch(e => console.error(e));
+                                                }
+
+                                                const rows = document.querySelectorAll(`tr[data-username="${username}"]`);
+                                                rows.forEach(r => r.remove());
+                                            } else {
+                                                console.error(`[IG Tools] Falha ao bloquear ${username}:`, apiResult);
+                                                showToast(`❌ Falha ao bloquear ${username}`);
+                                            }
+                                        } catch (err) {
+                                            console.error(`[IG Tools] Erro ao bloquear ${username}:`, err);
+                                            showToast(`❌ Erro ao bloquear ${username}`);
+                                        }
+
+                                        if (i < users.length - 1) {
+                                            await new Promise(r => setTimeout(r, blockDelay));
+                                        }
+                                    }
+
+                                    if (cb) await cb();
+                                } else {
+                                    await performActionOnProfile(users, ['Bloquear', 'Block'], cb);
+                                }
+                            }
                         }
                     };
 

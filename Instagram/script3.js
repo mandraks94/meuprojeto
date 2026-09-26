@@ -416,37 +416,98 @@
             }
 
             async function executeGraphqlUnfollow(uid) {
-                const body = new URLSearchParams({
-                    av: getCookie('ds_user_id') || getInstagramFormToken('av') || '17841401091313484',
-                    __a: '1',
-                    __user: '0',
-                    fb_api_caller_class: 'RelayModern',
-                    fb_api_req_friendly_name: 'usePolarisFollowUserUnfollowMutation',
-                    server_timestamps: 'true',
-                    variables: JSON.stringify({ target_user_id: String(uid) }),
-                    doc_id: '25174972798866458'
-                });
-                const fbDtsg = getDtsgToken();
-                const jazoest = computeJazoest(fbDtsg);
-                const lsd = getLsdToken();
+                if (!uid) return { response: { ok: false, status: 0 }, success: false, result: null, text: 'no_uid' };
+
+                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                const jazoest = computeJazoest(fbDtsg) || '26418';
+                const spin = getSpinParams();
+
+                const variables = {
+                    target_user_id: String(uid),
+                    container_module: 'profile',
+                    nav_chain: 'PolarisProfilePostsTabRoot:profilePage:1:via_cold_start'
+                };
+
+                const body = new URLSearchParams();
                 if (fbDtsg) body.append('fb_dtsg', fbDtsg);
                 if (jazoest) body.append('jazoest', jazoest);
                 if (lsd) body.append('lsd', lsd);
+                if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                body.append('__spin_b', spin.spin_b || 'trunk');
+                if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                body.append('__crn', 'comet.igweb.PolarisProfilePostsTabRoute');
+                body.append('qpl_active_flow_ids', '37919374');
+                body.append('fb_api_caller_class', 'RelayModern');
+                body.append('fb_api_req_friendly_name', 'usePolarisUnfollowMutation');
+                body.append('server_timestamps', 'true');
+                body.append('variables', JSON.stringify(variables));
+                body.append('doc_id', '27789106940691111');
+                body.append('fb_api_analytics_tags', '["qpl_active_flow_ids=37919374"]');
 
-                const response = await fetch('https://www.instagram.com/graphql/query/', {
-                    method: 'POST',
-                    headers: {
-                        ...getApiHeaders(true),
-                        'X-FB-LSD': lsd || ''
-                    },
-                    body: body.toString(),
-                    credentials: 'include',
-                    cache: 'no-store'
-                });
-                const text = await response.text();
-                let result = null;
-                try { result = JSON.parse(text); } catch (e) { }
-                return { response, result, text };
+                const headers = {
+                    ...getApiHeaders(true),
+                    'X-ASBD-ID': '359341',
+                    'X-FB-LSD': lsd,
+                    'X-FB-Friendly-Name': 'usePolarisUnfollowMutation',
+                    'X-IG-Max-Touch-Points': '0'
+                };
+
+                try {
+                    console.log(`[IG Tools Unfollow] Enviando mutação GraphQL para UID ${uid}...`, variables);
+                    const response = await fetch('https://www.instagram.com/api/graphql', {
+                        method: 'POST',
+                        headers,
+                        body: body.toString(),
+                        credentials: 'include',
+                        cache: 'no-store'
+                    });
+
+                    const rawText = await response.text();
+                    let cleanedText = rawText.trim();
+                    if (cleanedText.startsWith('for (;;);')) {
+                        cleanedText = cleanedText.slice(9).trim();
+                    }
+
+                    let data = null;
+                    try {
+                        data = JSON.parse(cleanedText);
+                    } catch (e) {
+                        const lines = cleanedText.split('\n');
+                        for (const line of lines) {
+                            try {
+                                const parsed = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                                if (parsed?.data || parsed?.errors) {
+                                    data = parsed;
+                                    break;
+                                }
+                            } catch (_) { }
+                        }
+                    }
+
+                    console.log('[IG Tools Unfollow] Resposta GraphQL:', {
+                        status: response.status,
+                        ok: response.ok,
+                        data,
+                        rawPreview: rawText.slice(0, 200)
+                    });
+
+                    const hasData = !!(data?.data?.xdt_destroy_friendship || data?.data);
+                    const isDestroySuccess = data?.data?.xdt_destroy_friendship?.friendship_status?.following === false;
+                    const hasErrors = Array.isArray(data?.errors) && data.errors.length > 0 && !hasData;
+                    const success = response.ok && !hasErrors && (isDestroySuccess || hasData);
+
+                    return {
+                        response,
+                        success,
+                        result: { status: success ? 'ok' : 'fail', data },
+                        text: rawText,
+                        data
+                    };
+                } catch (e) {
+                    console.error('[IG Tools Unfollow] Erro na requisição GraphQL:', e);
+                    return { response: { ok: false, status: 0 }, success: false, result: null, text: String(e) };
+                }
             }
 
             async function executeGraphqlSetBesties(adds = [], removes = []) {
@@ -780,58 +841,7 @@
             }
 
             async function executeWebUnfollow(uid) {
-                const headers = {
-                    ...getApiHeaders(true),
-                    'X-CSRFToken': getCookie('csrftoken') || ''
-                };
-                const body = new URLSearchParams();
-                body.append('user_id', String(uid));
-
-                try {
-                    const response = await fetch(`https://www.instagram.com/api/v1/web/friendships/${encodeURIComponent(uid)}/unfollow/`, {
-                        method: 'POST',
-                        headers,
-                        body: body.toString(),
-                        credentials: 'include',
-                        cache: 'no-store'
-                    });
-                    const text = await response.text();
-                    let result = null;
-                    try { result = JSON.parse(text); } catch (e) { }
-                    if (response.ok && result?.status === 'ok') {
-                        return { response, result, text };
-                    }
-                    if (!response.ok) {
-                        const fallbackResponse = await fetch(`https://www.instagram.com/api/v1/friendships/destroy/${encodeURIComponent(uid)}/`, {
-                            method: 'POST',
-                            headers,
-                            body: body.toString(),
-                            credentials: 'include',
-                            cache: 'no-store'
-                        });
-                        const fbText = await fallbackResponse.text();
-                        let fbResult = null;
-                        try { fbResult = JSON.parse(fbText); } catch (e) { }
-                        return { response: fallbackResponse, result: fbResult, text: fbText };
-                    }
-                    return { response, result, text };
-                } catch (e) {
-                    try {
-                        const fallbackResponse = await fetch(`https://www.instagram.com/api/v1/friendships/destroy/${encodeURIComponent(uid)}/`, {
-                            method: 'POST',
-                            headers,
-                            body: body.toString(),
-                            credentials: 'include',
-                            cache: 'no-store'
-                        });
-                        const fbText = await fallbackResponse.text();
-                        let fbResult = null;
-                        try { fbResult = JSON.parse(fbText); } catch (e) { }
-                        return { response: fallbackResponse, result: fbResult, text: fbText };
-                    } catch (e2) {
-                        return { response: { ok: false, status: 0 }, result: null, text: String(e2) };
-                    }
-                }
+                return await executeGraphqlUnfollow(uid);
             }
 
             async function executeWebFollow(uid) {
@@ -935,9 +945,10 @@
             }
 
             function getCachedUserId(username) {
+                if (!username) return null;
                 try {
                     const cache = JSON.parse(localStorage.getItem('ig_tools_id_cache') || '{}');
-                    return cache[username] || null;
+                    return cache[username] || cache[username.toLowerCase()] || null;
                 } catch (e) { return null; }
             }
 
@@ -945,7 +956,8 @@
                 if (!username || !id) return;
                 try {
                     const cache = JSON.parse(localStorage.getItem('ig_tools_id_cache') || '{}');
-                    cache[username] = id;
+                    cache[username] = String(id);
+                    cache[username.toLowerCase()] = String(id);
                     localStorage.setItem('ig_tools_id_cache', JSON.stringify(cache));
                 } catch (e) { }
             }
@@ -958,10 +970,11 @@
                 // 1. Procura na lista de seguindo em memória
                 try {
                     if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
-                        const item = seguindoList.find(x => x?.username?.toLowerCase() === cleanUsername);
-                        if (item?.id) {
-                            setCachedUserId(cleanUsername, String(item.id));
-                            return String(item.id);
+                        const item = seguindoList.find(x => (typeof x === 'object' ? x?.username : x)?.toLowerCase() === cleanUsername);
+                        const foundId = item && typeof item === 'object' ? (item.id || item.pk || item.pk_id) : null;
+                        if (foundId) {
+                            setCachedUserId(cleanUsername, String(foundId));
+                            return String(foundId);
                         }
                     }
                 } catch (e) { }
@@ -5875,10 +5888,11 @@
                                     console.log('[IG Tools] Executando unfollow via API web:', { username, uid: String(uid) });
                                     const apiResult = await executeWebUnfollow(uid);
                                     console.log('[IG Tools] Resposta API web do unfollow:', apiResult.result || apiResult.text);
-                                    if (apiResult.response.ok && apiResult.result?.status === 'ok') {
+                                    if (apiResult.response.ok && (apiResult.success || apiResult.result?.status === 'ok')) {
                                         console.log(`[IG Tools] Unfollow via API bem-sucedido para ${username}`);
-                                        const photoUrl = cachedData.userDetails.get(username.toLowerCase())?.photoUrl || null;
+                                        const photoUrl = (typeof cachedData !== 'undefined' && cachedData?.userDetails) ? (cachedData.userDetails.get(username.toLowerCase())?.photoUrl || null) : null;
                                         finishUserSuccess(photoUrl, uid);
+                                        showToast(`✅ Deixou de seguir ${username}`);
                                     } else {
                                         const errorText = apiResult.text;
                                         console.error(`[IG Tools] API não confirmou o unfollow de ${username} (HTTP ${apiResult.response.status}):`, errorText);
@@ -6726,12 +6740,14 @@
 
                         const updateLocalState = async (users, dbStore) => {
                             if (dbStore === 'following') {
-                                // Se for unfollow ou block, removemos permanentemente da lista local
-                                seguindoList = seguindoList.filter(user => !users.includes(user.username));
-                                // Atualiza o cache do IndexedDB para refletir a remoção
+                                const lowerUsers = users.map(u => (typeof u === 'string' ? u : u.username).toLowerCase());
+                                seguindoList = seguindoList.filter(user => {
+                                    const uName = (typeof user === 'object' ? user?.username : user) || '';
+                                    return !lowerUsers.includes(uName.toLowerCase());
+                                });
                                 await dbHelper.saveCache('following', seguindoList);
+                                if (statusDiv) statusDiv.innerText = `Total: ${seguindoList.length} perfis seguidos.`;
                             } else if (dbStore && dbStore !== 'exec') {
-                                // Toggle inteligente para botões individuais
                                 if (!userListCache[dbStore]) userListCache[dbStore] = new Set();
                                 users.forEach(u => {
                                     if (userListCache[dbStore].has(u)) userListCache[dbStore].delete(u);
@@ -6739,11 +6755,12 @@
                                 });
                                 await dbHelper.saveCache(dbStore, Array.from(userListCache[dbStore]));
                             }
-                            // Sincroniza o mapa de categorias
                             userCategoryMap = await dbHelper.loadAllUserCategories();
-
                             renderList(currentPage);
-                            selectedUsers.clear(); // Limpa seleção
+                            selectedUsers.clear();
+                            if (document.getElementById('seguindoSelectedCount')) {
+                                document.getElementById('seguindoSelectedCount').innerText = `(0 selecionados)`;
+                            }
                         };
 
                         const getFollowersAndFollowing = async (username) => {
@@ -9234,9 +9251,89 @@
                         },
                         unfollow: {
                             buttonId: 'unfollowSeguindoBtn',
-                            text: 'Unfollow',
+                            text: 'Deixar de Seguir',
                             dbStore: 'following',
-                            func: (users, cb) => { if (confirm(`Deixar de seguir ${users.length} usuários?`)) unfollowUsers(users, 0, cb); else { const b = document.getElementById('unfollowSeguindoBtn'); b.disabled = false; b.textContent = 'Unfollow'; } }
+                            func: async (users, cb) => {
+                                if (!confirm(`Deixar de seguir ${users.length} usuário(s)?`)) {
+                                    const b = document.getElementById('unfollowSeguindoBtn');
+                                    if (b) { b.disabled = false; b.textContent = 'Deixar de Seguir'; }
+                                    toggleLoading(false);
+                                    return;
+                                }
+
+                                if (loadSettings().useApi) {
+                                    const unfollowDelay = loadSettings().unfollowDelay || 1500;
+                                    for (let i = 0; i < users.length; i++) {
+                                        const username = users[i];
+                                        const percent = Math.round(((i + 1) / users.length) * 100);
+                                        toggleLoading(true, percent, `Deixando de seguir ${username} (${i + 1}/${users.length})...`);
+
+                                        let uid = getCachedUserId(username);
+                                        if (!uid && typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                            const item = seguindoList.find(x => (typeof x === 'object' ? x?.username : x)?.toLowerCase() === username.toLowerCase());
+                                            if (item && typeof item === 'object') {
+                                                const foundId = item.id || item.pk || item.pk_id;
+                                                if (foundId) {
+                                                    uid = String(foundId);
+                                                    setCachedUserId(username, uid);
+                                                }
+                                            }
+                                        }
+                                        if (!uid) {
+                                            uid = await getUserId(username);
+                                        }
+
+                                        if (!uid) {
+                                            console.warn(`[IG Tools] Não foi possível obter o ID de ${username}`);
+                                            showToast(`⚠️ ID de ${username} não encontrado`);
+                                            continue;
+                                        }
+
+                                        try {
+                                            console.log(`[IG Tools] Enviando unfollow via API para ${username} (UID: ${uid})...`);
+                                            const apiResult = await executeGraphqlUnfollow(uid);
+                                            console.log(`[IG Tools] Resultado unfollow para ${username}:`, apiResult);
+
+                                            if (apiResult.success || apiResult.result?.status === 'ok') {
+                                                showToast(`✅ Deixou de seguir ${username}`);
+
+                                                const photoUrl = (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList))
+                                                    ? (seguindoList.find(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() === username.toLowerCase())?.photoUrl || null)
+                                                    : null;
+
+                                                dbHelper.saveUnfollowHistory({
+                                                    username: username,
+                                                    id: String(uid),
+                                                    photoUrl: photoUrl,
+                                                    unfollowDate: new Date().toISOString()
+                                                }).catch(e => console.error("Erro ao salvar no histórico de unfollow:", e));
+
+                                                if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                                    seguindoList = seguindoList.filter(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() !== username.toLowerCase());
+                                                    await dbHelper.saveCache('following', seguindoList).catch(e => console.error(e));
+                                                }
+
+                                                const rows = document.querySelectorAll(`tr[data-username="${username}"]`);
+                                                rows.forEach(r => r.remove());
+                                            } else {
+                                                console.error(`[IG Tools] Falha no unfollow de ${username}:`, apiResult);
+                                                showToast(`❌ Falha ao deixar de seguir ${username}`);
+                                            }
+                                        } catch (err) {
+                                            console.error(`[IG Tools] Erro ao deixar de seguir ${username}:`, err);
+                                            showToast(`❌ Erro ao deixar de seguir ${username}`);
+                                        }
+
+                                        if (i < users.length - 1) {
+                                            await new Promise(r => setTimeout(r, unfollowDelay));
+                                        }
+                                    }
+
+                                    if (cb) await cb();
+                                } else {
+                                    await performActionOnProfile(users, ['Deixar de seguir', 'Unfollow'], cb);
+                                }
+                            }
                         },
                         block: {
                             buttonId: 'blockSeguindoBtn',
@@ -9749,7 +9846,12 @@
                         }
 
                         const lowerUser = username.toLowerCase();
-                        if (typeof cachedData !== 'undefined' && cachedData.seguindo && cachedData.seguindo.has(lowerUser)) {
+                        if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                            seguindoList = seguindoList.filter(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() !== lowerUser);
+                            dbHelper.saveCache('following', seguindoList).catch(e => console.error("Erro ao atualizar cache following:", e));
+                        }
+
+                        if (typeof cachedData !== 'undefined' && cachedData?.seguindo && cachedData.seguindo.has(lowerUser)) {
                             cachedData.seguindo.delete(lowerUser);
                             const newFollowingList = Array.from(cachedData.seguindo).map(u =>
                                 cachedData.userDetails ? (cachedData.userDetails.get(u) || { username: u, photoUrl: null }) : { username: u, photoUrl: null }
@@ -9776,10 +9878,11 @@
                                 console.log('[IG Tools] Executando unfollow via API web:', { username, uid: String(uid) });
                                 const apiResult = await executeWebUnfollow(uid);
                                 console.log('[IG Tools] Resposta API web do unfollow:', apiResult.result || apiResult.text);
-                                if (apiResult.response.ok && apiResult.result?.status === 'ok') {
+                                if (apiResult.response.ok && (apiResult.success || apiResult.result?.status === 'ok')) {
                                     console.log(`[IG Tools] Unfollow via API bem-sucedido para ${username}`);
-                                    const photoUrl = cachedData.userDetails.get(username.toLowerCase())?.photoUrl || null;
+                                    const photoUrl = (typeof cachedData !== 'undefined' && cachedData?.userDetails) ? (cachedData.userDetails.get(username.toLowerCase())?.photoUrl || null) : null;
                                     finishUserSuccess(photoUrl);
+                                    showToast(`✅ Deixou de seguir ${username}`);
                                 } else {
                                     const errorText = apiResult.text;
                                     console.error(`[IG Tools] API não confirmou o unfollow de ${username} (HTTP ${apiResult.response.status}):`, errorText);

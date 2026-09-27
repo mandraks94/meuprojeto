@@ -696,19 +696,114 @@
                         else if (user.edge_follow?.count !== undefined) following = user.edge_follow.count;
                         else if (user.following_tag_count !== undefined) following = user.following_tag_count;
 
-                        if (followers !== null || following !== null) {
+                        if (followers !== null || following !== null || user.profile_pic_url) {
                             return {
                                 followers: Number(followers) || 0,
                                 following: Number(following) || 0,
                                 isPrivate: user.is_private !== undefined ? user.is_private : null,
                                 mediaCount: user.media_count !== undefined ? user.media_count : null,
-                                profilePicUrl: user.profile_pic_url || user.hd_profile_pic_url_info?.url || null
+                                profilePicUrl: user.profile_pic_url || user.hd_profile_pic_url_info?.url || null,
+                                biography: user.biography || user.bio || '',
+                                fullName: user.full_name || ''
                             };
                         }
                     }
                     return null;
                 } catch (e) {
                     console.error(`[IG Tools Stats] Erro ao buscar stats via GraphQL para UID ${uid}:`, e);
+                    return null;
+                }
+            }
+
+            async function executeGraphqlProfilePosts(username, after = null) {
+                if (!username) return null;
+                const cleanUsername = String(username).trim().toLowerCase();
+
+                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                const jazoest = computeJazoest(fbDtsg) || '26239';
+                const spin = getSpinParams();
+
+                const variables = {
+                    after: after || null,
+                    before: null,
+                    data: {
+                        count: 12,
+                        include_reel_media_seen_timestamp: true,
+                        include_relationship_info: true,
+                        latest_besties_reel_media: true,
+                        latest_reel_media: true
+                    },
+                    first: 12,
+                    include_multi_captions: true,
+                    last: null,
+                    username: cleanUsername,
+                    __relay_internal__pv__PolarisMultiCaptionCarouselEnabledrelayprovider: true,
+                    __relay_internal__pv__PolarisShortDramaEnabledrelayprovider: false,
+                    __relay_internal__pv__PolarisReelsRecoDebugOverlayEnabledrelayprovider: false
+                };
+
+                const body = new URLSearchParams();
+                body.append('__comet_req', '7');
+                if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                if (jazoest) body.append('jazoest', jazoest);
+                if (lsd) body.append('lsd', lsd);
+                if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                body.append('__spin_b', spin.spin_b || 'trunk');
+                if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                body.append('__crn', 'comet.igweb.PolarisProfilePostsTabRoute');
+                body.append('fb_api_caller_class', 'RelayModern');
+                body.append('fb_api_req_friendly_name', 'PolarisProfilePostsTabContentQuery_connection');
+                body.append('server_timestamps', 'true');
+                body.append('variables', JSON.stringify(variables));
+                body.append('doc_id', '28975909992013618');
+
+                const headers = {
+                    ...getApiHeaders(true),
+                    'X-ASBD-ID': '359341',
+                    'X-CSRFToken': getCookie('csrftoken') || '',
+                    'X-FB-Friendly-Name': 'PolarisProfilePostsTabContentQuery_connection',
+                    'X-FB-LSD': lsd,
+                    'X-IG-App-ID': '936619743392459',
+                    'X-IG-Max-Touch-Points': '0'
+                };
+
+                try {
+                    console.log(`[IG Tools Interações] Buscando posts via GraphQL para @${cleanUsername} (cursor: ${after ? after.substring(0, 15) + '...' : 'início'})...`);
+                    const response = await fetch('https://www.instagram.com/api/graphql', {
+                        method: 'POST',
+                        headers,
+                        body: body.toString(),
+                        credentials: 'include',
+                        cache: 'no-store'
+                    });
+
+                    const rawText = await response.text();
+                    let cleanedText = rawText.trim();
+                    if (cleanedText.startsWith('for (;;);')) {
+                        cleanedText = cleanedText.slice(9).trim();
+                    }
+
+                    let data = null;
+                    try {
+                        data = JSON.parse(cleanedText);
+                    } catch (e) {
+                        const lines = cleanedText.split('\n');
+                        for (const line of lines) {
+                            try {
+                                const parsed = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                                if (parsed?.data) {
+                                    data = parsed;
+                                    break;
+                                }
+                            } catch (_) { }
+                        }
+                    }
+
+                    const connection = data?.data?.xdt_api__v1__feed__user_timeline_graphql_connection;
+                    return connection || null;
+                } catch (e) {
+                    console.error(`[IG Tools Interações] Erro ao buscar posts via GraphQL para @${cleanUsername}:`, e);
                     return null;
                 }
             }
@@ -1281,6 +1376,9 @@
                             } else bodyStr = JSON.stringify(body);
                         } catch (e) { }
                     }
+                    if (bodyStr.includes('PolarisProfilePostsTabContentQuery')) {
+                        return false;
+                    }
                     if (bodyStr.includes('seen') ||
                         bodyStr.includes('StoriesV2Seen') ||
                         bodyStr.includes('PolarisStoriesSeenMutation') ||
@@ -1449,88 +1547,112 @@
                     } catch (e) { /* silencia erros de parse */ }
                 }
 
-                const originalOpen = XMLHttpRequest.prototype.open;
-                const originalSend = XMLHttpRequest.prototype.send;
+                const targetWindows = [window];
+                if (typeof unsafeWindow !== 'undefined' && unsafeWindow !== window) {
+                    targetWindows.push(unsafeWindow);
+                }
 
-                XMLHttpRequest.prototype.open = function (method, url) {
-                    this._url = url;
-                    this._method = method;
-                    return originalOpen.apply(this, arguments);
-                };
+                targetWindows.forEach(tw => {
+                    try {
+                        const originalOpen = tw.XMLHttpRequest.prototype.open;
+                        const originalSend = tw.XMLHttpRequest.prototype.send;
 
-                XMLHttpRequest.prototype.send = function (body) {
-                    if (isStorySeenPayload(this._url, body)) {
-                        let isAnon = false;
-                        try {
-                            const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
-                            if (saved) isAnon = saved.anonymousStories;
-                        } catch (e) { }
+                        tw.XMLHttpRequest.prototype.open = function (method, url) {
+                            this._url = url;
+                            this._method = method;
+                            return originalOpen.apply(this, arguments);
+                        };
 
-                        if (isAnon) {
-                            console.log("%c[IG Tools] Bloqueado request de visto (XHR): " + this._url, "color: orange; font-weight: bold;");
-                            showToast("👁️ Story visto anonimamente!");
-                            return;
-                        } else {
-                            console.log("[IG Tools] Request de visto PERMITIDO (Modo Anônimo OFF): " + this._url);
-                        }
-                    }
-                    this.addEventListener('load', function () {
-                        try {
-                            const url = this._url || '';
-                            if (url.includes('/async/wbloks/fetch/') || url.includes('pagination.async') || url.includes('muted_accounts') || url.includes('blocked_accounts') || url.includes('hide_story')) {
-                                handleBloksResponseText(url, this.responseText);
+                        tw.XMLHttpRequest.prototype.send = function (body) {
+                            if (isStorySeenPayload(this._url, body)) {
+                                let isAnon = false;
+                                try {
+                                    const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
+                                    if (saved) isAnon = saved.anonymousStories;
+                                } catch (e) { }
+
+                                if (isAnon) {
+                                    console.log("%c[IG Tools] Bloqueado request de visto (XHR): " + this._url, "color: orange; font-weight: bold;");
+                                    showToast("👁️ Story visto anonimamente!");
+                                    return;
+                                } else {
+                                    console.log("[IG Tools] Request de visto PERMITIDO (Modo Anônimo OFF): " + this._url);
+                                }
                             }
-                        } catch (e) { }
-                    });
-                    return originalSend.apply(this, arguments);
-                };
+                            this.addEventListener('load', function () {
+                                try {
+                                    const url = this._url || '';
+                                    if (url.includes('/async/wbloks/fetch/') || url.includes('pagination.async') || url.includes('muted_accounts') || url.includes('blocked_accounts') || url.includes('hide_story')) {
+                                        handleBloksResponseText(url, this.responseText);
+                                    }
+                                } catch (e) { }
+                            });
+                            return originalSend.apply(this, arguments);
+                        };
+                    } catch (_) { }
 
-                const originalFetch = window.fetch;
-                window.fetch = async function (input, init) {
-                    let urlString = '';
-                    if (typeof input === 'string') {
-                        urlString = input;
-                    } else if (input instanceof URL) {
-                        urlString = input.toString();
-                    } else if (input && input.url) {
-                        urlString = input.url;
-                    }
+                    try {
+                        const originalFetch = tw.fetch;
+                        tw.fetch = async function (input, init) {
+                            let urlString = '';
+                            if (typeof input === 'string') {
+                                urlString = input;
+                            } else if (input instanceof URL) {
+                                urlString = input.toString();
+                            } else if (input && input.url) {
+                                urlString = input.url;
+                            }
 
-                    const bodyData = init?.body || (input && typeof input === 'object' ? input.body : null);
+                            const bodyData = init?.body || (input && typeof input === 'object' ? input.body : null);
 
-                    if (isStorySeenPayload(urlString, bodyData)) {
-                        let isAnon = false;
-                        try {
-                            const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
-                            if (saved) isAnon = saved.anonymousStories;
-                        } catch (e) { }
+                            if (isStorySeenPayload(urlString, bodyData)) {
+                                let isAnon = false;
+                                try {
+                                    const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
+                                    if (saved) isAnon = saved.anonymousStories;
+                                } catch (e) { }
 
-                        if (isAnon) {
-                            console.log("%c[IG Tools] Bloqueado request de visto (Fetch): " + urlString, "color: orange; font-weight: bold;");
-                            showToast("👁️ Story visto anonimamente!");
-                            return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-                        } else {
-                            console.log("[IG Tools] Request de visto PERMITIDO (Modo Anônimo OFF): " + urlString);
-                        }
-                    }
-                    // Verifica se é resposta Bloks de contas silenciadas, bloqueadas, ocultar story ou paginação assíncrona
-                    if (urlString.includes('com.instagram.pagination.async') ||
-                        urlString.includes('bloks/apps/com.instagram.interactions.privacy') ||
-                        urlString.includes('blocked_accounts') ||
-                        urlString.includes('muted_accounts') ||
-                        urlString.includes('hide_story') ||
-                        urlString.includes('/async/wbloks/fetch/')) {
-                        return originalFetch.apply(this, arguments).then(async response => {
-                            try {
-                                const clone = response.clone();
-                                const text = await clone.text();
-                                handleBloksResponseText(urlString, text);
-                            } catch (e) { /* silencia erros de parse */ }
-                            return response;
-                        });
-                    }
-                    return originalFetch.apply(this, arguments);
-                };
+                                if (isAnon) {
+                                    console.log("%c[IG Tools] Bloqueado request de visto (Fetch): " + urlString, "color: orange; font-weight: bold;");
+                                    showToast("👁️ Story visto anonimamente!");
+                                    return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+                                } else {
+                                    console.log("[IG Tools] Request de visto PERMITIDO (Modo Anônimo OFF): " + urlString);
+                                }
+                            }
+
+                            // Sniffer automático de queries GraphQL no console
+                            if (urlString.includes('/api/graphql') && bodyData) {
+                                try {
+                                    const params = new URLSearchParams(typeof bodyData === 'string' ? bodyData : '');
+                                    const qName = params.get('fb_api_req_friendly_name') || '';
+                                    const qDocId = params.get('doc_id') || '';
+                                    const qVars = params.get('variables') || '';
+                                    if (qName && !qName.includes('PolarisScreenTimeLogger')) {
+                                        console.log(`%c[IG GraphQL Sniffer] ${qName} (doc_id: ${qDocId})`, 'color: #00ffaa; background: #003311; font-weight: bold; padding: 2px 6px; border-radius: 3px;', qVars);
+                                    }
+                                } catch (_) { }
+                            }
+                            // Verifica se é resposta Bloks de contas silenciadas, bloqueadas, ocultar story ou paginação assíncrona
+                            if (urlString.includes('com.instagram.pagination.async') ||
+                                urlString.includes('bloks/apps/com.instagram.interactions.privacy') ||
+                                urlString.includes('blocked_accounts') ||
+                                urlString.includes('muted_accounts') ||
+                                urlString.includes('hide_story') ||
+                                urlString.includes('/async/wbloks/fetch/')) {
+                                return originalFetch.apply(this, arguments).then(async response => {
+                                    try {
+                                        const clone = response.clone();
+                                        const text = await clone.text();
+                                        handleBloksResponseText(urlString, text);
+                                    } catch (e) { /* silencia erros de parse */ }
+                                    return response;
+                                });
+                            }
+                            return originalFetch.apply(this, arguments);
+                        };
+                    } catch (_) { }
+                });
 
                 // Interceptor para Beacon
                 if (navigator.sendBeacon) {
@@ -3205,7 +3327,7 @@
                             <input type="checkbox" class="closeFriendCheckbox" id="cfcb_${username}" data-username="${username}" ${isChecked ? "checked" : ""}>
                             <span class="checkmark"></span>
                         </label>
-                        <img src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
+                        <img src="${photoUrl || DEFAULT_AVATAR}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
                         <span style="cursor:pointer; color: black;">${username}</span>
                     </li>
                 `;
@@ -3791,7 +3913,7 @@
                         <input type="checkbox" class="hideStoryCheckbox" id="hsb_${username}" data-username="${username}" ${isChecked ? "checked" : ""}>
                             <span class="checkmark"></span>
                         </label>
-                        <img src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
+                        <img src="${photoUrl || DEFAULT_AVATAR}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
                         <span style="cursor:pointer; color: black;">${username}</span>
                     </li>
                 `;
@@ -4331,7 +4453,7 @@
                             <input type="checkbox" class="mutedCheckbox" data-username="${username}" ${isChecked ? "checked" : ""}>
                             <span class="checkmark"></span>
                         </label>
-                        <img src="${photoUrl || 'https://via.placeholder.com/32'}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
+                        <img src="${photoUrl || DEFAULT_AVATAR}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
                         <div style="display:flex; flex-direction:column;"><span style="cursor:pointer; color: black; font-weight:bold;">${username}</span>${mutedDetailText ? `<span style="font-size:11px; color:gray;">${mutedDetailText}</span>` : ''}</div>
                     </li>
                 `;
@@ -6616,7 +6738,7 @@
                             if (dbFollowing.details) {
                                 seguindoList = Array.from(dbFollowing.details.values());
                             } else if (dbFollowing instanceof Set) { // Handle older cache format where it's just a Set of usernames
-                                seguindoList = Array.from(dbFollowing).map(u => ({ username: u, photoUrl: 'https://via.placeholder.com/150' }));
+                                seguindoList = Array.from(dbFollowing).map(u => ({ username: u, photoUrl: DEFAULT_AVATAR }));
                             } else { // Fallback if dbFollowing is not a Set or has no details
                                 seguindoList = [];
                             }
@@ -9139,9 +9261,21 @@
                     let followingList = [];
 
                     // Carrega a lista de seguindo do cache
-                    dbHelper.loadCache('following').then(set => {
-                        if (set) {
-                            followingList = Array.from(set);
+                    dbHelper.loadCache('following').then(data => {
+                        if (data) {
+                            if (data.details) {
+                                followingList = Array.from(data.details.keys());
+                            } else if (Array.isArray(data)) {
+                                followingList = data.map(x => typeof x === 'object' ? (x.username || '') : String(x)).filter(Boolean);
+                            } else if (data instanceof Set) {
+                                followingList = Array.from(data).map(x => typeof x === 'object' ? (x.username || '') : String(x)).filter(Boolean);
+                            }
+                        }
+                        if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList) && seguindoList.length > 0) {
+                            seguindoList.forEach(item => {
+                                const u = typeof item === 'object' ? item.username : item;
+                                if (u && !followingList.includes(u)) followingList.push(u);
+                            });
                         }
                     });
 
@@ -9199,13 +9333,41 @@
                         document.getElementById("interacoesDetalhes").style.display = "none";
                         profileDiv.style.display = "none";
 
-                        // Buscar foto de perfil e bio
-                        let photoUrl = 'https://via.placeholder.com/80';
+                        // Buscar foto de perfil e bio de forma segura e sem CSP/400
+                        let photoUrl = DEFAULT_AVATAR;
                         let bio = '';
-                        const info = await safeFetchProfileInfo(username);
-                        if (info && info.data?.user) {
-                            photoUrl = info.data.user.profile_pic_url || photoUrl;
-                            bio = info.data.user.biography || '';
+                        const cleanUsername = username.toLowerCase();
+
+                        // 1. Procura no cache local de detalhes
+                        if (typeof cachedData !== 'undefined' && cachedData?.userDetails?.has(cleanUsername)) {
+                            const cached = cachedData.userDetails.get(cleanUsername);
+                            if (cached?.profile_pic_url) photoUrl = cached.profile_pic_url;
+                            if (cached?.biography) bio = cached.biography;
+                        }
+
+                        // 2. Obter ID do usuário
+                        let targetUserId = await getUserId(username);
+
+                        // 3. Se tiver o ID, busca via GraphQL HoverCard (mais atual e sem erro 400)
+                        if (targetUserId) {
+                            try {
+                                const hoverData = await executeGraphqlUserHoverCard(targetUserId);
+                                if (hoverData) {
+                                    if (hoverData.profilePicUrl) photoUrl = hoverData.profilePicUrl;
+                                    if (hoverData.biography) bio = hoverData.biography;
+                                }
+                            } catch (_) { }
+                        }
+
+                        // 4. Fallback safeFetchProfileInfo apenas se ainda estiver sem foto
+                        if (photoUrl === DEFAULT_AVATAR) {
+                            try {
+                                const info = await safeFetchProfileInfo(username);
+                                if (info && info.data?.user) {
+                                    photoUrl = info.data.user.profile_pic_url || photoUrl;
+                                    bio = info.data.user.biography || bio;
+                                }
+                            } catch (_) { }
                         }
 
                         document.getElementById("interacoesUserPic").src = photoUrl;
@@ -9213,82 +9375,159 @@
                         document.getElementById("interacoesUserBioDisplay").innerText = bio;
                         profileDiv.style.display = "flex";
 
-                        const headers = { 'X-IG-App-ID': '936619743392459' };
-                        const myId = getCookie('ds_user_id');
-
                         try {
-                            // Obter ID do usuário de forma segura
-                            let targetUserId = await getUserId(username);
                             if (!targetUserId) {
                                 throw new Error("Não foi possível obter o ID do usuário.");
                             }
 
                             // --- O QUE EU CURTI DELE ---
-                            resultadosDiv.innerHTML = '<p style="color:black;">Analisando posts e destaques...</p>';
+                            resultadosDiv.innerHTML = '<p style="color:black;">Analisando publicações do perfil via GraphQL...</p>';
 
                             const likedPosts = [];
                             const likedStories = [];
 
-                            // 1. Posts
-                            let nextMaxId = null;
-                            let hasNext = true;
-                            let processedCount = 0;
-                            const MAX_POSTS = 500;
+                            // 1. Buscar posts via GraphQL oficial (com paginação segura)
+                            let totalPostsFound = 0;
+                            let hasNextPage = true;
+                            let endCursor = null;
+                            let pageNum = 0;
+                            const maxPages = 25; // Até 300 posts analisados!
 
-                            while (hasNext && processedCount < MAX_POSTS) {
-                                let url = `https://www.instagram.com/api/v1/feed/user/${targetUserId}/?count=33`;
-                                if (nextMaxId) url += `&max_id=${nextMaxId}`;
+                            while (hasNextPage && pageNum < maxPages) {
+                                pageNum++;
+                                toggleLoading(true, Math.min(100, Math.floor((pageNum / maxPages) * 100)), `Analisando posts da página ${pageNum}... (${likedPosts.length} curtidos)`);
 
-                                const feedRes = await fetch(url, { headers });
-                                if (!feedRes.ok) break;
+                                const connection = await executeGraphqlProfilePosts(cleanUsername, endCursor);
+                                if (!connection || !Array.isArray(connection.edges)) {
+                                    console.warn(`[IG Tools Interações] Fim das páginas ou dados indisponíveis na página ${pageNum}.`);
+                                    break;
+                                }
 
-                                const feedData = await feedRes.json();
-                                const items = feedData.items || [];
+                                const edges = connection.edges;
+                                totalPostsFound += edges.length;
 
-                                for (const item of items) {
-                                    if (item.has_liked) {
-                                        let thumb = item.image_versions2?.candidates?.[0]?.url || item.carousel_media?.[0]?.image_versions2?.candidates?.[0]?.url || '';
-                                        likedPosts.push({ type: 'Post', url: `https://www.instagram.com/p/${item.code}/`, thumb: thumb, id: item.id });
+                                for (const edge of edges) {
+                                    const node = edge?.node;
+                                    if (!node) continue;
+
+                                    const code = node.code || node.shortcode;
+                                    const isLiked = Boolean(node.has_liked || node.viewer_has_liked);
+                                    const thumb = node.image_versions2?.candidates?.[0]?.url || node.display_url || node.thumbnail_src || '';
+                                    const mediaId = node.id || node.pk;
+
+                                    if (isLiked && code) {
+                                        likedPosts.push({
+                                            type: 'Post',
+                                            url: `https://www.instagram.com/p/${code}/`,
+                                            thumb: thumb,
+                                            id: mediaId || code
+                                        });
                                     }
                                 }
 
-                                processedCount += items.length;
-                                resultadosDiv.innerHTML = `<p style="color:black;">Analisando posts... (${processedCount} verificados)</p>`;
+                                hasNextPage = Boolean(connection.page_info?.has_next_page);
+                                endCursor = connection.page_info?.end_cursor;
+                                if (!endCursor) break;
 
-                                nextMaxId = feedData.next_max_id;
-                                if (!feedData.more_available || !nextMaxId) hasNext = false;
-                                await new Promise(r => setTimeout(r, 300));
+                                // Pequena pausa suave para segurança total
+                                await new Promise(r => setTimeout(r, 400));
                             }
 
-                            // 2. Destaques (Stories)
-                            resultadosDiv.innerHTML = `<p style="color:black;">Analisando destaques...</p>`;
-                            try {
-                                const trayRes = await fetch(`https://www.instagram.com/api/v1/highlights/${targetUserId}/highlights_tray/`, { headers });
-                                if (trayRes.ok) {
-                                    const trayData = await trayRes.json();
-                                    const tray = trayData.tray || [];
-                                    const reelIds = tray.map(t => t.id);
+                            // 2. Extração de Stories (24h) e Destaques (Highlights) via API oficial
+                            toggleLoading(true, 95, "Analisando Stories e Destaques...");
 
-                                    if (reelIds.length > 0) {
-                                        let url = `https://www.instagram.com/api/v1/feed/reels_media/?`;
-                                        reelIds.forEach(id => url += `reel_ids=${id}&`);
-                                        const mediaRes = await fetch(url, { headers });
-                                        if (mediaRes.ok) {
-                                            const mediaData = await mediaRes.json();
-                                            for (const reelId in mediaData.reels) {
-                                                const items = mediaData.reels[reelId].items || [];
-                                                for (const item of items) {
-                                                    if (item.has_liked) {
-                                                        let thumb = item.image_versions2?.candidates?.[0]?.url || item.video_versions?.[0]?.url || '';
-                                                        const cleanReelId = reelId.replace(/^highlight:/, '');
-                                                        likedStories.push({ type: 'Story (Destaque)', url: `https://www.instagram.com/stories/highlights/${cleanReelId}/?story_media_id=${item.id}`, thumb: thumb, id: item.id });
+                            const reelsToFetch = new Set();
+                            if (targetUserId) {
+                                reelsToFetch.add(String(targetUserId));
+                            }
+
+                            // A. Detectar destaques na página atual (se estiver no perfil do usuário)
+                            if (typeof document !== 'undefined') {
+                                document.querySelectorAll('a[href*="/stories/highlights/"]').forEach(a => {
+                                    const m = (a.getAttribute('href') || '').match(/\/stories\/highlights\/(\d+)/);
+                                    if (m && m[1]) reelsToFetch.add(`highlight:${m[1]}`);
+                                });
+                            }
+
+                            // B. Obter HTML do perfil para capturar eventuais IDs de destaques embutidos
+                            try {
+                                const profileRes = await fetch(`https://www.instagram.com/${encodeURIComponent(cleanUsername)}/`, {
+                                    credentials: 'include',
+                                    cache: 'no-store'
+                                });
+                                if (profileRes.ok) {
+                                    const profileHtml = await profileRes.text();
+                                    const hlMatches = [...profileHtml.matchAll(/"(?:highlight:)?(\d{15,20})"/g), ...profileHtml.matchAll(/\/stories\/highlights\/(\d+)/g)];
+                                    for (const match of hlMatches) {
+                                        const hId = match[1];
+                                        if (hId && (hId.startsWith('17') || hId.startsWith('18'))) {
+                                            reelsToFetch.add(`highlight:${hId}`);
+                                        }
+                                    }
+                                }
+                            } catch (e) {
+                                console.warn("[IG Tools Interações] Aviso ao buscar HTML de destaques:", e);
+                            }
+
+                            console.log(`[IG Tools Interações] Buscando ${reelsToFetch.size} reel(s) (Stories 24h + Destaques)...`, Array.from(reelsToFetch));
+
+                            // C. Buscar reels_media em lotes
+                            const reelIdList = Array.from(reelsToFetch);
+                            const batchSize = 5;
+                            for (let i = 0; i < reelIdList.length; i += batchSize) {
+                                const batch = reelIdList.slice(i, i + batchSize);
+                                const queryParams = batch.map(id => `reel_ids=${encodeURIComponent(id)}`).join('&');
+                                const reelsUrl = `https://www.instagram.com/api/v1/feed/reels_media/?${queryParams}`;
+
+                                try {
+                                    const reelsRes = await fetch(reelsUrl, {
+                                        headers: {
+                                            'X-IG-App-ID': '936619743392459',
+                                            'X-Requested-With': 'XMLHttpRequest'
+                                        },
+                                        credentials: 'include'
+                                    });
+
+                                    if (reelsRes.ok) {
+                                        const reelsData = await reelsRes.json();
+                                        const reelsList = reelsData?.reels_media || Object.values(reelsData?.reels || {});
+
+                                        for (const reel of reelsList) {
+                                            const reelId = String(reel?.id || '');
+                                            const isHighlight = reelId.startsWith('highlight:') || reelId.startsWith('17') || reelId.startsWith('18');
+                                            const cleanHighlightId = reelId.replace(/^highlight:/, '');
+                                            const items = reel?.items || [];
+
+                                            for (const it of items) {
+                                                const hasLiked = Boolean(it.has_liked || it.viewer_has_liked);
+                                                if (hasLiked) {
+                                                    const rawId = String(it.id || it.pk || '');
+                                                    const cleanMediaId = rawId.split('_')[0];
+                                                    const thumb = it.image_versions2?.candidates?.[0]?.url || it.display_url || '';
+
+                                                    if (!likedStories.some(s => s.id === cleanMediaId)) {
+                                                        likedStories.push({
+                                                            type: isHighlight ? 'Story (Destaque)' : 'Story (24h)',
+                                                            url: isHighlight
+                                                                ? `https://www.instagram.com/stories/highlights/${cleanHighlightId}/`
+                                                                : `https://www.instagram.com/stories/${cleanUsername}/${cleanMediaId}/`,
+                                                            thumb: thumb,
+                                                            id: cleanMediaId
+                                                        });
                                                     }
                                                 }
                                             }
                                         }
                                     }
+                                } catch (errBatch) {
+                                    console.warn("[IG Tools Interações] Erro ao buscar lote de stories:", errBatch);
                                 }
-                            } catch (e) { console.error("Erro destaques", e); }
+                                if (i + batchSize < reelIdList.length) {
+                                    await new Promise(r => setTimeout(r, 300));
+                                }
+                            }
+
+                            console.log(`[IG Tools Interações] @${cleanUsername}: ${totalPostsFound} publicações analisadas. Curtidas encontradas: ${likedPosts.length}. Stories/Destaques curtidos: ${likedStories.length}`);
 
                             const dadosReais = {
                                 fotosCurtidas: { count: likedPosts.length, items: likedPosts },
@@ -9302,8 +9541,11 @@
                         } catch (e) {
                             console.error(e);
                             resultadosDiv.innerHTML = `<p style="color:red;">Erro ao buscar dados: ${e.message}</p>`;
+                        } finally {
                             toggleLoading(false);
-                        } finally { btn.disabled = false; btn.textContent = "Verificar"; }
+                            btn.disabled = false;
+                            btn.textContent = "Verificar";
+                        }
                     };
 
                     function renderizarCardsInteracoes(dados) {

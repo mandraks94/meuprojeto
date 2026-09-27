@@ -611,6 +611,107 @@
                 }
             }
 
+            async function executeGraphqlUserHoverCard(userId) {
+                if (!userId) return null;
+                const uid = String(userId);
+
+                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                const jazoest = computeJazoest(fbDtsg) || '26239';
+                const spin = getSpinParams();
+
+                const variables = {
+                    userID: uid
+                };
+
+                const body = new URLSearchParams();
+                body.append('__comet_req', '7');
+                if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                if (jazoest) body.append('jazoest', jazoest);
+                if (lsd) body.append('lsd', lsd);
+                if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                body.append('__spin_b', spin.spin_b || 'trunk');
+                if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                body.append('__crn', 'comet.igweb.PolarisFeedRoute');
+                body.append('fb_api_caller_class', 'RelayModern');
+                body.append('fb_api_req_friendly_name', 'PolarisUserHoverCardContentV2Query');
+                body.append('server_timestamps', 'true');
+                body.append('variables', JSON.stringify(variables));
+                body.append('doc_id', '28949219061332276');
+
+                const headers = {
+                    ...getApiHeaders(true),
+                    'X-ASBD-ID': '359341',
+                    'X-CSRFToken': getCookie('csrftoken') || '',
+                    'X-FB-Friendly-Name': 'PolarisUserHoverCardContentV2Query',
+                    'X-FB-LSD': lsd,
+                    'X-IG-App-ID': '936619743392459',
+                    'X-IG-Max-Touch-Points': '0'
+                };
+
+                try {
+                    console.log(`[IG Tools Stats] Buscando hovercard via GraphQL para UID ${uid}...`);
+                    const response = await fetch('https://www.instagram.com/api/graphql', {
+                        method: 'POST',
+                        headers,
+                        body: body.toString(),
+                        credentials: 'include',
+                        cache: 'no-store'
+                    });
+
+                    const rawText = await response.text();
+                    let cleanedText = rawText.trim();
+                    if (cleanedText.startsWith('for (;;);')) {
+                        cleanedText = cleanedText.slice(9).trim();
+                    }
+
+                    let data = null;
+                    try {
+                        data = JSON.parse(cleanedText);
+                    } catch (e) {
+                        const lines = cleanedText.split('\n');
+                        for (const line of lines) {
+                            try {
+                                const parsed = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                                if (parsed?.data) {
+                                    data = parsed;
+                                    break;
+                                }
+                            } catch (_) { }
+                        }
+                    }
+
+                    console.log(`[IG Tools Stats] Resposta HoverCard para UID ${uid}:`, data);
+
+                    const user = data?.data?.xig_user_by_igid_v2?.user_dict || data?.data?.user || data?.data?.xdt_user || data?.data;
+                    if (user) {
+                        let followers = null;
+                        let following = null;
+
+                        if (user.follower_count !== undefined) followers = user.follower_count;
+                        else if (user.edge_followed_by?.count !== undefined) followers = user.edge_followed_by.count;
+                        else if (user.followers_count !== undefined) followers = user.followers_count;
+
+                        if (user.following_count !== undefined) following = user.following_count;
+                        else if (user.edge_follow?.count !== undefined) following = user.edge_follow.count;
+                        else if (user.following_tag_count !== undefined) following = user.following_tag_count;
+
+                        if (followers !== null || following !== null) {
+                            return {
+                                followers: Number(followers) || 0,
+                                following: Number(following) || 0,
+                                isPrivate: user.is_private !== undefined ? user.is_private : null,
+                                mediaCount: user.media_count !== undefined ? user.media_count : null
+                            };
+                        }
+                    }
+                    return null;
+                } catch (e) {
+                    console.error(`[IG Tools Stats] Erro ao buscar stats via GraphQL para UID ${uid}:`, e);
+                    return null;
+                }
+            }
+
             async function executeGraphqlSetBesties(adds = [], removes = []) {
                 const addList = (Array.isArray(adds) ? adds : [adds]).filter(Boolean).map(String);
                 const removeList = (Array.isArray(removes) ? removes : [removes]).filter(Boolean).map(String);
@@ -6864,9 +6965,29 @@
                             }
                         };
 
-                        const getFollowersAndFollowing = async (username) => {
+                        const getFollowersAndFollowing = async (username, existingId = null) => {
+                            let uid = existingId || getCachedUserId(username);
+                            if (!uid && typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                const item = seguindoList.find(x => (typeof x === 'object' ? x?.username : x)?.toLowerCase() === username.toLowerCase());
+                                if (item && typeof item === 'object') {
+                                    const foundId = item.id || item.pk || item.pk_id;
+                                    if (foundId) {
+                                        uid = String(foundId);
+                                        setCachedUserId(username, uid);
+                                    }
+                                }
+                            }
+                            if (!uid) {
+                                uid = await getUserId(username);
+                            }
+
+                            if (uid) {
+                                const graphqlStats = await executeGraphqlUserHoverCard(uid);
+                                if (graphqlStats) return graphqlStats;
+                            }
+
                             const info = await safeFetchProfileInfo(username);
-                            if (info && info.data?.user) {
+                            if (info && info.data?.user && info.data.user.edge_followed_by?.count !== undefined) {
                                 return {
                                     followers: info.data.user.edge_followed_by?.count || 0,
                                     following: info.data.user.edge_follow?.count || 0
@@ -7235,21 +7356,49 @@
                             btn.textContent = 'Carregando...';
 
                             for (let i = 0; i < currentPaginatedUsers.length; i++) {
-                                if (processoCancelado) break; // Allow cancellation during stats loading
+                                if (processoCancelado) break;
                                 const user = currentPaginatedUsers[i];
-                                // If data exists, skip to next
-                                if (user.followers !== undefined && user.following !== undefined) continue;
 
                                 btn.textContent = `Carregando (${i + 1}/${currentPaginatedUsers.length})...`;
-                                const stats = await getFollowersAndFollowing(user.username);
-                                if (stats) { // Only update if stats were successfully fetched
+                                const stats = await getFollowersAndFollowing(user.username, user.id || user.pk);
+                                if (stats) {
                                     user.followers = stats.followers;
                                     user.following = stats.following;
+
+                                    const mainUser = seguindoList.find(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() === user.username.toLowerCase());
+                                    if (mainUser && typeof mainUser === 'object') {
+                                        mainUser.followers = stats.followers;
+                                        mainUser.following = stats.following;
+                                    }
+
+                                    // Atualiza a linha visual na tabela em tempo real
+                                    const tr = document.querySelector(`tr[data-username="${user.username}"]`);
+                                    if (tr) {
+                                        const tds = tr.querySelectorAll('td');
+                                        if (tds[4]) tds[4].textContent = stats.followers.toLocaleString();
+                                        if (tds[5]) tds[5].textContent = stats.following.toLocaleString();
+                                        if (tds[6]) {
+                                            if (stats.following > stats.followers) {
+                                                tds[6].textContent = 'Unfollow';
+                                                tds[6].style.cssText = 'color: #e74c3c; font-weight: bold; text-align: center; padding: 8px;';
+                                            } else {
+                                                tds[6].textContent = '-';
+                                                tds[6].style.cssText = 'text-align: center; padding: 8px;';
+                                            }
+                                        }
+
+                                        if (stats.isPrivate !== null && typeof privacyCache !== 'undefined') {
+                                            privacyCache.set(user.username.toLowerCase(), stats.isPrivate);
+                                            const badge = tr.querySelector('.seguindo-privacy-badge');
+                                            if (badge) {
+                                                badge.innerText = stats.isPrivate ? 'P' : 'A';
+                                                badge.style.cssText = `display: inline-flex; align-items: center; justify-content: center; padding: 2px 6px; font-size: 10px; font-weight: bold; border-radius: 4px; color: #ffffff; line-height: 1; background-color: ${stats.isPrivate ? '#e1306c' : '#28a745'};`;
+                                                badge.title = stats.isPrivate ? 'Perfil Privado' : 'Perfil Público';
+                                            }
+                                        }
+                                    }
                                 }
-                                // Update the specific user in the main seguindoList as well
-                                const mainUser = seguindoList.find(u => u.username === user.username);
-                                if (mainUser) Object.assign(mainUser, stats);
-                                await new Promise(r => setTimeout(r, 500));
+                                await new Promise(r => setTimeout(r, 350));
                             }
                             await dbHelper.saveCache('following', seguindoList);
                             btn.disabled = false;

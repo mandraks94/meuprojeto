@@ -701,7 +701,8 @@
                                 followers: Number(followers) || 0,
                                 following: Number(following) || 0,
                                 isPrivate: user.is_private !== undefined ? user.is_private : null,
-                                mediaCount: user.media_count !== undefined ? user.media_count : null
+                                mediaCount: user.media_count !== undefined ? user.media_count : null,
+                                profilePicUrl: user.profile_pic_url || user.hd_profile_pic_url_info?.url || null
                             };
                         }
                     }
@@ -1046,59 +1047,105 @@
                 return await executeGraphqlUnfollow(uid);
             }
 
-            async function executeWebFollow(uid) {
+            async function executeGraphqlFollow(uid) {
+                if (!uid) return { response: { ok: false, status: 0 }, success: false, result: null, text: 'no_uid' };
+
+                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                const jazoest = computeJazoest(fbDtsg) || '26275';
+                const spin = getSpinParams();
+
+                const variables = {
+                    target_user_id: String(uid),
+                    container_module: 'profile',
+                    nav_chain: 'PolarisProfilePostsTabRoot:profilePage:1:via_cold_start'
+                };
+
+                const body = new URLSearchParams();
+                body.append('__comet_req', '7');
+                if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                if (jazoest) body.append('jazoest', jazoest);
+                if (lsd) body.append('lsd', lsd);
+                if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                body.append('__spin_b', spin.spin_b || 'trunk');
+                if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                body.append('__crn', 'comet.igweb.PolarisProfilePostsTabRoute');
+                body.append('fb_api_caller_class', 'RelayModern');
+                body.append('fb_api_req_friendly_name', 'usePolarisFollowMutation');
+                body.append('server_timestamps', 'true');
+                body.append('variables', JSON.stringify(variables));
+                body.append('doc_id', '26508036048874888');
+
                 const headers = {
                     ...getApiHeaders(true),
-                    'X-CSRFToken': getCookie('csrftoken') || ''
+                    'X-ASBD-ID': '359341',
+                    'X-CSRFToken': getCookie('csrftoken') || '',
+                    'X-FB-Friendly-Name': 'usePolarisFollowMutation',
+                    'X-FB-LSD': lsd,
+                    'X-IG-App-ID': '936619743392459',
+                    'X-IG-Max-Touch-Points': '0'
                 };
-                const body = new URLSearchParams();
-                body.append('user_id', String(uid));
 
                 try {
-                    const response = await fetch(`https://www.instagram.com/api/v1/web/friendships/${encodeURIComponent(uid)}/follow/`, {
+                    console.log(`[IG Tools Follow] Enviando mutação GraphQL para UID ${uid}...`, variables);
+                    const response = await fetch('https://www.instagram.com/api/graphql', {
                         method: 'POST',
                         headers,
                         body: body.toString(),
                         credentials: 'include',
                         cache: 'no-store'
                     });
-                    const text = await response.text();
-                    let result = null;
-                    try { result = JSON.parse(text); } catch (e) { }
-                    if (response.ok && (result?.status === 'ok' || result?.result === 'following' || result?.result === 'requested')) {
-                        return { response, result, text };
+
+                    const rawText = await response.text();
+                    let cleanedText = rawText.trim();
+                    if (cleanedText.startsWith('for (;;);')) {
+                        cleanedText = cleanedText.slice(9).trim();
                     }
-                    if (!response.ok) {
-                        const fallbackResponse = await fetch(`https://www.instagram.com/api/v1/friendships/create/${encodeURIComponent(uid)}/`, {
-                            method: 'POST',
-                            headers,
-                            body: body.toString(),
-                            credentials: 'include',
-                            cache: 'no-store'
-                        });
-                        const fbText = await fallbackResponse.text();
-                        let fbResult = null;
-                        try { fbResult = JSON.parse(fbText); } catch (e) { }
-                        return { response: fallbackResponse, result: fbResult, text: fbText };
-                    }
-                    return { response, result, text };
-                } catch (e) {
+
+                    let data = null;
                     try {
-                        const fallbackResponse = await fetch(`https://www.instagram.com/api/v1/friendships/create/${encodeURIComponent(uid)}/`, {
-                            method: 'POST',
-                            headers,
-                            body: body.toString(),
-                            credentials: 'include',
-                            cache: 'no-store'
-                        });
-                        const fbText = await fallbackResponse.text();
-                        let fbResult = null;
-                        try { fbResult = JSON.parse(fbText); } catch (e) { }
-                        return { response: fallbackResponse, result: fbResult, text: fbText };
-                    } catch (e2) {
-                        return { response: { ok: false, status: 0 }, result: null, text: String(e2) };
+                        data = JSON.parse(cleanedText);
+                    } catch (e) {
+                        const lines = cleanedText.split('\n');
+                        for (const line of lines) {
+                            try {
+                                const parsed = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                                if (parsed?.data || parsed?.errors) {
+                                    data = parsed;
+                                    break;
+                                }
+                            } catch (_) { }
+                        }
                     }
+
+                    console.log('[IG Tools Follow] Resposta GraphQL:', {
+                        status: response.status,
+                        ok: response.ok,
+                        data,
+                        rawPreview: rawText.slice(0, 200)
+                    });
+
+                    const hasData = !!(data?.data?.xdt_create_friendship || data?.data);
+                    const isFollowSuccess = data?.data?.xdt_create_friendship?.friendship_status?.following === true ||
+                        data?.data?.xdt_create_friendship?.friendship_status?.outgoing_request === true;
+                    const hasErrors = Array.isArray(data?.errors) && data.errors.length > 0 && !hasData;
+                    const success = response.ok && !hasErrors && (isFollowSuccess || hasData);
+
+                    return {
+                        response,
+                        success,
+                        result: { status: success ? 'ok' : 'fail', data },
+                        text: rawText,
+                        data
+                    };
+                } catch (e) {
+                    console.error('[IG Tools Follow] Erro na requisição GraphQL:', e);
+                    return { response: { ok: false, status: 0 }, success: false, result: null, text: String(e) };
                 }
+            }
+
+            async function executeWebFollow(uid) {
+                return await executeGraphqlFollow(uid);
             }
 
             async function confirmUnfollow(uid, response) {
@@ -1217,22 +1264,7 @@
                     }
                 } catch (e) { }
 
-                // 5. Fallback web_profile_info
-                try {
-                    const response = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(cleanUsername)}`, {
-                        headers: getApiHeaders(),
-                        credentials: 'include',
-                        cache: 'no-store'
-                    });
-                    const data = await response.json();
-                    const id = data?.data?.user?.id;
-                    if (response.ok && id) {
-                        setCachedUserId(cleanUsername, String(id));
-                        return String(id);
-                    }
-                } catch (e) { }
-
-                // 6. Fallback HTML do perfil
+                // 5. Fallback HTML do perfil
                 try {
                     const profileResponse = await fetch(`https://www.instagram.com/${encodeURIComponent(cleanUsername)}/`, {
                         credentials: 'include',
@@ -5709,7 +5741,7 @@
                                             <button id="bloquearBtn" style="margin-left: 10px; background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Bloquear</button>
                                             ${currentTabId === 'tabNaoSegueDeVolta' ? `<button id="corrigirBtn" style="margin-left: 10px; background-color: #f39c12; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;" title="Remove usuários selecionados desta lista permanentemente">Corrigir (Já Sigo)</button>` : ''}
                                         ` : ''}
-                                        ${currentTabId === 'tabNaoSigoDeVolta' ? `<button id="followBackBtn" style="background:#0095f6;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">Seguir de Volta (Em breve)</button>` : ''}
+                                        ${currentTabId === 'tabNaoSigoDeVolta' ? `<button id="followBackBtn" style="background:#0095f6;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">Seguir de Volta</button>` : ''}
                                         ${currentTabId === 'tabHistorico' ? `
                                             <button id="seguirNovamenteBtn" style="background:#0095f6;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;margin-right:10px;">Seguir Novamente</button>
                                             <button id="limparHistoricoBtn" style="background:#e74c3c;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">Limpar Selecionados</button>
@@ -5768,6 +5800,32 @@
                                     }
                                 };
                             }
+                            if (document.getElementById("followBackBtn")) {
+                                document.getElementById("followBackBtn").onclick = async () => {
+                                    const selecionados = Array.from(selectedUsers);
+                                    if (selecionados.length === 0) return alert("Selecione os usuários para seguir de volta.");
+
+                                    const btn = document.getElementById("followBackBtn");
+                                    btn.disabled = true;
+                                    btn.textContent = "Processando...";
+                                    processoCancelado = false;
+
+                                    followUsers(selecionados, 0, async () => {
+                                        btn.disabled = false;
+                                        btn.textContent = "Seguir de Volta";
+                                        selectedUsers.clear();
+                                        document.querySelectorAll('#naoSegueDeVoltaTable .unfollowCheckbox, #historicoTable .unfollowCheckbox').forEach(cb => {
+                                            cb.checked = false;
+                                        });
+                                        const selectAllCb = document.getElementById('selectAllCheckbox');
+                                        if (selectAllCb) selectAllCb.checked = false;
+                                        if (updateSelectedCountDisplay) updateSelectedCountDisplay();
+                                        if (document.getElementById('naoSegueSelectedCount')) document.getElementById('naoSegueSelectedCount').innerText = '(0 selecionados)';
+                                        showToast(`Processo de seguir finalizado.`);
+                                        renderCurrentTab();
+                                    }, selectedUsers, updateSelectedCountDisplay);
+                                };
+                            }
                             if (document.getElementById("seguirNovamenteBtn")) {
                                 document.getElementById("seguirNovamenteBtn").onclick = async () => {
                                     const selecionados = Array.from(selectedUsers);
@@ -5786,6 +5844,13 @@
                                             await dbHelper.deleteUnfollowHistory(seguidos);
                                         }
                                         selectedUsers.clear();
+                                        document.querySelectorAll('#naoSegueDeVoltaTable .unfollowCheckbox, #historicoTable .unfollowCheckbox').forEach(cb => {
+                                            cb.checked = false;
+                                        });
+                                        const selectAllCb = document.getElementById('selectAllCheckbox');
+                                        if (selectAllCb) selectAllCb.checked = false;
+                                        if (updateSelectedCountDisplay) updateSelectedCountDisplay();
+                                        if (document.getElementById('naoSegueSelectedCount')) document.getElementById('naoSegueSelectedCount').innerText = '(0 selecionados)';
                                         showToast(`${seguidos.length} usuário(s) seguido(s) e removido(s) do histórico.`);
                                         renderCurrentTab();
                                     }, selectedUsers, updateSelectedCountDisplay);
@@ -6303,8 +6368,18 @@
                     function followUsers(users, index, callback, selectedUsersSet, updateCountCb) {
                         if (index >= users.length || processoCancelado) {
                             toggleLoading(false);
+                            document.querySelectorAll('#naoSegueDeVoltaTable .unfollowCheckbox, #historicoTable .unfollowCheckbox').forEach(cb => {
+                                cb.checked = false;
+                            });
+                            const selectAllCb = document.getElementById('selectAllCheckbox');
+                            if (selectAllCb) selectAllCb.checked = false;
+                            if (selectedUsersSet) selectedUsersSet.clear();
+                            if (updateCountCb) updateCountCb();
+                            if (document.getElementById('naoSegueSelectedCount')) {
+                                document.getElementById('naoSegueSelectedCount').innerText = '(0 selecionados)';
+                            }
                             if (!processoCancelado && users.length > 0) {
-                                alert("Processo concluído.");
+                                alert("Processo de seguir concluído.");
                             }
                             if (callback) callback();
                             return;
@@ -6316,24 +6391,43 @@
 
                         (async () => {
                             try {
-                                const uid = await getUserId(username);
+                                let uid = getCachedUserId(username);
+                                if (!uid && typeof cachedData !== 'undefined' && cachedData?.userDetails) {
+                                    const details = cachedData.userDetails.get(username.toLowerCase());
+                                    if (details?.id) uid = String(details.id);
+                                }
+                                if (!uid) {
+                                    uid = await getUserId(username);
+                                }
                                 if (uid) {
                                     const apiResult = await executeWebFollow(uid);
                                     console.log('[IG Tools] Resposta API web do follow:', { username, uid: String(uid), result: apiResult.result || apiResult.text });
-                                    const isOk = apiResult.response && apiResult.response.ok && (
+                                    const isOk = apiResult.success || (apiResult.response && apiResult.response.ok && (
                                         apiResult.result?.status === 'ok' ||
                                         apiResult.result?.result === 'following' ||
                                         apiResult.result?.result === 'requested' ||
                                         apiResult.result?.friendship_status?.following === true ||
                                         apiResult.result?.friendship_status?.outgoing_request === true
-                                    );
+                                    ));
 
                                     if (isOk) {
                                         if (selectedUsersSet) selectedUsersSet.delete(username);
                                         if (updateCountCb) updateCountCb();
+                                        const lowerUser = username.toLowerCase();
                                         if (typeof cachedData !== 'undefined' && cachedData.seguindo) {
-                                            cachedData.seguindo.add(username.toLowerCase());
+                                            cachedData.seguindo.add(lowerUser);
                                         }
+                                        if (typeof lists !== 'undefined' && lists && lists['tabNaoSigoDeVolta']) {
+                                            const uIdx = lists['tabNaoSigoDeVolta'].findIndex(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() === lowerUser);
+                                            if (uIdx > -1) {
+                                                lists['tabNaoSigoDeVolta'].splice(uIdx, 1);
+                                                const countSpan = document.getElementById('countNaoSigo');
+                                                if (countSpan) countSpan.innerText = lists['tabNaoSigoDeVolta'].length;
+                                            }
+                                        }
+                                        const rows = document.querySelectorAll(`tr[data-username="${username}"]`);
+                                        rows.forEach(r => r.remove());
+
                                         showToast(`✅ Agora você está seguindo ${username}`);
                                     } else {
                                         const errorMsg = apiResult.result?.message || `HTTP ${apiResult.response?.status || 'erro'}`;
@@ -10031,8 +10125,14 @@
 
 
                 async function getProfilePic(username) {
-                    const info = await safeFetchProfileInfo(username);
-                    return info?.data?.user?.profile_pic_url || 'https://via.placeholder.com/32';
+                    const uid = getCachedUserId(username);
+                    if (uid) {
+                        try {
+                            const stats = await executeGraphqlUserHoverCard(uid);
+                            if (stats?.profilePicUrl) return stats.profilePicUrl;
+                        } catch (e) { }
+                    }
+                    return DEFAULT_AVATAR;
                 }
 
                 function preencherTabela(userList, showCheckbox = true, isHistory = false, selectedSet = null, onCountChange = null) {
@@ -10103,36 +10203,13 @@
                                 });
                             }
 
-                            // Tratamento de erro de imagem (link expirado)
+                            // Tratamento de erro de imagem (link expirado): fallback silencioso para DEFAULT_AVATAR
                             const img = tr.querySelector('img');
                             if (img) {
                                 img.onerror = function () {
                                     this.onerror = null;
-                                    this.src = DEFAULT_AVATAR; // Fallback imediato vetorial
-
-                                    // Tenta buscar URL atualizada
-                                    getProfilePic(username).then(newUrl => {
-                                        if (newUrl && !newUrl.includes('placeholder')) {
-                                            this.src = newUrl;
-                                            // Se for histórico, atualiza no banco para corrigir o link expirado
-                                            if (isHistory) {
-                                                dbHelper.saveUnfollowHistory({
-                                                    username: username,
-                                                    photoUrl: newUrl,
-                                                    unfollowDate: userData.unfollowDate || new Date().toISOString()
-                                                }).catch(e => console.log("Erro ao atualizar foto no histórico", e));
-                                            }
-                                        }
-                                    });
+                                    this.src = DEFAULT_AVATAR;
                                 };
-                            }
-
-                            if (showCheckbox && selectedSet) {
-                                tr.querySelector('.unfollowCheckbox').addEventListener('change', (e) => {
-                                    if (e.target.checked) selectedSet.add(username);
-                                    else selectedSet.delete(username); // Corrected to remove from set
-                                    if (onCountChange) onCountChange();
-                                });
                             }
 
                             tbody.appendChild(tr);

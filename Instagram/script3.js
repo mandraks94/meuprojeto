@@ -5463,6 +5463,7 @@
                     };
 
                     let lists = {};
+                    let currentTabId = 'tabNaoSegueDeVolta';
 
                     // Função para extrair lista de usuários via API (muito mais rápido)
                     const fetchUserListAPI = async (userId, type, total) => {
@@ -5655,7 +5656,7 @@
                             'tabHistorico': listHistorico
                         };
 
-                        let currentTabId = 'tabNaoSegueDeVolta';
+                        currentTabId = 'tabNaoSegueDeVolta';
                         let currentList = lists[currentTabId];
 
                         async function renderCurrentTab() {
@@ -5972,22 +5973,111 @@
                         });
                     }
 
-                    function bloquearSelecionados(usersSet, updateCountCb) {
+                    async function bloquearSelecionados(usersSet, updateCountCb) {
                         const selecionados = Array.from(usersSet);
                         if (selecionados.length === 0) {
                             alert("Nenhum usuário selecionado para Bloquear.");
                             return;
                         }
-                        const btn = document.getElementById("bloquearBtn");
-                        btn.disabled = true;
-                        btn.textContent = "Processando...";
+                        if (!confirm(`Bloquear ${selecionados.length} usuário(s)? Atenção: o Instagram deixará de seguir e bloqueará estes perfis.`)) {
+                            return;
+                        }
 
-                        blockUsers(selecionados, 0, () => {
+                        const btn = document.getElementById("bloquearBtn");
+                        if (btn) {
+                            btn.disabled = true;
+                            btn.textContent = "Processando...";
+                        }
+
+                        toggleLoading(true, 0, "Iniciando Bloqueio...");
+                        const blockDelay = loadSettings().unfollowDelay || 1500;
+
+                        for (let i = 0; i < selecionados.length; i++) {
+                            if (processoCancelado) break;
+                            const username = selecionados[i];
+                            const percent = Math.round(((i + 1) / selecionados.length) * 100);
+                            toggleLoading(true, percent, `Bloqueando ${username} (${i + 1}/${selecionados.length})...`);
+                            if (statusDiv) statusDiv.innerText = `Bloqueando ${username} (${i + 1}/${selecionados.length})...`;
+
+                            let uid = getCachedUserId(username);
+                            if (!uid && typeof cachedData !== 'undefined' && cachedData?.userDetails) {
+                                const details = cachedData.userDetails.get(username.toLowerCase());
+                                if (details?.id) uid = String(details.id);
+                            }
+                            if (!uid) {
+                                uid = await getUserId(username);
+                            }
+
+                            if (!uid) {
+                                console.warn(`[IG Tools] Não foi possível obter o ID de ${username}`);
+                                showToast(`⚠️ ID de ${username} não encontrado`);
+                                continue;
+                            }
+
+                            try {
+                                console.log(`[IG Tools Block] Bloqueando ${username} (UID: ${uid})...`);
+                                const apiResult = await executeGraphqlBlockMany([uid]);
+                                if (apiResult.success || apiResult.result?.status === 'ok') {
+                                    showToast(`🚫 Bloqueou ${username}`);
+                                    usersSet.delete(username);
+                                    if (updateCountCb) updateCountCb();
+
+                                    // Remove da aba atual e atualiza contador
+                                    const activeTab = currentTabId || 'tabNaoSegueDeVolta';
+                                    const naoSegueList = (typeof lists !== 'undefined' && lists) ? lists[activeTab] : null;
+                                    if (naoSegueList) {
+                                        const userIndex = naoSegueList.findIndex(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() === username.toLowerCase());
+                                        if (userIndex > -1) naoSegueList.splice(userIndex, 1);
+                                        const countEl = document.getElementById(activeTab === 'tabNaoSegueDeVolta' ? 'countNaoSegue' : (activeTab === 'tabSeguidoresPerdidos' ? 'countSeguidoresPerdidos' : ''));
+                                        if (countEl) countEl.innerText = naoSegueList.length;
+                                    }
+
+                                    // Remove do cache de seguindo
+                                    const lowerUser = username.toLowerCase();
+                                    if (typeof cachedData !== 'undefined' && cachedData?.seguindo && cachedData.seguindo.has(lowerUser)) {
+                                        cachedData.seguindo.delete(lowerUser);
+                                        const newFollowingList = Array.from(cachedData.seguindo).map(u =>
+                                            cachedData.userDetails ? (cachedData.userDetails.get(u) || { username: u, photoUrl: null }) : { username: u, photoUrl: null }
+                                        );
+                                        dbHelper.saveCache('following', newFollowingList).catch(e => console.error(e));
+                                    }
+                                    if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                        seguindoList = seguindoList.filter(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() !== lowerUser);
+                                        dbHelper.saveCache('following', seguindoList).catch(e => console.error(e));
+                                    }
+
+                                    // Remove da tabela na tela
+                                    const rows = document.querySelectorAll(`tr[data-username="${username}"]`);
+                                    rows.forEach(r => r.remove());
+                                } else {
+                                    console.error(`[IG Tools Block] Falha ao bloquear ${username}:`, apiResult);
+                                    showToast(`❌ Falha ao bloquear ${username}`);
+                                }
+                            } catch (err) {
+                                console.error(`[IG Tools Block] Erro ao bloquear ${username}:`, err);
+                                showToast(`❌ Erro ao bloquear ${username}`);
+                            }
+
+                            if (i < selecionados.length - 1) {
+                                await new Promise(r => setTimeout(r, blockDelay));
+                            }
+                        }
+
+                        toggleLoading(false);
+                        usersSet.clear();
+                        document.querySelectorAll('#naoSegueDeVoltaTable .unfollowCheckbox, #historicoTable .unfollowCheckbox').forEach(cb => {
+                            cb.checked = false;
+                        });
+                        const selectAllCb = document.getElementById('selectAllCheckbox');
+                        if (selectAllCb) selectAllCb.checked = false;
+                        if (updateCountCb) updateCountCb();
+
+                        if (btn) {
                             btn.disabled = false;
                             btn.textContent = "Bloquear";
-                            usersSet.clear();
-                            if (updateCountCb) updateCountCb();
-                        });
+                        }
+                        if (statusDiv) statusDiv.innerText = "Processo de bloqueio finalizado.";
+                        alert("Processo de bloqueio finalizado.");
                     }
 
                     function unfollowSelecionados(usersSet, updateCountCb) {
@@ -6010,19 +6100,22 @@
 
                         toggleLoading(true, 0, "Iniciando Unfollows...");
                         unfollowUsers(selecionados, 0, () => {
-                            toggleLoading(false); // Fecha o loading ao terminar o processo de Unfollow
+                            toggleLoading(false);
                             unfollowBtn.disabled = false;
                             unfollowBtn.textContent = "Unfollow";
                             isUnfollowing = false;
-                            if (usersSet.size === 0) {
-                                if (document.getElementById('naoSegueSelectedCount')) document.getElementById('naoSegueSelectedCount').innerText = `(0 selecionados)`;
-                                const tabHistorico = document.getElementById('tabHistorico');
-                                if (tabHistorico) tabHistorico.click();
-                            } else {
-                                updateCountCb();
-                                showToast("⚠️ Alguns unfollows falharam. Os usuários continuam selecionados para tentar novamente.");
-                            }
-                        });
+                            usersSet.clear();
+                            document.querySelectorAll('#naoSegueDeVoltaTable .unfollowCheckbox, #historicoTable .unfollowCheckbox').forEach(cb => {
+                                cb.checked = false;
+                            });
+                            const selectAllCb = document.getElementById('selectAllCheckbox');
+                            if (selectAllCb) selectAllCb.checked = false;
+                            if (updateCountCb) updateCountCb();
+
+                            if (document.getElementById('naoSegueSelectedCount')) document.getElementById('naoSegueSelectedCount').innerText = `(0 selecionados)`;
+                            const tabHistorico = document.getElementById('tabHistorico');
+                            if (tabHistorico) tabHistorico.click();
+                        }, usersSet, updateCountCb);
                     }
 
                     function unfollowUsers(users, index, callback, selectedUsersSet, updateCountCb) {
@@ -6053,7 +6146,7 @@
 
                             const naoSegueList = (typeof lists !== 'undefined' && lists) ? lists['tabNaoSegueDeVolta'] : null;
                             if (naoSegueList) {
-                                const userIndex = naoSegueList.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
+                                const userIndex = naoSegueList.findIndex(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() === username.toLowerCase());
                                 if (userIndex > -1) naoSegueList.splice(userIndex, 1);
                                 const countSpan = document.getElementById('countNaoSegue');
                                 if (countSpan) countSpan.innerText = naoSegueList.length;
@@ -6067,18 +6160,29 @@
                                 );
                                 dbHelper.saveCache('following', newFollowingList).catch(e => console.error("Erro ao atualizar cache following:", e));
                             }
+                            if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                seguindoList = seguindoList.filter(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() !== lowerUser);
+                                dbHelper.saveCache('following', seguindoList).catch(e => console.error("Erro ao atualizar cache following:", e));
+                            }
 
                             const rows = document.querySelectorAll(`tr[data-username="${username}"]`);
                             rows.forEach(r => r.remove());
                         };
 
-                        // --- LÓGICA VIA API ---
+                        // --- LÓGICA VIA API (GRAPHQL) ---
                         if (loadSettings().useApi) {
-                            if (statusDiv) statusDiv.innerText = `Deixando de seguir ${username} (${index + 1}/${users.length}) via API...`;
+                            if (statusDiv) statusDiv.innerText = `Deixando de seguir ${username} (${index + 1}/${users.length}) via GraphQL...`;
                             toggleLoading(true, ((index + 1) / users.length) * 100, `Deixando de seguir ${username}...`);
 
                             (async () => {
-                                const uid = await getUserId(username);
+                                let uid = getCachedUserId(username);
+                                if (!uid && typeof cachedData !== 'undefined' && cachedData?.userDetails) {
+                                    const details = cachedData.userDetails.get(username.toLowerCase());
+                                    if (details?.id) uid = String(details.id);
+                                }
+                                if (!uid) {
+                                    uid = await getUserId(username);
+                                }
                                 if (!uid) {
                                     console.warn(`[IG Tools] Não foi possível obter o ID correto para ${username}; operação não executada.`);
                                     showToast(`⚠️ ID de ${username} não encontrado. Atualize a lista e tente novamente.`);
@@ -6087,25 +6191,25 @@
                                 }
 
                                 try {
-                                    console.log('[IG Tools] Executando unfollow via API web:', { username, uid: String(uid) });
-                                    const apiResult = await executeWebUnfollow(uid);
-                                    console.log('[IG Tools] Resposta API web do unfollow:', apiResult.result || apiResult.text);
-                                    if (apiResult.response.ok && (apiResult.success || apiResult.result?.status === 'ok')) {
-                                        console.log(`[IG Tools] Unfollow via API bem-sucedido para ${username}`);
+                                    console.log('[IG Tools] Executando unfollow via GraphQL:', { username, uid: String(uid) });
+                                    const apiResult = await executeGraphqlUnfollow(uid);
+                                    console.log('[IG Tools] Resposta GraphQL do unfollow:', apiResult.result || apiResult.text);
+                                    if (apiResult.success || apiResult.result?.status === 'ok') {
+                                        console.log(`[IG Tools] Unfollow via GraphQL bem-sucedido para ${username}`);
                                         const photoUrl = (typeof cachedData !== 'undefined' && cachedData?.userDetails) ? (cachedData.userDetails.get(username.toLowerCase())?.photoUrl || null) : null;
                                         finishUserSuccess(photoUrl, uid);
                                         showToast(`✅ Deixou de seguir ${username}`);
                                     } else {
                                         const errorText = apiResult.text;
-                                        console.error(`[IG Tools] API não confirmou o unfollow de ${username} (HTTP ${apiResult.response.status}):`, errorText);
-                                        if (apiResult.response.status === 400 || apiResult.response.status === 429 || apiResult.response.status === 403) {
-                                            showToast(`⚠️ Instagram bloqueou temporariamente o unfollow (HTTP ${apiResult.response.status})`);
+                                        console.error(`[IG Tools] GraphQL não confirmou o unfollow de ${username} (HTTP ${apiResult.response?.status}):`, errorText);
+                                        if (apiResult.response?.status === 400 || apiResult.response?.status === 429 || apiResult.response?.status === 403) {
+                                            showToast(`⚠️ Instagram bloqueou temporariamente o unfollow (HTTP ${apiResult.response?.status})`);
                                         } else {
-                                            showToast(`❌ Falha no unfollow de ${username} (HTTP ${apiResult.response.status})`);
+                                            showToast(`❌ Falha no unfollow de ${username} (HTTP ${apiResult.response?.status || 'erro'})`);
                                         }
                                     }
                                 } catch (e) {
-                                    console.error(`[IG Tools] Erro na requisição API de Unfollow para ${username}:`, e);
+                                    console.error(`[IG Tools] Erro na requisição GraphQL de Unfollow para ${username}:`, e);
                                 }
 
                                 setTimeout(() => unfollowUsers(users, index + 1, callback, selectedUsersSet, updateCountCb), loadSettings().unfollowDelay);
@@ -6421,6 +6525,7 @@
                                         <input type="text" id="seguindoSearchInput" placeholder="Pesquisar..." style="flex: 2; padding: 8px 12px; height: 40px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; outline: none; box-sizing: border-box;">
                                         <select id="seguindoFilterSelect" style="flex: 1; padding: 0 10px; height: 40px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; cursor: pointer; outline: none; box-sizing: border-box;">
                                     <option value="all">Todos</option>
+                                    <option value="no_category">⚪ Sem Categoria (Em Branco)</option>
                                     <option value="muted_stories">Silenciado (Stories)</option>
                                     <option value="muted_posts">Silenciado (Publicações)</option>
                                     <option value="muted_all">Silenciado (Ambos)</option>
@@ -6660,6 +6765,11 @@
                                         if (filterValue === 'muted_posts') return isPosts && !isStories;
                                     }
                                     return false;
+                                });
+                            } else if (filterValue === 'no_category') {
+                                filteredUsers = filteredUsers.filter(user => {
+                                    const cats = userCategoryMap.get(user.username.toLowerCase());
+                                    return !cats || cats.length === 0;
                                 });
                             } else if (filterValue.startsWith('category_')) {
                                 const categoryId = filterValue.replace('category_', '');

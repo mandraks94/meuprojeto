@@ -1008,43 +1008,11 @@
                     });
 
                     const hasErrors = Array.isArray(data?.errors) && data.errors.length > 0;
-                    if (response.ok && !hasErrors) {
-                        return { response, success: true, data, rawText };
-                    }
+                    return { response, success: response.ok && !hasErrors, data, rawText };
                 } catch (err) {
-                    console.warn(`[IG Tools HideStory] Erro Wbloks, tentando fallback friendships:`, err);
+                    console.error(`[IG Tools HideStory] Erro Wbloks:`, err);
+                    return { success: false, error: err };
                 }
-
-                // Fallback para api v1 friendships
-                try {
-                    const endpoint = shouldUnhide ? 'unblock_friend_reel' : 'block_friend_reel';
-                    const fallbackBody = new URLSearchParams();
-                    fallbackBody.append('source', 'reel_settings');
-                    fallbackBody.append('_uid', getCookie('ds_user_id') || '');
-                    fallbackBody.append('_uuid', getDeviceId());
-                    fallbackBody.append('_csrftoken', getCookie('csrftoken') || '');
-
-                    const fbRes = await fetch(`https://www.instagram.com/api/v1/friendships/${endpoint}/${uid}/`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                            'X-CSRFToken': getCookie('csrftoken') || '',
-                            'X-IG-App-ID': '936619743392459',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        body: fallbackBody.toString(),
-                        credentials: 'include'
-                    });
-
-                    return { response: fbRes, success: fbRes.ok };
-                } catch (fbErr) {
-                    console.error(`[IG Tools HideStory] Fallback friendships também falhou:`, fbErr);
-                    return { success: false, error: fbErr };
-                }
-            }
-
-            async function executeWebUnfollow(uid) {
-                return await executeGraphqlUnfollow(uid);
             }
 
             async function executeGraphqlFollow(uid) {
@@ -1142,55 +1110,6 @@
                     console.error('[IG Tools Follow] Erro na requisição GraphQL:', e);
                     return { response: { ok: false, status: 0 }, success: false, result: null, text: String(e) };
                 }
-            }
-
-            async function executeWebFollow(uid) {
-                return await executeGraphqlFollow(uid);
-            }
-
-            async function confirmUnfollow(uid, response) {
-                if (!response.ok) return false;
-
-                const contentType = response.headers.get('content-type') || '';
-                if (contentType.includes('application/json')) {
-                    const result = await response.clone().json().catch(() => null);
-                    console.log('[IG Tools] Resposta do unfollow:', { uid, status: response.status, result });
-                    if (result?.status === 'fail') {
-                        console.warn('[IG Tools] Instagram recusou o unfollow:', result);
-                        return false;
-                    }
-                    const friendshipStatus = result?.data?.xdt_destroy_friendship?.friendship_status;
-                    if (friendshipStatus) {
-                        if (String(friendshipStatus.id) !== String(uid)) {
-                            console.warn('[IG Tools] A mutação retornou um ID diferente do solicitado:', { uid, friendshipStatus });
-                            return false;
-                        }
-                        if (friendshipStatus.following === false) {
-                            console.log('[IG Tools] Mutação nativa confirmou o unfollow:', friendshipStatus);
-                            return true;
-                        }
-                        console.warn('[IG Tools] A mutação não confirmou following=false:', result);
-                        return false;
-                    }
-                }
-
-                for (let attempt = 1; attempt <= 3; attempt++) {
-                    if (attempt > 1) await new Promise(resolve => setTimeout(resolve, 1000));
-                    const verification = await fetch(`https://www.instagram.com/api/v1/friendships/show/${uid}/?ts=${Date.now()}`, {
-                        headers: getApiHeaders(),
-                        credentials: 'include',
-                        cache: 'no-store'
-                    });
-                    if (!verification.ok) {
-                        console.warn(`[IG Tools] Não foi possível verificar o unfollow de ${uid} (HTTP ${verification.status})`);
-                        continue;
-                    }
-                    const relationship = await verification.json().catch(() => null);
-                    console.log('[IG Tools] Estado após unfollow:', { uid, attempt, relationship });
-                    if (relationship?.friendship_status?.following === false) return true;
-                }
-                console.warn(`[IG Tools] O usuário ${uid} ainda aparece como seguido após a mutação.`);
-                return false;
             }
 
             function getCachedUserId(username) {
@@ -3977,13 +3896,8 @@
                                 const uid = getCachedUserId(username) || await getUserId(username);
                                 if (uid) {
                                     try {
-                                        const endpoint = checked ? 'block_friend_reel' : 'unblock_friend_reel';
-                                        const res = await fetch(`https://www.instagram.com/api/v1/friendships/${endpoint}/${uid}/`, {
-                                            method: 'POST',
-                                            headers: getApiHeaders(),
-                                            body: `source=reel_settings&_uid=${getCookie('ds_user_id')}&_uuid=${getDeviceId()}`
-                                        });
-                                        if (res.ok) officialStates.set(username, checked);
+                                        const res = await executeWbloksHideStory(uid, username, checked ? 'hide' : 'unhide');
+                                        if (res.success) officialStates.set(username, checked);
                                     } catch (e) { console.error(`Erro API Hide Story para ${username}`, e); }
                                 }
                                 await new Promise(r => setTimeout(r, 500));
@@ -5155,96 +5069,6 @@
                     if (onComplete) onComplete();
                 }
 
-                async function blockUsers(users, index, callback) {
-                    if (index >= users.length) {
-                        alert("Bloqueio concluído.");
-                        if (callback) callback();
-                        toggleLoading(false); // Fecha o loading ao terminar o bloqueio em massa
-                        return;
-                    }
-                    toggleLoading(true, ((index + 1) / users.length) * 100, `Bloqueando ${users[index]}...`);
-                    const username = users[index];
-                    const statusDiv = document.getElementById("statusNaoSegue") || document.getElementById("statusSeguindo");
-                    if (statusDiv) statusDiv.innerText = `Bloqueando ${username} (${index + 1}/${users.length})...`;
-
-                    if (loadSettings().useApi) {
-                        const uid = await getUserId(username);
-                        if (uid) {
-                            try {
-                                const body = new URLSearchParams();
-                                body.append('surface', 'profile');
-                                body.append('container_module', 'profile');
-                                body.append('user_id', uid);
-                                body.append('_uid', getCookie('ds_user_id'));
-                                body.append('_uuid', getDeviceId());
-
-                                const res = await fetch(`https://www.instagram.com/api/v1/friendships/block/${uid}/`, {
-                                    method: 'POST',
-                                    headers: getApiHeaders(),
-                                    body: body.toString(),
-                                    credentials: 'include'
-                                });
-                                if (res.status === 401) { alert("Sessão invalidada. Por favor, faça login novamente."); return; }
-
-                                // Feedback visual imediato: remove a linha da tabela
-                                const row = document.querySelector(`tr[data-username="${username}"]`);
-                                if (row) row.remove();
-                            } catch (e) { console.error(`Erro API Block ${username}`, e); }
-                        }
-                        setTimeout(() => blockUsers(users, index + 1, callback), (loadSettings().requestDelay || 500) + Math.random() * 1000);
-                        return;
-                    }
-
-                    history.pushState(null, null, `/${username}/`);
-                    window.dispatchEvent(new Event("popstate"));
-
-                    setTimeout(() => {
-                        const xpath1 = "/html/body/div[1]/div/div/div[2]/div/div/div[1]/div[2]/div[1]/section/main/div/div/header/div/section[2]/div/div[1]/div[2]/div";
-                        let optionsClicked = executeXPathClick(xpath1);
-                        if (!optionsClicked) {
-                            const svgs = document.querySelectorAll('svg[aria-label="Opções"], svg[aria-label="Options"]');
-                            if (svgs.length > 0) {
-                                let parent = svgs[0].closest('div[role="button"]') || svgs[0].parentNode;
-                                if (parent) { parent.click(); optionsClicked = true; }
-                            }
-                        }
-                        if (optionsClicked) {
-                            setTimeout(() => {
-                                let blockMenuClicked = false;
-                                const menuXpaths = ["/html/body/div[5]/div[1]/div/div[2]/div/div/div/div/div/button[1]", "/html/body/div[6]/div[1]/div/div[2]/div/div/div/div/div/button[1]", "/html/body/div[7]/div[1]/div/div[2]/div/div/div/div/div/button[1]"];
-                                for (let xp of menuXpaths) { if (executeXPathClick(xp)) { blockMenuClicked = true; break; } }
-                                if (!blockMenuClicked) {
-                                    const dialogs = document.querySelectorAll('div[role="dialog"]');
-                                    if (dialogs.length > 0) {
-                                        const lastDialog = dialogs[dialogs.length - 1];
-                                        const btn = Array.from(lastDialog.querySelectorAll('button')).find(b => b.innerText.trim() === 'Bloquear' || b.innerText.trim() === 'Block');
-                                        if (btn) { btn.click(); blockMenuClicked = true; }
-                                    }
-                                }
-                                if (blockMenuClicked) {
-                                    setTimeout(() => {
-                                        let confirmClicked = false;
-                                        const confirmXpaths = ["/html/body/div[10]/div[1]/div/div[2]/div/div/div/div/div/div/div[2]/button[1]", "/html/body/div[9]/div[1]/div/div[2]/div/div/div/div/div/div/div[2]/button[1]", "/html/body/div[8]/div[1]/div/div[2]/div/div/div/div/div/div/div[2]/button[1]"];
-                                        for (let xp of confirmXpaths) { if (executeXPathClick(xp)) { confirmClicked = true; break; } }
-                                        if (!confirmClicked) {
-                                            const dialogs = document.querySelectorAll('div[role="dialog"]');
-                                            if (dialogs.length > 0) {
-                                                const lastDialog = dialogs[dialogs.length - 1];
-                                                const btn = Array.from(lastDialog.querySelectorAll('button')).find(b => b.innerText.trim() === 'Bloquear' || b.innerText.trim() === 'Block');
-                                                if (btn) { btn.click(); confirmClicked = true; }
-                                            }
-                                        }
-                                        // Feedback visual imediato
-                                        const row = document.querySelector(`tr[data-username="${username}"]`);
-                                        if (row) row.remove();
-
-                                        setTimeout(() => blockUsers(users, index + 1, callback), 2000);
-                                    }, 2000);
-                                } else { blockUsers(users, index + 1, callback); }
-                            }, 2000);
-                        } else { blockUsers(users, index + 1, callback); }
-                    }, 4000);
-                }
 
                 let modalAbertoBlocked = false;
                 // --- FIM DO MENU CONTAS BLOQUEADAS ---
@@ -6400,8 +6224,8 @@
                                     uid = await getUserId(username);
                                 }
                                 if (uid) {
-                                    const apiResult = await executeWebFollow(uid);
-                                    console.log('[IG Tools] Resposta API web do follow:', { username, uid: String(uid), result: apiResult.result || apiResult.text });
+                                    const apiResult = await executeGraphqlFollow(uid);
+                                    console.log('[IG Tools Follow] Resposta GraphQL do follow:', { username, uid: String(uid), result: apiResult.result || apiResult.text });
                                     const isOk = apiResult.success || (apiResult.response && apiResult.response.ok && (
                                         apiResult.result?.status === 'ok' ||
                                         apiResult.result?.result === 'following' ||
@@ -9930,29 +9754,16 @@
                                 try {
                                     if (menuTexts.some(t => t.includes('Amigos Próximos') || t.includes('Amigo próximo'))) {
                                         const isCurrentlyCF = userListCache.closeFriends && userListCache.closeFriends.has(username);
-                                        const body = new URLSearchParams();
-
-                                        if (isCurrentlyCF) {
-                                            body.append('remove', JSON.stringify([parseInt(uid)]));
-                                        } else {
-                                            body.append('add', JSON.stringify([parseInt(uid)])); // Adiciona o usuário
-                                        }
-                                        // Headers are already set by getApiHeaders
-                                        body.append('source', 'audience_manager');
-                                        body.append('_uid', getCookie('ds_user_id'));
-                                        body.append('_uuid', getDeviceId());
-                                        body.append('_csrftoken', getCookie('csrftoken'));
-
-                                        const res = await fetch(`https://www.instagram.com/api/v1/friendships/set_besties/`, { method: 'POST', headers: getApiHeaders(true), body: body, credentials: "include" });
-                                        if (res.ok) {
-                                            success = true; // Mark as successful if API call is OK
-                                            // Atualiza o cache local imediatamente
+                                        const adds = isCurrentlyCF ? [] : [uid];
+                                        const removes = isCurrentlyCF ? [uid] : [];
+                                        const res = await executeGraphqlSetBesties(adds, removes);
+                                        if (res.success) {
+                                            success = true;
                                             if (isCurrentlyCF) userListCache.closeFriends.delete(username);
                                             else userListCache.closeFriends.add(username);
                                             await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
-                                            console.log(`[IG Tools] API Success: ${username} (Close Friends)`);
+                                            console.log(`[IG Tools] GraphQL Success: ${username} (Close Friends)`);
                                         }
-
                                     }
                                 } catch (e) { console.error(`Erro API Action ${username}`, e); }
                             }
@@ -10286,206 +10097,6 @@
                     }
 
                     renderTable(currentPage); // Renderiza a primeira página
-                }
-
-                function unfollowSelecionados(usersSet, updateCountCb) { // Added usersSet and updateCountCb
-                    if (isUnfollowing) {
-                        alert("Processo de unfollow já em andamento.");
-                        return;
-                    }
-
-                    const selecionados = Array.from(usersSet);
-                    if (selecionados.length === 0) {
-                        alert("Nenhum usuário selecionado para Unfollow.");
-                        return;
-                    }
-
-                    // Desabilitar botão para evitar múltiplas execuções
-                    const unfollowBtn = document.getElementById("unfollowBtn");
-                    unfollowBtn.disabled = true;
-                    unfollowBtn.textContent = "Processando...";
-                    isUnfollowing = true;
-
-                    toggleLoading(true, 0, "Deixando de seguir...");
-                    unfollowUsers(selecionados, 0, (processedUsers) => {
-                        toggleLoading(false);
-                        // Reabilitar botão ao finalizar
-                        unfollowBtn.disabled = false;
-                        unfollowBtn.textContent = "Unfollow";
-                        isUnfollowing = false;
-                        usersSet.clear(); // Clear selection after action
-                        updateCountCb(); // Update count
-                    }, usersSet, updateCountCb); // Pass selectedUsersSet and updateCountCb
-                }
-
-                function unfollowUsers(users, index, callback, selectedUsersSet, updateCountCb) {
-                    if (index >= users.length || processoCancelado) {
-                        if (!processoCancelado) {
-                            console.log("[IG Tools] Todos os usuários processados. Unfollow concluído.");
-                            showToast("✅ Unfollow concluído!");
-                            alert("Unfollow concluído.");
-                        }
-                        if (callback) callback();
-                        return;
-                    }
-
-                    const username = users[index];
-                    if (statusDiv) statusDiv.innerText = `Deixando de seguir ${username} (${index + 1}/${users.length})...`;
-
-                    const finishUserSuccess = (photoUrl) => {
-                        dbHelper.saveUnfollowHistory({
-                            username: username,
-                            photoUrl: photoUrl || null,
-                            unfollowDate: new Date().toISOString()
-                        }).catch(err => console.error(`Falha ao salvar ${username} no histórico:`, err));
-
-                        if (selectedUsersSet) selectedUsersSet.delete(username);
-                        if (updateCountCb) updateCountCb();
-
-                        const naoSegueList = (typeof lists !== 'undefined' && lists) ? lists['tabNaoSegueDeVolta'] : null;
-                        if (naoSegueList) {
-                            const userIndex = naoSegueList.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
-                            if (userIndex > -1) naoSegueList.splice(userIndex, 1);
-                            const countSpan = document.getElementById('countNaoSegue');
-                            if (countSpan) countSpan.innerText = naoSegueList.length;
-                        }
-
-                        const lowerUser = username.toLowerCase();
-                        if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
-                            seguindoList = seguindoList.filter(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() !== lowerUser);
-                            dbHelper.saveCache('following', seguindoList).catch(e => console.error("Erro ao atualizar cache following:", e));
-                        }
-
-                        if (typeof cachedData !== 'undefined' && cachedData?.seguindo && cachedData.seguindo.has(lowerUser)) {
-                            cachedData.seguindo.delete(lowerUser);
-                            const newFollowingList = Array.from(cachedData.seguindo).map(u =>
-                                cachedData.userDetails ? (cachedData.userDetails.get(u) || { username: u, photoUrl: null }) : { username: u, photoUrl: null }
-                            );
-                            dbHelper.saveCache('following', newFollowingList).catch(e => console.error("Erro ao atualizar cache following:", e));
-                        }
-
-                        const rows = document.querySelectorAll(`tr[data-username="${username}"]`);
-                        rows.forEach(r => r.remove());
-                    };
-
-                    if (loadSettings().useApi) {
-                        toggleLoading(true, ((index + 1) / users.length) * 100, `Deixando de seguir ${username}...`);
-                        (async () => {
-                            const uid = await getUserId(username);
-                            if (!uid) {
-                                console.warn(`[IG Tools] Não foi possível obter o ID correto para ${username}; operação não executada.`);
-                                showToast(`⚠️ ID de ${username} não encontrado. Atualize a lista e tente novamente.`);
-                                setTimeout(() => unfollowUsers(users, index + 1, callback, selectedUsersSet, updateCountCb), loadSettings().unfollowDelay);
-                                return;
-                            }
-
-                            try {
-                                console.log('[IG Tools] Executando unfollow via API web:', { username, uid: String(uid) });
-                                const apiResult = await executeWebUnfollow(uid);
-                                console.log('[IG Tools] Resposta API web do unfollow:', apiResult.result || apiResult.text);
-                                if (apiResult.response.ok && (apiResult.success || apiResult.result?.status === 'ok')) {
-                                    console.log(`[IG Tools] Unfollow via API bem-sucedido para ${username}`);
-                                    const photoUrl = (typeof cachedData !== 'undefined' && cachedData?.userDetails) ? (cachedData.userDetails.get(username.toLowerCase())?.photoUrl || null) : null;
-                                    finishUserSuccess(photoUrl);
-                                    showToast(`✅ Deixou de seguir ${username}`);
-                                } else {
-                                    const errorText = apiResult.text;
-                                    console.error(`[IG Tools] API não confirmou o unfollow de ${username} (HTTP ${apiResult.response.status}):`, errorText);
-                                    if (apiResult.response.status === 400 || apiResult.response.status === 429 || apiResult.response.status === 403) {
-                                        showToast(`⚠️ Instagram bloqueou temporariamente o unfollow (HTTP ${apiResult.response.status})`);
-                                    } else {
-                                        showToast(`❌ Falha no unfollow de ${username} (HTTP ${apiResult.response.status})`);
-                                    }
-                                }
-                            } catch (e) {
-                                console.error(`[IG Tools] Erro na requisição API de Unfollow para ${username}:`, e);
-                            }
-
-                            setTimeout(() => unfollowUsers(users, index + 1, callback, selectedUsersSet, updateCountCb), loadSettings().unfollowDelay);
-                        })();
-                        return;
-                    }
-
-                    toggleLoading(true, ((index + 1) / users.length) * 100, `Deixando de seguir ${username}...`);
-                    if (!window.location.pathname.includes(`/${username}`)) {
-                        history.pushState(null, null, `/${username}/`);
-                        window.dispatchEvent(new Event("popstate"));
-                    }
-
-                    const unfollowDelay = loadSettings().unfollowDelay;
-
-                    setTimeout(() => {
-                        if (processoCancelado) { if (callback) callback(); return; }
-
-                        function findFollowButton() {
-                            const ariaMatch = document.querySelector('header button[aria-label*="Seguindo"], header button[aria-label*="Following"], header div[role="button"][aria-label*="Seguindo"], header div[role="button"][aria-label*="Following"], button[aria-label*="Seguindo"], button[aria-label*="Following"]');
-                            if (ariaMatch) return ariaMatch;
-
-                            const candidates = Array.from(document.querySelectorAll('header button, header div[role="button"], main button, main div[role="button"], button, div[role="button"]'));
-                            for (const el of candidates) {
-                                const txt = (el.textContent || '').trim();
-                                if (['Seguindo', 'Following', 'Siguiendo'].includes(txt)) {
-                                    return el;
-                                }
-                            }
-                            return null;
-                        }
-
-                        const followBtn = findFollowButton();
-
-                        if (followBtn) {
-                            followBtn.click();
-                            console.log(`[IG Tools] Botão 'Seguindo' clicado para ${username}`);
-
-                            setTimeout(() => {
-                                if (processoCancelado) { if (callback) callback(); return; }
-
-                                function findConfirmButton() {
-                                    const dialogs = Array.from(document.querySelectorAll('div[role="dialog"], div[aria-modal="true"], div[tabindex="-1"]'));
-                                    for (const dialog of dialogs) {
-                                        const btns = Array.from(dialog.querySelectorAll('button, div[role="button"], span[role="button"]'));
-                                        const match = btns.find(b => {
-                                            const txt = (b.textContent || '').trim();
-                                            const aria = b.getAttribute('aria-label') || '';
-                                            return ['Deixar de seguir', 'Unfollow', 'Dejar de seguir'].some(t => txt.includes(t) || aria.includes(t));
-                                        });
-                                        if (match) return match;
-                                    }
-
-                                    const allBtns = Array.from(document.querySelectorAll('button, div[role="button"]'));
-                                    return allBtns.find(b => {
-                                        const txt = (b.textContent || '').trim();
-                                        const aria = b.getAttribute('aria-label') || '';
-                                        return ['Deixar de seguir', 'Unfollow', 'Dejar de seguir'].some(t => txt.includes(t) || aria.includes(t));
-                                    });
-                                }
-
-                                const confirmBtn = findConfirmButton();
-
-                                if (confirmBtn) {
-                                    confirmBtn.click();
-                                    console.log(`[IG Tools] Unfollow confirmado no modal para ${username}`);
-
-                                    const photoUrl = cachedData.userDetails.get(username.toLowerCase())?.photoUrl || null;
-                                    finishUserSuccess(photoUrl);
-
-                                    setTimeout(() => {
-                                        unfollowUsers(users, index + 1, callback, selectedUsersSet, updateCountCb);
-                                    }, unfollowDelay);
-
-                                } else {
-                                    console.warn(`[IG Tools] Botão de confirmação no modal não encontrado para ${username}`);
-                                    alert(`Não foi possível encontrar a confirmação no modal para ${username}. Pulando.`);
-                                    unfollowUsers(users, index + 1, callback, selectedUsersSet, updateCountCb);
-                                }
-                            }, 2000);
-
-                        } else {
-                            console.warn(`[IG Tools] Botão 'Seguindo' não encontrado no perfil de ${username}`);
-                            alert(`Botão 'Seguindo' não encontrado para ${username}. Dica: Ative o 'Modo API' nas configurações para unfollows automáticos em segundo plano.`);
-                            unfollowUsers(users, index + 1, callback, selectedUsersSet, updateCountCb);
-                        }
-                    }, 3500);
                 }
 
                 function isMobileDevice() {

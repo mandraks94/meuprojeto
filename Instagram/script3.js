@@ -244,6 +244,16 @@
                 if (parts.length === 2) return parts.pop().split(';').shift();
             }
 
+            function getActorId() {
+                try {
+                    const rur = getCookie('rur') || '';
+                    const decoded = decodeURIComponent(rur);
+                    const match = decoded.match(/,\s*(\d{10,})\s*,/);
+                    if (match && match[1]) return match[1];
+                } catch (_) { }
+                return getCookie('ds_user_id') || '';
+            }
+
             function getDeviceId() {
                 const cookie = getCookie('ig_did');
                 return cookie ? cookie : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
@@ -9677,6 +9687,80 @@
                         };
                     }
 
+                    async function executeGraphqlUnlikeStory(mediaId) {
+                        try {
+                            const cleanMediaId = String(mediaId).split('_')[0];
+                            const actorId = getActorId();
+                            const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                            const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                            const jazoest = computeJazoest(fbDtsg) || '26452';
+                            const spin = getSpinParams();
+
+                            const variables = {
+                                input: {
+                                    actor_id: actorId,
+                                    client_mutation_id: String(Math.floor(Math.random() * 100) + 1),
+                                    media_id: cleanMediaId
+                                }
+                            };
+
+                            const body = new URLSearchParams();
+                            body.append('__comet_req', '7');
+                            if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                            if (jazoest) body.append('jazoest', jazoest);
+                            if (lsd) body.append('lsd', lsd);
+                            if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                            body.append('__spin_b', spin.spin_b || 'trunk');
+                            if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                            body.append('__crn', 'comet.igweb.PolarisStoriesV3HighlightsRoute');
+                            body.append('fb_api_caller_class', 'RelayModern');
+                            body.append('fb_api_req_friendly_name', 'usePolarisStoriesV4LikeMutationUnlikeMutation');
+                            body.append('server_timestamps', 'true');
+                            body.append('variables', JSON.stringify(variables));
+                            body.append('doc_id', '26510485515280697');
+
+                            const headers = {
+                                ...getApiHeaders(true),
+                                'X-ASBD-ID': '359341',
+                                'X-CSRFToken': getCookie('csrftoken') || '',
+                                'X-FB-Friendly-Name': 'usePolarisStoriesV4LikeMutationUnlikeMutation',
+                                'X-FB-LSD': lsd,
+                                'X-IG-App-ID': '936619743392459',
+                                'X-IG-Max-Touch-Points': '0'
+                            };
+
+                            console.log(`[IG Tools Interações] Enviando mutação GraphQL para descurtir story (${cleanMediaId})...`, variables);
+                            const response = await fetch('https://www.instagram.com/api/graphql', {
+                                method: 'POST',
+                                headers,
+                                body: body.toString(),
+                                credentials: 'include',
+                                cache: 'no-store'
+                            });
+
+                            const rawText = await response.text();
+                            let cleanedText = rawText.trim();
+                            if (cleanedText.startsWith('for (;;);')) {
+                                cleanedText = cleanedText.slice(9).trim();
+                            }
+
+                            let data = null;
+                            try {
+                                data = JSON.parse(cleanedText);
+                            } catch (_) { }
+
+                            console.log('[IG Tools Interações] Resposta GraphQL Unlike Story:', { status: response.status, ok: response.ok, data });
+
+                            if (response.ok && (data?.data?.xig_unsend_story_like || !data?.errors)) {
+                                return true;
+                            }
+                            return false;
+                        } catch (e) {
+                            console.error('[IG Tools Interações] Erro ao descurtir story via GraphQL:', e);
+                            return false;
+                        }
+                    }
+
                     async function unlikeMedia(itemOrId, maybeType) {
                         try {
                             const csrf = getCookie('csrftoken');
@@ -9690,31 +9774,20 @@
                             const cleanMediaId = rawId.split('_')[0];
                             const type = item.type || maybeType || '';
 
-                            let url, body;
+                            console.log(`[IG Tools Interações] Descurtindo ${type} (${cleanMediaId})...`);
+
                             if (type && (type.includes('Story') || type.includes('Destaque'))) {
-                                url = `https://www.instagram.com/api/v1/story_interactions/unlike_story_like/`;
-                                body = `media_id=${encodeURIComponent(rawId || cleanMediaId)}`;
-                            } else {
-                                url = `https://www.instagram.com/api/v1/web/likes/${cleanMediaId}/unlike/`;
-                                body = '';
-                            }
+                                // 1. Tentar pela mutação oficial GraphQL descoberta no Network
+                                const gqlSuccess = await executeGraphqlUnlikeStory(cleanMediaId);
+                                if (gqlSuccess) {
+                                    console.log(`[IG Tools Interações] Sucesso ao descurtir story via GraphQL (${cleanMediaId})!`);
+                                    return true;
+                                }
 
-                            console.log(`[IG Tools Interações] Descurtindo ${type} (${cleanMediaId})...`, { url, body });
-
-                            let response = await fetch(url, {
-                                method: 'POST',
-                                headers: {
-                                    ...getApiHeaders(true),
-                                    'X-CSRFToken': csrf
-                                },
-                                body: body,
-                                credentials: 'include'
-                            });
-
-                            // Se for Story e falhou com rawId, tenta com cleanMediaId
-                            if (!response.ok && type && (type.includes('Story') || type.includes('Destaque')) && rawId !== cleanMediaId) {
-                                console.log(`[IG Tools Interações] Tentando fallback para story com cleanMediaId: ${cleanMediaId}...`);
-                                response = await fetch(url, {
+                                // 2. Fallback para endpoint REST tradicional caso o GraphQL falhe
+                                console.warn(`[IG Tools Interações] GraphQL falhou, tentando fallback REST...`);
+                                const restUrl = `https://www.instagram.com/api/v1/story_interactions/unlike_story_like/`;
+                                let restRes = await fetch(restUrl, {
                                     method: 'POST',
                                     headers: {
                                         ...getApiHeaders(true),
@@ -9723,17 +9796,34 @@
                                     body: `media_id=${encodeURIComponent(cleanMediaId)}`,
                                     credentials: 'include'
                                 });
-                            }
+                                if (restRes.ok) return true;
 
-                            if (response.ok) {
-                                console.log(`[IG Tools Interações] Sucesso ao descurtir ${type} (${cleanMediaId})!`);
-                                return true;
-                            }
+                                const errText = await restRes.text();
+                                console.error("[IG Tools Interações] Falha ao descurtir via REST:", restRes.status, errText);
+                                alert(`Falha ao descurtir (${restRes.status}). Verifique o console.`);
+                                return false;
+                            } else {
+                                // Descurtir Post
+                                const postUrl = `https://www.instagram.com/api/v1/web/likes/${cleanMediaId}/unlike/`;
+                                const postRes = await fetch(postUrl, {
+                                    method: 'POST',
+                                    headers: {
+                                        ...getApiHeaders(true),
+                                        'X-CSRFToken': csrf
+                                    },
+                                    body: '',
+                                    credentials: 'include'
+                                });
+                                if (postRes.ok) {
+                                    console.log(`[IG Tools Interações] Sucesso ao descurtir post (${cleanMediaId})!`);
+                                    return true;
+                                }
 
-                            const errText = await response.text();
-                            console.error("[IG Tools Interações] Falha ao descurtir:", response.status, errText);
-                            alert(`Falha ao descurtir (${response.status}). Verifique o console.`);
-                            return false;
+                                const errText = await postRes.text();
+                                console.error("[IG Tools Interações] Falha ao descurtir post:", postRes.status, errText);
+                                alert(`Falha ao descurtir post (${postRes.status}). Verifique o console.`);
+                                return false;
+                            }
                         } catch (e) {
                             console.error("[IG Tools Interações] Erro ao descurtir:", e);
                             alert("Erro ao descurtir: " + e.message);

@@ -9212,41 +9212,45 @@
                     div.className = "submenu-modal";
                     div.style.cssText = `
                         position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                        width: 90%; max-width: 600px; max-height: 90vh; border: 1px solid #ccc;
-                        border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
+                        width: 92%; max-width: 650px; min-height: 500px; max-height: 90vh; border: 1px solid var(--ig-stroke, #363636);
+                        border-radius: 12px; padding: 22px; z-index: 10000; overflow-y: auto; overflow-x: hidden;
+                        background: var(--ig-primary-background, #1a1a1a); color: var(--ig-primary-text, #fff);
+                        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column;
                     `;
 
                     div.innerHTML = `
-                        <div class="modal-header">
-                            <span class="modal-title">
+                        <div class="modal-header" style="margin-bottom: 16px;">
+                            <span class="modal-title" style="font-size: 16px; font-weight: bold; display: flex; align-items: center; color: var(--ig-primary-text, #fff);">
                                 Verificar Interações
                                 <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Verifique o que você curtiu de um usuário específico (Posts e Stories).</span></div>
                             </span>
                             <div class="modal-controls">
-                                <button id="fecharInteracoesBtn" title="Fechar">X</button>
+                                <button id="fecharInteracoesBtn" title="Fechar" style="background: none; border: none; color: var(--ig-secondary-text, #a8a8a8); font-size: 18px; cursor: pointer;">✕</button>
                             </div>
                         </div>
                         <div class="loading-overlay" style="display: none;"><div class="spinner"></div><div class="loading-text"></div></div>
-                        <div style="padding: 15px;">
+                        <div style="flex: 1; display: flex; flex-direction: column;">
                             <div style="display: flex; gap: 10px; margin-bottom: 20px;">
                                 <div style="flex: 1; position: relative;">
-                                    <input type="text" id="interacoesUsernameInput" placeholder="Digite o username..." style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: black; box-sizing: border-box;" autocomplete="off">
-                                    <div id="interacoesSuggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ccc; border-top: none; border-radius: 0 0 5px 5px; max-height: 200px; overflow-y: auto; z-index: 1001; display: none; color: black; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+                                    <input type="text" id="interacoesUsernameInput" placeholder="Digite o username..." style="width: 100%; padding: 11px 14px; border-radius: 8px; border: 1px solid var(--ig-stroke, #444); background: #ffffff; color: #000000; box-sizing: border-box; font-size: 14px; outline: none; transition: border-color 0.2s;" autocomplete="off">
+                                    <div id="interacoesSuggestions" style="position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--ig-secondary-background, #262626); border: 1px solid var(--ig-stroke, #444); border-radius: 8px; max-height: 220px; overflow-y: auto; overflow-x: hidden; z-index: 10001; display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.5); scrollbar-width: thin;"></div>
                                 </div>
-                                <button id="verificarInteracoesBtn" style="background: #0095f6; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Verificar</button>
+                                <button id="verificarInteracoesBtn" style="background: #0095f6; color: white; border: none; padding: 11px 22px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; white-space: nowrap;">Verificar</button>
                             </div>
                             <div id="interacoesUserProfile" style="display: none; flex-direction: column; align-items: center; margin-bottom: 20px;">
-                                <img id="interacoesUserPic" src="" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; border: 1px solid #dbdbdb;">
-                                <span id="interacoesUserNameDisplay" style="font-weight: bold; font-size: 16px; color: black;"></span>
-                                <span id="interacoesUserBioDisplay" style="font-size: 14px; color: #666; text-align: center; margin-top: 5px; max-width: 80%;"></span>
+                                <img id="interacoesUserPic" src="" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; border: 2px solid #dbdbdb;">
+                                <span id="interacoesUserNameDisplay" style="font-weight: bold; font-size: 16px; color: var(--ig-primary-text, #fff);"></span>
+                                <span id="interacoesUserBioDisplay" style="font-size: 14px; color: var(--ig-secondary-text, #8e8e8e); text-align: center; margin-top: 5px; max-width: 85%;"></span>
                             </div>
-                            <div id="interacoesResultados" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px;">
+                            <div id="interacoesResultados" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                                 <!-- Cards serão inseridos aqui -->
                             </div>
-                            <div id="interacoesDetalhes" style="margin-top: 20px; display: none;">
-                                <h3 id="detalhesTitulo" style="margin-bottom: 10px; color: black;"></h3>
-                                <button id="voltarCardsBtn" style="margin-bottom: 10px; padding: 5px 10px; cursor: pointer;">Voltar</button>
-                                <div id="detalhesLista" style="max-height: 300px; overflow-y: auto; color: black;"></div>
+                            <div id="interacoesDetalhes" style="margin-top: 15px; display: none;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <h3 id="detalhesTitulo" style="margin: 0; color: var(--ig-primary-text, #fff); font-size: 16px;"></h3>
+                                    <button id="voltarCardsBtn" style="padding: 6px 14px; background: #0095f6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">← Voltar</button>
+                                </div>
+                                <div id="detalhesLista" style="max-height: 320px; overflow-y: auto; color: var(--ig-primary-text, #fff);"></div>
                             </div>
                         </div>
                     `;
@@ -9292,10 +9296,10 @@
                         if (matches.length > 0) {
                             matches.forEach(u => {
                                 const item = document.createElement('div');
-                                item.style.cssText = 'padding: 10px; cursor: pointer; border-bottom: 1px solid #eee;';
+                                item.style.cssText = 'padding: 10px 14px; cursor: pointer; border-bottom: 1px solid rgba(150,150,150,0.1); font-size: 14px; color: var(--ig-primary-text, inherit); display: flex; align-items: center; gap: 8px; transition: background 0.15s;';
                                 item.innerText = u;
-                                item.onmouseover = () => item.style.background = '#f0f0f0';
-                                item.onmouseout = () => item.style.background = 'white';
+                                item.onmouseover = () => item.style.background = 'rgba(150, 150, 150, 0.15)';
+                                item.onmouseout = () => item.style.background = 'transparent';
                                 item.onclick = () => {
                                     inputUsername.value = u;
                                     suggestionsDiv.style.display = 'none';
@@ -9420,7 +9424,8 @@
                                             type: 'Post',
                                             url: `https://www.instagram.com/p/${code}/`,
                                             thumb: thumb,
-                                            id: mediaId || code
+                                            id: mediaId || code,
+                                            rawId: String(mediaId || code)
                                         });
                                     }
                                 }
@@ -9443,10 +9448,13 @@
 
                             // A. Se o usuário estiver em outro perfil ou no feed/direct, navega suavemente via SPA para o perfil alvo
                             const currentPath = (window.location.pathname || '').replace(/^\/|\/$/g, '').toLowerCase().split('/')[0];
+                            const previousPath = window.location.pathname;
+                            let navigated = false;
                             if (currentPath !== cleanUsername) {
                                 console.log(`[IG Tools Interações] Sincronizando SPA com @${cleanUsername} para carregar destaques...`);
                                 history.pushState(null, null, `/${cleanUsername}/`);
                                 window.dispatchEvent(new Event('popstate'));
+                                navigated = true;
                                 // Aguarda o Instagram montar os destaques na tela (até 1.5s)
                                 for (let wait = 0; wait < 8; wait++) {
                                     await new Promise(r => setTimeout(r, 200));
@@ -9463,6 +9471,12 @@
 
                                 const currentHl = (window.location.href || '').match(/\/stories\/highlights\/(\d+)/);
                                 if (currentHl && currentHl[1]) reelsToFetch.add(`highlight:${currentHl[1]}`);
+                            }
+
+                            // Restaura automaticamente a URL original para que você continue onde estava
+                            if (navigated && previousPath && previousPath !== `/${cleanUsername}/`) {
+                                history.pushState(null, null, previousPath);
+                                window.dispatchEvent(new Event('popstate'));
                             }
 
                             console.log(`[IG Tools Interações] Buscando ${reelsToFetch.size} reel(s) (Stories 24h + Destaques)...`, Array.from(reelsToFetch));
@@ -9508,7 +9522,8 @@
                                                                 ? `https://www.instagram.com/stories/highlights/${cleanHighlightId}/`
                                                                 : `https://www.instagram.com/stories/${cleanUsername}/${cleanMediaId}/`,
                                                             thumb: thumb,
-                                                            id: cleanMediaId
+                                                            id: cleanMediaId,
+                                                            rawId: rawId
                                                         });
                                                     }
                                                 }
@@ -9528,8 +9543,7 @@
                             const dadosReais = {
                                 fotosCurtidas: { count: likedPosts.length, items: likedPosts },
                                 storiesCurtidos: { count: likedStories.length, items: likedStories },
-                                comentarios: { count: 0, items: [] },
-                                enquetes: { count: 0, items: [] }
+                                comentarios: { count: 0, items: [] }
                             };
                             dataEuCurti = dadosReais;
                             renderizarCardsInteracoes(dadosReais);
@@ -9551,22 +9565,34 @@
                         const mapLabels = {
                             fotosCurtidas: 'Fotos Curtidas',
                             storiesCurtidos: 'Stories Curtidos',
-                            comentarios: 'Comentários',
-                            enquetes: 'Enquetes'
+                            comentarios: 'Comentários'
                         };
 
                         for (const [key, data] of Object.entries(dados)) {
                             const card = document.createElement("div");
                             card.style.cssText = `
-                            border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px;
-                            text-align: center; cursor: pointer; background: #f8f9fa; transition: transform 0.2s;
-                        `;
+                                border: 1px solid #e0e0e0;
+                                border-radius: 12px;
+                                padding: 18px 12px;
+                                text-align: center;
+                                cursor: pointer;
+                                background: #ffffff;
+                                color: #262626;
+                                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+                                transition: transform 0.2s ease, box-shadow 0.2s ease;
+                            `;
                             card.innerHTML = `
-                            <div style="font-size: 24px; font-weight: bold; color: #0095f6;">${data.count}</div>
-                            <div style="font-size: 14px; color: #8e8e8e;">${mapLabels[key] || key}</div>
-                        `;
-                            card.onmouseover = () => card.style.transform = "scale(1.05)";
-                            card.onmouseout = () => card.style.transform = "scale(1)";
+                                <div style="font-size: 26px; font-weight: 700; color: #0095f6; margin-bottom: 6px;">${data.count}</div>
+                                <div style="font-size: 13px; font-weight: 600; color: #262626;">${mapLabels[key] || key}</div>
+                            `;
+                            card.onmouseover = () => {
+                                card.style.transform = "translateY(-3px)";
+                                card.style.boxShadow = "0 8px 20px rgba(0, 0, 0, 0.22)";
+                            };
+                            card.onmouseout = () => {
+                                card.style.transform = "translateY(0)";
+                                card.style.boxShadow = "0 4px 14px rgba(0, 0, 0, 0.12)";
+                            };
                             card.onclick = () => mostrarDetalhesInteracao(mapLabels[key] || key, data.items);
                             container.appendChild(card);
                         }
@@ -9576,28 +9602,29 @@
                         document.getElementById("interacoesResultados").style.display = "none";
                         const detalhesDiv = document.getElementById("interacoesDetalhes");
                         detalhesDiv.style.display = "block";
-                        document.getElementById("detalhesTitulo").innerText = titulo;
+                        document.getElementById("detalhesTitulo").innerText = `${titulo} (${itens.length})`;
 
                         const lista = document.getElementById("detalhesLista");
                         lista.innerHTML = '';
 
                         if (itens.length === 0) {
-                            lista.innerHTML = '<p>Nenhum item encontrado.</p>';
+                            lista.innerHTML = '<p style="color: var(--ig-secondary-text, #a8a8a8); text-align: center; padding: 25px;">Nenhum item encontrado.</p>';
                         } else {
                             const grid = document.createElement("div");
-                            grid.style.cssText = "display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px;";
+                            grid.style.cssText = "display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; padding: 4px;";
                             itens.forEach(item => {
                                 const div = document.createElement("div");
-                                div.style.cssText = "aspect-ratio: 1; overflow: hidden; border-radius: 5px; border: 1px solid #dbdbdb; cursor: pointer; position: relative;";
+                                div.style.cssText = "aspect-ratio: 1; overflow: hidden; border-radius: 8px; border: 1px solid var(--ig-stroke, #444); cursor: pointer; position: relative; background: #000; box-shadow: 0 2px 8px rgba(0,0,0,0.2);";
 
                                 const contentDiv = document.createElement("div");
-                                contentDiv.style.cssText = "width: 100%; height: 100%;";
+                                contentDiv.style.cssText = "width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;";
 
                                 if (item.thumb) {
                                     contentDiv.innerHTML = `<img src="${item.thumb}" style="width: 100%; height: 100%; object-fit: cover;">`;
                                     contentDiv.onclick = () => window.open(item.url, '_blank');
                                 } else {
-                                    contentDiv.innerText = item.type;
+                                    contentDiv.innerHTML = `<span style="font-size: 12px; color: #aaa; text-align: center; padding: 6px;">${item.type}</span>`;
+                                    contentDiv.onclick = () => window.open(item.url, '_blank');
                                 }
                                 div.appendChild(contentDiv);
 
@@ -9605,13 +9632,34 @@
                                     const unlikeBtn = document.createElement("button");
                                     unlikeBtn.innerHTML = "💔";
                                     unlikeBtn.title = "Descurtir";
-                                    unlikeBtn.style.cssText = "position: absolute; bottom: 5px; right: 5px; width: 30px; height: 30px; border-radius: 50%; border: none; background: rgba(0,0,0,0.7); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; z-index: 10;";
+                                    unlikeBtn.style.cssText = "position: absolute; bottom: 6px; right: 6px; width: 32px; height: 32px; border-radius: 50%; border: none; background: rgba(0,0,0,0.75); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 15px; z-index: 10; transition: transform 0.15s, background 0.15s;";
+                                    unlikeBtn.onmouseover = () => { unlikeBtn.style.transform = "scale(1.15)"; unlikeBtn.style.background = "rgba(220, 38, 38, 0.9)"; };
+                                    unlikeBtn.onmouseout = () => { unlikeBtn.style.transform = "scale(1)"; unlikeBtn.style.background = "rgba(0,0,0,0.75)"; };
                                     unlikeBtn.onclick = async (e) => {
                                         e.stopPropagation();
-                                        if (confirm("Tem certeza que deseja descurtir?")) {
-                                            const success = await unlikeMedia(item.id, item.type);
+                                        if (confirm("Tem certeza que deseja descurtir este item?")) {
+                                            unlikeBtn.disabled = true;
+                                            unlikeBtn.style.opacity = "0.5";
+                                            const success = await unlikeMedia(item);
                                             if (success) {
                                                 div.remove();
+                                                const idx = itens.indexOf(item);
+                                                if (idx !== -1) itens.splice(idx, 1);
+                                                document.getElementById("detalhesTitulo").innerText = `${titulo} (${itens.length})`;
+
+                                                if (titulo.includes('Foto') || titulo.includes('Post')) {
+                                                    if (dataEuCurti?.fotosCurtidas) dataEuCurti.fotosCurtidas.count = itens.length;
+                                                } else if (titulo.includes('Stori')) {
+                                                    if (dataEuCurti?.storiesCurtidos) dataEuCurti.storiesCurtidos.count = itens.length;
+                                                }
+                                                renderizarCardsInteracoes(dataEuCurti);
+
+                                                if (itens.length === 0) {
+                                                    lista.innerHTML = '<p style="color: var(--ig-secondary-text, #a8a8a8); text-align: center; padding: 25px;">Nenhum item restante.</p>';
+                                                }
+                                            } else {
+                                                unlikeBtn.disabled = false;
+                                                unlikeBtn.style.opacity = "1";
                                             }
                                         }
                                     };
@@ -9629,7 +9677,7 @@
                         };
                     }
 
-                    async function unlikeMedia(mediaId, type) {
+                    async function unlikeMedia(itemOrId, maybeType) {
                         try {
                             const csrf = getCookie('csrftoken');
                             if (!csrf) {
@@ -9637,34 +9685,58 @@
                                 return false;
                             }
 
+                            const item = typeof itemOrId === 'object' ? itemOrId : { id: itemOrId, type: maybeType };
+                            const rawId = String(item.rawId || item.id || '');
+                            const cleanMediaId = rawId.split('_')[0];
+                            const type = item.type || maybeType || '';
+
                             let url, body;
                             if (type && (type.includes('Story') || type.includes('Destaque'))) {
                                 url = `https://www.instagram.com/api/v1/story_interactions/unlike_story_like/`;
-                                body = `media_id=${mediaId}`;
+                                body = `media_id=${encodeURIComponent(rawId || cleanMediaId)}`;
                             } else {
-                                url = `https://www.instagram.com/api/v1/web/likes/${mediaId}/unlike/`;
+                                url = `https://www.instagram.com/api/v1/web/likes/${cleanMediaId}/unlike/`;
                                 body = '';
                             }
 
-                            const response = await fetch(url, {
+                            console.log(`[IG Tools Interações] Descurtindo ${type} (${cleanMediaId})...`, { url, body });
+
+                            let response = await fetch(url, {
                                 method: 'POST',
                                 headers: {
-                                    'X-IG-App-ID': '936619743392459',
-                                    'X-CSRFToken': csrf,
-                                    'X-Requested-With': 'XMLHttpRequest',
-                                    'X-ASBD-ID': '129477',
-                                    'X-Instagram-AJAX': '1',
-                                    'Content-Type': 'application/x-www-form-urlencoded'
+                                    ...getApiHeaders(true),
+                                    'X-CSRFToken': csrf
                                 },
-                                body: body
+                                body: body,
+                                credentials: 'include'
                             });
-                            if (response.ok) return true;
-                            console.error("Falha ao descurtir:", await response.text());
-                            alert("Falha ao descurtir.");
+
+                            // Se for Story e falhou com rawId, tenta com cleanMediaId
+                            if (!response.ok && type && (type.includes('Story') || type.includes('Destaque')) && rawId !== cleanMediaId) {
+                                console.log(`[IG Tools Interações] Tentando fallback para story com cleanMediaId: ${cleanMediaId}...`);
+                                response = await fetch(url, {
+                                    method: 'POST',
+                                    headers: {
+                                        ...getApiHeaders(true),
+                                        'X-CSRFToken': csrf
+                                    },
+                                    body: `media_id=${encodeURIComponent(cleanMediaId)}`,
+                                    credentials: 'include'
+                                });
+                            }
+
+                            if (response.ok) {
+                                console.log(`[IG Tools Interações] Sucesso ao descurtir ${type} (${cleanMediaId})!`);
+                                return true;
+                            }
+
+                            const errText = await response.text();
+                            console.error("[IG Tools Interações] Falha ao descurtir:", response.status, errText);
+                            alert(`Falha ao descurtir (${response.status}). Verifique o console.`);
                             return false;
                         } catch (e) {
-                            console.error(e);
-                            alert("Erro ao descurtir.");
+                            console.error("[IG Tools Interações] Erro ao descurtir:", e);
+                            alert("Erro ao descurtir: " + e.message);
                             return false;
                         }
                     }

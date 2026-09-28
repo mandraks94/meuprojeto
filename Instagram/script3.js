@@ -9441,32 +9441,28 @@
                                 reelsToFetch.add(String(targetUserId));
                             }
 
-                            // A. Detectar destaques na página atual (se estiver no perfil do usuário)
+                            // A. Se o usuário estiver em outro perfil ou no feed/direct, navega suavemente via SPA para o perfil alvo
+                            const currentPath = (window.location.pathname || '').replace(/^\/|\/$/g, '').toLowerCase().split('/')[0];
+                            if (currentPath !== cleanUsername) {
+                                console.log(`[IG Tools Interações] Sincronizando SPA com @${cleanUsername} para carregar destaques...`);
+                                history.pushState(null, null, `/${cleanUsername}/`);
+                                window.dispatchEvent(new Event('popstate'));
+                                // Aguarda o Instagram montar os destaques na tela (até 1.5s)
+                                for (let wait = 0; wait < 8; wait++) {
+                                    await new Promise(r => setTimeout(r, 200));
+                                    if (document.querySelector('a[href*="/stories/highlights/"]')) break;
+                                }
+                            }
+
+                            // B. Detectar destaques no DOM da tela (ou do story aberto no momento)
                             if (typeof document !== 'undefined') {
                                 document.querySelectorAll('a[href*="/stories/highlights/"]').forEach(a => {
                                     const m = (a.getAttribute('href') || '').match(/\/stories\/highlights\/(\d+)/);
                                     if (m && m[1]) reelsToFetch.add(`highlight:${m[1]}`);
                                 });
-                            }
 
-                            // B. Obter HTML do perfil para capturar eventuais IDs de destaques embutidos
-                            try {
-                                const profileRes = await fetch(`https://www.instagram.com/${encodeURIComponent(cleanUsername)}/`, {
-                                    credentials: 'include',
-                                    cache: 'no-store'
-                                });
-                                if (profileRes.ok) {
-                                    const profileHtml = await profileRes.text();
-                                    const hlMatches = [...profileHtml.matchAll(/"(?:highlight:)?(\d{15,20})"/g), ...profileHtml.matchAll(/\/stories\/highlights\/(\d+)/g)];
-                                    for (const match of hlMatches) {
-                                        const hId = match[1];
-                                        if (hId && (hId.startsWith('17') || hId.startsWith('18'))) {
-                                            reelsToFetch.add(`highlight:${hId}`);
-                                        }
-                                    }
-                                }
-                            } catch (e) {
-                                console.warn("[IG Tools Interações] Aviso ao buscar HTML de destaques:", e);
+                                const currentHl = (window.location.href || '').match(/\/stories\/highlights\/(\d+)/);
+                                if (currentHl && currentHl[1]) reelsToFetch.add(`highlight:${currentHl[1]}`);
                             }
 
                             console.log(`[IG Tools Interações] Buscando ${reelsToFetch.size} reel(s) (Stories 24h + Destaques)...`, Array.from(reelsToFetch));

@@ -9435,7 +9435,8 @@
                                             url: `https://www.instagram.com/p/${code}/`,
                                             thumb: thumb,
                                             id: mediaId || code,
-                                            rawId: String(mediaId || code)
+                                            rawId: String(mediaId || code),
+                                            trackingToken: node.tracking_token || ''
                                         });
                                     }
                                 }
@@ -9761,6 +9762,83 @@
                         }
                     }
 
+                    async function executeGraphqlUnlikePost(mediaId, trackingToken = '') {
+                        try {
+                            const cleanMediaId = String(mediaId).split('_')[0];
+                            const actorId = getActorId();
+                            const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                            const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                            const jazoest = computeJazoest(fbDtsg) || '26456';
+                            const spin = getSpinParams();
+
+                            const inputObj = {
+                                actor_id: actorId,
+                                client_mutation_id: String(Math.floor(Math.random() * 100) + 1),
+                                media_id: cleanMediaId
+                            };
+                            if (trackingToken) {
+                                inputObj.tracking_token = trackingToken;
+                            }
+
+                            const variables = { input: inputObj };
+
+                            const body = new URLSearchParams();
+                            body.append('__comet_req', '7');
+                            if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                            if (jazoest) body.append('jazoest', jazoest);
+                            if (lsd) body.append('lsd', lsd);
+                            if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                            body.append('__spin_b', spin.spin_b || 'trunk');
+                            if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                            body.append('__crn', 'comet.igweb.PolarisDesktopPostRoute');
+                            body.append('fb_api_caller_class', 'RelayModern');
+                            body.append('fb_api_req_friendly_name', 'usePolarisLikeMediaXIGUnlikeMutation');
+                            body.append('server_timestamps', 'true');
+                            body.append('variables', JSON.stringify(variables));
+                            body.append('doc_id', '27345296031770102');
+
+                            const headers = {
+                                ...getApiHeaders(true),
+                                'X-ASBD-ID': '359341',
+                                'X-CSRFToken': getCookie('csrftoken') || '',
+                                'X-FB-Friendly-Name': 'usePolarisLikeMediaXIGUnlikeMutation',
+                                'X-FB-LSD': lsd,
+                                'X-IG-App-ID': '936619743392459',
+                                'X-IG-Max-Touch-Points': '0'
+                            };
+
+                            console.log(`[IG Tools Interações] Enviando mutação GraphQL para descurtir post (${cleanMediaId})...`, variables);
+                            const response = await fetch('https://www.instagram.com/api/graphql', {
+                                method: 'POST',
+                                headers,
+                                body: body.toString(),
+                                credentials: 'include',
+                                cache: 'no-store'
+                            });
+
+                            const rawText = await response.text();
+                            let cleanedText = rawText.trim();
+                            if (cleanedText.startsWith('for (;;);')) {
+                                cleanedText = cleanedText.slice(9).trim();
+                            }
+
+                            let data = null;
+                            try {
+                                data = JSON.parse(cleanedText);
+                            } catch (_) { }
+
+                            console.log('[IG Tools Interações] Resposta GraphQL Unlike Post:', { status: response.status, ok: response.ok, data });
+
+                            if (response.ok && (data?.data?.xig_media_unlike || !data?.errors)) {
+                                return true;
+                            }
+                            return false;
+                        } catch (e) {
+                            console.error('[IG Tools Interações] Erro ao descurtir post via GraphQL:', e);
+                            return false;
+                        }
+                    }
+
                     async function unlikeMedia(itemOrId, maybeType) {
                         try {
                             const csrf = getCookie('csrftoken');
@@ -9804,6 +9882,15 @@
                                 return false;
                             } else {
                                 // Descurtir Post
+                                // 1. Tentar pela mutação oficial GraphQL (usePolarisLikeMediaXIGUnlikeMutation)
+                                const gqlSuccess = await executeGraphqlUnlikePost(cleanMediaId, item.trackingToken);
+                                if (gqlSuccess) {
+                                    console.log(`[IG Tools Interações] Sucesso ao descurtir post via GraphQL (${cleanMediaId})!`);
+                                    return true;
+                                }
+
+                                // 2. Fallback REST para o endpoint tradicional
+                                console.warn(`[IG Tools Interações] GraphQL falhou para post, tentando fallback REST...`);
                                 const postUrl = `https://www.instagram.com/api/v1/web/likes/${cleanMediaId}/unlike/`;
                                 const postRes = await fetch(postUrl, {
                                     method: 'POST',

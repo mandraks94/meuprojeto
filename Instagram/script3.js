@@ -621,6 +621,124 @@
                 }
             }
 
+            async function executeGraphqlUnblock(uid) {
+                if (!uid) {
+                    console.warn("[IG Tools Unblock] Nenhum UID fornecido para desbloqueio.");
+                    return { response: { ok: false, status: 0 }, success: false, result: null, text: 'no_uid' };
+                }
+
+                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                const jazoest = computeJazoest(fbDtsg) || '26261';
+                const spin = getSpinParams();
+
+                const variables = {
+                    target_user_id: String(uid)
+                };
+
+                const body = new URLSearchParams();
+                body.append('__comet_req', '7');
+                if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                if (jazoest) body.append('jazoest', jazoest);
+                if (lsd) body.append('lsd', lsd);
+                if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                body.append('__spin_b', spin.spin_b || 'trunk');
+                if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                body.append('__crn', 'comet.igweb.PolarisProfilePostsTabRoute');
+                body.append('fb_api_caller_class', 'RelayModern');
+                body.append('fb_api_req_friendly_name', 'usePolarisUnblockMutation');
+                body.append('server_timestamps', 'true');
+                body.append('variables', JSON.stringify(variables));
+                body.append('doc_id', '28398337623154952');
+
+                const headers = {
+                    ...getApiHeaders(true),
+                    'X-ASBD-ID': '359341',
+                    'X-Bloks-Version-Id': '62077fc559de123afe03ebeb18194a88ba5d4e6874d9a07873752f3792adb8a0',
+                    'X-CSRFToken': getCookie('csrftoken') || '',
+                    'X-FB-Friendly-Name': 'usePolarisUnblockMutation',
+                    'X-FB-LSD': lsd,
+                    'X-IG-App-ID': '936619743392459',
+                    'X-IG-Max-Touch-Points': '0',
+                    'X-Root-Field-Name': 'xdt_unblock',
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                };
+
+                try {
+                    console.log(`[IG Tools Unblock] Enviando mutação GraphQL para UID ${uid}...`, variables);
+                    const response = await fetch('https://www.instagram.com/graphql/query', {
+                        method: 'POST',
+                        headers,
+                        body: body.toString(),
+                        credentials: 'include',
+                        cache: 'no-store'
+                    });
+
+                    const rawText = await response.text();
+                    let cleanedText = rawText.trim();
+                    if (cleanedText.startsWith('for (;;);')) {
+                        cleanedText = cleanedText.slice(9).trim();
+                    }
+
+                    let data = null;
+                    try {
+                        data = JSON.parse(cleanedText);
+                    } catch (e) {
+                        const lines = cleanedText.split('\n');
+                        for (const line of lines) {
+                            try {
+                                const parsed = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                                if (parsed?.data || parsed?.errors) {
+                                    data = parsed;
+                                    break;
+                                }
+                            } catch (_) { }
+                        }
+                    }
+
+                    console.log('[IG Tools Unblock] Resposta GraphQL:', {
+                        status: response.status,
+                        ok: response.ok,
+                        data,
+                        rawPreview: rawText.slice(0, 200)
+                    });
+
+                    const hasData = !!(data?.data?.xdt_unblock || data?.data);
+                    const isUnblocked = data?.data?.xdt_unblock?.friendship_status?.blocking === false;
+                    const hasErrors = Array.isArray(data?.errors) && data.errors.length > 0 && !hasData;
+                    const success = response.ok && !hasErrors && (isUnblocked || hasData);
+
+                    return {
+                        response,
+                        success,
+                        result: { status: success ? 'ok' : 'fail', data },
+                        text: rawText,
+                        data
+                    };
+                } catch (e) {
+                    console.error('[IG Tools Unblock] Erro na requisição GraphQL:', e);
+                    return { response: { ok: false, status: 0 }, success: false, result: null, text: String(e) };
+                }
+            }
+
+            async function executeApiUnblock(uid, username = '') {
+                if (!uid) return { success: false, error: 'no_uid' };
+
+                // Mutação oficial GraphQL do Instagram (usePolarisUnblockMutation)
+                try {
+                    const gqlRes = await executeGraphqlUnblock(uid);
+                    if (gqlRes.success) {
+                        console.log(`[IG Tools Unblock] Sucesso via GraphQL para UID ${uid} (@${username})`);
+                        return { success: true, data: gqlRes.data, method: 'graphql' };
+                    }
+                    console.warn(`[IG Tools Unblock] Falha na mutação GraphQL para @${username}:`, gqlRes);
+                    return { success: false, error: 'graphql_failed', data: gqlRes.data };
+                } catch (e) {
+                    console.error(`[IG Tools Unblock] Erro no GraphQL para @${username}:`, e);
+                    return { success: false, error: String(e) };
+                }
+            }
+
             async function executeGraphqlUserHoverCard(userId) {
                 if (!userId) return null;
                 const uid = String(userId);
@@ -4720,13 +4838,173 @@
                 let modalAbertoMuted = false;
                 // --- FIM DO MENU CONTAS SILENCIADAS ---
 
-                // --- NOVO MENU: CONTAS BLOQUEADAS ---
+                // --- NOVO MENU: CONTAS BLOQUEADAS (WBLOKS & TABELA SEGUINDO-STYLE) ---
+
+                async function fetchBlockedAccountsWbloks() {
+                    try {
+                        const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                        const jazoest = computeJazoest(fbDtsg) || '25862';
+                        const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                        const spin = getSpinParams();
+
+                        const dyn = getInstagramFormToken('__dyn') || '';
+                        const csr = getInstagramFormToken('__csr') || '';
+                        const hsdp = getInstagramFormToken('__hsdp') || '';
+                        const hblp = getInstagramFormToken('__hblp') || '';
+                        const sjsp = getInstagramFormToken('__sjsp') || getInstagramFormToken('_sjsp') || '';
+                        const sParam = getInstagramFormToken('__s') || '';
+                        const hsi = getInstagramFormToken('__hsi') || '';
+                        const hs = getInstagramFormToken('__hs') || '';
+
+                        const url = 'https://www.instagram.com/async/wbloks/fetch/?appid=com.instagram.portable_settings.blocked_accounts.blocked_accounts_reloader&type=action&__bkv=62077fc559de123afe03ebeb18194a88ba5d4e6874d9a07873752f3792adb8a0';
+
+                        const body = new URLSearchParams({
+                            params: JSON.stringify({
+                                container_id_of_list: "2073224587",
+                                container_id_of_rows: "2073224588"
+                            }),
+                            __crn: 'comet.igweb.PolarisBlockedAccountsSettingsRoute',
+                            __comet_req: '7',
+                            server_timestamps: 'true',
+                            __d: 'www',
+                            __user: '0',
+                            __a: '1',
+                            __req: '7',
+                            __hs: hs,
+                            dpr: String(window.devicePixelRatio || 1),
+                            __ccg: 'EXCELLENT',
+                            __rev: spin.spin_r || '1048608279',
+                            __s: sParam,
+                            __hsi: hsi,
+                            __dyn: dyn,
+                            __csr: csr,
+                            __hsdp: hsdp,
+                            __hblp: hblp,
+                            __sjsp: sjsp,
+                            _sjsp: sjsp,
+                            __spin_r: spin.spin_r || '1048608279',
+                            __spin_b: spin.spin_b || 'trunk',
+                            __spin_t: spin.spin_t || String(Math.floor(Date.now() / 1000))
+                        });
+
+                        if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                        if (jazoest) body.append('jazoest', jazoest);
+                        if (lsd) body.append('lsd', lsd);
+
+                        const headers = {
+                            ...getApiHeaders(true),
+                            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                            'X-FB-LSD': lsd
+                        };
+
+                        console.log('[IG Tools Bloqueados] Buscando contas bloqueadas via Wbloks endpoint...');
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers,
+                            body: body.toString(),
+                            credentials: 'include',
+                            cache: 'no-store'
+                        });
+
+                        if (!response.ok) {
+                            console.warn('[IG Tools Bloqueados] Resposta Wbloks HTTP', response.status);
+                            return null;
+                        }
+
+                        const rawText = await response.text();
+                        let cleanedText = rawText.trim();
+                        if (cleanedText.startsWith('for (;;);')) {
+                            cleanedText = cleanedText.slice(9).trim();
+                        }
+
+                        let parsedJson = null;
+                        try {
+                            parsedJson = JSON.parse(cleanedText);
+                        } catch (e) {
+                            const lines = cleanedText.split('\n');
+                            for (const line of lines) {
+                                try {
+                                    const p = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                                    if (p?.payload || p?.data) {
+                                        parsedJson = p;
+                                        break;
+                                    }
+                                } catch (_) { }
+                            }
+                        }
+
+                        let lispyStr = '';
+                        if (parsedJson?.payload?.layout?.bloks_payload?.data) {
+                            const items = parsedJson.payload.layout.bloks_payload.data;
+                            for (const it of items) {
+                                if (it?.data?.initial_lispy) {
+                                    lispyStr = it.data.initial_lispy;
+                                    break;
+                                }
+                            }
+                        }
+
+                        const textToSearch = lispyStr || cleanedText;
+                        const users = [];
+                        const seen = new Set();
+
+                        // Regex para extrair usuários do Lispy do Wbloks:
+                        // (bk.action.array.Make, "user_id", "username", "secondary_text", (bk.action.bool.Const, false), "profile_pic_url", (bk.action.bool.Const, is_auto_blocked))
+                        const itemRegex = /\(bk\.action\.array\.Make,\s*"(\d+)",\s*"([^"]+)",\s*"((?:\\.|[^"\\])*)",\s*\(bk\.action\.bool\.Const,\s*(?:true|false)\),\s*"((?:\\.|[^"\\])+)",\s*\(bk\.action\.bool\.Const,\s*(true|false)\)/g;
+
+                        let match;
+                        while ((match = itemRegex.exec(textToSearch)) !== null) {
+                            const pk = match[1];
+                            const uname = match[2];
+                            let rawSec = match[3];
+                            let picUrl = match[4].replace(/\\/g, '');
+                            const isAutoBlocked = match[5] === 'true';
+
+                            try {
+                                rawSec = JSON.parse(`"${rawSec}"`);
+                            } catch (_) { }
+
+                            if (uname && !seen.has(uname)) {
+                                seen.add(uname);
+                                const isAutoText = rawSec.toLowerCase().includes('outras contas') || rawSec.toLowerCase().includes('other accounts');
+                                const fullName = isAutoText ? '' : rawSec;
+                                const secondaryText = isAutoText ? 'Inclui outras contas que o usuário tiver ou criar' : rawSec;
+
+                                if (pk) setCachedUserId(uname, pk);
+
+                                users.push({
+                                    username: uname,
+                                    pk: pk,
+                                    id: pk,
+                                    fullName: fullName,
+                                    secondaryText: secondaryText,
+                                    photoUrl: picUrl || DEFAULT_AVATAR,
+                                    isAutoBlocked: isAutoBlocked || isAutoText
+                                });
+                            }
+                        }
+
+                        console.log(`[IG Tools Bloqueados] Extraídos ${users.length} usuários via Wbloks com sucesso.`);
+                        return users.length > 0 ? users : null;
+                    } catch (err) {
+                        console.error('[IG Tools Bloqueados] Erro ao buscar Wbloks:', err);
+                        return null;
+                    }
+                }
+
                 function extractBlockedAccountsUsernames(doc = document) {
-                    return new Promise((resolve) => {
+                    return new Promise(async (resolve) => {
+                        // Tenta Wbloks primeiro
+                        const wbloksUsers = await fetchBlockedAccountsWbloks();
+                        if (wbloksUsers && wbloksUsers.length > 0) {
+                            resolve(wbloksUsers);
+                            return;
+                        }
+
                         const users = new Map();
                         let scrollInterval;
                         let noNewUsersCount = 0;
-                        const maxIdleCount = 6; // Parar após 6 tentativas rápidas sem novos usuários (~2.4s)
+                        const maxIdleCount = 6;
 
                         let cancelled = false;
                         const { bar, update, closeButton } = createCancellableProgressBar();
@@ -4743,14 +5021,13 @@
                                 if (idx !== -1) window._igBlockedUsersCapture.callbacks.splice(idx, 1);
                             }
                             if (bar) bar.remove();
-                            console.log(`[IG Tools] Extração de bloqueados finalizada. Total de ${users.size} usuários encontrados.`);
+                            console.log(`[IG Tools] Extração de bloqueados finalizada. Total de ${users.size} usuários.`);
                             users.forEach(u => {
                                 if (u.username && u.pk) setCachedUserId(u.username, u.pk);
                             });
                             resolve(cancelled ? [] : Array.from(users.values()));
                         }
 
-                        // 1. Tenta extrair dados JSON embutidos pelo Instagram SSR (scripts application/json)
                         function tryExtractFromSSRScripts() {
                             try {
                                 const scripts = Array.from(doc.querySelectorAll('script[type="application/json"]'));
@@ -4758,13 +5035,13 @@
                                     const text = script.textContent || '';
                                     if (!text.includes('blocked') && !text.includes('username')) continue;
                                     const userRegex = /"username":"([a-zA-Z0-9._]+)"/g;
-                                    let match;
-                                    while ((match = userRegex.exec(text)) !== null) {
-                                        const uname = match[1];
+                                    let m;
+                                    while ((m = userRegex.exec(text)) !== null) {
+                                        const uname = m[1];
                                         if (!uname || uname === 'instagram' || uname === 'threads') continue;
 
-                                        const start = Math.max(0, match.index - 300);
-                                        const end = Math.min(text.length, match.index + 500);
+                                        const start = Math.max(0, m.index - 300);
+                                        const end = Math.min(text.length, m.index + 500);
                                         const chunk = text.slice(start, end);
 
                                         const picMatch = chunk.match(/"profile_pic_url":"([^"]+)"/);
@@ -4775,12 +5052,11 @@
                                         if (pk) setCachedUserId(uname, pk);
 
                                         if (!users.has(uname)) {
-                                            users.set(uname, { username: uname, photoUrl, pk });
+                                            users.set(uname, { username: uname, photoUrl, pk, id: pk, fullName: '', secondaryText: '', isAutoBlocked: false });
                                         }
                                     }
                                 }
                                 if (users.size > 0) {
-                                    console.log(`[IG Tools] Extraídos ${users.size} bloqueados via script JSON SSR.`);
                                     update(users.size, users.size, `Carregados ${users.size} usuário(s) iniciais...`);
                                 }
                             } catch (e) { }
@@ -4788,30 +5064,28 @@
 
                         tryExtractFromSSRScripts();
 
-                        // 2. Importa dados já capturados na sessão pelo interceptor de rede
                         if (window._igBlockedUsersCapture && window._igBlockedUsersCapture.users) {
                             window._igBlockedUsersCapture.users.forEach(u => {
                                 if (!users.has(u.username)) {
-                                    users.set(u.username, { username: u.username, photoUrl: u.photoUrl, pk: u.pk });
+                                    users.set(u.username, { username: u.username, photoUrl: u.photoUrl, pk: u.pk, id: u.pk, fullName: '', secondaryText: '', isAutoBlocked: false });
                                 } else {
                                     const cur = users.get(u.username);
-                                    if (!cur.pk && u.pk) cur.pk = u.pk;
+                                    if (!cur.pk && u.pk) { cur.pk = u.pk; cur.id = u.pk; }
                                     if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && u.photoUrl !== DEFAULT_AVATAR) cur.photoUrl = u.photoUrl;
                                 }
                                 if (u.pk) setCachedUserId(u.username, u.pk);
                             });
                         }
 
-                        // 3. Callback em tempo real para paginação assíncrona (com.instagram.pagination.async)
                         function networkCallback(capturedArray) {
                             let added = false;
                             capturedArray.forEach(u => {
                                 if (!users.has(u.username)) {
-                                    users.set(u.username, { username: u.username, photoUrl: u.photoUrl, pk: u.pk });
+                                    users.set(u.username, { username: u.username, photoUrl: u.photoUrl, pk: u.pk, id: u.pk, fullName: '', secondaryText: '', isAutoBlocked: false });
                                     added = true;
                                 } else {
                                     const cur = users.get(u.username);
-                                    if (!cur.pk && u.pk) cur.pk = u.pk;
+                                    if (!cur.pk && u.pk) { cur.pk = u.pk; cur.id = u.pk; }
                                     if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && u.photoUrl !== DEFAULT_AVATAR) cur.photoUrl = u.photoUrl;
                                 }
                                 if (u.pk) setCachedUserId(u.username, u.pk);
@@ -4825,12 +5099,10 @@
                             window._igBlockedUsersCapture.callbacks.push(networkCallback);
                         }
 
-                        // 4. Varredura no DOM combinada com rolagem acelerada (Turbo Scroll)
                         function performScrollAndExtract() {
                             if (cancelled) return;
                             const initialUserCount = users.size;
 
-                            // Seletores Bloks e genéricos
                             const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')).filter(el =>
                                 el.querySelector('span[data-bloks-name="bk.components.Text"]') || (el.querySelector('img') && el.innerText && el.innerText.includes('\n'))
                             );
@@ -4857,11 +5129,13 @@
                                 if (username && /^[a-zA-Z0-9_.]{3,30}$/.test(username)) {
                                     const imgTag = el.querySelector('img');
                                     const photoUrl = imgTag ? imgTag.src : DEFAULT_AVATAR;
+                                    const pk = getCachedUserId(username) || '';
                                     if (!users.has(username)) {
-                                        users.set(username, { username, photoUrl, pk: getCachedUserId(username) || '' });
+                                        users.set(username, { username, photoUrl, pk, id: pk, fullName: '', secondaryText: '', isAutoBlocked: false });
                                     } else {
                                         const cur = users.get(username);
                                         if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && photoUrl !== DEFAULT_AVATAR) cur.photoUrl = photoUrl;
+                                        if (!cur.pk && pk) { cur.pk = pk; cur.id = pk; }
                                     }
                                 }
                             });
@@ -4875,7 +5149,6 @@
                             }
 
                             if (noNewUsersCount >= (users.size > 0 ? maxIdleCount : 8)) {
-                                console.log("[IG Tools] Nenhum novo bloqueado após tentativas sucessivas. Finalizando.");
                                 finishExtraction();
                                 return;
                             }
@@ -4893,12 +5166,10 @@
                             }
                         }
 
-                        // Inicia rolagem a cada 400ms (Turbo Scroll)
                         scrollInterval = setInterval(performScrollAndExtract, 400);
 
                         setTimeout(() => {
                             if (scrollInterval) {
-                                console.log("[IG Tools] Timeout de segurança atingido. Finalizando extração.");
                                 finishExtraction();
                             }
                         }, 60000);
@@ -4906,195 +5177,412 @@
                 }
 
                 async function iniciarProcessoBloqueados() {
+                    const existingModal = document.getElementById("blockedAccountsModal") || document.getElementById("allBlockedAccountsDiv");
+                    if (existingModal) {
+                        existingModal.remove();
+                    }
                     if (modalAbertoBlocked) return;
                     modalAbertoBlocked = true;
 
-                    if (window.location.pathname !== '/accounts/blocked_accounts/') {
-                        showToast('Abrindo página de contas bloqueadas...');
-                        sessionStorage.setItem('ig_tools_reopen_blocked', '1');
+                    toggleLoading(true, 0, "Buscando contas bloqueadas via Wbloks...");
+
+                    let rawUsers = await fetchBlockedAccountsWbloks();
+
+                    if (!rawUsers || rawUsers.length === 0) {
+                        if (window.location.pathname !== '/accounts/blocked_accounts/') {
+                            toggleLoading(false);
+                            showToast('Abrindo página de contas bloqueadas...');
+                            sessionStorage.setItem('ig_tools_reopen_blocked', '1');
+                            modalAbertoBlocked = false;
+                            window.location.href = '/accounts/blocked_accounts/';
+                            return;
+                        }
+                        rawUsers = await extractBlockedAccountsUsernames();
+                    }
+
+                    toggleLoading(false);
+
+                    if (!rawUsers || rawUsers.length === 0) {
                         modalAbertoBlocked = false;
-                        window.location.href = '/accounts/blocked_accounts/';
+                        alert('Nenhuma conta bloqueada encontrada.');
                         return;
                     }
 
-                    const users = await extractBlockedAccountsUsernames();
-
-                    if (!users || users.length === 0) {
-                        modalAbertoBlocked = false;
-                        return;
-                    }
-
-                    // Cacheia os IDs capturados
-                    users.forEach(u => { if (u.username && u.pk) setCachedUserId(u.username, u.pk); });
-
-
-                    const modalStates = new Map();
-                    users.forEach(u => {
-                        const username = typeof u === 'string' ? u : u.username;
-                        modalStates.set(username, false);
+                    // Normaliza lista de usuários
+                    let blockedList = rawUsers.map(u => {
+                        const uname = typeof u === 'string' ? u : u.username;
+                        const pk = (typeof u === 'object' && (u.pk || u.id)) ? String(u.pk || u.id) : (getCachedUserId(uname) || '');
+                        if (uname && pk) setCachedUserId(uname, pk);
+                        return {
+                            username: uname,
+                            pk: pk,
+                            id: pk,
+                            fullName: (typeof u === 'object' && u.fullName) ? u.fullName : '',
+                            secondaryText: (typeof u === 'object' && u.secondaryText) ? u.secondaryText : '',
+                            photoUrl: (typeof u === 'object' && u.photoUrl) ? u.photoUrl : DEFAULT_AVATAR,
+                            isAutoBlocked: (typeof u === 'object' && u.isAutoBlocked) ? true : false
+                        };
                     });
 
-                    const itemsPerPage = loadSettings().itemsPerPage;
+                    const selectedUsers = new Set();
                     let currentPage = 1;
+                    let sortConfig = { key: 'username', direction: 'ascending' };
 
                     const div = document.createElement("div");
-                    div.id = "allBlockedAccountsDiv";
+                    div.id = "blockedAccountsModal";
                     div.className = "submenu-modal";
                     div.style.cssText = `
-            position: fixed;
-            top: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 70vw;
-            max-width: 700px;
-            max-height: 85vh;
-            overflow: auto;
-            border: 2px solid #e74c3c;
-            border-radius: 10px;
-            z-index: 2147483647;
-            padding: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        `;
+                        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                        width: 90%; max-width: 800px; max-height: 90vh; border: 1px solid #ccc;
+                        border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
+                    `;
 
-                    function renderPage(page) {
-                        let html = `
-                <div class="modal-header">
-                    <span class="modal-title">
-                        Contas Bloqueadas <span id="blockedSelectedCount" style="font-size:12px; font-weight:normal; color:#e74c3c;">(${Array.from(modalStates.values()).filter(v => v).length} selecionados)</span>
-                        <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Lista de usuários que você bloqueou. Você pode desbloqueá-los em massa aqui.</span></div>
-                    </span>
-                    <div class="modal-controls"><button id="blockedMinimizarBtn" title="Minimizar">_</button><button id="blockedFecharBtn" title="Fechar">X</button></div>
-                </div>`;
-                        html += `
-                <div style="padding: 15px;">
-                    <button id="blockedMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
-                    <button id="blockedDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
-                    <button id="blockedDesbloquearBtn" style="background:#2ecc71;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Desbloquear</button>
-                </div>
-                <div style="padding: 0 15px 15px 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                    <button id="blockedRefreshBtn" style="background: #1abc9c; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar</button>
-                </div>
-                <div style="margin-bottom:15px;">
-                    <input type="text" id="blockedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
-                </div>
-                <ul id="blockedList" style='list-style:none;padding:0;max-height:40vh;overflow:auto;'>
-            `;
-                        const startIndex = (page - 1) * itemsPerPage;
-                        const endIndex = Math.min(startIndex + itemsPerPage, users.length);
-                        const pageUsers = users.slice(startIndex, endIndex);
+                    div.innerHTML = `
+                        <div class="modal-header">
+                            <span class="modal-title">
+                                Gerenciador de Contas Bloqueadas <span id="blockedSelectedCount" style="font-size:12px; font-weight:normal; color:#e74c3c;">(0 selecionados)</span>
+                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie as contas que você bloqueou no Instagram. Filtre, pesquise e desbloqueie em lote ou individualmente.</span></div>
+                            </span>
+                            <div class="modal-controls">
+                                <button id="blockedMinimizarBtn" title="Minimizar">_</button>
+                                <button id="blockedFecharBtn" title="Fechar">X</button>
+                            </div>
+                        </div>
+                        <div style="padding: 15px 0 10px 0;">
+                            <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                                    <button id="blockedRefreshBtn" title="Atualizar Dados" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">🔄 Atualizar</button>
+                                    <button id="blockedDesbloquearBtn" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">🔓 Desbloquear Selecionados</button>
+                                    <button id="blockedMarcarTodosBtn" style="background: #0095f6; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">Selecionar Página</button>
+                                    <button id="blockedDesmarcarTodosBtn" style="background: #6c757d; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">Desmarcar Todos</button>
+                                </div>
+                                <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; display: flex; align-items: center;">
+                                    <span style="font-size: 14px; font-weight: 500;">⚡ Usar API</span>
+                                    <label class="switch"><input type="checkbox" id="blockedUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}><span class="slider"></span></label>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 15px; display: flex; gap: 10px;">
+                            <input type="text" id="blockedSearchInput" placeholder="Pesquisar por @usuário, nome ou ID..." style="flex: 2; padding: 8px 12px; height: 40px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; outline: none; box-sizing: border-box;">
+                            <select id="blockedFilterSelect" style="flex: 1; padding: 0 10px; height: 40px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; cursor: pointer; outline: none; box-sizing: border-box;">
+                                <option value="all">Todos (${blockedList.length})</option>
+                                <option value="auto_blocked">🔒 Inclui novas contas (Auto-bloqueio)</option>
+                                <option value="standard">👤 Bloqueio padrão</option>
+                            </select>
+                        </div>
+                        <div id="statusBloqueados" style="margin-top: 5px; font-weight: bold; font-size: 13px; color: #555;">Total: ${blockedList.length} contas bloqueadas.</div>
+                        <div id="tabelaBloqueadosContainer" style="display: block; margin-top: 15px;"></div>
+                    `;
 
-                        pageUsers.forEach((userObj, idx) => {
-                            const username = typeof userObj === 'string' ? userObj : userObj.username;
-                            const photoUrl = (typeof userObj === 'object' && userObj.photoUrl) ? userObj.photoUrl : DEFAULT_AVATAR;
-                            const globalIdx = startIndex + idx;
-                            const isChecked = modalStates.get(username) || false;
-                            html += `
-                    <li style="padding:5px 0;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px;">
-                        <label class="custom-checkbox" for="blocked_cb_${globalIdx}" style="margin:0;">
-                            <input type="checkbox" class="blockedCheckbox" id="blocked_cb_${globalIdx}" data-username="${username}" ${isChecked ? "checked" : ""}>
-                            <span class="checkmark"></span>
-                        </label>
-                        <img src="${photoUrl}" alt="${username}" onerror="this.onerror=null;this.src='${DEFAULT_AVATAR}';" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
-                        <span style="cursor:pointer; color: black;">${username}</span>
-                    </li>
-                `;
-                        });
-                        html += "</ul>";
-                        const totalPages = Math.ceil(users.length / itemsPerPage);
-                        html += `<div id="paginationControls" style="margin-top:20px; display:flex; justify-content:center; align-items:center; gap:10px;">`;
-                        if (totalPages > 1) {
-                            if (page > 1) html += `<button id="prevPageBtn">Anterior</button>`;
-                            html += `<span style="font-weight:bold;">Página ${page} de ${totalPages}</span>`;
-                            if (page < totalPages) html += `<button id="nextPageBtn">Próximo</button>`;
+                    document.body.appendChild(div);
+
+                    const container = document.getElementById("tabelaBloqueadosContainer");
+
+                    const updateCounts = (paginatedUsers = []) => {
+                        const countEl = document.getElementById('blockedSelectedCount');
+                        if (countEl) countEl.innerText = `(${selectedUsers.size} selecionados)`;
+
+                        const selectAllCb = document.getElementById('selectAllBlockedCheckbox');
+                        if (selectAllCb && paginatedUsers.length > 0) {
+                            selectAllCb.checked = paginatedUsers.every(u => selectedUsers.has(u.username));
                         }
-                        html += `</div>`;
-                        div.innerHTML = html;
-                        document.body.appendChild(div);
+                    };
 
-                        document.getElementById("blockedFecharBtn").onclick = () => { div.remove(); modalAbertoBlocked = false; };
-                        document.getElementById("blockedMinimizarBtn").onclick = () => {
-                            const modal = document.getElementById('allBlockedAccountsDiv');
-                            const contentToToggle = [
-                                modal.querySelector('input[type="text"]'),
-                                modal.querySelector('ul'),
-                                modal.querySelector('#paginationControls')
-                            ].filter(Boolean);
+                    const renderList = (page) => {
+                        const itemsPerPage = loadSettings().itemsPerPage || 10;
+                        const startIndex = (page - 1) * itemsPerPage;
+                        const endIndex = startIndex + itemsPerPage;
 
-                            const btn = document.getElementById('blockedMinimizarBtn');
-                            const isMinimized = modal.dataset.minimized === 'true';
+                        const searchTerm = (document.getElementById('blockedSearchInput')?.value || '').toLowerCase().trim();
+                        const filterValue = document.getElementById('blockedFilterSelect')?.value || 'all';
 
-                            contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+                        let filteredUsers = blockedList;
 
-                            modal.dataset.minimized = !isMinimized;
-                            btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
-                            modal.style.maxHeight = isMinimized ? '85vh' : 'none';
-                        };
+                        if (searchTerm) {
+                            filteredUsers = filteredUsers.filter(u =>
+                                (u.username && u.username.toLowerCase().includes(searchTerm)) ||
+                                (u.fullName && u.fullName.toLowerCase().includes(searchTerm)) ||
+                                (u.secondaryText && u.secondaryText.toLowerCase().includes(searchTerm)) ||
+                                (u.pk && u.pk.includes(searchTerm))
+                            );
+                        }
 
-                        document.getElementById("blockedRefreshBtn").onclick = () => {
-                            div.remove();
-                            modalAbertoBlocked = false;
-                            iniciarProcessoBloqueados();
-                        };
+                        if (filterValue === 'auto_blocked') {
+                            filteredUsers = filteredUsers.filter(u => u.isAutoBlocked);
+                        } else if (filterValue === 'standard') {
+                            filteredUsers = filteredUsers.filter(u => !u.isAutoBlocked);
+                        }
 
-                        document.getElementById("blockedMarcarTodosBtn").onclick = () => {
-                            document.querySelectorAll("#blockedList .blockedCheckbox").forEach(cb => { cb.checked = true; modalStates.set(cb.dataset.username, true); });
-                        };
-                        document.getElementById("blockedDesmarcarTodosBtn").onclick = () => {
-                            document.querySelectorAll("#blockedList .blockedCheckbox").forEach(cb => { cb.checked = false; modalStates.set(cb.dataset.username, false); });
-                        };
-
-                        const searchInput = document.getElementById("blockedSearchInput");
-                        searchInput.addEventListener("input", () => {
-                            const filter = searchInput.value.toLowerCase();
-                            // O seletor foi corrigido para pegar o span correto com o nome de usuário
-                            div.querySelectorAll("#blockedList li").forEach(li => {
-                                const usernameSpan = li.querySelector('span[style*="cursor:pointer"]');
-                                const text = usernameSpan ? usernameSpan.textContent.toLowerCase() : '';
-                                li.style.display = text.includes(filter) ? "" : "none";
-                            });
-                        });
-
-                        const prevBtn = document.getElementById("prevPageBtn");
-                        if (prevBtn) prevBtn.onclick = () => { currentPage--; renderPage(currentPage); };
-                        const nextBtn = document.getElementById("nextPageBtn");
-                        if (nextBtn) nextBtn.onclick = () => { currentPage++; renderPage(currentPage); };
-
-                        document.querySelectorAll(".blockedCheckbox").forEach(cb => {
-                            cb.addEventListener("change", () => {
-                                modalStates.set(cb.dataset.username, cb.checked);
-                                const countEl = document.getElementById('blockedSelectedCount');
-                                if (countEl) countEl.innerText = `(${Array.from(modalStates.values()).filter(v => v).length} selecionados)`;
-                            });
-                        });
-
-                        document.getElementById("blockedDesbloquearBtn").onclick = async () => {
-                            const usersToUnblock = Array.from(modalStates.entries())
-                                .filter(([_, checked]) => checked)
-                                .map(([username]) => username);
-
-                            if (usersToUnblock.length === 0) {
-                                alert("Nenhum usuário selecionado para desbloquear.");
-                                return;
+                        const sortedUsers = [...filteredUsers].sort((a, b) => {
+                            let valA = '';
+                            let valB = '';
+                            if (sortConfig.key === 'username') {
+                                valA = (a.username || '').toLowerCase();
+                                valB = (b.username || '').toLowerCase();
+                            } else if (sortConfig.key === 'pk') {
+                                valA = Number(a.pk) || 0;
+                                valB = Number(b.pk) || 0;
+                            } else if (sortConfig.key === 'isAutoBlocked') {
+                                valA = a.isAutoBlocked ? 1 : 0;
+                                valB = b.isAutoBlocked ? 1 : 0;
                             }
 
-                            const desbloquearBtn = document.getElementById("blockedDesbloquearBtn");
-                            desbloquearBtn.disabled = true;
-                            desbloquearBtn.textContent = "Processando...";
-                            toggleLoading(true, 0, "Desbloqueando...");
+                            if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+                            if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
+                            return 0;
+                        });
 
-                            await unblockUsers(usersToUnblock, () => {
-                                desbloquearBtn.disabled = false;
-                                desbloquearBtn.textContent = "Desbloquear";
-                                alert(`${usersToUnblock.length} usuário(s) tiveram o bloqueio removido.`);
-                                // Recarrega o modal para refletir as mudanças
-                                div.remove();
-                                modalAbertoBlocked = false;
-                                iniciarProcessoBloqueados();
-                                toggleLoading(false);
+                        const totalPages = Math.max(1, Math.ceil(sortedUsers.length / itemsPerPage));
+                        if (page > totalPages) page = totalPages;
+                        currentPage = page;
+
+                        const paginatedUsers = sortedUsers.slice(startIndex, endIndex);
+
+                        const statusEl = document.getElementById('statusBloqueados');
+                        if (statusEl) {
+                            statusEl.innerText = `Mostrando ${filteredUsers.length} de ${blockedList.length} contas bloqueadas.`;
+                        }
+
+                        let tableHtml = `
+                            <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                                <thead style="cursor: pointer;">
+                                    <tr style="text-align: left; border-bottom: 2px solid #dbdbdb;">
+                                        <th style="padding: 8px; width: 30px;"><input type="checkbox" id="selectAllBlockedCheckbox" title="Selecionar Todos da Página"></th>
+                                        <th style="padding: 8px;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                        <th style="padding: 8px; text-align: center;" data-sort-key="pk">ID (PK) ${sortConfig.key === 'pk' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                        <th style="padding: 8px; text-align: center;" data-sort-key="isAutoBlocked">Tipo de Bloqueio ${sortConfig.key === 'isAutoBlocked' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                        <th style="padding: 8px; text-align: center;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                        `;
+
+                        if (paginatedUsers.length === 0) {
+                            tableHtml += `<tr><td colspan="5" style="text-align: center; padding: 25px; color: #888;">Nenhum usuário encontrado com os filtros aplicados.</td></tr>`;
+                        } else {
+                            paginatedUsers.forEach(userObj => {
+                                const { username, photoUrl, pk, fullName, secondaryText, isAutoBlocked } = userObj;
+                                const isChecked = selectedUsers.has(username);
+
+                                tableHtml += `
+                                    <tr style="border-bottom: 1px solid #dbdbdb;" data-username="${username}">
+                                        <td style="padding: 8px;"><input type="checkbox" class="user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
+                                        <td style="padding: 8px; display: flex; align-items: center; gap: 10px;">
+                                            <img src="${photoUrl || DEFAULT_AVATAR}" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${username}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                                            <div style="display: flex; flex-direction: column;">
+                                                <div style="display: flex; align-items: center; gap: 6px;">
+                                                    <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration: none; color: inherit; font-weight: 600;">${username}</a>
+                                                </div>
+                                                ${fullName ? `<span style="font-size: 12px; color: #666;">${fullName}</span>` : ''}
+                                                ${isAutoBlocked && secondaryText ? `<span style="font-size: 11px; color: #e74c3c;">${secondaryText}</span>` : ''}
+                                            </div>
+                                        </td>
+                                        <td style="text-align: center; padding: 8px; font-family: monospace; font-size: 12px; color: #555;">${pk || '-'}</td>
+                                        <td style="text-align: center; padding: 8px;">
+                                            ${isAutoBlocked
+                                                ? `<span style="background: #fde8e8; color: #c0392b; border: 1px solid #f8b4b4; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">🔒 + Novas contas</span>`
+                                                : `<span style="background: #e8f4fd; color: #1976d2; border: 1px solid #bbdefb; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">👤 Padrão</span>`
+                                            }
+                                        </td>
+                                        <td style="text-align: center; padding: 8px;">
+                                            <button class="btn-unblock-row" data-username="${username}" data-uid="${pk}" style="background: #2ecc71; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">Desbloquear</button>
+                                        </td>
+                                    </tr>
+                                `;
                             });
-                        };
+                        }
+
+                        tableHtml += `</tbody></table>`;
+
+                        let paginationHtml = `<div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px;">`;
+                        if (page > 1) paginationHtml += `<button id="prevBlockedPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Anterior</button>`;
+                        paginationHtml += `<span style="font-size: 13px; font-weight: 600;">Página ${page} de ${totalPages}</span>`;
+                        if (page < totalPages) paginationHtml += `<button id="nextBlockedPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Próximo</button>`;
+                        paginationHtml += `</div>`;
+
+                        container.innerHTML = tableHtml + paginationHtml;
+
+                        // Checkbox individual listeners
+                        container.querySelectorAll('.user-checkbox').forEach(cb => {
+                            cb.addEventListener('change', (e) => {
+                                const uname = e.target.dataset.username;
+                                if (e.target.checked) selectedUsers.add(uname);
+                                else selectedUsers.delete(uname);
+                                updateCounts(paginatedUsers);
+                            });
+                        });
+
+                        // Select all checkbox listener
+                        const selectAllCb = document.getElementById('selectAllBlockedCheckbox');
+                        if (selectAllCb) {
+                            selectAllCb.checked = paginatedUsers.length > 0 && paginatedUsers.every(u => selectedUsers.has(u.username));
+                            selectAllCb.onchange = (e) => {
+                                const isChecked = e.target.checked;
+                                paginatedUsers.forEach(u => {
+                                    if (isChecked) selectedUsers.add(u.username);
+                                    else selectedUsers.delete(u.username);
+                                });
+                                container.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = isChecked);
+                                updateCounts(paginatedUsers);
+                            };
+                        }
+
+                        // Sorting listeners
+                        container.querySelectorAll('th[data-sort-key]').forEach(th => {
+                            th.addEventListener('click', () => {
+                                const key = th.dataset.sortKey;
+                                if (sortConfig.key === key) {
+                                    sortConfig.direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+                                } else {
+                                    sortConfig.key = key;
+                                    sortConfig.direction = 'ascending';
+                                }
+                                renderList(currentPage);
+                            });
+                        });
+
+                        // Pagination button listeners
+                        const prevBtn = document.getElementById('prevBlockedPageBtn');
+                        if (prevBtn) prevBtn.onclick = () => renderList(currentPage - 1);
+                        const nextBtn = document.getElementById('nextBlockedPageBtn');
+                        if (nextBtn) nextBtn.onclick = () => renderList(currentPage + 1);
+
+                        // Individual unblock button listeners
+                        container.querySelectorAll('.btn-unblock-row').forEach(btn => {
+                            btn.addEventListener('click', async (e) => {
+                                const targetBtn = e.currentTarget;
+                                const uname = targetBtn.dataset.username;
+                                if (!confirm(`Deseja desbloquear o usuário @${uname}?`)) return;
+
+                                targetBtn.disabled = true;
+                                targetBtn.textContent = 'Processando...';
+
+                                await unblockUsers([uname], (unblocked) => {
+                                    if (unblocked && unblocked.includes(uname)) {
+                                        blockedList = blockedList.filter(u => u.username !== uname);
+                                        selectedUsers.delete(uname);
+                                        showToast(`Usuário @${uname} desbloqueado!`);
+                                        updateCounts();
+                                        const visibleRows = container.querySelectorAll('tbody tr[data-username]');
+                                        if (visibleRows.length <= 1 && currentPage > 1) {
+                                            renderList(currentPage - 1);
+                                        } else {
+                                            renderList(currentPage);
+                                        }
+                                    } else {
+                                        targetBtn.disabled = false;
+                                        targetBtn.textContent = 'Desbloquear';
+                                    }
+                                });
+                            });
+                        });
+                    };
+
+                    renderList(currentPage);
+
+                    // Static header button listeners
+                    document.getElementById("blockedFecharBtn").onclick = () => {
+                        div.remove();
+                        modalAbertoBlocked = false;
+                    };
+
+                    document.getElementById("blockedMinimizarBtn").onclick = () => {
+                        const modal = document.getElementById('blockedAccountsModal');
+                        if (!modal) return;
+                        const contentToToggle = [
+                            modal.querySelector('#blockedSearchInput')?.parentElement,
+                            modal.querySelector('#statusBloqueados'),
+                            modal.querySelector('#tabelaBloqueadosContainer')
+                        ].filter(Boolean);
+
+                        const btn = document.getElementById('blockedMinimizarBtn');
+                        const isMinimized = modal.dataset.minimized === 'true';
+
+                        contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+                        modal.dataset.minimized = !isMinimized;
+                        btn.textContent = isMinimized ? '_' : '⬜';
+                        btn.title = isMinimized ? 'Minimizar' : 'Maximizar';
+                        modal.style.maxHeight = isMinimized ? '90vh' : 'auto';
+                    };
+
+                    document.getElementById("blockedRefreshBtn").onclick = () => {
+                        div.remove();
+                        modalAbertoBlocked = false;
+                        iniciarProcessoBloqueados();
+                    };
+
+                    document.getElementById("blockedMarcarTodosBtn").onclick = () => {
+                        const itemsPerPage = loadSettings().itemsPerPage || 10;
+                        const startIndex = (currentPage - 1) * itemsPerPage;
+                        const pageUsers = blockedList.slice(startIndex, startIndex + itemsPerPage);
+                        pageUsers.forEach(u => selectedUsers.add(u.username));
+                        container.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = true);
+                        updateCounts(pageUsers);
+                    };
+
+                    document.getElementById("blockedDesmarcarTodosBtn").onclick = () => {
+                        selectedUsers.clear();
+                        container.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = false);
+                        updateCounts();
+                    };
+
+                    const searchInput = document.getElementById("blockedSearchInput");
+                    if (searchInput) {
+                        searchInput.addEventListener("input", () => renderList(1));
                     }
-                    renderPage(currentPage);
+
+                    const filterSelect = document.getElementById("blockedFilterSelect");
+                    if (filterSelect) {
+                        filterSelect.addEventListener("change", () => renderList(1));
+                    }
+
+                    const apiToggle = document.getElementById("blockedUseApiToggle");
+                    if (apiToggle) {
+                        apiToggle.addEventListener("change", (e) => {
+                            const s = loadSettings();
+                            s.useApi = e.target.checked;
+                            saveSettings(s);
+                            showToast(`Modo API ${s.useApi ? 'ativado' : 'desativado'}.`);
+                        });
+                    }
+
+                    // Bulk unblock listener
+                    document.getElementById("blockedDesbloquearBtn").onclick = async () => {
+                        if (selectedUsers.size === 0) {
+                            alert("Nenhum usuário selecionado para desbloquear.");
+                            return;
+                        }
+
+                        const count = selectedUsers.size;
+                        if (!confirm(`Deseja desbloquear os ${count} usuário(s) selecionado(s)?`)) return;
+
+                        const desbloquearBtn = document.getElementById("blockedDesbloquearBtn");
+                        desbloquearBtn.disabled = true;
+                        desbloquearBtn.textContent = "Processando...";
+                        toggleLoading(true, 0, "Desbloqueando contas...");
+
+                        const usersToUnblock = Array.from(selectedUsers);
+
+                        await unblockUsers(usersToUnblock, (unblocked) => {
+                            desbloquearBtn.disabled = false;
+                            desbloquearBtn.textContent = "🔓 Desbloquear Selecionados";
+                            toggleLoading(false);
+
+                            if (unblocked && unblocked.length > 0) {
+                                const unblockedSet = new Set(unblocked);
+                                blockedList = blockedList.filter(u => !unblockedSet.has(u.username));
+                                unblocked.forEach(u => selectedUsers.delete(u));
+                                alert(`${unblocked.length} usuário(s) tiveram o bloqueio removido com sucesso.`);
+                            } else {
+                                alert("Nenhum usuário pôde ser desbloqueado.");
+                            }
+
+                            updateCounts();
+                            const totalPages = Math.max(1, Math.ceil(blockedList.length / (loadSettings().itemsPerPage || 10)));
+                            if (currentPage > totalPages) currentPage = totalPages;
+                            renderList(currentPage);
+                        });
+                    };
                 }
 
                 async function unblockUsers(usersToUnblock, onComplete) {
@@ -5103,93 +5591,60 @@
                     closeButton.onclick = () => {
                         cancelled = true;
                         bar.remove();
-                        alert("Processo de desbloqueio interrompido.");
+                        showToast("Processo de desbloqueio interrompido.");
                     };
-                    toggleLoading(true, 0, "Desbloqueando...");
+                    toggleLoading(true, 0, "Desbloqueando contas via GraphQL...");
 
-                    // --- LÓGICA API ---
-                    if (loadSettings().useApi) {
-                        for (let i = 0; i < usersToUnblock.length; i++) {
-                            if (cancelled) break;
-                            const username = usersToUnblock[i];
-                            update(i + 1, usersToUnblock.length, `Desbloqueando ${username} via API...`);
-                            toggleLoading(true, ((i + 1) / usersToUnblock.length) * 100, "Desbloqueando via API...");
-                            const uid = getCachedUserId(username) || await getUserId(username);
-                            if (uid) {
-                                try {
-                                    const body = new URLSearchParams();
-                                    body.append('container_module', 'profile');
-                                    body.append('surface', 'profile');
-                                    body.append('container_module', 'profile');
-                                    body.append('user_id', uid);
-                                    body.append('_uid', getCookie('ds_user_id'));
-                                    body.append('_uuid', getDeviceId());
-
-                                    const res = await fetch(`https://www.instagram.com/api/v1/friendships/unblock/${uid}/`, {
-                                        method: 'POST',
-                                        headers: getApiHeaders(true),
-                                        body: body.toString(),
-                                        credentials: 'include'
-                                    });
-                                    if (res.status === 401) { alert("Sessão invalidada. Por favor, faça login novamente."); return; }
-
-                                    // Feedback visual imediato: remove a linha da tabela
-                                    const row = document.querySelector(`tr[data-username="${username}"]`);
-                                    if (row) row.remove();
-                                } catch (e) { console.error(`Erro API Unblock ${username}`, e); }
-                                toggleLoading(false);
-                            }
-                            await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
-                        }
-                        bar.remove(); if (onComplete) onComplete(); return;
-                    }
-
-                    // Garante que estamos na página de contas bloqueadas
-                    if (window.location.pathname !== "/accounts/blocked_accounts/") {
-                        history.pushState(null, null, "/accounts/blocked_accounts/");
-                        window.dispatchEvent(new Event("popstate"));
-                        await new Promise(resolve => setTimeout(resolve, 3000)); // Espera a página carregar
-                    }
+                    const delay = loadSettings().unfollowDelay || 1200;
+                    const successfullyUnblocked = [];
 
                     for (let i = 0; i < usersToUnblock.length; i++) {
                         if (cancelled) break;
                         const username = usersToUnblock[i];
-                        update(i + 1, usersToUnblock.length, "Desbloqueando:");
-                        toggleLoading(true, ((i + 1) / usersToUnblock.length) * 100, "Desbloqueando...");
+                        const percent = Math.round(((i + 1) / usersToUnblock.length) * 100);
+                        update(i + 1, usersToUnblock.length, `Desbloqueando @${username}...`);
+                        toggleLoading(true, percent, `Desbloqueando @${username} (${i + 1}/${usersToUnblock.length})...`);
 
-                        // 1. Encontrar o card do usuário na lista de bloqueados
-                        const userCard = Array.from(document.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]'))
-                            .find(el => el.querySelector('span')?.innerText.trim() === username);
+                        let uid = getCachedUserId(username);
+                        if (!uid && Array.isArray(blockedList)) {
+                            const item = blockedList.find(x => x?.username?.toLowerCase() === username.toLowerCase());
+                            if (item?.pk || item?.id) {
+                                uid = String(item.pk || item.id);
+                                setCachedUserId(username, uid);
+                            }
+                        }
+                        if (!uid) {
+                            uid = await getUserId(username);
+                        }
 
-                        if (!userCard) {
-                            console.warn(`Usuário ${username} não encontrado na lista. Pulando.`);
+                        if (!uid) {
+                            console.warn(`[IG Tools] ID não encontrado para @${username}`);
+                            showToast(`⚠️ ID de @${username} não encontrado`);
                             continue;
                         }
 
-                        // 2. Encontrar e clicar no botão "Desbloquear" dentro do card do usuário
-                        const unblockButton = userCard.querySelector('div[aria-label="Desbloquear"]');
-                        if (!unblockButton) {
-                            console.warn(`Botão 'Desbloquear' não encontrado para ${username}. Pulando.`);
-                            continue;
-                        }
-                        simulateClick(unblockButton);
-                        await new Promise(resolve => setTimeout(resolve, 1500)); // Espera o modal de confirmação
+                        const res = await executeApiUnblock(uid, username);
+                        if (res.success) {
+                            successfullyUnblocked.push(username);
+                            showToast(`🔓 Desbloqueou @${username}`);
 
-                        // 3. Encontrar e clicar no botão de confirmação final no modal
-                        const confirmButton = Array.from(document.querySelectorAll('button')).find(btn => btn.innerText.trim() === 'Desbloquear' || btn.innerText.trim() === 'Unblock');
-                        if (confirmButton) {
-                            simulateClick(confirmButton);
+                            // Feedback visual imediato na tabela
+                            const rows = document.querySelectorAll(`tr[data-username="${username}"]`);
+                            rows.forEach(r => r.remove());
                         } else {
-                            console.warn(`Botão de confirmação de desbloqueio não encontrado para ${username}.`);
+                            showToast(`❌ Falha ao desbloquear @${username}`);
                         }
-                        await new Promise(resolve => setTimeout(resolve, 2000)); // Pausa entre as ações
+
+                        if (i < usersToUnblock.length - 1) {
+                            await new Promise(r => setTimeout(r, delay));
+                        }
                     }
 
                     bar.remove();
                     toggleLoading(false);
-                    if (onComplete) onComplete();
-                }
 
+                    if (onComplete) onComplete(successfullyUnblocked);
+                }
 
                 let modalAbertoBlocked = false;
                 // --- FIM DO MENU CONTAS BLOQUEADAS ---
@@ -9899,6 +10354,7 @@
                         history.pushState(null, null, `/${username}/`);
                         window.dispatchEvent(new Event("popstate"));
                         await new Promise(resolve => setTimeout(resolve, 4000));
+
                         const followingButton = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"]')).find(el => {
                             const text = el.innerText.trim();
                             return text === 'Seguindo' || text === 'Following';
@@ -9937,6 +10393,12 @@
                                             else userListCache.closeFriends.add(username);
                                             await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
                                             console.log(`[IG Tools] GraphQL Success: ${username} (Close Friends)`);
+                                        }
+                                    } else if (menuTexts.some(t => t.includes('Desbloquear') || t.includes('Unblock'))) {
+                                        const res = await executeApiUnblock(uid, username);
+                                        if (res.success) {
+                                            success = true;
+                                            console.log(`[IG Tools] API Unblock Sucesso: ${username}`);
                                         }
                                     }
                                 } catch (e) { console.error(`Erro API Action ${username}`, e); }

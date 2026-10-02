@@ -2630,6 +2630,146 @@
                             .dark-mode .category-item-container {
                                 background: #262626 !important;
                             }
+
+                            /* Modal de Interações - Padrão de Fontes e Cores */
+                            #interacoesModal, #interacoesModal * {
+                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+                            }
+                            #interacoesModal {
+                                border: 1px solid #ccc;
+                            }
+                            .dark-mode #interacoesModal {
+                                border: 1px solid #333 !important;
+                            }
+                            .submenu-modal .interacoes-input {
+                                width: 100%;
+                                padding: 11px 14px;
+                                border-radius: 8px;
+                                box-sizing: border-box;
+                                font-size: 14px;
+                                outline: none;
+                                transition: border-color 0.2s, background 0.2s;
+                                background: #ffffff !important;
+                                color: #000000 !important;
+                                border: 1px solid #dbdbdb !important;
+                            }
+                            .dark-mode .submenu-modal .interacoes-input {
+                                background: #262626 !important;
+                                color: #ffffff !important;
+                                border: 1px solid #555 !important;
+                            }
+                            .submenu-modal #interacoesSuggestions {
+                                position: absolute;
+                                top: calc(100% + 4px);
+                                left: 0;
+                                right: 0;
+                                border-radius: 8px;
+                                max-height: 220px;
+                                overflow-y: auto;
+                                overflow-x: hidden;
+                                z-index: 10001;
+                                display: none;
+                                scrollbar-width: thin;
+                                background: #ffffff !important;
+                                border: 1px solid #dbdbdb !important;
+                                box-shadow: 0 8px 24px rgba(0,0,0,0.15) !important;
+                            }
+                            .dark-mode .submenu-modal #interacoesSuggestions {
+                                background: #262626 !important;
+                                border: 1px solid #444 !important;
+                                box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
+                            }
+                            .submenu-modal .interacoes-suggestion-item {
+                                color: #000000 !important;
+                            }
+                            .submenu-modal .interacoes-suggestion-item:hover {
+                                background: rgba(0, 0, 0, 0.06) !important;
+                            }
+                            .dark-mode .submenu-modal .interacoes-suggestion-item {
+                                color: #ffffff !important;
+                            }
+                            .dark-mode .submenu-modal .interacoes-suggestion-item:hover {
+                                background: rgba(255, 255, 255, 0.1) !important;
+                            }
+                            .submenu-modal #interacoesUserNameDisplay {
+                                color: #262626 !important;
+                            }
+                            .submenu-modal #interacoesUserBioDisplay {
+                                color: #737373 !important;
+                            }
+                            .submenu-modal #detalhesTitulo {
+                                color: #262626 !important;
+                            }
+                            .submenu-modal .interacoes-status-text {
+                                color: #262626 !important;
+                            }
+                            .dark-mode .submenu-modal #interacoesUserNameDisplay {
+                                color: #ffffff !important;
+                            }
+                            .dark-mode .submenu-modal #interacoesUserBioDisplay {
+                                color: #a8a8a8 !important;
+                            }
+                            .dark-mode .submenu-modal #detalhesTitulo {
+                                color: #ffffff !important;
+                            }
+                            .dark-mode .submenu-modal .interacoes-status-text {
+                                color: #e0e0e0 !important;
+                            }
+
+                            /* Tema Claro: Modal Claro -> Cards Escuros */
+                            .submenu-modal .interacoes-stat-card {
+                                background: #262626 !important;
+                                border: 1px solid #3d3d3d !important;
+                                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+                            }
+                            .submenu-modal .interacoes-stat-card .card-count {
+                                color: #0095f6 !important;
+                            }
+                            .submenu-modal .interacoes-stat-card .card-label,
+                            .submenu-modal .interacoes-stat-card span,
+                            .submenu-modal .interacoes-stat-card div:not(.card-count) {
+                                color: #ffffff !important;
+                            }
+
+                            /* Tema Escuro: Modal Escuro -> Cards Claros */
+                            .dark-mode .submenu-modal .interacoes-stat-card {
+                                background: #ffffff !important;
+                                border: 1px solid #e0e0e0 !important;
+                                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15) !important;
+                            }
+                            .dark-mode .submenu-modal .interacoes-stat-card .card-count {
+                                color: #0095f6 !important;
+                            }
+                            .dark-mode .submenu-modal .interacoes-stat-card .card-label,
+                            .dark-mode .submenu-modal .interacoes-stat-card span,
+                            .dark-mode .submenu-modal .interacoes-stat-card div:not(.card-count) {
+                                color: #262626 !important;
+                            }
+
+                            /* Badges da Coluna Tipo de Bloqueio com alto contraste */
+                            .submenu-modal .badge-tipo-bloqueio,
+                            .dark-mode .submenu-modal .badge-tipo-bloqueio {
+                                display: inline-flex;
+                                align-items: center;
+                                gap: 4px;
+                                padding: 4px 10px;
+                                border-radius: 12px;
+                                font-size: 11px;
+                                font-weight: 700 !important;
+                            }
+                            .submenu-modal .badge-auto-blocked,
+                            .dark-mode .submenu-modal .badge-auto-blocked {
+                                background: #fde8e8 !important;
+                                color: #b71c1c !important;
+                                border: 1px solid #f8b4b4 !important;
+                            }
+                            .submenu-modal .badge-standard,
+                            .dark-mode .submenu-modal .badge-standard {
+                                background: #e8f4fd !important;
+                                color: #0d47a1 !important;
+                                border: 1px solid #90caf9 !important;
+                            }
+
                             .menu-item-button {
                                 background: #f8f9fa; border: 1px solid #dbdbdb; padding: 10px; border-radius: 8px; cursor: pointer; text-align: left; font-size: 16px; color: black;
                             }
@@ -5380,8 +5520,8 @@
                                         <td style="text-align: center; padding: 8px; font-family: monospace; font-size: 12px; color: #555;">${pk || '-'}</td>
                                         <td style="text-align: center; padding: 8px;">
                                             ${isAutoBlocked
-                                                ? `<span style="background: #fde8e8; color: #c0392b; border: 1px solid #f8b4b4; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">🔒 + Novas contas</span>`
-                                                : `<span style="background: #e8f4fd; color: #1976d2; border: 1px solid #bbdefb; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">👤 Padrão</span>`
+                                                ? `<span class="badge-tipo-bloqueio badge-auto-blocked" style="background: #fde8e8; color: #b71c1c !important; border: 1px solid #f8b4b4; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">🔒 + Novas contas</span>`
+                                                : `<span class="badge-tipo-bloqueio badge-standard" style="background: #e8f4fd; color: #0d47a1 !important; border: 1px solid #90caf9; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">👤 Padrão</span>`
                                             }
                                         </td>
                                         <td style="text-align: center; padding: 8px;">
@@ -6987,10 +7127,132 @@
                     div.className = "submenu-modal";
                     let processoCancelado = false;
 
+                    let styleEl = document.getElementById("seguindoResponsiveStyle");
+                    if (!styleEl) {
+                        styleEl = document.createElement("style");
+                        styleEl.id = "seguindoResponsiveStyle";
+                        document.head.appendChild(styleEl);
+                    }
+                    styleEl.textContent = `
+                        #seguindoModal {
+                            width: 96vw !important;
+                            max-width: 1420px !important;
+                            max-height: 94vh !important;
+                            box-sizing: border-box !important;
+                        }
+                        #tabelaSeguindoContainer {
+                            width: 100% !important;
+                            overflow-x: auto !important;
+                            -webkit-overflow-scrolling: touch !important;
+                            box-sizing: border-box !important;
+                            padding-bottom: 6px;
+                        }
+                        #tabelaSeguindoContainer::-webkit-scrollbar {
+                            height: 7px;
+                            width: 7px;
+                        }
+                        #tabelaSeguindoContainer::-webkit-scrollbar-track {
+                            background: rgba(150, 150, 150, 0.1);
+                            border-radius: 4px;
+                        }
+                        #tabelaSeguindoContainer::-webkit-scrollbar-thumb {
+                            background: #3498db;
+                            border-radius: 4px;
+                        }
+                        #tabelaSeguindoContainer table {
+                            width: 100% !important;
+                            min-width: 820px !important;
+                            border-collapse: separate !important;
+                            border-spacing: 0 !important;
+                        }
+                        @media screen and (max-width: 768px) {
+                            #seguindoModal {
+                                width: 98vw !important;
+                                max-width: 98vw !important;
+                                height: 96vh !important;
+                                max-height: 96vh !important;
+                                padding: 10px 6px !important;
+                                border-radius: 10px !important;
+                                top: 50% !important;
+                                left: 50% !important;
+                                transform: translate(-50%, -50%) !important;
+                            }
+                            #seguindoModal .modal-header {
+                                padding: 6px 8px !important;
+                            }
+                            #seguindoModal .modal-title {
+                                font-size: 13px !important;
+                            }
+                            .seguindo-header-actions {
+                                display: flex !important;
+                                flex-wrap: wrap !important;
+                                gap: 6px !important;
+                            }
+                            .seguindo-header-actions button {
+                                padding: 6px 8px !important;
+                                font-size: 11px !important;
+                                border-radius: 4px !important;
+                                flex: 1 1 calc(50% - 6px) !important;
+                                min-width: 110px !important;
+                                text-align: center !important;
+                            }
+                            .seguindo-search-bar {
+                                flex-direction: column !important;
+                                gap: 6px !important;
+                                margin: 0 0 8px 0 !important;
+                            }
+                            .seguindo-search-bar input,
+                            .seguindo-search-bar select {
+                                width: 100% !important;
+                                height: 36px !important;
+                                font-size: 12px !important;
+                                flex: none !important;
+                            }
+                            .seguindo-mobile-scroll-controls {
+                                display: flex !important;
+                            }
+                            #tabelaSeguindoContainer {
+                                border: 1px solid rgba(150, 150, 150, 0.25) !important;
+                                border-radius: 8px !important;
+                            }
+                            #tabelaSeguindoContainer table {
+                                min-width: 840px !important;
+                            }
+                            #tabelaSeguindoContainer th,
+                            #tabelaSeguindoContainer td {
+                                padding: 6px 4px !important;
+                                font-size: 11px !important;
+                            }
+                            #tabelaSeguindoContainer th.col-sticky-1,
+                            #tabelaSeguindoContainer td.col-sticky-1 {
+                                position: sticky !important;
+                                left: 0 !important;
+                                z-index: 5 !important;
+                                background: #ffffff !important;
+                            }
+                            #tabelaSeguindoContainer th.col-sticky-2,
+                            #tabelaSeguindoContainer td.col-sticky-2 {
+                                position: sticky !important;
+                                left: 32px !important;
+                                z-index: 5 !important;
+                                background: #ffffff !important;
+                                box-shadow: 3px 0 6px -2px rgba(0, 0, 0, 0.25) !important;
+                            }
+                            .dark-mode #tabelaSeguindoContainer th.col-sticky-1,
+                            .dark-mode #tabelaSeguindoContainer td.col-sticky-1,
+                            .dark-mode #tabelaSeguindoContainer th.col-sticky-2,
+                            .dark-mode #tabelaSeguindoContainer td.col-sticky-2 {
+                                background: #000000 !important;
+                                box-shadow: 3px 0 6px -2px rgba(255, 255, 255, 0.15) !important;
+                            }
+                        }
+                    `;
+
                     div.style.cssText = `
                             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                            width: 90%; max-width: 800px; max-height: 90vh; border: 1px solid #ccc;
-                            border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
+                            width: 96vw; max-width: 1420px; max-height: 94vh; border: 1px solid #ccc;
+                            border-radius: 12px; padding: 16px 20px; z-index: 10000; overflow-y: auto; overflow-x: hidden;
+                            box-sizing: border-box;
                         `;
                     div.innerHTML = `
                             <div class="modal-header">
@@ -7000,14 +7262,14 @@
                                 </span>
                                 <div class="modal-controls"><button id="seguindoMinimizarBtn" title="Minimizar">_</button><button id="fecharSeguindoBtn" title="Fechar">X</button></div>
                             </div>
-                            <div style="padding: 15px;">
-                                        <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                                            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-                                    <button id="atualizarSeguindoBtn" title="Atualizar Dados" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">🔄️ Atualizar</button>
-                                            <button id="executarSeguindoBtn" style="background: #3498db; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">🚀 Executar</button>
-                                    <button id="unfollowSeguindoBtn" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Deixar de Seguir</button>
-                                    <button id="blockSeguindoBtn" style="background: #c0392b; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Bloquear</button>
-                                    <button id="loadStatsSeguindoBtn" style="background: #e67e22; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer;">Carregar Stats (Página)</button>
+                            <div style="padding: 10px 0;">
+                                        <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                            <div class="seguindo-header-actions" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                    <button id="atualizarSeguindoBtn" title="Atualizar Dados" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">🔄️ Atualizar</button>
+                                            <button id="executarSeguindoBtn" style="background: #3498db; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">🚀 Executar</button>
+                                    <button id="unfollowSeguindoBtn" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">Deixar de Seguir</button>
+                                    <button id="blockSeguindoBtn" style="background: #c0392b; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">Bloquear</button>
+                                    <button id="loadStatsSeguindoBtn" style="background: #e67e22; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">Carregar Stats (Página)</button>
                                 </div>
                                             <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px;">
                                                 <span style="font-size: 14px; font-weight: 500;">⚡ ${getText('useApi')}</span>
@@ -7015,7 +7277,7 @@
                                             </div>
                                         </div>
                             </div>
-                            <div style="margin: 0 20px 20px 20px; display: flex; gap: 10px;">
+                            <div class="seguindo-search-bar" style="margin: 0 0 12px 0; display: flex; gap: 10px;">
                                         <input type="text" id="seguindoSearchInput" placeholder="Pesquisar..." style="flex: 2; padding: 8px 12px; height: 40px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; outline: none; box-sizing: border-box;">
                                         <select id="seguindoFilterSelect" style="flex: 1; padding: 0 10px; height: 40px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; cursor: pointer; outline: none; box-sizing: border-box;">
                                     <option value="all">Todos</option>
@@ -7027,8 +7289,13 @@
                                     <option value="hidden_stories">Ocultar Stories</option>
                                 </select>
                             </div>
-                            <div id="statusSeguindo" style="margin-top: 20px; font-weight: bold; padding: 0 20px;"></div>
-                                    <div id="tabelaSeguindoContainer" style="display: block; margin-top: 15px;"></div>
+                            <div id="statusSeguindo" style="margin-top: 10px; font-weight: bold; padding: 0;"></div>
+                            <div class="seguindo-mobile-scroll-controls" style="display: none; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 6px 0; padding: 6px 10px; background: rgba(52, 152, 219, 0.12); border-radius: 8px; border: 1px solid rgba(52, 152, 219, 0.25);">
+                                <button id="seguindoScrollStartBtn" type="button" style="background: #3498db; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 3px;">◀ Usuário</button>
+                                <span style="color: #2980b9; font-size: 11px; font-weight: 600; text-align: center; flex: 1;">↔️ Deslize para ver todas as 10 colunas</span>
+                                <button id="seguindoScrollEndBtn" type="button" style="background: #3498db; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 3px;">Interações ▶</button>
+                            </div>
+                            <div id="tabelaSeguindoContainer" style="display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; box-sizing: border-box;"></div>
                         `;
                     document.body.appendChild(div);
 
@@ -7042,8 +7309,8 @@
                         document.getElementById("seguindoMinimizarBtn").addEventListener("click", () => {
                             const modal = document.getElementById('seguindoModal');
                             const contentToToggle = [
-                                modal.querySelector('input[type="text"]').parentElement, // div da pesquisa
-                                modal.querySelector('#tabelaSeguindoContainer'),
+                                modal.querySelector('input[type="text"]')?.parentElement, // div da pesquisa
+                                modal.querySelector('.seguindo-mobile-scroll-controls'),
                                 modal.querySelector('#tabelaSeguindoContainer')
                             ].filter(Boolean);
 
@@ -7059,6 +7326,21 @@
                         document.getElementById("atualizarSeguindoBtn").addEventListener("click", () => {
                             showUpdateOptionsModal();
                         });
+
+                        const scrollStartBtn = document.getElementById("seguindoScrollStartBtn");
+                        if (scrollStartBtn) {
+                            scrollStartBtn.onclick = () => {
+                                const c = document.getElementById("tabelaSeguindoContainer");
+                                if (c) c.scrollTo({ left: 0, behavior: 'smooth' });
+                            };
+                        }
+                        const scrollEndBtn = document.getElementById("seguindoScrollEndBtn");
+                        if (scrollEndBtn) {
+                            scrollEndBtn.onclick = () => {
+                                const c = document.getElementById("tabelaSeguindoContainer");
+                                if (c) c.scrollTo({ left: c.scrollWidth, behavior: 'smooth' });
+                            };
+                        }
                     };
                     attachStaticListeners();
 
@@ -7069,6 +7351,8 @@
                     const selectedUsers = new Set(); // Armazena todos os usuários selecionados entre as páginas
                     let allCategories = [];
                     let userCategoryMap = new Map();
+                    const seguindoInteracoesCache = new Map();
+                    const activeInteracoesSubrows = new Set();
 
                     const fetchUserListAPISeguindo = async (userId, type, total) => {
                         const userList = [];
@@ -7272,18 +7556,19 @@
                                 });
                             }
                             let tableHtml = `
-                                    <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                                    <table style="width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 14px;">
                                         <thead style="cursor: pointer;">
-                                            <tr style="text-align: left; border-bottom: 2px solid #dbdbdb;">
-                                                <th style="padding: 8px; width: 20px;"><input type="checkbox" id="selectAllCheckbox" title="Selecionar Todos"></th>
-                                                        <th style="padding: 8px;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                                        <th style="padding: 8px; text-align: center;" data-sort-key="isMuted" title="${userListCache.muted === null ? 'Visite o menu Contas Silenciadas para carregar estes dados.' : ''}">Silenciado? ${userListCache.muted === null ? '??' : (sortConfig.key === 'isMuted' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
-                                                        <th style="padding: 8px; text-align: center;" data-sort-key="isCloseFriend" title="${userListCache.closeFriends === null ? 'Visite o menu Amigos Próximos para carregar estes dados.' : ''}">Melhores Amigos? ${userListCache.closeFriends === null ? '??' : (sortConfig.key === 'isCloseFriend' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
-                                                        <th style="padding: 8px; text-align: center;" data-sort-key="isStoryHidden" title="${userListCache.hiddenStory === null ? 'Visite o menu Ocultar Story para carregar estes dados.' : ''}">Ocultar Stories? ${userListCache.hiddenStory === null ? '??' : (sortConfig.key === 'isStoryHidden' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
-                                                        <th style="padding: 8px; text-align: center;" data-sort-key="followers">Seguidores ${sortConfig.key === 'followers' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                                        <th style="padding: 8px; text-align: center;" data-sort-key="following">Seguindo ${sortConfig.key === 'following' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                                <th style="padding: 8px; text-align: center;" data-sort-key="status">Status ${sortConfig.key === 'status' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                                <th style="padding: 8px;" data-sort-key="categories">Categorias ${sortConfig.key === 'categories' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                            <tr style="text-align: left;">
+                                                <th class="col-sticky-1" style="padding: 8px 4px; width: 30px; text-align: center; border-bottom: 2px solid #dbdbdb;"><input type="checkbox" id="selectAllCheckbox" title="Selecionar Todos"></th>
+                                                <th class="col-sticky-2" style="padding: 8px 6px; min-width: 140px; border-bottom: 2px solid #dbdbdb;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="isMuted" title="${userListCache.muted === null ? 'Visite o menu Contas Silenciadas para carregar estes dados.' : ''}">Silenciado? ${userListCache.muted === null ? '??' : (sortConfig.key === 'isMuted' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
+                                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="isCloseFriend" title="${userListCache.closeFriends === null ? 'Visite o menu Amigos Próximos para carregar estes dados.' : ''}">Melhores Amigos? ${userListCache.closeFriends === null ? '??' : (sortConfig.key === 'isCloseFriend' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
+                                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="isStoryHidden" title="${userListCache.hiddenStory === null ? 'Visite o menu Ocultar Story para carregar estes dados.' : ''}">Ocultar Stories? ${userListCache.hiddenStory === null ? '??' : (sortConfig.key === 'isStoryHidden' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
+                                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="followers">Seguidores ${sortConfig.key === 'followers' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="following">Seguindo ${sortConfig.key === 'following' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="status">Status ${sortConfig.key === 'status' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                                <th style="padding: 8px 6px; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="categories">Categorias ${sortConfig.key === 'categories' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                                <th style="padding: 8px 6px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;">Interações</th>
                                             </tr>
                                         </thead>
                                         <tbody style="max-height: 60vh; overflow-y: auto;">
@@ -7330,7 +7615,7 @@
                             currentPaginatedUsers = paginatedUsers;
 
                             if (paginatedUsers.length === 0) {
-                                tableHtml += `<tr><td colspan="9" style="text-align: center; padding: 20px;">Nenhum usuário encontrado com os filtros aplicados.</td></tr>`;
+                                tableHtml += `<tr><td colspan="10" style="text-align: center; padding: 20px;">Nenhum usuário encontrado com os filtros aplicados.</td></tr>`;
                             } else {
 
                                 paginatedUsers.forEach((userObj) => {
@@ -7387,26 +7672,52 @@
                                         }
                                     }
 
+                                    const cleanUser = username.toLowerCase();
+                                    const userInteractions = seguindoInteracoesCache.get(cleanUser);
+                                    const isSubrowOpen = activeInteracoesSubrows.has(cleanUser);
+                                    let btnInteracoesHtml = '';
+                                    if (userInteractions) {
+                                        btnInteracoesHtml = `
+                                            <button class="btn-seguindo-interacoes" data-username="${username}" data-userid="${userObj.id || ''}" style="background: ${userInteractions.total > 0 ? '#e74c3c' : '#7f8c8d'}; color: white; border: none; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;" title="Ver interações com @${username}">
+                                                <span>${userInteractions.total > 0 ? `❤️ ${userInteractions.total}` : '0'}</span>
+                                            </button>
+                                        `;
+                                    } else {
+                                        btnInteracoesHtml = `
+                                            <button class="btn-seguindo-interacoes" data-username="${username}" data-userid="${userObj.id || ''}" style="background: #0095f6; color: white; border: none; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;" title="Ver interações com @${username}">
+                                                <span>🔍 Interações</span>
+                                            </button>
+                                        `;
+                                    }
+
                                     tableHtml += `
                                         <tr style="border-bottom: 1px solid #dbdbdb;" data-username="${username}">
-                                            <td style="padding: 8px;"><input type="checkbox" class="user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
-                                            <td style="padding: 8px; display:flex; align-items:center; gap:10px;">
-                                                <img src="${photoUrl || DEFAULT_AVATAR}" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${username}" style="width:40px; height:40px; border-radius:50%; object-fit:cover;">
-                                                <div style="display:flex; flex-direction:column;">
-                                                    <div style="display:flex; align-items:center; gap:6px;">
-                                                        <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600;">${username}</a>
-                                                        ${loadSettings().validateProfileStatus ? `<span class="seguindo-privacy-badge" data-username="${username}"></span>` : ''}
+                                            <td class="col-sticky-1" style="padding: 6px 4px; text-align: center; border-bottom: 1px solid #dbdbdb;"><input type="checkbox" class="user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
+                                            <td class="col-sticky-2" style="padding: 6px 6px; border-bottom: 1px solid #dbdbdb;">
+                                                <div style="display:flex; align-items:center; gap:8px;">
+                                                    <img src="${photoUrl || DEFAULT_AVATAR}" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${username}" style="width:34px; height:34px; border-radius:50%; object-fit:cover; flex-shrink: 0;">
+                                                    <div style="display:flex; flex-direction:column; overflow: hidden; max-width: 140px;">
+                                                        <div style="display:flex; align-items:center; gap:4px; overflow: hidden;">
+                                                            <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600; font-size:13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${username}</a>
+                                                            ${loadSettings().validateProfileStatus ? `<span class="seguindo-privacy-badge" data-username="${username}"></span>` : ''}
+                                                        </div>
+                                                        ${mutedDetailText ? `<span style="font-size:10px; color:gray; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${mutedDetailText}">${mutedDetailText}</span>` : ''}
                                                     </div>
-                                                    ${mutedDetailText ? `<span style="font-size:11px; color:gray;">${mutedDetailText}</span>` : ''}
                                                 </div>
                                             </td>
-                                            <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isMutedSimple, 'muted')}">${isMutedSimple}</span></td>
-                                            <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isCloseFriend, 'closeFriend')}">${isCloseFriend}</span></td>
-                                            <td style="text-align: center; padding: 8px;"><span style="padding: 4px 8px; border-radius: 5px; font-weight: bold; ${getStatusStyle(isStoryHidden, 'storyHidden')}">${isStoryHidden}</span></td>
-                                            <td style="text-align: center; padding: 8px;">${userObj.followers !== undefined ? userObj.followers.toLocaleString() : '-'}</td>
-                                            <td style="text-align: center; padding: 8px;">${userObj.following !== undefined ? userObj.following.toLocaleString() : '-'}</td>
-                                            <td style="text-align: center; padding: 8px; ${statusStyle}">${statusText}</td>
-                                            <td style="padding: 8px; min-width: 100px;">${categorySpans}</td>
+                                            <td style="text-align: center; padding: 6px 4px; border-bottom: 1px solid #dbdbdb;"><span style="padding: 3px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; display: inline-block; ${getStatusStyle(isMutedSimple, 'muted')}">${isMutedSimple}</span></td>
+                                            <td style="text-align: center; padding: 6px 4px; border-bottom: 1px solid #dbdbdb;"><span style="padding: 3px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; display: inline-block; ${getStatusStyle(isCloseFriend, 'closeFriend')}">${isCloseFriend}</span></td>
+                                            <td style="text-align: center; padding: 6px 4px; border-bottom: 1px solid #dbdbdb;"><span style="padding: 3px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; display: inline-block; ${getStatusStyle(isStoryHidden, 'storyHidden')}">${isStoryHidden}</span></td>
+                                            <td style="text-align: center; padding: 6px 4px; font-size: 12px; border-bottom: 1px solid #dbdbdb; white-space: nowrap;">${userObj.followers !== undefined ? userObj.followers.toLocaleString() : '-'}</td>
+                                            <td style="text-align: center; padding: 6px 4px; font-size: 12px; border-bottom: 1px solid #dbdbdb; white-space: nowrap;">${userObj.following !== undefined ? userObj.following.toLocaleString() : '-'}</td>
+                                            <td style="text-align: center; padding: 6px 4px; font-size: 12px; border-bottom: 1px solid #dbdbdb; white-space: nowrap; ${statusStyle}">${statusText}</td>
+                                            <td style="padding: 6px 6px; min-width: 90px; border-bottom: 1px solid #dbdbdb;">${categorySpans}</td>
+                                            <td style="text-align: center; padding: 6px 6px; white-space: nowrap; border-bottom: 1px solid #dbdbdb;">${btnInteracoesHtml}</td>
+                                        </tr>
+                                        <tr class="subrow-interacoes" id="subrow-interacoes-${cleanUser}" style="display: ${isSubrowOpen ? 'table-row' : 'none'}; background: rgba(0, 149, 246, 0.04); border-bottom: 2px solid rgba(0, 149, 246, 0.2);">
+                                            <td colspan="10" style="padding: 10px 14px; border-bottom: 2px solid rgba(0, 149, 246, 0.2);">
+                                                <div id="subrow-content-${cleanUser}"></div>
+                                            </td>
                                         </tr>
                                     `;
                                 });
@@ -7542,6 +7853,87 @@
                                     renderList(1); // Volta para a primeira página ao reordenar
                                 });
                             });
+
+                            // Eventos de clique para os botões de Interações
+                            document.querySelectorAll('#seguindoModal .btn-seguindo-interacoes').forEach(btn => {
+                                btn.addEventListener('click', async (e) => {
+                                    e.stopPropagation();
+                                    const username = btn.dataset.username;
+                                    const explicitUid = btn.dataset.userid || null;
+                                    if (!username) return;
+                                    const cleanUser = username.toLowerCase();
+                                    const subrow = document.getElementById(`subrow-interacoes-${cleanUser}`);
+                                    const contentDiv = document.getElementById(`subrow-content-${cleanUser}`);
+                                    if (!subrow || !contentDiv) return;
+
+                                    if (subrow.style.display !== 'none') {
+                                        subrow.style.display = 'none';
+                                        activeInteracoesSubrows.delete(cleanUser);
+                                        return;
+                                    }
+
+                                    subrow.style.display = 'table-row';
+                                    activeInteracoesSubrows.add(cleanUser);
+
+                                    if (seguindoInteracoesCache.has(cleanUser)) {
+                                        renderSubrowInteracoesContent(username, seguindoInteracoesCache.get(cleanUser), contentDiv, btn);
+                                    } else {
+                                        await carregarInteracoesUsuario(username, explicitUid, contentDiv, btn);
+                                    }
+                                });
+                            });
+
+                            // Se havia sublinhas ativas antes da paginação/filtro/ordenação, preenche os dados
+                            activeInteracoesSubrows.forEach(cleanUser => {
+                                const contentDiv = document.getElementById(`subrow-content-${cleanUser}`);
+                                const btn = document.querySelector(`.btn-seguindo-interacoes[data-username="${cleanUser}"]`);
+                                if (contentDiv && seguindoInteracoesCache.has(cleanUser)) {
+                                    renderSubrowInteracoesContent(cleanUser, seguindoInteracoesCache.get(cleanUser), contentDiv, btn);
+                                }
+                            });
+                        };
+
+                        const carregarInteracoesUsuario = async (username, explicitUid, contentDiv, btn, forceReload = false) => {
+                            const cleanUser = username.toLowerCase();
+                            btn.disabled = true;
+                            btn.style.opacity = '0.7';
+                            contentDiv.innerHTML = `
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 10px; padding: 18px; color: var(--ig-primary-text, #333); font-size: 13px;">
+                                    <div class="spinner" style="width: 16px; height: 16px; border: 2px solid #ccc; border-top-color: #0095f6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                                    <span id="subrow-status-${cleanUser}">Buscando publicações, stories e destaques de <strong>@${username}</strong>...</span>
+                                </div>
+                            `;
+
+                            try {
+                                const updateStatus = (msg) => {
+                                    const statusEl = document.getElementById(`subrow-status-${cleanUser}`);
+                                    if (statusEl) statusEl.innerHTML = `${msg} (<strong>@${username}</strong>)`;
+                                };
+
+                                const data = await fetchUserInteractionsData(cleanUser, explicitUid, updateStatus);
+                                seguindoInteracoesCache.set(cleanUser, data);
+
+                                btn.disabled = false;
+                                btn.style.opacity = '1';
+                                btn.innerHTML = `<span>${data.total > 0 ? `❤️ ${data.total}` : '0'}</span>`;
+                                btn.style.background = data.total > 0 ? '#e74c3c' : '#7f8c8d';
+
+                                renderSubrowInteracoesContent(username, data, contentDiv, btn);
+                            } catch (err) {
+                                console.error(`[IG Tools] Erro ao carregar interações de @${username}:`, err);
+                                btn.disabled = false;
+                                btn.style.opacity = '1';
+                                contentDiv.innerHTML = `
+                                    <div style="text-align: center; padding: 15px; color: #e74c3c; font-size: 13px;">
+                                        Erro ao buscar interações: ${err.message || 'Falha na requisição'}.
+                                        <button class="btn-tentar-novamente" style="margin-left: 10px; background: #3498db; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px;">Tentar novamente</button>
+                                    </div>
+                                `;
+                                const retryBtn = contentDiv.querySelector('.btn-tentar-novamente');
+                                if (retryBtn) {
+                                    retryBtn.onclick = () => carregarInteracoesUsuario(username, explicitUid, contentDiv, btn, true);
+                                }
+                            }
                         };
 
                         const updateLocalState = async (users, dbStore) => {
@@ -9356,6 +9748,495 @@
                     renderTable();
                 }
 
+                // ========================================================
+                // FUNÇÕES COMPARTILHADAS DE INTERAÇÕES E DESCURTIR (UNLIKE)
+                // ========================================================
+
+                async function executeGraphqlUnlikeStory(mediaId) {
+                    try {
+                        const cleanMediaId = String(mediaId).split('_')[0];
+                        const actorId = getActorId();
+                        const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                        const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                        const jazoest = computeJazoest(fbDtsg) || '26452';
+                        const spin = getSpinParams();
+
+                        const variables = {
+                            input: {
+                                actor_id: actorId,
+                                client_mutation_id: String(Math.floor(Math.random() * 100) + 1),
+                                media_id: cleanMediaId
+                            }
+                        };
+
+                        const body = new URLSearchParams();
+                        body.append('__comet_req', '7');
+                        if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                        if (jazoest) body.append('jazoest', jazoest);
+                        if (lsd) body.append('lsd', lsd);
+                        if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                        body.append('__spin_b', spin.spin_b || 'trunk');
+                        if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                        body.append('__crn', 'comet.igweb.PolarisStoriesV3HighlightsRoute');
+                        body.append('fb_api_caller_class', 'RelayModern');
+                        body.append('fb_api_req_friendly_name', 'usePolarisStoriesV4LikeMutationUnlikeMutation');
+                        body.append('server_timestamps', 'true');
+                        body.append('variables', JSON.stringify(variables));
+                        body.append('doc_id', '26510485515280697');
+
+                        const headers = {
+                            ...getApiHeaders(true),
+                            'X-ASBD-ID': '359341',
+                            'X-CSRFToken': getCookie('csrftoken') || '',
+                            'X-FB-Friendly-Name': 'usePolarisStoriesV4LikeMutationUnlikeMutation',
+                            'X-FB-LSD': lsd,
+                            'X-IG-App-ID': '936619743392459',
+                            'X-IG-Max-Touch-Points': '0'
+                        };
+
+                        console.log(`[IG Tools Interações] Enviando mutação GraphQL para descurtir story (${cleanMediaId})...`, variables);
+                        const response = await fetch('https://www.instagram.com/api/graphql', {
+                            method: 'POST',
+                            headers,
+                            body: body.toString(),
+                            credentials: 'include',
+                            cache: 'no-store'
+                        });
+
+                        const rawText = await response.text();
+                        let cleanedText = rawText.trim();
+                        if (cleanedText.startsWith('for (;;);')) {
+                            cleanedText = cleanedText.slice(9).trim();
+                        }
+
+                        let data = null;
+                        try {
+                            data = JSON.parse(cleanedText);
+                        } catch (_) { }
+
+                        console.log('[IG Tools Interações] Resposta GraphQL Unlike Story:', { status: response.status, ok: response.ok, data });
+
+                        if (response.ok && (data?.data?.xig_unsend_story_like || !data?.errors)) {
+                            return true;
+                        }
+                        return false;
+                    } catch (e) {
+                        console.error('[IG Tools Interações] Erro ao descurtir story via GraphQL:', e);
+                        return false;
+                    }
+                }
+
+                async function executeGraphqlUnlikePost(mediaId, trackingToken = '') {
+                    try {
+                        const cleanMediaId = String(mediaId).split('_')[0];
+                        const actorId = getActorId();
+                        const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                        const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                        const jazoest = computeJazoest(fbDtsg) || '26456';
+                        const spin = getSpinParams();
+
+                        const inputObj = {
+                            actor_id: actorId,
+                            client_mutation_id: String(Math.floor(Math.random() * 100) + 1),
+                            media_id: cleanMediaId
+                        };
+                        if (trackingToken) {
+                            inputObj.tracking_token = trackingToken;
+                        }
+
+                        const variables = { input: inputObj };
+
+                        const body = new URLSearchParams();
+                        body.append('__comet_req', '7');
+                        if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                        if (jazoest) body.append('jazoest', jazoest);
+                        if (lsd) body.append('lsd', lsd);
+                        if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                        body.append('__spin_b', spin.spin_b || 'trunk');
+                        if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                        body.append('__crn', 'comet.igweb.PolarisDesktopPostRoute');
+                        body.append('fb_api_caller_class', 'RelayModern');
+                        body.append('fb_api_req_friendly_name', 'usePolarisLikeMediaXIGUnlikeMutation');
+                        body.append('server_timestamps', 'true');
+                        body.append('variables', JSON.stringify(variables));
+                        body.append('doc_id', '27345296031770102');
+
+                        const headers = {
+                            ...getApiHeaders(true),
+                            'X-ASBD-ID': '359341',
+                            'X-CSRFToken': getCookie('csrftoken') || '',
+                            'X-FB-Friendly-Name': 'usePolarisLikeMediaXIGUnlikeMutation',
+                            'X-FB-LSD': lsd,
+                            'X-IG-App-ID': '936619743392459',
+                            'X-IG-Max-Touch-Points': '0'
+                        };
+
+                        console.log(`[IG Tools Interações] Enviando mutação GraphQL para descurtir post (${cleanMediaId})...`, variables);
+                        const response = await fetch('https://www.instagram.com/api/graphql', {
+                            method: 'POST',
+                            headers,
+                            body: body.toString(),
+                            credentials: 'include',
+                            cache: 'no-store'
+                        });
+
+                        const rawText = await response.text();
+                        let cleanedText = rawText.trim();
+                        if (cleanedText.startsWith('for (;;);')) {
+                            cleanedText = cleanedText.slice(9).trim();
+                        }
+
+                        let data = null;
+                        try {
+                            data = JSON.parse(cleanedText);
+                        } catch (_) { }
+
+                        console.log('[IG Tools Interações] Resposta GraphQL Unlike Post:', { status: response.status, ok: response.ok, data });
+
+                        if (response.ok && (data?.data?.xig_media_unlike || !data?.errors)) {
+                            return true;
+                        }
+                        return false;
+                    } catch (e) {
+                        console.error('[IG Tools Interações] Erro ao descurtir post via GraphQL:', e);
+                        return false;
+                    }
+                }
+
+                async function unlikeMedia(itemOrId, maybeType) {
+                    try {
+                        const csrf = getCookie('csrftoken');
+                        if (!csrf) {
+                            alert("Erro: Token CSRF não encontrado. Recarregue a página.");
+                            return false;
+                        }
+
+                        const item = typeof itemOrId === 'object' ? itemOrId : { id: itemOrId, type: maybeType };
+                        const rawId = String(item.rawId || item.id || '');
+                        const cleanMediaId = rawId.split('_')[0];
+                        const type = item.type || maybeType || '';
+
+                        console.log(`[IG Tools Interações] Descurtindo ${type} (${cleanMediaId})...`);
+
+                        if (type && (type.includes('Story') || type.includes('Destaque'))) {
+                            const gqlSuccess = await executeGraphqlUnlikeStory(cleanMediaId);
+                            if (gqlSuccess) {
+                                console.log(`[IG Tools Interações] Sucesso ao descurtir story via GraphQL (${cleanMediaId})!`);
+                                return true;
+                            }
+
+                            console.warn(`[IG Tools Interações] GraphQL falhou, tentando fallback REST...`);
+                            const restUrl = `https://www.instagram.com/api/v1/story_interactions/unlike_story_like/`;
+                            let restRes = await fetch(restUrl, {
+                                method: 'POST',
+                                headers: {
+                                    ...getApiHeaders(true),
+                                    'X-CSRFToken': csrf
+                                },
+                                body: `media_id=${encodeURIComponent(cleanMediaId)}`,
+                                credentials: 'include'
+                            });
+                            if (restRes.ok) return true;
+
+                            const errText = await restRes.text();
+                            console.error("[IG Tools Interações] Falha ao descurtir via REST:", restRes.status, errText);
+                            alert(`Falha ao descurtir (${restRes.status}). Verifique o console.`);
+                            return false;
+                        } else {
+                            const gqlSuccess = await executeGraphqlUnlikePost(cleanMediaId, item.trackingToken);
+                            if (gqlSuccess) {
+                                console.log(`[IG Tools Interações] Sucesso ao descurtir post via GraphQL (${cleanMediaId})!`);
+                                return true;
+                            }
+
+                            console.warn(`[IG Tools Interações] GraphQL falhou para post, tentando fallback REST...`);
+                            const postUrl = `https://www.instagram.com/api/v1/web/likes/${cleanMediaId}/unlike/`;
+                            const postRes = await fetch(postUrl, {
+                                method: 'POST',
+                                headers: {
+                                    ...getApiHeaders(true),
+                                    'X-CSRFToken': csrf
+                                },
+                                body: '',
+                                credentials: 'include'
+                            });
+                            if (postRes.ok) {
+                                console.log(`[IG Tools Interações] Sucesso ao descurtir post (${cleanMediaId})!`);
+                                return true;
+                            }
+
+                            const errText = await postRes.text();
+                            console.error("[IG Tools Interações] Falha ao descurtir post:", postRes.status, errText);
+                            alert(`Falha ao descurtir post (${postRes.status}). Verifique o console.`);
+                            return false;
+                        }
+                    } catch (e) {
+                        console.error("[IG Tools Interações] Erro ao descurtir:", e);
+                        alert("Erro ao descurtir: " + e.message);
+                        return false;
+                    }
+                }
+
+                async function fetchUserInteractionsData(username, explicitUid = null, onProgress = null) {
+                    const cleanUsername = String(username).trim().toLowerCase();
+                    let targetUserId = explicitUid || getCachedUserId(cleanUsername);
+                    if (!targetUserId) {
+                        targetUserId = await getUserId(cleanUsername);
+                    }
+                    if (!targetUserId) {
+                        throw new Error("Não foi possível obter o ID do perfil.");
+                    }
+
+                    const likedPosts = [];
+                    const likedStories = [];
+                    const likedHighlights = [];
+
+                    // 1. Posts via GraphQL oficial (analisa com paginação segura)
+                    let hasNextPage = true;
+                    let endCursor = null;
+                    let pageNum = 0;
+                    const maxPages = 5; // Analisa até 60 posts mais recentes com agilidade e segurança
+
+                    while (hasNextPage && pageNum < maxPages) {
+                        pageNum++;
+                        if (onProgress) onProgress(`Analisando publicações (pág ${pageNum})...`);
+                        const connection = await executeGraphqlProfilePosts(cleanUsername, endCursor);
+                        if (!connection || !Array.isArray(connection.edges)) break;
+
+                        for (const edge of connection.edges) {
+                            const node = edge?.node;
+                            if (!node) continue;
+                            const code = node.code || node.shortcode;
+                            const isLiked = Boolean(node.has_liked || node.viewer_has_liked);
+                            const thumb = node.image_versions2?.candidates?.[0]?.url || node.display_url || node.thumbnail_src || '';
+                            const mediaId = node.id || node.pk;
+
+                            if (isLiked && code) {
+                                likedPosts.push({
+                                    type: 'Post',
+                                    url: `https://www.instagram.com/p/${code}/`,
+                                    thumb: thumb,
+                                    id: mediaId || code,
+                                    rawId: String(mediaId || code),
+                                    trackingToken: node.tracking_token || ''
+                                });
+                            }
+                        }
+                        hasNextPage = Boolean(connection.page_info?.has_next_page);
+                        endCursor = connection.page_info?.end_cursor;
+                        if (!endCursor) break;
+                        await new Promise(r => setTimeout(r, 250));
+                    }
+
+                    // 2. Stories 24h via API reels_media
+                    if (onProgress) onProgress('Buscando Stories (24h)...');
+                    try {
+                        const reelsUrl = `https://www.instagram.com/api/v1/feed/reels_media/?reel_ids=${encodeURIComponent(targetUserId)}`;
+                        const reelsRes = await fetch(reelsUrl, {
+                            headers: {
+                                'X-IG-App-ID': '936619743392459',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            credentials: 'include'
+                        });
+                        if (reelsRes.ok) {
+                            const reelsData = await reelsRes.json();
+                            const reelsList = reelsData?.reels_media || Object.values(reelsData?.reels || {});
+                            for (const reel of reelsList) {
+                                const items = reel?.items || [];
+                                for (const it of items) {
+                                    if (it.has_liked || it.viewer_has_liked) {
+                                        const rawId = String(it.id || it.pk || '');
+                                        const cleanMediaId = rawId.split('_')[0];
+                                        const thumb = it.image_versions2?.candidates?.[0]?.url || it.display_url || '';
+                                        likedStories.push({
+                                            type: 'Story (24h)',
+                                            url: `https://www.instagram.com/stories/${cleanUsername}/${cleanMediaId}/`,
+                                            thumb: thumb,
+                                            id: cleanMediaId,
+                                            rawId: rawId
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    } catch (errStory) {
+                        console.warn('[IG Tools Interações] Erro ao buscar stories 24h:', errStory);
+                    }
+
+                    // 3. Destaques (Highlights) via endpoint oficial highlights_tray
+                    if (onProgress) onProgress('Buscando Destaques...');
+                    try {
+                        const hlUrl = `https://www.instagram.com/api/v1/highlights/${encodeURIComponent(targetUserId)}/highlights_tray/`;
+                        const hlRes = await fetch(hlUrl, {
+                            headers: {
+                                'X-IG-App-ID': '936619743392459',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            credentials: 'include'
+                        });
+                        if (hlRes.ok) {
+                            const hlData = await hlRes.json();
+                            const tray = hlData?.tray || [];
+                            const highlightIds = tray.map(t => t.id).filter(Boolean);
+
+                            for (let i = 0; i < highlightIds.length; i += 5) {
+                                const batch = highlightIds.slice(i, i + 5);
+                                const qParams = batch.map(id => `reel_ids=${encodeURIComponent(id)}`).join('&');
+                                const batchRes = await fetch(`https://www.instagram.com/api/v1/feed/reels_media/?${qParams}`, {
+                                    headers: {
+                                        'X-IG-App-ID': '936619743392459',
+                                        'X-Requested-With': 'XMLHttpRequest'
+                                    },
+                                    credentials: 'include'
+                                });
+                                if (batchRes.ok) {
+                                    const batchData = await batchRes.json();
+                                    const batchList = batchData?.reels_media || Object.values(batchData?.reels || {});
+                                    for (const reel of batchList) {
+                                        const cleanHighlightId = String(reel?.id || '').replace(/^highlight:/, '');
+                                        for (const it of (reel?.items || [])) {
+                                            if (it.has_liked || it.viewer_has_liked) {
+                                                const rawId = String(it.id || it.pk || '');
+                                                const cleanMediaId = rawId.split('_')[0];
+                                                const thumb = it.image_versions2?.candidates?.[0]?.url || it.display_url || '';
+                                                likedHighlights.push({
+                                                    type: 'Destaque',
+                                                    url: `https://www.instagram.com/stories/highlights/${cleanHighlightId}/`,
+                                                    thumb: thumb,
+                                                    id: cleanMediaId,
+                                                    rawId: rawId
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                                if (i + 5 < highlightIds.length) await new Promise(r => setTimeout(r, 200));
+                            }
+                        }
+                    } catch (errHl) {
+                        console.warn('[IG Tools Interações] Erro ao buscar destaques:', errHl);
+                    }
+
+                    return {
+                        likedPosts,
+                        likedStories,
+                        likedHighlights,
+                        total: likedPosts.length + likedStories.length + likedHighlights.length
+                    };
+                }
+
+                function renderSubrowInteracoesContent(username, data, containerEl, btnEl) {
+                    const isDark = document.body.classList.contains('dark-mode') || document.querySelector('.dark-mode');
+                    const allItems = [
+                        ...data.likedPosts,
+                        ...data.likedStories,
+                        ...data.likedHighlights
+                    ];
+
+                    let headerHtml = `
+                        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(150,150,150,0.2);">
+                            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 13px; font-weight: 600;">
+                                <span style="color: #0095f6;">Interações com @${username}:</span>
+                                <span style="background: rgba(0, 149, 246, 0.12); color: #0095f6; padding: 2px 8px; border-radius: 12px; font-size: 11px;">📸 ${data.likedPosts.length} Posts</span>
+                                <span style="background: rgba(231, 76, 60, 0.12); color: #e74c3c; padding: 2px 8px; border-radius: 12px; font-size: 11px;">⭕ ${data.likedStories.length} Stories</span>
+                                <span style="background: rgba(243, 156, 18, 0.12); color: #f39c12; padding: 2px 8px; border-radius: 12px; font-size: 11px;">⭐ ${data.likedHighlights.length} Destaques</span>
+                                <span style="font-weight: bold; font-size: 12px;">(Total: ${data.total})</span>
+                            </div>
+                            <button class="btn-recarregar-interacoes-subrow" style="background: transparent; border: 1px solid rgba(150,150,150,0.4); border-radius: 5px; padding: 3px 8px; font-size: 11px; cursor: pointer; color: inherit;">🔄 Recarregar</button>
+                        </div>
+                    `;
+
+                    if (allItems.length === 0) {
+                        containerEl.innerHTML = headerHtml + `
+                            <div style="text-align: center; padding: 12px; color: var(--ig-secondary-text, #888); font-size: 13px;">
+                                Nenhuma curtida encontrada nas publicações recentes, stories ou destaques de @${username}.
+                            </div>
+                        `;
+                        const reloadBtn = containerEl.querySelector('.btn-recarregar-interacoes-subrow');
+                        if (reloadBtn) {
+                            reloadBtn.onclick = () => carregarInteracoesUsuario(username, btnEl?.dataset?.userid || null, containerEl, btnEl, true);
+                        }
+                        return;
+                    }
+
+                    let gridHtml = `<div style="display: flex; flex-wrap: wrap; gap: 10px; max-height: 250px; overflow-y: auto; padding: 4px;">`;
+                    allItems.forEach((item) => {
+                        gridHtml += `
+                            <div class="item-interacao-card" data-id="${item.id}" style="position: relative; width: 90px; height: 115px; border-radius: 8px; overflow: hidden; border: 1px solid rgba(150,150,150,0.25); background: ${isDark ? '#262626' : '#fff'}; box-shadow: 0 2px 6px rgba(0,0,0,0.1); flex-shrink: 0; display: flex; flex-direction: column;">
+                                <div style="flex: 1; position: relative; cursor: pointer; overflow: hidden;" title="Abrir ${item.type}">
+                                    ${item.thumb ? `<img src="${item.thumb}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'">` : `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #999;">${item.type}</div>`}
+                                    <span style="position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,0.7); color: white; padding: 1px 5px; border-radius: 4px; font-size: 9px; font-weight: 600;">
+                                        ${item.type.includes('Post') ? 'Post' : item.type.includes('Destaque') ? 'Destaque' : 'Story'}
+                                    </span>
+                                </div>
+                                <button class="btn-unlike-subrow" title="Descurtir" style="position: absolute; bottom: 5px; right: 5px; width: 28px; height: 28px; border-radius: 50%; border: none; background: rgba(0,0,0,0.75); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; z-index: 5; transition: transform 0.15s, background 0.15s;">
+                                    💔
+                                </button>
+                            </div>
+                        `;
+                    });
+                    gridHtml += `</div>`;
+
+                    containerEl.innerHTML = headerHtml + gridHtml;
+
+                    // Recarregar
+                    const reloadBtn = containerEl.querySelector('.btn-recarregar-interacoes-subrow');
+                    if (reloadBtn) {
+                        reloadBtn.onclick = () => carregarInteracoesUsuario(username, btnEl?.dataset?.userid || null, containerEl, btnEl, true);
+                    }
+
+                    // Clique nas imagens para abrir e no botão de descurtir
+                    containerEl.querySelectorAll('.item-interacao-card').forEach((card) => {
+                        const itemId = card.dataset.id;
+                        const item = allItems.find(x => x.id === itemId);
+                        if (!item) return;
+
+                        const imgDiv = card.querySelector('div[title^="Abrir"]');
+                        if (imgDiv) {
+                            imgDiv.onclick = () => window.open(item.url, '_blank');
+                        }
+
+                        const unlikeBtn = card.querySelector('.btn-unlike-subrow');
+                        if (unlikeBtn) {
+                            unlikeBtn.onmouseover = () => { unlikeBtn.style.transform = "scale(1.15)"; unlikeBtn.style.background = "rgba(220, 38, 38, 0.9)"; };
+                            unlikeBtn.onmouseout = () => { unlikeBtn.style.transform = "scale(1)"; unlikeBtn.style.background = "rgba(0,0,0,0.75)"; };
+                            unlikeBtn.onclick = async (e) => {
+                                e.stopPropagation();
+                                unlikeBtn.disabled = true;
+                                unlikeBtn.style.opacity = "0.5";
+                                const success = await unlikeMedia(item);
+                                if (success) {
+                                    card.style.transition = 'opacity 0.2s, transform 0.2s';
+                                    card.style.opacity = '0';
+                                    card.style.transform = 'scale(0.8)';
+                                    setTimeout(() => {
+                                        card.remove();
+                                        const removeFromArray = (arr) => {
+                                            const i = arr.findIndex(x => x.id === item.id);
+                                            if (i !== -1) arr.splice(i, 1);
+                                        };
+                                        removeFromArray(data.likedPosts);
+                                        removeFromArray(data.likedStories);
+                                        removeFromArray(data.likedHighlights);
+                                        data.total = data.likedPosts.length + data.likedStories.length + data.likedHighlights.length;
+
+                                        if (btnEl) {
+                                            btnEl.innerHTML = `<span>${data.total > 0 ? `❤️ ${data.total}` : '0'}</span>`;
+                                            btnEl.style.background = data.total > 0 ? '#e74c3c' : '#7f8c8d';
+                                        }
+
+                                        renderSubrowInteracoesContent(username, data, containerEl, btnEl);
+                                    }, 200);
+                                } else {
+                                    unlikeBtn.disabled = false;
+                                    unlikeBtn.style.opacity = "1";
+                                }
+                            };
+                        }
+                    });
+                }
+
                 function abrirModalInteracoes() {
                     if (document.getElementById("interacoesModal")) return;
 
@@ -9364,45 +10245,48 @@
                     div.className = "submenu-modal";
                     div.style.cssText = `
                         position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                        width: 92%; max-width: 650px; min-height: 500px; max-height: 90vh; border: 1px solid var(--ig-stroke, #363636);
-                        border-radius: 12px; padding: 22px; z-index: 10000; overflow-y: auto; overflow-x: hidden;
-                        background: var(--ig-primary-background, #1a1a1a); color: var(--ig-primary-text, #fff);
-                        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column;
+                        width: 92%; max-width: 650px; min-height: 480px; max-height: 90vh;
+                        border-radius: 10px; z-index: 10000; overflow-y: auto; overflow-x: hidden;
+                        display: flex; flex-direction: column;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
                     `;
+                    if (loadSettings().rgbBorder) {
+                        div.classList.add('rgb-border-effect');
+                    }
 
                     div.innerHTML = `
-                        <div class="modal-header" style="margin-bottom: 16px;">
-                            <span class="modal-title" style="font-size: 16px; font-weight: bold; display: flex; align-items: center; color: var(--ig-primary-text, #fff);">
+                        <div class="modal-header">
+                            <span class="modal-title">
                                 Verificar Interações
                                 <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Verifique o que você curtiu de um usuário específico (Posts e Stories).</span></div>
                             </span>
                             <div class="modal-controls">
-                                <button id="fecharInteracoesBtn" title="Fechar" style="background: none; border: none; color: var(--ig-secondary-text, #a8a8a8); font-size: 18px; cursor: pointer;">✕</button>
+                                <button id="fecharInteracoesBtn" title="Fechar">X</button>
                             </div>
                         </div>
                         <div class="loading-overlay" style="display: none;"><div class="spinner"></div><div class="loading-text"></div></div>
-                        <div style="flex: 1; display: flex; flex-direction: column;">
+                        <div style="padding: 20px; flex: 1; display: flex; flex-direction: column;">
                             <div style="display: flex; gap: 10px; margin-bottom: 20px;">
                                 <div style="flex: 1; position: relative;">
-                                    <input type="text" id="interacoesUsernameInput" placeholder="Digite o username..." style="width: 100%; padding: 11px 14px; border-radius: 8px; border: 1px solid var(--ig-stroke, #444); background: #ffffff; color: #000000; box-sizing: border-box; font-size: 14px; outline: none; transition: border-color 0.2s;" autocomplete="off">
-                                    <div id="interacoesSuggestions" style="position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--ig-secondary-background, #262626); border: 1px solid var(--ig-stroke, #444); border-radius: 8px; max-height: 220px; overflow-y: auto; overflow-x: hidden; z-index: 10001; display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.5); scrollbar-width: thin;"></div>
+                                    <input type="text" id="interacoesUsernameInput" class="interacoes-input" placeholder="Digite o username..." autocomplete="off">
+                                    <div id="interacoesSuggestions"></div>
                                 </div>
-                                <button id="verificarInteracoesBtn" style="background: #0095f6; color: white; border: none; padding: 11px 22px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; white-space: nowrap;">Verificar</button>
+                                <button id="verificarInteracoesBtn" style="background: #0095f6; color: white; border: none; padding: 10px 22px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; white-space: nowrap; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; transition: background 0.2s;">Verificar</button>
                             </div>
                             <div id="interacoesUserProfile" style="display: none; flex-direction: column; align-items: center; margin-bottom: 20px;">
-                                <img id="interacoesUserPic" src="" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; border: 2px solid #dbdbdb;">
-                                <span id="interacoesUserNameDisplay" style="font-weight: bold; font-size: 16px; color: var(--ig-primary-text, #fff);"></span>
-                                <span id="interacoesUserBioDisplay" style="font-size: 14px; color: var(--ig-secondary-text, #8e8e8e); text-align: center; margin-top: 5px; max-width: 85%;"></span>
+                                <img id="interacoesUserPic" src="" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; border: 2px solid #0095f6;">
+                                <span id="interacoesUserNameDisplay" style="font-weight: bold; font-size: 16px;"></span>
+                                <span id="interacoesUserBioDisplay" style="font-size: 14px; text-align: center; margin-top: 5px; max-width: 85%; line-height: 1.4;"></span>
                             </div>
                             <div id="interacoesResultados" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                                 <!-- Cards serão inseridos aqui -->
                             </div>
                             <div id="interacoesDetalhes" style="margin-top: 15px; display: none;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                                    <h3 id="detalhesTitulo" style="margin: 0; color: var(--ig-primary-text, #fff); font-size: 16px;"></h3>
-                                    <button id="voltarCardsBtn" style="padding: 6px 14px; background: #0095f6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">← Voltar</button>
+                                    <h3 id="detalhesTitulo" style="margin: 0; font-size: 16px;"></h3>
+                                    <button id="voltarCardsBtn" style="padding: 6px 14px; background: #0095f6; color: white; border: none; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">← Voltar</button>
                                 </div>
-                                <div id="detalhesLista" style="max-height: 320px; overflow-y: auto; color: var(--ig-primary-text, #fff);"></div>
+                                <div id="detalhesLista" style="max-height: 320px; overflow-y: auto;"></div>
                             </div>
                         </div>
                     `;
@@ -9485,7 +10369,7 @@
                         const resultadosDiv = document.getElementById("interacoesResultados");
                         const profileDiv = document.getElementById("interacoesUserProfile");
 
-                        resultadosDiv.innerHTML = '<p style="color:black;">Carregando interações...</p>';
+                        resultadosDiv.innerHTML = '<p class="interacoes-status-text" style="text-align: center; padding: 20px; font-size: 14px; font-weight: 500;">Carregando interações...</p>';
                         document.getElementById("interacoesDetalhes").style.display = "none";
                         profileDiv.style.display = "none";
 
@@ -9537,7 +10421,7 @@
                             }
 
                             // --- O QUE EU CURTI DELE ---
-                            resultadosDiv.innerHTML = '<p style="color:black;">Analisando publicações do perfil via GraphQL...</p>';
+                            resultadosDiv.innerHTML = '<p class="interacoes-status-text" style="text-align: center; padding: 20px; font-size: 14px; font-weight: 500;">Analisando publicações do perfil via GraphQL...</p>';
 
                             const likedPosts = [];
                             const likedStories = [];
@@ -9721,30 +10605,41 @@
                             comentarios: 'Comentários'
                         };
 
+                        const isDarkMode = document.body.classList.contains('dark-mode') || loadSettings().darkMode;
+
                         for (const [key, data] of Object.entries(dados)) {
                             const card = document.createElement("div");
+                            card.className = "interacoes-stat-card";
+
+                            // Tema escuro: card claro | Tema claro: card escuro
+                            const bgCard = isDarkMode ? "#ffffff" : "#262626";
+                            const textCard = isDarkMode ? "#262626" : "#ffffff";
+                            const borderCard = isDarkMode ? "1px solid #e0e0e0" : "1px solid #3d3d3d";
+                            const shadowCard = isDarkMode ? "0 4px 14px rgba(0, 0, 0, 0.15)" : "0 4px 14px rgba(0, 0, 0, 0.25)";
+
                             card.style.cssText = `
-                                border: 1px solid #e0e0e0;
+                                border: ${borderCard};
                                 border-radius: 12px;
                                 padding: 18px 12px;
                                 text-align: center;
                                 cursor: pointer;
-                                background: #ffffff;
-                                color: #262626;
-                                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+                                background: ${bgCard};
+                                color: ${textCard};
+                                box-shadow: ${shadowCard};
                                 transition: transform 0.2s ease, box-shadow 0.2s ease;
+                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
                             `;
                             card.innerHTML = `
-                                <div style="font-size: 26px; font-weight: 700; color: #0095f6; margin-bottom: 6px;">${data.count}</div>
-                                <div style="font-size: 13px; font-weight: 600; color: #262626;">${mapLabels[key] || key}</div>
+                                <div class="card-count" style="font-size: 26px; font-weight: 700; color: #0095f6; margin-bottom: 6px; font-family: inherit;">${data.count}</div>
+                                <div class="card-label" style="font-size: 13px; font-weight: 600; color: ${textCard}; font-family: inherit;">${mapLabels[key] || key}</div>
                             `;
                             card.onmouseover = () => {
                                 card.style.transform = "translateY(-3px)";
-                                card.style.boxShadow = "0 8px 20px rgba(0, 0, 0, 0.22)";
+                                card.style.boxShadow = isDarkMode ? "0 8px 20px rgba(0, 0, 0, 0.25)" : "0 8px 20px rgba(0, 0, 0, 0.4)";
                             };
                             card.onmouseout = () => {
                                 card.style.transform = "translateY(0)";
-                                card.style.boxShadow = "0 4px 14px rgba(0, 0, 0, 0.12)";
+                                card.style.boxShadow = shadowCard;
                             };
                             card.onclick = () => mostrarDetalhesInteracao(mapLabels[key] || key, data.items);
                             container.appendChild(card);
@@ -9760,14 +10655,16 @@
                         const lista = document.getElementById("detalhesLista");
                         lista.innerHTML = '';
 
+                        const isDark = document.body.classList.contains('dark-mode') || loadSettings().darkMode;
+
                         if (itens.length === 0) {
-                            lista.innerHTML = '<p style="color: var(--ig-secondary-text, #a8a8a8); text-align: center; padding: 25px;">Nenhum item encontrado.</p>';
+                            lista.innerHTML = '<p style="color: var(--ig-secondary-text, #a8a8a8); text-align: center; padding: 25px; font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif;">Nenhum item encontrado.</p>';
                         } else {
                             const grid = document.createElement("div");
                             grid.style.cssText = "display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; padding: 4px;";
                             itens.forEach(item => {
                                 const div = document.createElement("div");
-                                div.style.cssText = "aspect-ratio: 1; overflow: hidden; border-radius: 8px; border: 1px solid var(--ig-stroke, #444); cursor: pointer; position: relative; background: #000; box-shadow: 0 2px 8px rgba(0,0,0,0.2);";
+                                div.style.cssText = `aspect-ratio: 1; overflow: hidden; border-radius: 8px; border: 1px solid ${isDark ? '#444' : '#dbdbdb'}; cursor: pointer; position: relative; background: ${isDark ? '#000' : '#f5f5f5'}; box-shadow: 0 2px 8px rgba(0,0,0,0.15);`;
 
                                 const contentDiv = document.createElement("div");
                                 contentDiv.style.cssText = "width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;";
@@ -9776,7 +10673,7 @@
                                     contentDiv.innerHTML = `<img src="${item.thumb}" style="width: 100%; height: 100%; object-fit: cover;">`;
                                     contentDiv.onclick = () => window.open(item.url, '_blank');
                                 } else {
-                                    contentDiv.innerHTML = `<span style="font-size: 12px; color: #aaa; text-align: center; padding: 6px;">${item.type}</span>`;
+                                    contentDiv.innerHTML = `<span style="font-size: 12px; color: ${isDark ? '#aaa' : '#666'}; text-align: center; padding: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">${item.type}</span>`;
                                     contentDiv.onclick = () => window.open(item.url, '_blank');
                                 }
                                 div.appendChild(contentDiv);
@@ -9790,30 +10687,29 @@
                                     unlikeBtn.onmouseout = () => { unlikeBtn.style.transform = "scale(1)"; unlikeBtn.style.background = "rgba(0,0,0,0.75)"; };
                                     unlikeBtn.onclick = async (e) => {
                                         e.stopPropagation();
-                                        if (confirm("Tem certeza que deseja descurtir este item?")) {
-                                            unlikeBtn.disabled = true;
-                                            unlikeBtn.style.opacity = "0.5";
-                                            const success = await unlikeMedia(item);
-                                            if (success) {
-                                                div.remove();
-                                                const idx = itens.indexOf(item);
-                                                if (idx !== -1) itens.splice(idx, 1);
-                                                document.getElementById("detalhesTitulo").innerText = `${titulo} (${itens.length})`;
+                                        // Descurtir diretamente sem tela de confirmação
+                                        unlikeBtn.disabled = true;
+                                        unlikeBtn.style.opacity = "0.5";
+                                        const success = await unlikeMedia(item);
+                                        if (success) {
+                                            div.remove();
+                                            const idx = itens.indexOf(item);
+                                            if (idx !== -1) itens.splice(idx, 1);
+                                            document.getElementById("detalhesTitulo").innerText = `${titulo} (${itens.length})`;
 
-                                                if (titulo.includes('Foto') || titulo.includes('Post')) {
-                                                    if (dataEuCurti?.fotosCurtidas) dataEuCurti.fotosCurtidas.count = itens.length;
-                                                } else if (titulo.includes('Stori')) {
-                                                    if (dataEuCurti?.storiesCurtidos) dataEuCurti.storiesCurtidos.count = itens.length;
-                                                }
-                                                renderizarCardsInteracoes(dataEuCurti);
-
-                                                if (itens.length === 0) {
-                                                    lista.innerHTML = '<p style="color: var(--ig-secondary-text, #a8a8a8); text-align: center; padding: 25px;">Nenhum item restante.</p>';
-                                                }
-                                            } else {
-                                                unlikeBtn.disabled = false;
-                                                unlikeBtn.style.opacity = "1";
+                                            if (titulo.includes('Foto') || titulo.includes('Post')) {
+                                                if (dataEuCurti?.fotosCurtidas) dataEuCurti.fotosCurtidas.count = itens.length;
+                                            } else if (titulo.includes('Stori')) {
+                                                if (dataEuCurti?.storiesCurtidos) dataEuCurti.storiesCurtidos.count = itens.length;
                                             }
+                                            renderizarCardsInteracoes(dataEuCurti);
+
+                                            if (itens.length === 0) {
+                                                lista.innerHTML = '<p style="color: var(--ig-secondary-text, #a8a8a8); text-align: center; padding: 25px; font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif;">Nenhum item restante.</p>';
+                                            }
+                                        } else {
+                                            unlikeBtn.disabled = false;
+                                            unlikeBtn.style.opacity = "1";
                                         }
                                     };
                                     div.appendChild(unlikeBtn);
@@ -9828,236 +10724,6 @@
                             detalhesDiv.style.display = "none";
                             document.getElementById("interacoesResultados").style.display = "grid";
                         };
-                    }
-
-                    async function executeGraphqlUnlikeStory(mediaId) {
-                        try {
-                            const cleanMediaId = String(mediaId).split('_')[0];
-                            const actorId = getActorId();
-                            const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
-                            const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
-                            const jazoest = computeJazoest(fbDtsg) || '26452';
-                            const spin = getSpinParams();
-
-                            const variables = {
-                                input: {
-                                    actor_id: actorId,
-                                    client_mutation_id: String(Math.floor(Math.random() * 100) + 1),
-                                    media_id: cleanMediaId
-                                }
-                            };
-
-                            const body = new URLSearchParams();
-                            body.append('__comet_req', '7');
-                            if (fbDtsg) body.append('fb_dtsg', fbDtsg);
-                            if (jazoest) body.append('jazoest', jazoest);
-                            if (lsd) body.append('lsd', lsd);
-                            if (spin.spin_r) body.append('__spin_r', spin.spin_r);
-                            body.append('__spin_b', spin.spin_b || 'trunk');
-                            if (spin.spin_t) body.append('__spin_t', spin.spin_t);
-                            body.append('__crn', 'comet.igweb.PolarisStoriesV3HighlightsRoute');
-                            body.append('fb_api_caller_class', 'RelayModern');
-                            body.append('fb_api_req_friendly_name', 'usePolarisStoriesV4LikeMutationUnlikeMutation');
-                            body.append('server_timestamps', 'true');
-                            body.append('variables', JSON.stringify(variables));
-                            body.append('doc_id', '26510485515280697');
-
-                            const headers = {
-                                ...getApiHeaders(true),
-                                'X-ASBD-ID': '359341',
-                                'X-CSRFToken': getCookie('csrftoken') || '',
-                                'X-FB-Friendly-Name': 'usePolarisStoriesV4LikeMutationUnlikeMutation',
-                                'X-FB-LSD': lsd,
-                                'X-IG-App-ID': '936619743392459',
-                                'X-IG-Max-Touch-Points': '0'
-                            };
-
-                            console.log(`[IG Tools Interações] Enviando mutação GraphQL para descurtir story (${cleanMediaId})...`, variables);
-                            const response = await fetch('https://www.instagram.com/api/graphql', {
-                                method: 'POST',
-                                headers,
-                                body: body.toString(),
-                                credentials: 'include',
-                                cache: 'no-store'
-                            });
-
-                            const rawText = await response.text();
-                            let cleanedText = rawText.trim();
-                            if (cleanedText.startsWith('for (;;);')) {
-                                cleanedText = cleanedText.slice(9).trim();
-                            }
-
-                            let data = null;
-                            try {
-                                data = JSON.parse(cleanedText);
-                            } catch (_) { }
-
-                            console.log('[IG Tools Interações] Resposta GraphQL Unlike Story:', { status: response.status, ok: response.ok, data });
-
-                            if (response.ok && (data?.data?.xig_unsend_story_like || !data?.errors)) {
-                                return true;
-                            }
-                            return false;
-                        } catch (e) {
-                            console.error('[IG Tools Interações] Erro ao descurtir story via GraphQL:', e);
-                            return false;
-                        }
-                    }
-
-                    async function executeGraphqlUnlikePost(mediaId, trackingToken = '') {
-                        try {
-                            const cleanMediaId = String(mediaId).split('_')[0];
-                            const actorId = getActorId();
-                            const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
-                            const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
-                            const jazoest = computeJazoest(fbDtsg) || '26456';
-                            const spin = getSpinParams();
-
-                            const inputObj = {
-                                actor_id: actorId,
-                                client_mutation_id: String(Math.floor(Math.random() * 100) + 1),
-                                media_id: cleanMediaId
-                            };
-                            if (trackingToken) {
-                                inputObj.tracking_token = trackingToken;
-                            }
-
-                            const variables = { input: inputObj };
-
-                            const body = new URLSearchParams();
-                            body.append('__comet_req', '7');
-                            if (fbDtsg) body.append('fb_dtsg', fbDtsg);
-                            if (jazoest) body.append('jazoest', jazoest);
-                            if (lsd) body.append('lsd', lsd);
-                            if (spin.spin_r) body.append('__spin_r', spin.spin_r);
-                            body.append('__spin_b', spin.spin_b || 'trunk');
-                            if (spin.spin_t) body.append('__spin_t', spin.spin_t);
-                            body.append('__crn', 'comet.igweb.PolarisDesktopPostRoute');
-                            body.append('fb_api_caller_class', 'RelayModern');
-                            body.append('fb_api_req_friendly_name', 'usePolarisLikeMediaXIGUnlikeMutation');
-                            body.append('server_timestamps', 'true');
-                            body.append('variables', JSON.stringify(variables));
-                            body.append('doc_id', '27345296031770102');
-
-                            const headers = {
-                                ...getApiHeaders(true),
-                                'X-ASBD-ID': '359341',
-                                'X-CSRFToken': getCookie('csrftoken') || '',
-                                'X-FB-Friendly-Name': 'usePolarisLikeMediaXIGUnlikeMutation',
-                                'X-FB-LSD': lsd,
-                                'X-IG-App-ID': '936619743392459',
-                                'X-IG-Max-Touch-Points': '0'
-                            };
-
-                            console.log(`[IG Tools Interações] Enviando mutação GraphQL para descurtir post (${cleanMediaId})...`, variables);
-                            const response = await fetch('https://www.instagram.com/api/graphql', {
-                                method: 'POST',
-                                headers,
-                                body: body.toString(),
-                                credentials: 'include',
-                                cache: 'no-store'
-                            });
-
-                            const rawText = await response.text();
-                            let cleanedText = rawText.trim();
-                            if (cleanedText.startsWith('for (;;);')) {
-                                cleanedText = cleanedText.slice(9).trim();
-                            }
-
-                            let data = null;
-                            try {
-                                data = JSON.parse(cleanedText);
-                            } catch (_) { }
-
-                            console.log('[IG Tools Interações] Resposta GraphQL Unlike Post:', { status: response.status, ok: response.ok, data });
-
-                            if (response.ok && (data?.data?.xig_media_unlike || !data?.errors)) {
-                                return true;
-                            }
-                            return false;
-                        } catch (e) {
-                            console.error('[IG Tools Interações] Erro ao descurtir post via GraphQL:', e);
-                            return false;
-                        }
-                    }
-
-                    async function unlikeMedia(itemOrId, maybeType) {
-                        try {
-                            const csrf = getCookie('csrftoken');
-                            if (!csrf) {
-                                alert("Erro: Token CSRF não encontrado. Recarregue a página.");
-                                return false;
-                            }
-
-                            const item = typeof itemOrId === 'object' ? itemOrId : { id: itemOrId, type: maybeType };
-                            const rawId = String(item.rawId || item.id || '');
-                            const cleanMediaId = rawId.split('_')[0];
-                            const type = item.type || maybeType || '';
-
-                            console.log(`[IG Tools Interações] Descurtindo ${type} (${cleanMediaId})...`);
-
-                            if (type && (type.includes('Story') || type.includes('Destaque'))) {
-                                // 1. Tentar pela mutação oficial GraphQL descoberta no Network
-                                const gqlSuccess = await executeGraphqlUnlikeStory(cleanMediaId);
-                                if (gqlSuccess) {
-                                    console.log(`[IG Tools Interações] Sucesso ao descurtir story via GraphQL (${cleanMediaId})!`);
-                                    return true;
-                                }
-
-                                // 2. Fallback para endpoint REST tradicional caso o GraphQL falhe
-                                console.warn(`[IG Tools Interações] GraphQL falhou, tentando fallback REST...`);
-                                const restUrl = `https://www.instagram.com/api/v1/story_interactions/unlike_story_like/`;
-                                let restRes = await fetch(restUrl, {
-                                    method: 'POST',
-                                    headers: {
-                                        ...getApiHeaders(true),
-                                        'X-CSRFToken': csrf
-                                    },
-                                    body: `media_id=${encodeURIComponent(cleanMediaId)}`,
-                                    credentials: 'include'
-                                });
-                                if (restRes.ok) return true;
-
-                                const errText = await restRes.text();
-                                console.error("[IG Tools Interações] Falha ao descurtir via REST:", restRes.status, errText);
-                                alert(`Falha ao descurtir (${restRes.status}). Verifique o console.`);
-                                return false;
-                            } else {
-                                // Descurtir Post
-                                // 1. Tentar pela mutação oficial GraphQL (usePolarisLikeMediaXIGUnlikeMutation)
-                                const gqlSuccess = await executeGraphqlUnlikePost(cleanMediaId, item.trackingToken);
-                                if (gqlSuccess) {
-                                    console.log(`[IG Tools Interações] Sucesso ao descurtir post via GraphQL (${cleanMediaId})!`);
-                                    return true;
-                                }
-
-                                // 2. Fallback REST para o endpoint tradicional
-                                console.warn(`[IG Tools Interações] GraphQL falhou para post, tentando fallback REST...`);
-                                const postUrl = `https://www.instagram.com/api/v1/web/likes/${cleanMediaId}/unlike/`;
-                                const postRes = await fetch(postUrl, {
-                                    method: 'POST',
-                                    headers: {
-                                        ...getApiHeaders(true),
-                                        'X-CSRFToken': csrf
-                                    },
-                                    body: '',
-                                    credentials: 'include'
-                                });
-                                if (postRes.ok) {
-                                    console.log(`[IG Tools Interações] Sucesso ao descurtir post (${cleanMediaId})!`);
-                                    return true;
-                                }
-
-                                const errText = await postRes.text();
-                                console.error("[IG Tools Interações] Falha ao descurtir post:", postRes.status, errText);
-                                alert(`Falha ao descurtir post (${postRes.status}). Verifique o console.`);
-                                return false;
-                            }
-                        } catch (e) {
-                            console.error("[IG Tools Interações] Erro ao descurtir:", e);
-                            alert("Erro ao descurtir: " + e.message);
-                            return false;
-                        }
                     }
                 }
 

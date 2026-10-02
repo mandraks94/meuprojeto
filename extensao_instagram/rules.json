@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {
+          "header": "User-Agent",
+          "operation": "set",
+          "value": "Instagram 278.0.0.19.115 Android (33/13; 420dpi; 1080x2400; samsung; SM-G991B; o1s; exynos2100)"
+        }
+      ]
+    },
+    "condition": {
+      "urlFilter": "*://*.instagram.com/api/v1/users/blocked_list*",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  }
+]

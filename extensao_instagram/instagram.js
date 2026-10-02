@@ -1,0 +1,12064 @@
+// ==UserScript==
+// @name         Instagram_novo_2
+// @description  Adds download buttons to Instagram stories
+// @author       You
+// @version      1.0
+// @match        https://www.instagram.com/*
+// @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        unsafeWindow
+// @connect      www.googleapis.com
+// @connect      accounts.google.com
+// @connect      script.google.com
+// @connect      script.googleusercontent.com
+// ==/UserScript==
+
+(function () {
+    'use strict';
+    console.log("[IG Tools] Script injetado e rodando.");
+
+    function initScript() {
+        if (window.location.href.includes("instagram.com")) {
+
+            // Helper para Toast (Notificação Visual) - Movido para o topo para uso no fluxo de Login
+            function showToast(message) {
+                if (!document.body) { console.log("[IG Tools]", message); return; }
+                const toast = document.createElement('div');
+                toast.innerText = message;
+                toast.style.cssText = "position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px; z-index: 2147483647; font-size: 14px; pointer-events: none; transition: opacity 0.5s;";
+                document.body.appendChild(toast);
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    setTimeout(() => toast.remove(), 500);
+                }, 3000);
+            }
+
+            // Helper para Loading (Centralizado para evitar erros de redeclaração)
+            function toggleLoading(isLoading, progress = null, message = "Carregando...") {
+                const modal = document.querySelector('.submenu-modal'); // Detecta o modal ativo
+                if (!modal) return;
+                if (isLoading) {
+                    let overlay = modal.querySelector('.loading-overlay');
+                    if (!overlay) {
+                        overlay = document.createElement('div');
+                        overlay.className = 'loading-overlay';
+                        overlay.innerHTML = `<div class="spinner"></div><div class="loading-text">${message}</div>`;
+                        modal.appendChild(overlay);
+                    }
+                    const textDiv = overlay.querySelector('.loading-text');
+                    if (textDiv) {
+                        if (progress !== null) {
+                            textDiv.innerText = `${message} ${Math.floor(progress)}%`;
+                        } else {
+                            textDiv.innerText = message;
+                        }
+                    }
+                } else {
+                    modal.querySelector('.loading-overlay')?.remove();
+                }
+            }
+
+            // --- CONFIGURAÇÃO GOOGLE DRIVE ---
+            const GDRIVE_CONFIG = {
+                clientId: '118908063115-j6fj7f069urt69vh5fa6ha1luh4fgvea.apps.googleusercontent.com',
+                scope: 'https://www.googleapis.com/auth/drive.appdata', // Usa a pasta oculta de dados do app
+                fileName: 'ig_tools_data.json'
+            };
+
+            // Interface de armazenamento segura (Fallback para localStorage caso o Tampermonkey falhe)
+            const storage = {
+                get: (key) => {
+                    try {
+                        return typeof GM_getValue !== 'undefined' ? GM_getValue(key) : localStorage.getItem('ig_tools_' + key);
+                    } catch (e) { return localStorage.getItem('ig_tools_' + key); }
+                },
+                set: (key, val) => {
+                    try {
+                        if (typeof GM_setValue !== 'undefined') GM_setValue(key, val);
+                        localStorage.setItem('ig_tools_' + key, val);
+                    } catch (e) { localStorage.setItem('ig_tools_' + key, val); }
+                }
+            };
+
+            const googleAuth = {
+                getAccessToken: () => storage.get('gdrive_token'),
+                setAccessToken: (token) => storage.set('gdrive_token', token),
+
+                login: function () {
+                    if (GDRIVE_CONFIG.clientId.includes('SEU_CLIENT_ID')) {
+                        alert("ERRO: Você precisa configurar seu Client ID do Google Cloud no código!");
+                        window.open('https://console.cloud.google.com/');
+                        return;
+                    }
+                    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GDRIVE_CONFIG.clientId}&redirect_uri=${encodeURIComponent(window.location.origin + '/')}&response_type=token&scope=${encodeURIComponent(GDRIVE_CONFIG.scope)}`;
+                    window.location.href = authUrl;
+                },
+
+                checkUrlToken: function () {
+                    const hash = window.location.hash;
+                    if (hash && hash.includes('access_token=')) {
+                        console.log("[IG Tools] Hash detectado após login.");
+                        const params = new URLSearchParams(hash.substring(1));
+                        const token = params.get('access_token');
+                        console.log("[IG Tools] Sucesso! Token recebido.");
+                        this.setAccessToken(token);
+                        localStorage.setItem('ig_tools_gdrive_token', token); // Garantia extra
+                        showToast("✅ Logado no Google Drive!");
+                        window.location.hash = ''; // Limpa a URL apenas após salvar
+                    }
+                }
+            };
+            googleAuth.checkUrlToken();
+
+            // --- BLOQUEIO DE ACESSO: SÓ CONTINUA SE ESTIVER LOGADO ---
+            if (!googleAuth.getAccessToken()) {
+                console.log("[IG Tools] Acesso negado: Login Google necessário.");
+
+                const showAuthGate = () => {
+                    if (document.getElementById('ig-tools-auth-gate')) return;
+                    const gate = document.createElement('div');
+                    gate.id = 'ig-tools-auth-gate';
+
+                    // Estilo responsivo: centralizado no mobile, canto no desktop
+                    const isMobile = window.innerWidth <= 768;
+                    const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
+                    const desktopPos = 'bottom: 20px; right: 20px; max-width: 280px;';
+
+                    gate.style.cssText = `position: fixed; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; font-family: -apple-system, system-ui, sans-serif; ${isMobile ? mobilePos : desktopPos}`;
+                    gate.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; max-width: 280px; font-family: -apple-system, system-ui, sans-serif;';
+                    gate.innerHTML = `
+                        <div style="font-size: 24px;">🛠️</div>
+                        <span style="color: black; font-weight: bold; font-size: 16px; text-align: center;">IG Tools Protegido</span>
+                        <p style="color: #666; font-size: 12px; text-align: center; margin: 0;">Faça login com sua conta Google para ativar as ferramentas de download e análise.</p>
+                        <button id="authGateLoginBtn" style="background: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; transition: background 0.2s;">Login com Google</button>
+                    `;
+                    document.body.appendChild(gate);
+                    document.getElementById('authGateLoginBtn').onclick = () => googleAuth.login();
+                };
+
+                if (document.body) showAuthGate();
+                else document.addEventListener('DOMContentLoaded', showAuthGate);
+
+                return; // INTERROMPE TODO O RESTO DO SCRIPT
+            }
+
+            const gDriveApi = {
+                execute: function (options) {
+                    const token = googleAuth.getAccessToken();
+                    if (!token) {
+                        showToast("⚠️ Faça login no Google nas Configurações");
+                        return Promise.reject("Sem token");
+                    }
+                    return new Promise((resolve, reject) => {
+                        const doDirectFetch = () => {
+                            fetch(options.url, {
+                                method: options.method || 'GET',
+                                headers: {
+                                    ...(options.headers || {}),
+                                    'Authorization': `Bearer ${token}`
+                                },
+                                body: options.data || null
+                            })
+                            .then(async (res) => {
+                                const text = await res.text();
+                                if (res.status >= 200 && res.status < 300) {
+                                    try { resolve(text ? JSON.parse(text) : {}); }
+                                    catch (e) { resolve(text); }
+                                } else {
+                                    reject(new Error(`HTTP ${res.status}: ${text}`));
+                                }
+                            })
+                            .catch((err) => {
+                                console.error("[IG Tools] Network Error Direct Fetch:", err);
+                                reject(err instanceof Error ? err : new Error(String(err)));
+                            });
+                        };
+
+                        const httpHandler = (typeof GM_xmlhttpRequest !== 'undefined')
+                            ? GM_xmlhttpRequest
+                            : (window.IGTools?.HttpClient?.request || null);
+
+                        if (httpHandler) {
+                            try {
+                                httpHandler({
+                                    ...options,
+                                    headers: {
+                                        ...options.headers,
+                                        'Authorization': `Bearer ${token}`
+                                    },
+                                    onload: (res) => {
+                                        console.log(`[IG Tools] API Response (${options.method} ${options.url}):`, res.status);
+                                        if (res.status >= 200 && res.status < 300) {
+                                            try {
+                                                const data = res.responseText ? JSON.parse(res.responseText) : {};
+                                                resolve(data);
+                                            } catch (e) {
+                                                resolve(res.responseText);
+                                            }
+                                        } else {
+                                            reject(new Error(`API Error ${res.status}`));
+                                        }
+                                    },
+                                    onerror: (err) => {
+                                        console.warn("[IG Tools] Erro no canal da extensão, tentando fallback direto:", err);
+                                        doDirectFetch();
+                                    }
+                                });
+                            } catch (e) {
+                                doDirectFetch();
+                            }
+                        } else {
+                            doDirectFetch();
+                        }
+                    });
+                },
+
+                getFileId: async function () {
+                    const data = await this.execute({
+                        method: 'GET',
+                        url: `https://www.googleapis.com/drive/v3/files?q=name='${GDRIVE_CONFIG.fileName}'&spaces=appDataFolder`
+                    });
+                    if (data.files && data.files.length > 0) {
+                        console.log("[IG Tools] Arquivo encontrado no Drive ID:", data.files[0].id);
+                        return data.files[0].id;
+                    }
+                    return null;
+                },
+
+                saveData: async function (allData) {
+                    let fileId = await this.getFileId();
+                    const method = fileId ? 'PATCH' : 'POST';
+                    const url = fileId
+                        ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`
+                        : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+
+                    if (!fileId) {
+                        // Criação inicial (Multipart)
+                        console.log("[IG Tools] Criando novo arquivo no Google Drive...");
+                        const metadata = { name: GDRIVE_CONFIG.fileName, parents: ['appDataFolder'] };
+                        const body = `--foo\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--foo\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(allData)}\r\n--foo--`;
+                        return this.execute({
+                            method,
+                            url,
+                            headers: { 'Content-Type': 'multipart/related; boundary=foo' },
+                            data: body
+                        });
+                    } else {
+                        // Atualização simples
+                        console.log("[IG Tools] Atualizando arquivo existente no Drive...");
+                        return this.execute({ method, url, data: JSON.stringify(allData) });
+                    }
+                },
+
+                loadData: async function () {
+                    const fileId = await this.getFileId();
+                    if (!fileId) return {};
+                    const response = await this.execute({
+                        method: 'GET',
+                        url: `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
+                    });
+                    try {
+                        // O execute retorna o texto se não for JSON, então parseamos aqui
+                        return typeof response === 'string' ? JSON.parse(response) : response;
+                    } catch (e) {
+                        console.error("[IG Tools] Erro ao parsear dados do arquivo:", e);
+                        return {};
+                    }
+                }
+            };
+
+            const infoIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: text-bottom; margin-left: 5px;"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>`;
+
+            // Helper para Cookie
+            function getCookie(name) {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${name}=`);
+                if (parts.length === 2) return parts.pop().split(';').shift();
+            }
+
+            function getActorId() {
+                try {
+                    const rur = getCookie('rur') || '';
+                    const decoded = decodeURIComponent(rur);
+                    const match = decoded.match(/,\s*(\d{10,})\s*,/);
+                    if (match && match[1]) return match[1];
+                } catch (_) { }
+                return getCookie('ds_user_id') || '';
+            }
+
+            function getDeviceId() {
+                const cookie = getCookie('ig_did');
+                return cookie ? cookie : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+                    const r = Math.random() * 16 | 0;
+                    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+                });
+            }
+
+            let cachedRolloutHash = "";
+            function getRolloutHash() {
+                if (cachedRolloutHash) return cachedRolloutHash;
+                try {
+                    if (window.__p && window.__p.rollout_hash) {
+                        cachedRolloutHash = window.__p.rollout_hash;
+                        return cachedRolloutHash;
+                    }
+                    const scripts = document.querySelectorAll("script");
+                    for (let i = 0; i < scripts.length; i++) {
+                        const text = scripts[i].innerText;
+                        if (text.includes('"rollout_hash"')) {
+                            const match = text.match(/"rollout_hash":"([a-z0-9]+)"/);
+                            if (match) {
+                                cachedRolloutHash = match[1];
+                                return cachedRolloutHash;
+                            }
+                        }
+                    }
+                } catch (e) { }
+                return "1";
+            }
+
+            let cachedWWWClaim = "0";
+            function getWWWClaim() {
+                if (cachedWWWClaim && cachedWWWClaim !== "" && cachedWWWClaim !== "0") return cachedWWWClaim;
+                try {
+                    // Tenta obter de múltiplas fontes globais do Instagram
+                    const claim = window.__p?.www_claim ||
+                        window._sharedData?.config?.viewer?.www_claim ||
+                        window.__cu?.www_claim ||
+                        window.__v?.www_claim ||
+                        window.__DTS?.www_claim ||
+                        window._sharedData?.config?.viewer?.www_claim;
+
+                    if (claim && claim !== "0" && claim !== "") {
+                        cachedWWWClaim = claim;
+                        return cachedWWWClaim;
+                    }
+                } catch (e) { }
+                return "0";
+            }
+
+            function getApiHeaders(isPost = false) {
+                const headers = {
+                    "X-IG-App-ID": "936619743392459",
+                    "X-CSRFToken": getCookie("csrftoken") || "",
+                    "X-Requested-With": "XMLHttpRequest",
+                };
+                const rollout = getRolloutHash();
+                if (rollout && rollout !== "1" && rollout !== "") {
+                    headers["X-Instagram-AJAX"] = rollout;
+                }
+                const claim = getWWWClaim();
+                if (claim && claim !== "0" && claim !== "") {
+                    headers["X-IG-WWW-Claim"] = claim;
+                }
+                if (isPost) {
+                    headers["Content-Type"] = "application/x-www-form-urlencoded";
+                }
+                return headers;
+            }
+
+            function getDtsgToken() {
+                try {
+                    if (window.DTSGInitialData?.token) return window.DTSGInitialData.token;
+                    if (window.DTSG?.getToken) return window.DTSG.getToken();
+                    if (window.__fb_dtsg) return window.__fb_dtsg;
+                } catch (e) { }
+
+                const input = document.querySelector('input[name="fb_dtsg"]');
+                if (input?.value) return input.value;
+                const meta = document.querySelector('meta[name="fb_dtsg"]');
+                if (meta?.content) return meta.content;
+
+                try {
+                    const scripts = document.querySelectorAll('script');
+                    for (const s of scripts) {
+                        const txt = s.textContent || '';
+                        if (!txt || (!txt.includes('token') && !txt.includes('DTSG'))) continue;
+                        const m = txt.match(/\["DTSGInitialData",\[\],\{"token":"([^"]+)"\}/) ||
+                            txt.match(/"DTSGInitialData"[^>]*?"token":"([^"]+)"/) ||
+                            txt.match(/"token":"([a-zA-Z0-9_-]{10,}:\d+:\d+)"/) ||
+                            txt.match(/"dtsg":\{"token":"([^"]+)"\}/);
+                        if (m && m[1]) return m[1];
+                    }
+                } catch (e) { }
+
+                try {
+                    const html = document.documentElement.innerHTML;
+                    const m = html.match(/"token":"([a-zA-Z0-9_-]{10,}:\d+:\d+)"/) ||
+                        html.match(/\["DTSGInitialData",\[\],\{"token":"([^"]+)"\}/) ||
+                        html.match(/"DTSGInitialData"[^>]*?"token":"([^"]+)"/);
+                    if (m && m[1]) return m[1];
+                } catch (e) { }
+
+                return '';
+            }
+
+            function getLsdToken() {
+                try {
+                    if (window.LSD?.token) return window.LSD.token;
+                    if (window.__lsd) return window.__lsd;
+                } catch (e) { }
+
+                const input = document.querySelector('input[name="lsd"]');
+                if (input?.value) return input.value;
+
+                try {
+                    const scripts = document.querySelectorAll('script');
+                    for (const s of scripts) {
+                        const txt = s.textContent || '';
+                        if (!txt || !txt.includes('LSD')) continue;
+                        const m = txt.match(/\["LSD",\[\],\{"token":"([^"]+)"\}/) ||
+                            txt.match(/"LSDInitialData"[^>]*?"token":"([^"]+)"/) ||
+                            txt.match(/"lsd":"([^"]+)"/);
+                        if (m && m[1]) return m[1];
+                    }
+                } catch (e) { }
+
+                try {
+                    const html = document.documentElement.innerHTML;
+                    const m = html.match(/\["LSD",\[\],\{"token":"([^"]+)"\}/) ||
+                        html.match(/"LSDInitialData"[^>]*?"token":"([^"]+)"/);
+                    if (m && m[1]) return m[1];
+                } catch (e) { }
+
+                return '';
+            }
+
+            function computeJazoest(token) {
+                if (!token) return '26367';
+                let sum = 0;
+                for (let i = 0; i < token.length; i++) {
+                    sum += token.charCodeAt(i);
+                }
+                return '2' + sum;
+            }
+
+            function getSpinParams() {
+                let r = '', t = '';
+                try {
+                    const html = document.documentElement.innerHTML;
+                    const mr = html.match(/"__spin_r"\s*:\s*(\d+)/) || html.match(/"server_revision"\s*:\s*(\d+)/);
+                    if (mr && mr[1]) r = mr[1];
+                    const mt = html.match(/"__spin_t"\s*:\s*(\d+)/);
+                    if (mt && mt[1]) t = mt[1];
+                } catch (e) { }
+                return {
+                    spin_r: r || '1048569652',
+                    spin_b: 'trunk',
+                    spin_t: t || String(Math.floor(Date.now() / 1000))
+                };
+            }
+
+            function getInstagramFormToken(name) {
+                if (name === 'fb_dtsg') return getDtsgToken();
+                if (name === 'lsd') return getLsdToken();
+                const input = document.querySelector(`input[name="${name}"]`);
+                if (input?.value) return input.value;
+                const meta = document.querySelector(`meta[name="${name}"]`);
+                if (meta?.content) return meta.content;
+                const html = document.documentElement.innerHTML;
+                const pattern = new RegExp(`"${name}"\\s*:\\s*"([^"]+)"`);
+                const match = html.match(pattern);
+                return match ? match[1] : '';
+            }
+
+            async function executeGraphqlUnfollow(uid) {
+                if (!uid) return { response: { ok: false, status: 0 }, success: false, result: null, text: 'no_uid' };
+
+                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                const jazoest = computeJazoest(fbDtsg) || '26418';
+                const spin = getSpinParams();
+
+                const variables = {
+                    target_user_id: String(uid),
+                    container_module: 'profile',
+                    nav_chain: 'PolarisProfilePostsTabRoot:profilePage:1:via_cold_start'
+                };
+
+                const body = new URLSearchParams();
+                if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                if (jazoest) body.append('jazoest', jazoest);
+                if (lsd) body.append('lsd', lsd);
+                if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                body.append('__spin_b', spin.spin_b || 'trunk');
+                if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                body.append('__crn', 'comet.igweb.PolarisProfilePostsTabRoute');
+                body.append('qpl_active_flow_ids', '37919374');
+                body.append('fb_api_caller_class', 'RelayModern');
+                body.append('fb_api_req_friendly_name', 'usePolarisUnfollowMutation');
+                body.append('server_timestamps', 'true');
+                body.append('variables', JSON.stringify(variables));
+                body.append('doc_id', '27789106940691111');
+                body.append('fb_api_analytics_tags', '["qpl_active_flow_ids=37919374"]');
+
+                const headers = {
+                    ...getApiHeaders(true),
+                    'X-ASBD-ID': '359341',
+                    'X-FB-LSD': lsd,
+                    'X-FB-Friendly-Name': 'usePolarisUnfollowMutation',
+                    'X-IG-Max-Touch-Points': '0'
+                };
+
+                try {
+                    console.log(`[IG Tools Unfollow] Enviando mutação GraphQL para UID ${uid}...`, variables);
+                    const response = await fetch('https://www.instagram.com/api/graphql', {
+                        method: 'POST',
+                        headers,
+                        body: body.toString(),
+                        credentials: 'include',
+                        cache: 'no-store'
+                    });
+
+                    const rawText = await response.text();
+                    let cleanedText = rawText.trim();
+                    if (cleanedText.startsWith('for (;;);')) {
+                        cleanedText = cleanedText.slice(9).trim();
+                    }
+
+                    let data = null;
+                    try {
+                        data = JSON.parse(cleanedText);
+                    } catch (e) {
+                        const lines = cleanedText.split('\n');
+                        for (const line of lines) {
+                            try {
+                                const parsed = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                                if (parsed?.data || parsed?.errors) {
+                                    data = parsed;
+                                    break;
+                                }
+                            } catch (_) { }
+                        }
+                    }
+
+                    console.log('[IG Tools Unfollow] Resposta GraphQL:', {
+                        status: response.status,
+                        ok: response.ok,
+                        data,
+                        rawPreview: rawText.slice(0, 200)
+                    });
+
+                    const hasData = !!(data?.data?.xdt_destroy_friendship || data?.data);
+                    const isDestroySuccess = data?.data?.xdt_destroy_friendship?.friendship_status?.following === false;
+                    const hasErrors = Array.isArray(data?.errors) && data.errors.length > 0 && !hasData;
+                    const success = response.ok && !hasErrors && (isDestroySuccess || hasData);
+
+                    return {
+                        response,
+                        success,
+                        result: { status: success ? 'ok' : 'fail', data },
+                        text: rawText,
+                        data
+                    };
+                } catch (e) {
+                    console.error('[IG Tools Unfollow] Erro na requisição GraphQL:', e);
+                    return { response: { ok: false, status: 0 }, success: false, result: null, text: String(e) };
+                }
+            }
+
+            async function executeGraphqlBlockMany(targetUserIds = []) {
+                const idList = (Array.isArray(targetUserIds) ? targetUserIds : [targetUserIds]).filter(Boolean).map(String);
+                if (idList.length === 0) {
+                    console.warn("[IG Tools Block] Nenhum ID fornecido para bloqueio.");
+                    return { response: { ok: false, status: 0 }, success: false, result: null, text: 'empty_ids' };
+                }
+
+                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                const jazoest = computeJazoest(fbDtsg) || '26629';
+                const spin = getSpinParams();
+
+                const variables = {
+                    surface: null,
+                    target_user_ids: idList
+                };
+
+                const body = new URLSearchParams();
+                body.append('__comet_req', '7');
+                if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                if (jazoest) body.append('jazoest', jazoest);
+                if (lsd) body.append('lsd', lsd);
+                if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                body.append('__spin_b', spin.spin_b || 'trunk');
+                if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                body.append('__crn', 'comet.igweb.PolarisProfilePostsTabRoute');
+                body.append('fb_api_caller_class', 'RelayModern');
+                body.append('fb_api_req_friendly_name', 'usePolarisBlockManyMutation');
+                body.append('server_timestamps', 'true');
+                body.append('variables', JSON.stringify(variables));
+                body.append('doc_id', '39139849082272635');
+
+                const headers = {
+                    ...getApiHeaders(true),
+                    'X-ASBD-ID': '359341',
+                    'X-Bloks-Version-Id': '62077fc559de123afe03ebeb18194a88ba5d4e6874d9a07873752f3792adb8a0',
+                    'X-CSRFToken': getCookie('csrftoken') || '',
+                    'X-FB-Friendly-Name': 'usePolarisBlockManyMutation',
+                    'X-FB-LSD': lsd,
+                    'X-IG-App-ID': '936619743392459',
+                    'X-IG-Max-Touch-Points': '0',
+                    'X-Root-Field-Name': 'xdt_block_many',
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                };
+
+                try {
+                    console.log(`[IG Tools Block] Enviando mutação GraphQL para UIDs:`, idList, variables);
+                    const response = await fetch('https://www.instagram.com/graphql/query', {
+                        method: 'POST',
+                        headers,
+                        body: body.toString(),
+                        credentials: 'include',
+                        cache: 'no-store'
+                    });
+
+                    const rawText = await response.text();
+                    let cleanedText = rawText.trim();
+                    if (cleanedText.startsWith('for (;;);')) {
+                        cleanedText = cleanedText.slice(9).trim();
+                    }
+
+                    let data = null;
+                    try {
+                        data = JSON.parse(cleanedText);
+                    } catch (e) {
+                        const lines = cleanedText.split('\n');
+                        for (const line of lines) {
+                            try {
+                                const parsed = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                                if (parsed?.data || parsed?.errors) {
+                                    data = parsed;
+                                    break;
+                                }
+                            } catch (_) { }
+                        }
+                    }
+
+                    console.log('[IG Tools Block] Resposta GraphQL:', {
+                        status: response.status,
+                        ok: response.ok,
+                        data,
+                        rawPreview: rawText.slice(0, 200)
+                    });
+
+                    const hasData = !!(data?.data?.xdt_block_many || data?.data);
+                    const hasErrors = Array.isArray(data?.errors) && data.errors.length > 0 && !hasData;
+                    const success = response.ok && !hasErrors && hasData;
+
+                    return {
+                        response,
+                        success,
+                        result: { status: success ? 'ok' : 'fail', data },
+                        text: rawText,
+                        data
+                    };
+                } catch (e) {
+                    console.error('[IG Tools Block] Erro na requisição GraphQL:', e);
+                    return { response: { ok: false, status: 0 }, success: false, result: null, text: String(e) };
+                }
+            }
+
+            async function executeGraphqlUnblock(uid) {
+                if (!uid) {
+                    console.warn("[IG Tools Unblock] Nenhum UID fornecido para desbloqueio.");
+                    return { response: { ok: false, status: 0 }, success: false, result: null, text: 'no_uid' };
+                }
+
+                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                const jazoest = computeJazoest(fbDtsg) || '26261';
+                const spin = getSpinParams();
+
+                const variables = {
+                    target_user_id: String(uid)
+                };
+
+                const body = new URLSearchParams();
+                body.append('__comet_req', '7');
+                if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                if (jazoest) body.append('jazoest', jazoest);
+                if (lsd) body.append('lsd', lsd);
+                if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                body.append('__spin_b', spin.spin_b || 'trunk');
+                if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                body.append('__crn', 'comet.igweb.PolarisProfilePostsTabRoute');
+                body.append('fb_api_caller_class', 'RelayModern');
+                body.append('fb_api_req_friendly_name', 'usePolarisUnblockMutation');
+                body.append('server_timestamps', 'true');
+                body.append('variables', JSON.stringify(variables));
+                body.append('doc_id', '28398337623154952');
+
+                const headers = {
+                    ...getApiHeaders(true),
+                    'X-ASBD-ID': '359341',
+                    'X-Bloks-Version-Id': '62077fc559de123afe03ebeb18194a88ba5d4e6874d9a07873752f3792adb8a0',
+                    'X-CSRFToken': getCookie('csrftoken') || '',
+                    'X-FB-Friendly-Name': 'usePolarisUnblockMutation',
+                    'X-FB-LSD': lsd,
+                    'X-IG-App-ID': '936619743392459',
+                    'X-IG-Max-Touch-Points': '0',
+                    'X-Root-Field-Name': 'xdt_unblock',
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                };
+
+                try {
+                    console.log(`[IG Tools Unblock] Enviando mutação GraphQL para UID ${uid}...`, variables);
+                    const response = await fetch('https://www.instagram.com/graphql/query', {
+                        method: 'POST',
+                        headers,
+                        body: body.toString(),
+                        credentials: 'include',
+                        cache: 'no-store'
+                    });
+
+                    const rawText = await response.text();
+                    let cleanedText = rawText.trim();
+                    if (cleanedText.startsWith('for (;;);')) {
+                        cleanedText = cleanedText.slice(9).trim();
+                    }
+
+                    let data = null;
+                    try {
+                        data = JSON.parse(cleanedText);
+                    } catch (e) {
+                        const lines = cleanedText.split('\n');
+                        for (const line of lines) {
+                            try {
+                                const parsed = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                                if (parsed?.data || parsed?.errors) {
+                                    data = parsed;
+                                    break;
+                                }
+                            } catch (_) { }
+                        }
+                    }
+
+                    console.log('[IG Tools Unblock] Resposta GraphQL:', {
+                        status: response.status,
+                        ok: response.ok,
+                        data,
+                        rawPreview: rawText.slice(0, 200)
+                    });
+
+                    const hasData = !!(data?.data?.xdt_unblock || data?.data);
+                    const isUnblocked = data?.data?.xdt_unblock?.friendship_status?.blocking === false;
+                    const hasErrors = Array.isArray(data?.errors) && data.errors.length > 0 && !hasData;
+                    const success = response.ok && !hasErrors && (isUnblocked || hasData);
+
+                    return {
+                        response,
+                        success,
+                        result: { status: success ? 'ok' : 'fail', data },
+                        text: rawText,
+                        data
+                    };
+                } catch (e) {
+                    console.error('[IG Tools Unblock] Erro na requisição GraphQL:', e);
+                    return { response: { ok: false, status: 0 }, success: false, result: null, text: String(e) };
+                }
+            }
+
+            async function executeApiUnblock(uid, username = '') {
+                if (!uid) return { success: false, error: 'no_uid' };
+
+                // Mutação oficial GraphQL do Instagram (usePolarisUnblockMutation)
+                try {
+                    const gqlRes = await executeGraphqlUnblock(uid);
+                    if (gqlRes.success) {
+                        console.log(`[IG Tools Unblock] Sucesso via GraphQL para UID ${uid} (@${username})`);
+                        return { success: true, data: gqlRes.data, method: 'graphql' };
+                    }
+                    console.warn(`[IG Tools Unblock] Falha na mutação GraphQL para @${username}:`, gqlRes);
+                    return { success: false, error: 'graphql_failed', data: gqlRes.data };
+                } catch (e) {
+                    console.error(`[IG Tools Unblock] Erro no GraphQL para @${username}:`, e);
+                    return { success: false, error: String(e) };
+                }
+            }
+
+            async function executeGraphqlUserHoverCard(userId) {
+                if (!userId) return null;
+                const uid = String(userId);
+
+                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                const jazoest = computeJazoest(fbDtsg) || '26239';
+                const spin = getSpinParams();
+
+                const variables = {
+                    userID: uid
+                };
+
+                const body = new URLSearchParams();
+                body.append('__comet_req', '7');
+                if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                if (jazoest) body.append('jazoest', jazoest);
+                if (lsd) body.append('lsd', lsd);
+                if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                body.append('__spin_b', spin.spin_b || 'trunk');
+                if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                body.append('__crn', 'comet.igweb.PolarisFeedRoute');
+                body.append('fb_api_caller_class', 'RelayModern');
+                body.append('fb_api_req_friendly_name', 'PolarisUserHoverCardContentV2Query');
+                body.append('server_timestamps', 'true');
+                body.append('variables', JSON.stringify(variables));
+                body.append('doc_id', '28949219061332276');
+
+                const headers = {
+                    ...getApiHeaders(true),
+                    'X-ASBD-ID': '359341',
+                    'X-CSRFToken': getCookie('csrftoken') || '',
+                    'X-FB-Friendly-Name': 'PolarisUserHoverCardContentV2Query',
+                    'X-FB-LSD': lsd,
+                    'X-IG-App-ID': '936619743392459',
+                    'X-IG-Max-Touch-Points': '0'
+                };
+
+                try {
+                    console.log(`[IG Tools Stats] Buscando hovercard via GraphQL para UID ${uid}...`);
+                    const response = await fetch('https://www.instagram.com/api/graphql', {
+                        method: 'POST',
+                        headers,
+                        body: body.toString(),
+                        credentials: 'include',
+                        cache: 'no-store'
+                    });
+
+                    const rawText = await response.text();
+                    let cleanedText = rawText.trim();
+                    if (cleanedText.startsWith('for (;;);')) {
+                        cleanedText = cleanedText.slice(9).trim();
+                    }
+
+                    let data = null;
+                    try {
+                        data = JSON.parse(cleanedText);
+                    } catch (e) {
+                        const lines = cleanedText.split('\n');
+                        for (const line of lines) {
+                            try {
+                                const parsed = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                                if (parsed?.data) {
+                                    data = parsed;
+                                    break;
+                                }
+                            } catch (_) { }
+                        }
+                    }
+
+                    console.log(`[IG Tools Stats] Resposta HoverCard para UID ${uid}:`, data);
+
+                    const user = data?.data?.xig_user_by_igid_v2?.user_dict || data?.data?.user || data?.data?.xdt_user || data?.data;
+                    if (user) {
+                        let followers = null;
+                        let following = null;
+
+                        if (user.follower_count !== undefined) followers = user.follower_count;
+                        else if (user.edge_followed_by?.count !== undefined) followers = user.edge_followed_by.count;
+                        else if (user.followers_count !== undefined) followers = user.followers_count;
+
+                        if (user.following_count !== undefined) following = user.following_count;
+                        else if (user.edge_follow?.count !== undefined) following = user.edge_follow.count;
+                        else if (user.following_tag_count !== undefined) following = user.following_tag_count;
+
+                        if (followers !== null || following !== null || user.profile_pic_url) {
+                            return {
+                                followers: Number(followers) || 0,
+                                following: Number(following) || 0,
+                                isPrivate: user.is_private !== undefined ? user.is_private : null,
+                                mediaCount: user.media_count !== undefined ? user.media_count : null,
+                                profilePicUrl: user.profile_pic_url || user.hd_profile_pic_url_info?.url || null,
+                                biography: user.biography || user.bio || '',
+                                fullName: user.full_name || ''
+                            };
+                        }
+                    }
+                    return null;
+                } catch (e) {
+                    console.error(`[IG Tools Stats] Erro ao buscar stats via GraphQL para UID ${uid}:`, e);
+                    return null;
+                }
+            }
+
+            async function executeGraphqlProfilePosts(username, after = null) {
+                if (!username) return null;
+                const cleanUsername = String(username).trim().toLowerCase();
+
+                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                const jazoest = computeJazoest(fbDtsg) || '26239';
+                const spin = getSpinParams();
+
+                const variables = {
+                    after: after || null,
+                    before: null,
+                    data: {
+                        count: 12,
+                        include_reel_media_seen_timestamp: true,
+                        include_relationship_info: true,
+                        latest_besties_reel_media: true,
+                        latest_reel_media: true
+                    },
+                    first: 12,
+                    include_multi_captions: true,
+                    last: null,
+                    username: cleanUsername,
+                    __relay_internal__pv__PolarisMultiCaptionCarouselEnabledrelayprovider: true,
+                    __relay_internal__pv__PolarisShortDramaEnabledrelayprovider: false,
+                    __relay_internal__pv__PolarisReelsRecoDebugOverlayEnabledrelayprovider: false
+                };
+
+                const body = new URLSearchParams();
+                body.append('__comet_req', '7');
+                if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                if (jazoest) body.append('jazoest', jazoest);
+                if (lsd) body.append('lsd', lsd);
+                if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                body.append('__spin_b', spin.spin_b || 'trunk');
+                if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                body.append('__crn', 'comet.igweb.PolarisProfilePostsTabRoute');
+                body.append('fb_api_caller_class', 'RelayModern');
+                body.append('fb_api_req_friendly_name', 'PolarisProfilePostsTabContentQuery_connection');
+                body.append('server_timestamps', 'true');
+                body.append('variables', JSON.stringify(variables));
+                body.append('doc_id', '28975909992013618');
+
+                const headers = {
+                    ...getApiHeaders(true),
+                    'X-ASBD-ID': '359341',
+                    'X-CSRFToken': getCookie('csrftoken') || '',
+                    'X-FB-Friendly-Name': 'PolarisProfilePostsTabContentQuery_connection',
+                    'X-FB-LSD': lsd,
+                    'X-IG-App-ID': '936619743392459',
+                    'X-IG-Max-Touch-Points': '0'
+                };
+
+                try {
+                    console.log(`[IG Tools Interações] Buscando posts via GraphQL para @${cleanUsername} (cursor: ${after ? after.substring(0, 15) + '...' : 'início'})...`);
+                    const response = await fetch('https://www.instagram.com/api/graphql', {
+                        method: 'POST',
+                        headers,
+                        body: body.toString(),
+                        credentials: 'include',
+                        cache: 'no-store'
+                    });
+
+                    const rawText = await response.text();
+                    let cleanedText = rawText.trim();
+                    if (cleanedText.startsWith('for (;;);')) {
+                        cleanedText = cleanedText.slice(9).trim();
+                    }
+
+                    let data = null;
+                    try {
+                        data = JSON.parse(cleanedText);
+                    } catch (e) {
+                        const lines = cleanedText.split('\n');
+                        for (const line of lines) {
+                            try {
+                                const parsed = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                                if (parsed?.data) {
+                                    data = parsed;
+                                    break;
+                                }
+                            } catch (_) { }
+                        }
+                    }
+
+                    const connection = data?.data?.xdt_api__v1__feed__user_timeline_graphql_connection;
+                    return connection || null;
+                } catch (e) {
+                    console.error(`[IG Tools Interações] Erro ao buscar posts via GraphQL para @${cleanUsername}:`, e);
+                    return null;
+                }
+            }
+
+            async function executeGraphqlSetBesties(adds = [], removes = []) {
+                const addList = (Array.isArray(adds) ? adds : [adds]).filter(Boolean).map(String);
+                const removeList = (Array.isArray(removes) ? removes : [removes]).filter(Boolean).map(String);
+
+                if (addList.length === 0 && removeList.length === 0) {
+                    console.warn("[IG Tools Besties] Nenhum ID fornecido para adicionar ou remover.");
+                    return { success: false, error: 'empty_ids' };
+                }
+
+                const viewerId = getCookie('ds_user_id') || getInstagramFormToken('av') || '';
+                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                const jazoest = computeJazoest(fbDtsg) || '26367';
+                const spin = getSpinParams();
+
+                console.log("[IG Tools Besties] Enviando mutação GraphQL:", {
+                    viewerId,
+                    hasFbDtsg: !!fbDtsg,
+                    fbDtsgSnippet: fbDtsg ? fbDtsg.substring(0, 20) + '...' : '(vazio)',
+                    hasLsd: !!lsd,
+                    jazoest,
+                    adds: addList,
+                    removes: removeList
+                });
+
+                const body = new URLSearchParams({
+                    __comet_req: '7',
+                    fb_api_caller_class: 'RelayModern',
+                    fb_api_req_friendly_name: 'usePolarisSetBestiesMutation',
+                    server_timestamps: 'true',
+                    variables: JSON.stringify({
+                        add: addList,
+                        remove: removeList,
+                        source: 'profile'
+                    }),
+                    doc_id: '27495272076736910'
+                });
+
+                if (viewerId) body.append('av', viewerId);
+                if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                if (jazoest) body.append('jazoest', jazoest);
+                if (lsd) body.append('lsd', lsd);
+                if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                if (spin.spin_b) body.append('__spin_b', spin.spin_b);
+                if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+
+                const headers = {
+                    ...getApiHeaders(true),
+                    'X-FB-LSD': lsd,
+                    'X-FB-Friendly-Name': 'usePolarisSetBestiesMutation'
+                };
+
+                const response = await fetch('https://www.instagram.com/api/graphql', {
+                    method: 'POST',
+                    headers,
+                    body: body.toString(),
+                    credentials: 'include',
+                    cache: 'no-store'
+                });
+
+                const rawText = await response.text();
+                let cleanedText = rawText.trim();
+                if (cleanedText.startsWith('for (;;);')) {
+                    cleanedText = cleanedText.slice(9).trim();
+                }
+
+                let data = null;
+                try {
+                    data = JSON.parse(cleanedText);
+                } catch (e) {
+                    const lines = cleanedText.split('\n');
+                    for (const line of lines) {
+                        try {
+                            const parsed = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                            if (parsed?.data || parsed?.errors) {
+                                data = parsed;
+                                break;
+                            }
+                        } catch (_) { }
+                    }
+                }
+
+                console.log("[IG Tools Besties] Resposta recebida da API GraphQL:", {
+                    status: response.status,
+                    ok: response.ok,
+                    parsedData: data,
+                    rawPreview: rawText.slice(0, 300)
+                });
+
+                const hasErrors = Array.isArray(data?.errors) && data.errors.length > 0;
+                const mutationData = data?.data?.xdt_set_besties ?? data?.data?.set_besties ?? data?.data;
+                const success = response.ok && !hasErrors && (mutationData !== null && mutationData !== undefined);
+
+                return { response, success, data, rawText };
+            }
+
+            async function executeGraphqlMute(uid, targetType = 'stories', action = 'mute') {
+                if (!uid) return { success: false, error: 'no_uid' };
+
+                const viewerId = getCookie('ds_user_id') || getInstagramFormToken('av') || '';
+                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                const jazoest = computeJazoest(fbDtsg) || '26367';
+                const spin = getSpinParams();
+
+                const isStory = targetType === 'stories';
+                const isUnmute = action === 'unmute';
+
+                let friendlyName = '';
+                let docId = '';
+                let variables = {};
+
+                if (isStory) {
+                    friendlyName = isUnmute ? 'usePolarisUnmuteStoryMutation' : 'usePolarisMuteStoryMutation';
+                    docId = isUnmute ? '27418767487792418' : '27469196189379050';
+                    variables = { target_reel_author_id: String(uid) };
+                } else {
+                    friendlyName = isUnmute ? 'usePolarisUnmutePostsMutation' : 'usePolarisMutePostsMutation';
+                    docId = isUnmute ? '26763085236678376' : '36105467102431300';
+                    variables = { target_posts_author_id: String(uid) };
+                }
+
+                console.log(`[IG Tools Mute] Enviando mutação GraphQL (${friendlyName}):`, variables);
+
+                const body = new URLSearchParams({
+                    __comet_req: '7',
+                    fb_api_caller_class: 'RelayModern',
+                    fb_api_req_friendly_name: friendlyName,
+                    server_timestamps: 'true',
+                    variables: JSON.stringify(variables),
+                    doc_id: docId
+                });
+
+                if (viewerId) body.append('av', viewerId);
+                if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                if (jazoest) body.append('jazoest', jazoest);
+                if (lsd) body.append('lsd', lsd);
+                if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                if (spin.spin_b) body.append('__spin_b', spin.spin_b);
+                if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+
+                const headers = {
+                    ...getApiHeaders(true),
+                    'X-FB-LSD': lsd,
+                    'X-FB-Friendly-Name': friendlyName
+                };
+
+                const response = await fetch('https://www.instagram.com/api/graphql', {
+                    method: 'POST',
+                    headers,
+                    body: body.toString(),
+                    credentials: 'include',
+                    cache: 'no-store'
+                });
+
+                const rawText = await response.text();
+                let cleanedText = rawText.trim();
+                if (cleanedText.startsWith('for (;;);')) {
+                    cleanedText = cleanedText.slice(9).trim();
+                }
+
+                let data = null;
+                try {
+                    data = JSON.parse(cleanedText);
+                } catch (e) {
+                    const lines = cleanedText.split('\n');
+                    for (const line of lines) {
+                        try {
+                            const parsed = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                            if (parsed?.data || parsed?.errors) {
+                                data = parsed;
+                                break;
+                            }
+                        } catch (_) { }
+                    }
+                }
+
+                console.log(`[IG Tools Mute] Resposta GraphQL (${friendlyName}):`, {
+                    status: response.status,
+                    ok: response.ok,
+                    data,
+                    rawPreview: rawText.slice(0, 200)
+                });
+
+                const hasErrors = Array.isArray(data?.errors) && data.errors.length > 0;
+                const mutationData = data?.data;
+                const success = response.ok && !hasErrors && (mutationData !== null && mutationData !== undefined);
+
+                return { response, success, data, rawText };
+            }
+
+            async function executeWbloksHideStory(uid, username, action = 'hide') {
+                if (!uid) return { success: false, error: 'no_uid' };
+
+                const viewerId = getCookie('ds_user_id') || getInstagramFormToken('av') || '';
+                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                const jazoest = computeJazoest(fbDtsg) || '26321';
+                const spin = getSpinParams();
+                const shouldUnhide = action === 'unhide';
+
+                const params = {
+                    user_id: Number(uid) || uid,
+                    username: username,
+                    should_unhide: shouldUnhide
+                };
+
+                const url = 'https://www.instagram.com/async/wbloks/fetch/?appid=com.instagram.portable_settings.privacy.hide_story_from_screen.hide_story_from&type=action&__bkv=62077fc559de123afe03ebeb18194a88ba5d4e6874d9a07873752f3792adb8a0';
+
+                const dyn = getInstagramFormToken('__dyn') || '7xeUjG1mxu1syaxG4Vp41twpUnwgU7SbzEdF8vyUco2qwJyEiw50x609vCwjE1EEc87m0yE462mcw5Mx62G5UswoEcE7O2l0Fwqo5W1yw9O1lwxwQzXwae4UaEW2G0AEco5G0zK5o4q0HU1wEbUGdwtUeo9UaQ0Lo6-bwHwKG6Ufk0zU8oC1IwjUpwlAcwBwUQp1yU426V8aUuwm8jxK1mwa6bBK4o16UeUGq2Kq11whE984O0XEdoCQ1jw';
+                const csr = getInstagramFormToken('__csr') || 'iMB0FNX5N22j9eUHPWl8iGkV-eGXT8G5OPdP8VIzehP8KBh9pV9cNGWnip9Wh4BGfld8Dif4W4au9Irs8F4l9JbhAF4gJ7l95AFagBBBAkDiq9uVdppZDJykAch9QvAKiXjAV4HgzDBoLaaGh3Q68K9zGzay9pUC8yEj-dyWxe9zEGK9zXBzWzWyuQmbyWxaZ3KFEgxjhj1ycBzk5uVoGdgK8Ax3AAHV8K5GgG22maG1UUK1sweq7okw5ww08Ha00Y8EcU0vn2UKkMoQ18xgE0h1opw6yCtw2TU0hyS0Koqguw8Z0BwiUdK0qW5Eo6jw4dU3HwbWq3G8wTg1iV2By84iUy8guGywqodE2YrRrw1s2i1lG5o06KC02qu2K9g6rw0E5weS0fcw';
+                const hsdp = getInstagramFormToken('__hsdp') || 'gjMb_j1GkkCPcx4Pn9lEHV2NOEO99KXjQ3pyigsojx5AqI9xeGG48qx222boGwm9cwnoAV4A-FUK19gZ91G8woHuSHG4u7dChF4mmQ4B8fCK68G2GUC9wzz84e11wywkqwHxS3u6Ed98S19wDxedwm8qwk8szofoKU28wJwok32361dyUO0j-0pC2O0cPwpE0B20YEnwtE0mCw5Ywa20zi08-5o0Guew5fxvw2GA0gW09Iwww5GwmU887K0kO0BVk7nu';
+                const hblp = getInstagramFormToken('__hblp') || '0CG7E5u10wxzEb9bK9wAxedy69G1lwFBGm5ECiCiqim8K8yEyi2W5GAHyXEyjRwrAAq4Vk1ACg-eHxa9VbhFbGmUW4oyqWxny8hxeiCmECqUObz9ohwEGbxPx7Gmqmm9wkqz8hz8twTy-cgO4UiAzoiwSwDxedxam3-UmwYxe59US2u5kaK2K1czQ2O1tig8ES363CubCAz81fU7uiaw4hwIw8a1Lwt82zwGxS2W1Lw_wpE4e0N89U17U3Oxu1Sw2Yo0Hi5o2bwOwau1ewJwzwm8O2swuJ4wkU7u0HE1GoW0NE28xvwRxvw24o4x04ew5twah0q88awvU3xBwDwPwwyU6-0w85K1sxa8x_wr9k7nu';
+                const sjsp = getInstagramFormToken('__sjsp') || getInstagramFormToken('_sjsp') || 'gjMbXj2k4hhiragx4PmpmyLAb7az8ACXKjgdES8UA4M9S9wFwQx2226a1oswnoB4AijWwrAA6E2QS4Qfg5u2GUjwzw6cwl8';
+                const sParam = getInstagramFormToken('__s') || 'z3nm3y:imx696:n7ke1q';
+                const hsi = getInstagramFormToken('__hsi') || '7689958851794881797';
+                const hs = getInstagramFormToken('__hs') || '20722.HYP:instagram_web_pkg.2.1...0';
+
+                const body = new URLSearchParams({
+                    __d: 'www',
+                    __user: '0',
+                    __a: '1',
+                    __req: '24',
+                    __hs: hs,
+                    dpr: '2',
+                    __ccg: 'EXCELLENT',
+                    __rev: spin.spin_r || '1048569652',
+                    __s: sParam,
+                    __hsi: hsi,
+                    __dyn: dyn,
+                    __csr: csr,
+                    __hsdp: hsdp,
+                    __hblp: hblp,
+                    __sjsp: sjsp,
+                    _sjsp: sjsp,
+                    __comet_req: '7',
+                    server_timestamps: 'true',
+                    __spin_r: spin.spin_r || '1048569652',
+                    __spin_b: spin.spin_b || 'trunk',
+                    __spin_t: spin.spin_t || String(Math.floor(Date.now() / 1000)),
+                    __crn: 'comet.igweb.PolarisSettingsHideStoryAndLiveFromRoute',
+                    params: JSON.stringify(params)
+                });
+
+                if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                if (jazoest) body.append('jazoest', jazoest);
+                if (lsd) body.append('lsd', lsd);
+
+                const headers = {
+                    ...getApiHeaders(true),
+                    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                    'X-FB-LSD': lsd
+                };
+
+                console.log(`[IG Tools HideStory] Enviando Wbloks (${action}):`, params);
+
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers,
+                        body: body.toString(),
+                        credentials: 'include',
+                        cache: 'no-store'
+                    });
+
+                    const rawText = await response.text();
+                    let cleanedText = rawText.trim();
+                    if (cleanedText.startsWith('for (;;);')) {
+                        cleanedText = cleanedText.slice(9).trim();
+                    }
+
+                    let data = null;
+                    try {
+                        data = JSON.parse(cleanedText);
+                    } catch (e) {
+                        const lines = cleanedText.split('\n');
+                        for (const line of lines) {
+                            try {
+                                const parsed = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                                if (parsed?.data || parsed?.layout || parsed?.errors) {
+                                    data = parsed;
+                                    break;
+                                }
+                            } catch (_) { }
+                        }
+                    }
+
+                    console.log(`[IG Tools HideStory] Resposta Wbloks (${action}):`, {
+                        status: response.status,
+                        ok: response.ok,
+                        data,
+                        rawPreview: rawText.slice(0, 200)
+                    });
+
+                    const hasErrors = Array.isArray(data?.errors) && data.errors.length > 0;
+                    return { response, success: response.ok && !hasErrors, data, rawText };
+                } catch (err) {
+                    console.error(`[IG Tools HideStory] Erro Wbloks:`, err);
+                    return { success: false, error: err };
+                }
+            }
+
+            async function executeGraphqlFollow(uid) {
+                if (!uid) return { response: { ok: false, status: 0 }, success: false, result: null, text: 'no_uid' };
+
+                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                const jazoest = computeJazoest(fbDtsg) || '26275';
+                const spin = getSpinParams();
+
+                const variables = {
+                    target_user_id: String(uid),
+                    container_module: 'profile',
+                    nav_chain: 'PolarisProfilePostsTabRoot:profilePage:1:via_cold_start'
+                };
+
+                const body = new URLSearchParams();
+                body.append('__comet_req', '7');
+                if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                if (jazoest) body.append('jazoest', jazoest);
+                if (lsd) body.append('lsd', lsd);
+                if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                body.append('__spin_b', spin.spin_b || 'trunk');
+                if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                body.append('__crn', 'comet.igweb.PolarisProfilePostsTabRoute');
+                body.append('fb_api_caller_class', 'RelayModern');
+                body.append('fb_api_req_friendly_name', 'usePolarisFollowMutation');
+                body.append('server_timestamps', 'true');
+                body.append('variables', JSON.stringify(variables));
+                body.append('doc_id', '26508036048874888');
+
+                const headers = {
+                    ...getApiHeaders(true),
+                    'X-ASBD-ID': '359341',
+                    'X-CSRFToken': getCookie('csrftoken') || '',
+                    'X-FB-Friendly-Name': 'usePolarisFollowMutation',
+                    'X-FB-LSD': lsd,
+                    'X-IG-App-ID': '936619743392459',
+                    'X-IG-Max-Touch-Points': '0'
+                };
+
+                try {
+                    console.log(`[IG Tools Follow] Enviando mutação GraphQL para UID ${uid}...`, variables);
+                    const response = await fetch('https://www.instagram.com/api/graphql', {
+                        method: 'POST',
+                        headers,
+                        body: body.toString(),
+                        credentials: 'include',
+                        cache: 'no-store'
+                    });
+
+                    const rawText = await response.text();
+                    let cleanedText = rawText.trim();
+                    if (cleanedText.startsWith('for (;;);')) {
+                        cleanedText = cleanedText.slice(9).trim();
+                    }
+
+                    let data = null;
+                    try {
+                        data = JSON.parse(cleanedText);
+                    } catch (e) {
+                        const lines = cleanedText.split('\n');
+                        for (const line of lines) {
+                            try {
+                                const parsed = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                                if (parsed?.data || parsed?.errors) {
+                                    data = parsed;
+                                    break;
+                                }
+                            } catch (_) { }
+                        }
+                    }
+
+                    console.log('[IG Tools Follow] Resposta GraphQL:', {
+                        status: response.status,
+                        ok: response.ok,
+                        data,
+                        rawPreview: rawText.slice(0, 200)
+                    });
+
+                    const hasData = !!(data?.data?.xdt_create_friendship || data?.data);
+                    const isFollowSuccess = data?.data?.xdt_create_friendship?.friendship_status?.following === true ||
+                        data?.data?.xdt_create_friendship?.friendship_status?.outgoing_request === true;
+                    const hasErrors = Array.isArray(data?.errors) && data.errors.length > 0 && !hasData;
+                    const success = response.ok && !hasErrors && (isFollowSuccess || hasData);
+
+                    return {
+                        response,
+                        success,
+                        result: { status: success ? 'ok' : 'fail', data },
+                        text: rawText,
+                        data
+                    };
+                } catch (e) {
+                    console.error('[IG Tools Follow] Erro na requisição GraphQL:', e);
+                    return { response: { ok: false, status: 0 }, success: false, result: null, text: String(e) };
+                }
+            }
+
+            function getCachedUserId(username) {
+                if (!username) return null;
+                try {
+                    const cache = JSON.parse(localStorage.getItem('ig_tools_id_cache') || '{}');
+                    return cache[username] || cache[username.toLowerCase()] || null;
+                } catch (e) { return null; }
+            }
+
+            function setCachedUserId(username, id) {
+                if (!username || !id) return;
+                try {
+                    const cache = JSON.parse(localStorage.getItem('ig_tools_id_cache') || '{}');
+                    cache[username] = String(id);
+                    cache[username.toLowerCase()] = String(id);
+                    localStorage.setItem('ig_tools_id_cache', JSON.stringify(cache));
+                } catch (e) { }
+            }
+
+            // Helper para obter ID de usuário
+            async function getUserId(username) {
+                if (!username) return null;
+                const cleanUsername = username.trim().toLowerCase();
+
+                // 1. Procura na lista de seguindo em memória
+                try {
+                    if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                        const item = seguindoList.find(x => (typeof x === 'object' ? x?.username : x)?.toLowerCase() === cleanUsername);
+                        const foundId = item && typeof item === 'object' ? (item.id || item.pk || item.pk_id) : null;
+                        if (foundId) {
+                            setCachedUserId(cleanUsername, String(foundId));
+                            return String(foundId);
+                        }
+                    }
+                } catch (e) { }
+
+                // 2. Procura em cachedData.userDetails
+                try {
+                    if (typeof cachedData !== 'undefined' && cachedData?.userDetails && cachedData.userDetails.has(cleanUsername)) {
+                        const details = cachedData.userDetails.get(cleanUsername);
+                        if (details && details.id) {
+                            const id = String(details.id);
+                            setCachedUserId(cleanUsername, id);
+                            return id;
+                        }
+                    }
+                } catch (e) { }
+
+                // 3. Cache persistente (localStorage)
+                const cachedId = getCachedUserId(cleanUsername);
+                if (cachedId) return String(cachedId);
+
+                // 4. Fallback topsearch oficial da API web do Instagram (/api/v1/web/search/topsearch/)
+                try {
+                    const searchRes = await fetch(`https://www.instagram.com/api/v1/web/search/topsearch/?context=blended&query=${encodeURIComponent(cleanUsername)}`, {
+                        headers: getApiHeaders(),
+                        credentials: 'include',
+                        cache: 'no-store'
+                    });
+                    if (searchRes.ok) {
+                        const searchData = await searchRes.json();
+                        if (searchData.users && Array.isArray(searchData.users)) {
+                            const exact = searchData.users.find(u => u?.user?.username && u.user.username.toLowerCase() === cleanUsername);
+                            if (exact?.user && (exact.user.pk || exact.user.id || exact.user.pk_id)) {
+                                const id = String(exact.user.pk || exact.user.id || exact.user.pk_id);
+                                setCachedUserId(cleanUsername, id);
+                                return id;
+                            }
+                        }
+                    }
+                } catch (e) { }
+
+                // 5. Fallback HTML do perfil
+                try {
+                    const profileResponse = await fetch(`https://www.instagram.com/${encodeURIComponent(cleanUsername)}/`, {
+                        credentials: 'include',
+                        cache: 'no-store'
+                    });
+                    if (profileResponse.ok) {
+                        const html = await profileResponse.text();
+                        const usernamePattern = new RegExp(`"username"\\s*:\\s*"${cleanUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'i');
+                        const usernameMatch = usernamePattern.exec(html);
+                        if (usernameMatch) {
+                            const nearby = html.slice(Math.max(0, usernameMatch.index - 3000), usernameMatch.index + 3000);
+                            const idMatches = [...nearby.matchAll(/"(?:pk|id|user_id|pk_id)"\s*:\\s*"?(\\d+)"?/g)];
+                            const idMatch = idMatches[idMatches.length - 1];
+                            if (idMatch?.[1]) {
+                                const id = String(idMatch[1]);
+                                setCachedUserId(cleanUsername, id);
+                                console.log(`[IG Tools] ID obtido pelo HTML do perfil de ${cleanUsername}: ${id}`);
+                                return id;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`[IG Tools] Falha ao obter o HTML do perfil de ${cleanUsername}:`, e);
+                }
+
+                return null;
+            }
+
+            const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23aaa'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 4c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm0 14c-2.03 0-3.8-.85-5.05-2.2.03-1.66 3.37-2.57 5.05-2.57s5.02.91 5.05 2.57C15.8 19.15 14.03 20 12 20z'/%3E%3C/svg%3E";
+
+            // Helper seguro para buscar informações do perfil sem lançar erro de sintaxe JSON quando ocorre 429 ou 400
+            async function safeFetchProfileInfo(username) {
+                if (!username) return null;
+                const cleanUsername = username.trim().toLowerCase();
+                const encodedUsername = encodeURIComponent(cleanUsername);
+
+                try {
+                    const response = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodedUsername}`, {
+                        headers: {
+                            'X-IG-App-ID': '936619743392459',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        credentials: 'include'
+                    });
+                    if (response.status === 429) {
+                        console.warn(`[IG Tools] HTTP 429 (Rate limit) em web_profile_info para ${cleanUsername}`);
+                    } else if (response.ok) {
+                        const contentType = response.headers.get("content-type");
+                        if (contentType && contentType.includes("application/json")) {
+                            const data = await response.json();
+                            if (data && data.data && data.data.user) {
+                                if (data.data.user.id) setCachedUserId(cleanUsername, data.data.user.id);
+                                return data;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`[IG Tools] Erro ao buscar web_profile_info para ${cleanUsername}:`, e);
+                }
+
+                // Fallback: se web_profile_info falhou/429, tenta obter ao menos o ID via getUserId (cache / DOM / HTML)
+                const fallbackId = await getUserId(cleanUsername);
+                if (fallbackId) {
+                    return {
+                        data: {
+                            user: {
+                                id: fallbackId,
+                                username: cleanUsername,
+                                edge_follow: { count: 0 },
+                                edge_followed_by: { count: 0 }
+                            }
+                        }
+                    };
+                }
+                return null;
+            }
+
+            // Helper para identificar requisições de visualização de Stories (URL ou Corpo da requisição GraphQL)
+            function isStorySeenPayload(url, body) {
+                if (!url) return false;
+                const urlStr = String(url);
+                if (urlStr.includes('/stories/reel/seen') || urlStr.includes('/api/v1/stories/reel/seen')) {
+                    return true;
+                }
+                if (urlStr.includes('graphql/query') || urlStr.includes('/api/v1/') || urlStr.includes('/graphql/')) {
+                    if (!body) return false;
+                    let bodyStr = '';
+                    if (typeof body === 'string') {
+                        bodyStr = body;
+                    } else if (typeof body === 'object') {
+                        try {
+                            if (body instanceof URLSearchParams) bodyStr = body.toString();
+                            else if (body instanceof FormData) {
+                                for (let pair of body.entries()) { bodyStr += pair[0] + '=' + pair[1] + '&'; }
+                            } else bodyStr = JSON.stringify(body);
+                        } catch (e) { }
+                    }
+                    if (bodyStr.includes('PolarisProfilePostsTabContentQuery')) {
+                        return false;
+                    }
+                    if (bodyStr.includes('seen') ||
+                        bodyStr.includes('StoriesV2Seen') ||
+                        bodyStr.includes('PolarisStoriesSeenMutation') ||
+                        bodyStr.includes('reel_media')) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            // --- INTERCEPTOR STORIES ANÔNIMO ---
+            if (!window._anonymousInterceptorInstalled) {
+                window._anonymousInterceptorInstalled = true;
+                console.log("[IG Tools] Instalando interceptores de rede avançados (XHR, Fetch, Beacon)...");
+                // Variável compartilhada para capturar dados de bloqueados via Bloks
+                if (!window._igBlockedUsersCapture) {
+                    window._igBlockedUsersCapture = { users: new Map(), data: [], callbacks: [] };
+                }
+                // Variável compartilhada para capturar dados de silenciados via Bloks (incluindo paginação)
+                if (!window._igMutedUsersCapture) {
+                    window._igMutedUsersCapture = { users: new Map(), callbacks: [] };
+                }
+                // Variável compartilhada para capturar dados de ocultar story via Bloks (incluindo paginação)
+                if (!window._igHideStoryUsersCapture) {
+                    window._igHideStoryUsersCapture = { users: new Map(), callbacks: [] };
+                }
+
+                function handleBloksResponseText(urlString, text) {
+                    if (!text || typeof text !== 'string') return;
+                    try {
+                        const path = window.location.pathname;
+                        const isMutedContext = urlString.includes('muted_accounts') ||
+                            (path.includes('muted_accounts') && (urlString.includes('com.instagram.pagination.async') || urlString.includes('/async/wbloks/fetch/')));
+
+                        const isBlockedContext = urlString.includes('blocked_accounts') ||
+                            (path.includes('blocked_accounts') && (urlString.includes('com.instagram.pagination.async') || urlString.includes('/async/wbloks/fetch/')));
+
+                        const isHideStoryContext = urlString.includes('hide_story') ||
+                            (path.includes('hide_story_and_live_from') && (urlString.includes('com.instagram.pagination.async') || urlString.includes('/async/wbloks/fetch/')));
+
+                        if (isMutedContext) {
+                            const userRegex = /"username":"([a-zA-Z0-9._]+)"/g;
+                            let match;
+                            let newCount = 0;
+                            while ((match = userRegex.exec(text)) !== null) {
+                                const uname = match[1];
+                                if (!uname || uname === 'instagram' || uname === 'threads') continue;
+
+                                const start = Math.max(0, match.index - 300);
+                                const end = Math.min(text.length, match.index + 500);
+                                const chunk = text.slice(start, end);
+
+                                const picMatch = chunk.match(/"profile_pic_url":"([^"]+)"/);
+                                const photoUrl = picMatch ? picMatch[1].replace(/\\/g, '').replace(/\\u0026/g, '&') : DEFAULT_AVATAR;
+
+                                const pkMatch = chunk.match(/"pk":"?(\d+)"?/);
+                                const pk = pkMatch ? pkMatch[1] : '';
+                                if (pk) setCachedUserId(uname, pk);
+
+                                let status = "Silenciado";
+                                const chunkLower = chunk.toLowerCase();
+                                if (chunkLower.includes('posts e story') || chunkLower.includes('publicações e stories') || chunkLower.includes('stories e publicações') || chunkLower.includes('posts and stories') || chunkLower.includes('publicaciones e historias')) {
+                                    status = "Stories e Publicações";
+                                } else if (chunkLower.includes('story') || chunkLower.includes('stories') || chunkLower.includes('historias')) {
+                                    status = "Stories";
+                                } else if (chunkLower.includes('post') || chunkLower.includes('publica') || chunkLower.includes('publicaciones')) {
+                                    status = "Publicações";
+                                }
+
+                                if (!window._igMutedUsersCapture.users.has(uname)) {
+                                    window._igMutedUsersCapture.users.set(uname, { username: uname, photoUrl, pk, status });
+                                    newCount++;
+                                } else {
+                                    const existing = window._igMutedUsersCapture.users.get(uname);
+                                    if (!existing.pk && pk) existing.pk = pk;
+                                    if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && photoUrl !== DEFAULT_AVATAR) existing.photoUrl = photoUrl;
+                                    if (existing.status === 'Silenciado' && status !== 'Silenciado') existing.status = status;
+                                }
+                            }
+                            if (newCount > 0 || window._igMutedUsersCapture.users.size > 0) {
+                                console.log(`[IG Tools] Bloks interceptou ${window._igMutedUsersCapture.users.size} usuário(s) silenciado(s) (+${newCount} novos).`);
+                                const usersArray = Array.from(window._igMutedUsersCapture.users.values());
+                                window._igMutedUsersCapture.callbacks.forEach(cb => {
+                                    try { cb(usersArray); } catch (e) { }
+                                });
+                            }
+                        } else if (isBlockedContext) {
+                            const userRegex = /"username":"([a-zA-Z0-9._]+)"/g;
+                            let match;
+                            let newCount = 0;
+                            while ((match = userRegex.exec(text)) !== null) {
+                                const uname = match[1];
+                                if (!uname || uname === 'instagram' || uname === 'threads') continue;
+
+                                const start = Math.max(0, match.index - 300);
+                                const end = Math.min(text.length, match.index + 500);
+                                const chunk = text.slice(start, end);
+
+                                const picMatch = chunk.match(/"profile_pic_url":"([^"]+)"/);
+                                const photoUrl = picMatch ? picMatch[1].replace(/\\/g, '').replace(/\\u0026/g, '&') : DEFAULT_AVATAR;
+
+                                const pkMatch = chunk.match(/"pk":"?(\d+)"?/);
+                                const pk = pkMatch ? pkMatch[1] : '';
+                                if (pk) setCachedUserId(uname, pk);
+
+                                if (!window._igBlockedUsersCapture.users.has(uname)) {
+                                    window._igBlockedUsersCapture.users.set(uname, { username: uname, photoUrl, pk });
+                                    newCount++;
+                                } else {
+                                    const existing = window._igBlockedUsersCapture.users.get(uname);
+                                    if (!existing.pk && pk) existing.pk = pk;
+                                    if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && photoUrl !== DEFAULT_AVATAR) existing.photoUrl = photoUrl;
+                                }
+                            }
+                            const usersArray = Array.from(window._igBlockedUsersCapture.users.values());
+                            window._igBlockedUsersCapture.data = usersArray;
+                            if (newCount > 0 || usersArray.length > 0) {
+                                console.log(`[IG Tools] Bloks interceptou ${usersArray.length} usuário(s) bloqueado(s) (+${newCount} novos).`);
+                                window._igBlockedUsersCapture.callbacks.forEach(cb => {
+                                    try { cb(usersArray); } catch (e) { }
+                                });
+                            }
+                        } else if (isHideStoryContext) {
+                            const userRegex = /"username":"([a-zA-Z0-9._]+)"/g;
+                            let match;
+                            let newCount = 0;
+                            while ((match = userRegex.exec(text)) !== null) {
+                                const uname = match[1];
+                                if (!uname || uname === 'instagram' || uname === 'threads') continue;
+
+                                const start = Math.max(0, match.index - 300);
+                                const end = Math.min(text.length, match.index + 500);
+                                const chunk = text.slice(start, end);
+
+                                const picMatch = chunk.match(/"profile_pic_url":"([^"]+)"/);
+                                const photoUrl = picMatch ? picMatch[1].replace(/\\/g, '').replace(/\\u0026/g, '&') : DEFAULT_AVATAR;
+
+                                const pkMatch = chunk.match(/"pk":"?(\d+)"?/);
+                                const pk = pkMatch ? pkMatch[1] : '';
+                                if (pk) setCachedUserId(uname, pk);
+
+                                let isChecked = false;
+                                const chunkLower = chunk.toLowerCase();
+                                if (chunkLower.includes('circle-check') || chunkLower.includes('"is_selected":true') || chunkLower.includes('"selected":true')) {
+                                    isChecked = true;
+                                }
+
+                                if (!window._igHideStoryUsersCapture.users.has(uname)) {
+                                    window._igHideStoryUsersCapture.users.set(uname, { username: uname, photoUrl, pk, isChecked });
+                                    newCount++;
+                                } else {
+                                    const existing = window._igHideStoryUsersCapture.users.get(uname);
+                                    if (!existing.pk && pk) existing.pk = pk;
+                                    if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && photoUrl !== DEFAULT_AVATAR) existing.photoUrl = photoUrl;
+                                    if (!existing.isChecked && isChecked) existing.isChecked = true;
+                                }
+                            }
+                            if (newCount > 0 || window._igHideStoryUsersCapture.users.size > 0) {
+                                console.log(`[IG Tools] Bloks interceptou ${window._igHideStoryUsersCapture.users.size} usuário(s) ocultar story (+${newCount} novos).`);
+                                const usersArray = Array.from(window._igHideStoryUsersCapture.users.values());
+                                window._igHideStoryUsersCapture.callbacks.forEach(cb => {
+                                    try { cb(usersArray); } catch (e) { }
+                                });
+                            }
+                        }
+                    } catch (e) { /* silencia erros de parse */ }
+                }
+
+                const targetWindows = [window];
+                if (typeof unsafeWindow !== 'undefined' && unsafeWindow !== window) {
+                    targetWindows.push(unsafeWindow);
+                }
+
+                targetWindows.forEach(tw => {
+                    try {
+                        const originalOpen = tw.XMLHttpRequest.prototype.open;
+                        const originalSend = tw.XMLHttpRequest.prototype.send;
+
+                        tw.XMLHttpRequest.prototype.open = function (method, url) {
+                            this._url = url;
+                            this._method = method;
+                            return originalOpen.apply(this, arguments);
+                        };
+
+                        tw.XMLHttpRequest.prototype.send = function (body) {
+                            if (isStorySeenPayload(this._url, body)) {
+                                let isAnon = false;
+                                try {
+                                    const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
+                                    if (saved) isAnon = saved.anonymousStories;
+                                } catch (e) { }
+
+                                if (isAnon) {
+                                    console.log("%c[IG Tools] Bloqueado request de visto (XHR): " + this._url, "color: orange; font-weight: bold;");
+                                    showToast("👁️ Story visto anonimamente!");
+                                    return;
+                                } else {
+                                    console.log("[IG Tools] Request de visto PERMITIDO (Modo Anônimo OFF): " + this._url);
+                                }
+                            }
+                            this.addEventListener('load', function () {
+                                try {
+                                    const url = this._url || '';
+                                    if (url.includes('/async/wbloks/fetch/') || url.includes('pagination.async') || url.includes('muted_accounts') || url.includes('blocked_accounts') || url.includes('hide_story')) {
+                                        handleBloksResponseText(url, this.responseText);
+                                    }
+                                } catch (e) { }
+                            });
+                            return originalSend.apply(this, arguments);
+                        };
+                    } catch (_) { }
+
+                    try {
+                        const originalFetch = tw.fetch;
+                        tw.fetch = async function (input, init) {
+                            let urlString = '';
+                            if (typeof input === 'string') {
+                                urlString = input;
+                            } else if (input instanceof URL) {
+                                urlString = input.toString();
+                            } else if (input && input.url) {
+                                urlString = input.url;
+                            }
+
+                            const bodyData = init?.body || (input && typeof input === 'object' ? input.body : null);
+
+                            if (isStorySeenPayload(urlString, bodyData)) {
+                                let isAnon = false;
+                                try {
+                                    const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
+                                    if (saved) isAnon = saved.anonymousStories;
+                                } catch (e) { }
+
+                                if (isAnon) {
+                                    console.log("%c[IG Tools] Bloqueado request de visto (Fetch): " + urlString, "color: orange; font-weight: bold;");
+                                    showToast("👁️ Story visto anonimamente!");
+                                    return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+                                } else {
+                                    console.log("[IG Tools] Request de visto PERMITIDO (Modo Anônimo OFF): " + urlString);
+                                }
+                            }
+
+                            // Sniffer automático de queries GraphQL no console
+                            if (urlString.includes('/api/graphql') && bodyData) {
+                                try {
+                                    const params = new URLSearchParams(typeof bodyData === 'string' ? bodyData : '');
+                                    const qName = params.get('fb_api_req_friendly_name') || '';
+                                    const qDocId = params.get('doc_id') || '';
+                                    const qVars = params.get('variables') || '';
+                                    if (qName && !qName.includes('PolarisScreenTimeLogger')) {
+                                        console.log(`%c[IG GraphQL Sniffer] ${qName} (doc_id: ${qDocId})`, 'color: #00ffaa; background: #003311; font-weight: bold; padding: 2px 6px; border-radius: 3px;', qVars);
+                                    }
+                                } catch (_) { }
+                            }
+                            // Verifica se é resposta Bloks de contas silenciadas, bloqueadas, ocultar story ou paginação assíncrona
+                            if (urlString.includes('com.instagram.pagination.async') ||
+                                urlString.includes('bloks/apps/com.instagram.interactions.privacy') ||
+                                urlString.includes('blocked_accounts') ||
+                                urlString.includes('muted_accounts') ||
+                                urlString.includes('hide_story') ||
+                                urlString.includes('/async/wbloks/fetch/')) {
+                                return originalFetch.apply(this, arguments).then(async response => {
+                                    try {
+                                        const clone = response.clone();
+                                        const text = await clone.text();
+                                        handleBloksResponseText(urlString, text);
+                                    } catch (e) { /* silencia erros de parse */ }
+                                    return response;
+                                });
+                            }
+                            return originalFetch.apply(this, arguments);
+                        };
+                    } catch (_) { }
+                });
+
+                // Interceptor para Beacon
+                if (navigator.sendBeacon) {
+                    const originalSendBeacon = navigator.sendBeacon;
+                    navigator.sendBeacon = function (url, data) {
+                        if (isStorySeenPayload(url, data)) {
+                            let isAnon = false;
+                            try {
+                                const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
+                                if (saved) isAnon = saved.anonymousStories;
+                            } catch (e) { }
+
+                            if (isAnon) {
+                                console.log("%c[IG Tools] Bloqueado request de visto (Beacon): " + url, "color: orange; font-weight: bold;");
+                                showToast("👁️ Story visto anonimamente!");
+                                return true;
+                            } else {
+                                console.log("[IG Tools] Request de visto PERMITIDO (Modo Anônimo OFF): " + url);
+                            }
+                        }
+                        return originalSendBeacon.apply(this, arguments);
+                    };
+                }
+            }
+
+            function getFullXPath(element) {
+                if (!element || element.nodeType !== 1) return "";
+
+                // Prioridade 1: Atributos de acessibilidade (mais estáveis no Instagram)
+                const ariaLabel = element.getAttribute('aria-label');
+                if (ariaLabel) {
+                    return `//${element.tagName.toLowerCase()}[@aria-label="${ariaLabel}"]`;
+                }
+
+                // Prioridade 2: ID (ignorando IDs dinâmicos do sistema "mount_")
+                if (element.id && !element.id.startsWith('mount_') && !element.id.includes('mount_')) {
+                    return `//*[@id="${element.id}"]`;
+                }
+
+                if (element === document.body) return "/html/body";
+
+                const parent = element.parentNode;
+                if (!parent || parent.nodeType !== 1) return "/" + element.tagName.toLowerCase();
+
+                const siblings = Array.from(parent.children).filter(s => s.tagName === element.tagName);
+                const index = siblings.indexOf(element) + 1;
+                const tagName = element.tagName.toLowerCase();
+                const pathSegment = siblings.length > 1 ? `${tagName}[${index}]` : tagName;
+
+                return getFullXPath(parent) + "/" + pathSegment;
+            }
+
+            function getAbsoluteXPath(element) {
+                if (!element || element.nodeType !== 1) return "";
+                if (element === document.body) return "/html/body";
+                const parent = element.parentNode;
+                const siblings = Array.from(parent.children).filter(s => s.tagName === element.tagName);
+                const index = siblings.indexOf(element) + 1;
+                const tagName = element.tagName.toLowerCase();
+                const pathSegment = siblings.length > 1 ? `${tagName}[${index}]` : tagName;
+                return getAbsoluteXPath(parent) + "/" + pathSegment;
+            }
+
+            function getCssSelector(el) {
+                if (!(el instanceof Element)) return "";
+                const path = [];
+                while (el.nodeType === Node.ELEMENT_NODE) {
+                    let selector = el.nodeName.toLowerCase();
+                    if (el.id && !el.id.startsWith('mount_') && !el.id.includes('mount_')) {
+                        selector += '#' + el.id;
+                        path.unshift(selector);
+                        break;
+                    } else {
+                        let sib = el, nth = 1;
+                        while (sib = sib.previousElementSibling) {
+                            if (sib.nodeName.toLowerCase() == selector) nth++;
+                        }
+                        if (nth != 1) selector += ":nth-of-type(" + nth + ")";
+                    }
+                    path.unshift(selector);
+                    el = el.parentNode;
+                }
+                return path.join(" > ");
+            }
+
+            let isPickingElement = false;
+            let lastHoveredElement = null;
+            function startElementPicker(callback) {
+                if (isPickingElement) return;
+                isPickingElement = true;
+                showToast("🖱️ Clique em um elemento da página para capturar o XPath (ESC para cancelar)");
+
+                const onMouseOver = (e) => {
+                    if (!isPickingElement) return;
+                    e.stopPropagation();
+                    if (lastHoveredElement) lastHoveredElement.classList.remove('ig-tools-highlight');
+                    // Destaca o elemento interativo mais próximo
+                    lastHoveredElement = e.target.closest('button, a, div[role="button"]') || e.target;
+                    lastHoveredElement.classList.add('ig-tools-highlight');
+                };
+
+                const onClick = (e) => {
+                    if (!isPickingElement) return;
+                    e.preventDefault(); e.stopPropagation();
+                    // Se clicar em um ícone (SVG), captura o botão/link pai
+                    const target = e.target.closest('button, a, div[role="button"]') || e.target;
+                    stopPicker();
+                    callback(target);
+                };
+
+                const onKeyDown = (e) => { if (e.key === 'Escape') stopPicker(); };
+
+                function stopPicker() {
+                    isPickingElement = false;
+                    if (lastHoveredElement) lastHoveredElement.classList.remove('ig-tools-highlight');
+                    document.removeEventListener('mouseover', onMouseOver, true);
+                    document.removeEventListener('click', onClick, true);
+                    document.removeEventListener('keydown', onKeyDown, true);
+                }
+                document.addEventListener('mouseover', onMouseOver, true);
+                document.addEventListener('click', onClick, true);
+                document.addEventListener('keydown', onKeyDown, true);
+            }
+
+            // Helper consolidado para Google Drive (Substitui o IndexedDB completamente)
+            const dbHelper = {
+                _cache: null,
+                _init: async function () {
+                    if (!this._cache) {
+                        try {
+                            console.log("[IG Tools] Sincronizando com Google Drive...");
+                            this._cache = await gDriveApi.loadData();
+                            // Garante que o cache seja um objeto e não nulo/texto
+                            if (!this._cache || typeof this._cache !== 'object') {
+                                this._cache = {};
+                            }
+                            if (Object.keys(this._cache).length > 0) {
+                                console.log("[IG Tools] Dados carregados com sucesso.");
+                            }
+                        } catch (e) {
+                            console.error("[IG Tools] Erro ao carregar dados da nuvem:", e);
+                            this._cache = {};
+                        }
+                    }
+                    return this._cache;
+                },
+                openDB: function () { return this._init(); },
+                saveCache: async function (storeName, data) {
+                    await this._init();
+                    // Ensure data is an array of objects with username and photoUrl
+                    let formattedData = [];
+                    if (data instanceof Set) {
+                        formattedData = Array.from(data).map(u => ({ username: u, photoUrl: null })); // Default photoUrl
+                    } else if (Array.isArray(data)) {
+                        formattedData = data.map(item => {
+                            if (typeof item === 'string') return { username: item, photoUrl: null };
+                            return item; // Assume it's already an object with username and photoUrl
+                        });
+                    } else {
+                        console.warn("[IG Tools] saveCache received unexpected data type:", data);
+                        formattedData = [];
+                    }
+                    this._cache[storeName] = formattedData;
+                    try {
+                        localStorage.setItem('ig_tools_cache_' + storeName, JSON.stringify(formattedData));
+                        await gDriveApi.saveData(this._cache);
+                    } catch (errSync) {
+                        console.warn(`[IG Tools] Aviso: Dados salvos localmente, sincronização em nuvem pendente (${storeName}):`, errSync);
+                    }
+                },
+                loadCache: async function (storeName) {
+                    await this._init();
+                    const data = this._cache[storeName]; // This will be an array of objects
+                    if (!data) return null;
+                    const set = new Set(data.map(u => u.username));
+                    set.details = new Map(data.map(u => [u.username, u]));
+                    return set;
+                },
+                saveUnfollowHistory: async function (userData) {
+                    await this._init();
+                    if (!this._cache.unfollowHistory) this._cache.unfollowHistory = [];
+                    this._cache.unfollowHistory.push(userData);
+                    await gDriveApi.saveData(this._cache);
+                },
+                deleteUnfollowHistory: async function (usernames) {
+                    await this._init();
+                    this._cache.unfollowHistory = (this._cache.unfollowHistory || []).filter(u => !usernames.includes(u.username));
+                    await gDriveApi.saveData(this._cache);
+                },
+                loadUnfollowHistory: async function () {
+                    await this._init();
+                    return (this._cache.unfollowHistory || []).sort((a, b) => new Date(b.unfollowDate) - new Date(a.unfollowDate));
+                },
+                saveException: async function (username) {
+                    await this._init();
+                    if (!this._cache.exceptions) this._cache.exceptions = [];
+                    if (!this._cache.exceptions.includes(username)) this._cache.exceptions.push(username);
+                    await gDriveApi.saveData(this._cache);
+                },
+                loadExceptions: async function () {
+                    await this._init();
+                    return new Set(this._cache.exceptions || []);
+                },
+                saveCategory: async function (category) {
+                    await this._init();
+                    if (!this._cache.categories) this._cache.categories = [];
+                    const idx = this._cache.categories.findIndex(c => c.id === category.id);
+                    if (idx > -1) this._cache.categories[idx] = category;
+                    else this._cache.categories.push(category);
+                    await gDriveApi.saveData(this._cache);
+                },
+                loadCategories: async function () {
+                    await this._init();
+                    return (this._cache.categories || []).sort((a, b) => a.name.localeCompare(b.name));
+                },
+                deleteCategory: async function (categoryId) {
+                    await this._init();
+                    this._cache.categories = (this._cache.categories || []).filter(c => c.id !== categoryId);
+                    if (this._cache.userCategories) {
+                        Object.keys(this._cache.userCategories).forEach(user => {
+                            this._cache.userCategories[user] = this._cache.userCategories[user].filter(id => id !== categoryId);
+                        });
+                    }
+                    await gDriveApi.saveData(this._cache);
+                },
+                saveUserCategories: async function (username, categoryIds) {
+                    await this._init();
+                    if (!this._cache.userCategories) this._cache.userCategories = {};
+                    this._cache.userCategories[username.toLowerCase()] = categoryIds;
+                    await gDriveApi.saveData(this._cache);
+                },
+                loadAllUserCategories: async function () {
+                    await this._init();
+                    const map = new Map();
+                    const data = this._cache.userCategories || {};
+                    Object.keys(data).forEach(user => map.set(user, data[user]));
+                    return map;
+                },
+                saveAllUserCategories: async function (categoryMap) {
+                    await this._init();
+                    // Convert Map to a plain object for JSON serialization
+                    this._cache.userCategories = Object.fromEntries(categoryMap);
+                    await gDriveApi.saveData(this._cache);
+                },
+                loadCacheRaw: async function (storeName) {
+                    await this._init();
+                    const data = this._cache[storeName];
+                    if (!data) return null;
+                    Object.keys(data).forEach(user => map.set(user, data[user]));
+                    return map;
+                },
+                saveAllUserCategories: async function (categoryMap) {
+                    await this._init();
+                    this._cache.userCategories = Object.fromEntries(categoryMap);
+                    await gDriveApi.saveData(this._cache);
+                },
+                clearCache: async function (storeName) {
+                    await this._init();
+                    delete this._cache[storeName];
+                    await gDriveApi.saveData(this._cache);
+                }
+            };
+
+            // --- FUNÇÕES SILENCIOSAS DE SEGUIDORES E NOTIFICAÇÃO POR E-MAIL ---
+            async function fetchUserListAPISilent(userId, type) {
+                const userList = [];
+                let nextMaxId = '';
+                let hasNextPage = true;
+                const appID = '936619743392459';
+                const settings = loadSettings();
+                // O Instagram limita requisições de seguidores a um máximo de 50/100 itens.
+                // Forçamos o lote para 50 para evitar erros HTTP 400 Bad Request.
+                const batchSize = 50;
+                const delay = settings.requestDelay || 250;
+
+                try {
+                    while (hasNextPage) {
+                        const queryParams = new URLSearchParams({ count: batchSize });
+                        if (nextMaxId) {
+                            queryParams.append('max_id', nextMaxId);
+                        }
+                        const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?${queryParams.toString()}`, {
+                            headers: getApiHeaders()
+                        });
+                        if (!response.ok) throw new Error(`Erro na API: ${response.status}`);
+                        const data = await response.json();
+                        if (!data || !data.users) throw new Error("Resposta inválida da API do Instagram");
+
+                        data.users.forEach(user => {
+                            userList.push({
+                                username: user.username,
+                                photoUrl: user.profile_pic_url
+                            });
+                        });
+
+                        if (data.next_max_id) {
+                            nextMaxId = data.next_max_id;
+                        } else {
+                            hasNextPage = false;
+                        }
+                        await new Promise(r => setTimeout(r, delay));
+                    }
+                } catch (error) {
+                    console.error(`[IG Tools] Erro silencioso ao buscar ${type}:`, error);
+                    return null; // Retorna null para sinalizar falha ou busca incompleta
+                }
+                return userList;
+            }
+
+            function sendUnfollowEmailNotification(unfollowers, recipient, webhookUrl) {
+                if (!webhookUrl) {
+                    console.error("[IG Tools] Webhook URL de e-mail não configurada.");
+                    return Promise.reject("Webhook URL não configurada");
+                }
+                console.log("[IG Tools] Enviando notificação de unfollow por e-mail...");
+                return new Promise((resolve, reject) => {
+                    const httpHandler = (typeof GM_xmlhttpRequest !== 'undefined')
+                        ? GM_xmlhttpRequest
+                        : (window.IGTools?.HttpClient?.request || null);
+
+                    const postData = JSON.stringify({
+                        recipient: recipient,
+                        unfollowers: unfollowers
+                    });
+
+                    if (httpHandler) {
+                        httpHandler({
+                            method: "POST",
+                            url: webhookUrl,
+                            anonymous: true,
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            data: postData,
+                            onload: function (response) {
+                                console.log("[IG Tools] Resposta do webhook de e-mail:", response.status, response.responseText);
+                                if (response.status >= 200 && response.status < 300) {
+                                    resolve(response.responseText);
+                                } else {
+                                    reject("Erro no envio do e-mail: " + response.status);
+                                }
+                            },
+                            onerror: function (err) {
+                                console.error("[IG Tools] Erro ao enviar e-mail via webhook:", err);
+                                reject(err);
+                            }
+                        });
+                    } else {
+                        fetch(webhookUrl, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: postData
+                        })
+                        .then(async (res) => {
+                            const text = await res.text();
+                            if (res.ok) resolve(text);
+                            else reject("Erro no envio do e-mail: " + res.status);
+                        })
+                        .catch((err) => {
+                            console.error("[IG Tools] Erro ao enviar e-mail via webhook:", err);
+                            reject(err);
+                        });
+                    }
+                });
+            }
+
+            async function executarVerificacaoAgendadaUnfollow() {
+                const settings = loadSettings();
+                if (!settings.unfollowEmailEnabled || !settings.unfollowEmailWebhookUrl) {
+                    return;
+                }
+
+                // Verifica se passou pelo menos 1 hora (3600000 ms)
+                const horaEmMs = 3600000;
+                const agora = Date.now();
+                if (agora - settings.lastUnfollowEmailCheck < horaEmMs) {
+                    console.log("[IG Tools] Verificação agendada de unfollow: Menos de 1 hora se passou desde a última verificação.");
+                    return;
+                }
+
+                const userId = getCookie('ds_user_id');
+                if (!userId) {
+                    console.log("[IG Tools] Verificação agendada de unfollow: Usuário não está logado no Instagram.");
+                    return;
+                }
+
+                // Atualiza o timestamp temporariamente para evitar múltiplas execuções simultâneas
+                saveSettings({ lastUnfollowEmailCheck: agora });
+                console.log("[IG Tools] Iniciando verificação agendada de unfollow em segundo plano...");
+
+                try {
+                    // 1. Carrega seguidores anteriores do Google Drive
+                    const dbFollowers = await dbHelper.loadCache('followers');
+                    if (!dbFollowers) {
+                        console.log("[IG Tools] Primeiro carregamento de seguidores. Salvando lista atual no Google Drive sem enviar e-mail.");
+                        const currentFollowersList = await fetchUserListAPISilent(userId, 'followers');
+                        if (currentFollowersList && currentFollowersList.length > 0) {
+                            await dbHelper.saveCache('followers', currentFollowersList);
+                        }
+                        return;
+                    }
+
+                    // 2. Busca seguidores atuais do Instagram
+                    const currentFollowersList = await fetchUserListAPISilent(userId, 'followers');
+                    if (!currentFollowersList) {
+                        console.warn("[IG Tools] A busca de seguidores atuais falhou ou foi parcial. Abortando verificação para evitar falsos positivos.");
+                        // Restaura o timestamp para permitir nova tentativa em breve
+                        saveSettings({ lastUnfollowEmailCheck: 0 });
+                        return;
+                    }
+
+                    // Cria um Set dos seguidores atuais para busca rápida
+                    const currentFollowersSet = new Set(currentFollowersList.map(u => u.username.toLowerCase()));
+
+                    // 3. Compara: Quem estava no cache do Drive (dbFollowers) mas não está na lista atual?
+                    const unfollowers = [];
+                    dbFollowers.forEach(prevUsername => {
+                        const lowerPrev = prevUsername.toLowerCase();
+                        if (!currentFollowersSet.has(lowerPrev)) {
+                            const details = dbFollowers.details?.get(prevUsername) || { username: prevUsername, photoUrl: null };
+                            unfollowers.push({
+                                username: details.username || prevUsername,
+                                photoUrl: details.photoUrl || null
+                            });
+                        }
+                    });
+
+                    // 4. Se houver unfollowers, envia a notificação por e-mail e salva no histórico
+                    if (unfollowers.length > 0) {
+                        console.log(`[IG Tools] Detectados ${unfollowers.length} unfollowers! Enviando e-mail...`);
+                        try {
+                            await sendUnfollowEmailNotification(
+                                unfollowers,
+                                settings.unfollowEmailRecipient || '',
+                                settings.unfollowEmailWebhookUrl
+                            );
+
+                            // Adiciona ao histórico de unfollows local/Drive
+                            for (const unfollower of unfollowers) {
+                                await dbHelper.saveUnfollowHistory({
+                                    username: unfollower.username,
+                                    photoUrl: unfollower.photoUrl,
+                                    unfollowDate: new Date().toISOString()
+                                });
+                            }
+                            console.log("[IG Tools] Notificação de e-mail enviada e histórico atualizado.");
+                        } catch (emailErr) {
+                            console.error("[IG Tools] Falha ao enviar e-mail de notificação:", emailErr);
+                        }
+                    } else {
+                        console.log("[IG Tools] Nenhum unfollow detectado nesta verificação.");
+                    }
+
+                    // 5. Salva a nova lista de seguidores atualizada no Google Drive
+                    await dbHelper.saveCache('followers', currentFollowersList);
+                    console.log("[IG Tools] Lista de seguidores atualizada salva no Google Drive.");
+
+                } catch (err) {
+                    console.error("[IG Tools] Erro na verificação agendada de unfollow:", err);
+                    // Reseta o timestamp em caso de erro crítico
+                    saveSettings({ lastUnfollowEmailCheck: 0 });
+                }
+            }
+
+            // --- LÓGICA DE CONFIGURAÇÕES ---
+            function loadSettings() {
+                const defaults = {
+                    darkMode: false,
+                    rgbBorder: false,
+                    language: 'pt-BR',
+                    unfollowDelay: 5000,
+                    itemsPerPage: 10,
+                    requestDelay: 250,
+                    requestBatchSize: 50,
+                    maxRequests: 0,
+                    anonymousStories: false,
+                    useApi: true,
+                    unfollowEmailEnabled: false,
+                    unfollowEmailRecipient: '',
+                    unfollowEmailWebhookUrl: '',
+                    lastUnfollowEmailCheck: 0,
+                    validateProfileStatus: true,
+                };
+                try {
+                    const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2'));
+                    return { ...defaults, ...saved };
+                } catch (e) {
+                    return defaults;
+                }
+            }
+
+            const translations = {
+                'pt-BR': { likes: 'Curtidas', comments: 'Comentários', blocked: 'Bloqueados', messages: 'Mensagens', notFollowingBack: 'Não segue de volta', following: 'Seguindo', closeFriends: 'Amigos Próximos', hideStory: 'Ocultar Story', mutedAccounts: 'Contas Silenciadas', interactions: 'Interações', reelsMenu: 'Menu de Reels', downloadStory: 'Baixar Story', settings: 'Configurações', darkMode: 'Modo Escuro', rgbBorder: 'Borda RGB', shortcuts: 'Atalhos', parameters: 'Parâmetros', language: 'Idioma', anonymousStories: 'Stories Anônimo', useApi: 'Usar API (Rápido)', validateProfileStatus: 'Validar Status (P/A)' },
+                'en-US': { likes: 'Likes', comments: 'Comments', blocked: 'Blocked', messages: 'Messages', notFollowingBack: 'Not Following Back', following: 'Following', closeFriends: 'Close Friends', hideStory: 'Hide Story', mutedAccounts: 'Muted Accounts', interactions: 'Interactions', reelsMenu: 'Reels Menu', downloadStory: 'Download Story', settings: 'Settings', darkMode: 'Dark Mode', rgbBorder: 'RGB Border', shortcuts: 'Shortcuts', parameters: 'Parameters', language: 'Language', anonymousStories: 'Anonymous Stories', useApi: 'Use API (Fast)', validateProfileStatus: 'Validate Status (P/O)' },
+                'es-ES': { likes: 'Me gusta', comments: 'Comentarios', blocked: 'Bloqueados', messages: 'Mensajes', notFollowingBack: 'No te sigue', following: 'Siguiendo', closeFriends: 'Mejores Amigos', hideStory: 'Ocultar Historia', mutedAccounts: 'Cuentas Silenciadas', interactions: 'Interacciones', reelsMenu: 'Menú de Reels', downloadStory: 'Descargar Historia', settings: 'Configuración', darkMode: 'Modo Oscuro', rgbBorder: 'Borde RGB', shortcuts: 'Atajos', parameters: 'Parámetros', language: 'Idioma', anonymousStories: 'Historias Anónimas', useApi: 'Usar API (Rápido)', validateProfileStatus: 'Validar Estado (P/A)' },
+                'fr-FR': { likes: 'J\'aime', comments: 'Commentaires', blocked: 'Bloqués', messages: 'Messages', notFollowingBack: 'Ne suit pas en retour', following: 'Abonnements', closeFriends: 'Amis Proches', hideStory: 'Masquer Story', mutedAccounts: 'Comptes Muets', interactions: 'Interactions', reelsMenu: 'Menu Reels', downloadStory: 'Télécharger Story', settings: 'Paramètres', darkMode: 'Mode Sombre', rgbBorder: 'Bordure RGB', shortcuts: 'Raccourcis', parameters: 'Paramètres', language: 'Langue', anonymousStories: 'Stories Anonymes', useApi: 'Utiliser API (Rapide)', validateProfileStatus: 'Valider Statut (P/O)' },
+                'it-IT': { likes: 'Mi piace', comments: 'Commenti', blocked: 'Bloccati', messages: 'Messaggi', notFollowingBack: 'Non ti segue', following: 'Seguiti', closeFriends: 'Amici Più Stretti', hideStory: 'Nascondi Storia', mutedAccounts: 'Account Silenziati', interactions: 'Interazioni', reelsMenu: 'Menu Reels', downloadStory: 'Scarica Storia', settings: 'Impostazioni', darkMode: 'Modalità Scura', rgbBorder: 'Bordo RGB', shortcuts: 'Scorciatoie', parameters: 'Parametri', language: 'Lingua', anonymousStories: 'Storie Anonime', useApi: 'Usa API (Veloce)', validateProfileStatus: 'Valida Stato (P/A)' },
+                'de-DE': { likes: 'Gefällt mir', comments: 'Kommentare', blocked: 'Blockiert', messages: 'Nachrichten', notFollowingBack: 'Folgt nicht zurück', following: 'Abonniert', closeFriends: 'Engste Freunde', hideStory: 'Story verbergen', mutedAccounts: 'Stummgeschaltete', interactions: 'Interaktionen', reelsMenu: 'Reels Menü', downloadStory: 'Story herunterladen', settings: 'Einstellungen', darkMode: 'Dunkelmodus', rgbBorder: 'RGB-Rand', shortcuts: 'Verknüpfungen', parameters: 'Parameter', language: 'Sprache', anonymousStories: 'Anonyme Stories', useApi: 'API verwenden (Schnell)', validateProfileStatus: 'Status validieren (P/Ö)' }
+            };
+
+            function getText(key) {
+                const lang = loadSettings().language || 'pt-BR';
+                return translations[lang]?.[key] || translations['pt-BR'][key] || key;
+            }
+
+            function saveSettings(newSettings) {
+                const current = loadSettings();
+                const updated = { ...current, ...newSettings };
+                localStorage.setItem('instagramToolsSettings_v2', JSON.stringify(updated));
+            }
+
+            function toggleDarkMode(enabled) {
+                document.body.classList.toggle('dark-mode', enabled);
+                const btn = document.getElementById("settingsDarkModeBtn");
+                if (btn) btn.style.background = enabled ? '#4c5c75' : '';
+            }
+
+            function toggleRgbBorder(enabled) {
+                const elements = document.querySelectorAll('.submenu-modal, .assistive-menu');
+                elements.forEach(el => {
+                    el.classList.toggle('rgb-border-effect', enabled);
+                });
+                const btn = document.getElementById("settingsRgbBorderBtn");
+                if (btn) btn.style.background = enabled ? '#4c5c75' : '';
+            }
+
+            function toggleAnonymousStories(enabled) {
+                const btn = document.getElementById("settingsAnonymousStoriesBtn");
+                if (btn) btn.style.background = enabled ? '#4c5c75' : '';
+            }
+
+            function toggleUseApi(enabled) {
+                const btn = document.getElementById("settingsUseApiBtn");
+                if (btn) btn.style.background = enabled ? '#4c5c75' : '';
+            }
+
+            function applyInitialSettings() {
+                const settings = loadSettings();
+                toggleDarkMode(settings.darkMode);
+                toggleRgbBorder(settings.rgbBorder);
+                toggleAnonymousStories(settings.anonymousStories);
+                toggleUseApi(settings.useApi);
+                // Não precisa de uma função toggle separada para validateProfileStatus, pois ele não tem efeito visual imediato.
+            }
+
+            // --- LÓGICA PARA ATALHOS ---
+            function getShortcuts() {
+                try {
+                    const saved = JSON.parse(localStorage.getItem('instagram_shortcuts_v2'));
+                    return Array.isArray(saved) ? saved : [];
+                } catch (e) {
+                    return [];
+                }
+            }
+
+            function saveShortcuts(shortcuts) {
+                localStorage.setItem('instagram_shortcuts_v2', JSON.stringify(shortcuts));
+            }
+
+            function formatShortcutForDisplay(shortcut) {
+                if (!shortcut || !shortcut.key) return '';
+                const parts = [];
+                if (shortcut.ctrlKey) parts.push('Ctrl');
+                if (shortcut.altKey) parts.push('Alt');
+                if (shortcut.shiftKey) parts.push('Shift');
+                parts.push(shortcut.key.toUpperCase());
+                return parts.join(' + ');
+            }
+
+            function executeXPathClick(xpath) {
+                try {
+                    const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                    const element = result.singleNodeValue;
+                    if (element) {
+                        simulateClick(element);
+                        return true;
+                    }
+                    console.warn("Atalho: Nenhum elemento encontrado para o XPath:", xpath);
+                    return false;
+                } catch (error) {
+                    console.error("Atalho: Erro ao executar o XPath:", xpath, error);
+                    return false;
+                }
+            }
+
+            function initShortcutListener() {
+                if (document.body.dataset.shortcutsInitialized) return; // Evita múltiplos listeners
+                document.body.dataset.shortcutsInitialized = 'true';
+
+                document.addEventListener('keydown', (event) => {
+                    // Ignora atalhos se um input, textarea ou contenteditable estiver focado
+                    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable) {
+                        return;
+                    }
+
+                    // Ignora pressionamentos de apenas teclas modificadoras
+                    if (['Control', 'Alt', 'Shift', 'Meta'].includes(event.key)) {
+                        return;
+                    }
+
+                    const shortcuts = getShortcuts();
+                    const shortcut = shortcuts.find(s =>
+                        s.key.toLowerCase() === event.key.toLowerCase() &&
+                        !!s.ctrlKey === event.ctrlKey &&
+                        !!s.altKey === event.altKey &&
+                        !!s.shiftKey === event.shiftKey
+                    );
+
+                    if (shortcut) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        console.log(`Atalho '${formatShortcutForDisplay(shortcut)}' acionado.`);
+                        if (shortcut.xpath) {
+                            executeXPathClick(shortcut.xpath);
+                        } else if (shortcut.link) {
+                            window.location.href = shortcut.link;
+                        }
+                    }
+                });
+            }
+
+            function injectMenu() {
+                if (document.getElementById("assistiveTouchMenu")) return;
+                if (document.getElementById("instagramToolsSidebarBtn")) return;
+
+                // --- LÓGICA DE COMANDOS DE VOZ ---
+                const voiceControl = {
+                    recognition: null,
+                    isListening: false,
+                    commands: [],
+                    init: function () {
+                        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                            console.warn("Web Speech API não suportada.");
+                            return;
+                        }
+                        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                        this.recognition = new SpeechRecognition();
+                        this.recognition.continuous = true;
+                        this.recognition.lang = loadSettings().language || 'pt-BR';
+                        this.recognition.interimResults = false;
+
+                        this.recognition.onresult = (event) => {
+                            const last = event.results.length - 1;
+                            const command = event.results[last][0].transcript.trim().toLowerCase();
+                            console.log("Comando de voz:", command);
+                            this.executeCommand(command);
+                        };
+
+                        this.recognition.onerror = (event) => {
+                            console.error("Erro voz:", event.error);
+                            if (event.error === 'not-allowed') {
+                                this.stop();
+                                alert("Permissão de microfone negada.");
+                            }
+                        };
+
+                        this.recognition.onend = () => {
+                            if (this.isListening) {
+                                try { this.recognition.start(); } catch (e) { }
+                            }
+                        };
+
+                        this.loadCommands();
+                        if (localStorage.getItem('instagram_voice_enabled') === 'true') {
+                            try { this.start(); } catch (e) { console.log("Autostart voz bloqueado"); }
+                        }
+                    },
+                    loadCommands: function () {
+                        const defaults = [
+                            { phrase: "baixar story", action: "downloadStory", description: "Baixa o story atual" },
+                            { phrase: "abrir configurações", action: "openSettings", description: "Abre configurações" },
+                            { phrase: "fechar menu", action: "closeMenu", description: "Fecha o menu" },
+                            { phrase: "rolar reels", action: "toggleReelsScroll", description: "Rolagem de Reels" },
+                            { phrase: "baixar reel", action: "downloadReel", description: "Baixa o Reel atual" },
+                            { phrase: "amigos próximos", action: "openCloseFriends", description: "Menu Amigos Próximos" },
+                            { phrase: "ocultar story", action: "openHideStory", description: "Menu Ocultar Story" },
+                            { phrase: "contas silenciadas", action: "openMuted", description: "Menu Contas Silenciadas" },
+                            { phrase: "não segue de volta", action: "openNotFollowingBack", description: "Análise Não Segue de Volta" },
+                            { phrase: "seguindo", action: "openFollowing", description: "Gerenciador Seguindo" },
+                            { phrase: "bloqueados", action: "openBlocked", description: "Lista de Bloqueados" },
+                            { phrase: "análise reels", action: "analyzeReels", description: "Análise de Reels" },
+                            { phrase: "interações", action: "openInteractions", description: "Verificar Interações" }
+                        ];
+                        try {
+                            const saved = JSON.parse(localStorage.getItem('instagram_voice_commands'));
+                            this.commands = saved || defaults;
+                        } catch (e) { this.commands = defaults; }
+                    },
+                    saveCommands: function () {
+                        localStorage.setItem('instagram_voice_commands', JSON.stringify(this.commands));
+                    },
+                    start: function () {
+                        if (!this.recognition) this.init();
+                        if (this.recognition && !this.isListening) {
+                            try {
+                                this.recognition.start();
+                                this.isListening = true;
+                                localStorage.setItem('instagram_voice_enabled', 'true');
+                                console.log("Voz iniciada.");
+                            } catch (e) { console.error(e); }
+                        }
+                    },
+                    stop: function () {
+                        if (this.recognition && this.isListening) {
+                            this.recognition.stop();
+                            this.isListening = false;
+                            localStorage.setItem('instagram_voice_enabled', 'false');
+                            console.log("Voz parada.");
+                        }
+                    },
+                    toggle: function () {
+                        if (this.isListening) this.stop();
+                        else this.start();
+                        return this.isListening;
+                    },
+                    executeCommand: function (transcript) {
+                        const cmd = this.commands.find(c => transcript.includes(c.phrase.toLowerCase()));
+                        if (cmd) {
+                            console.log("Executando:", cmd.action);
+                            const toast = document.createElement('div');
+                            toast.innerText = `🎤 ${cmd.phrase}`;
+                            toast.style.cssText = "position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); color: white; padding: 8px 16px; border-radius: 20px; z-index: 100000; font-size: 14px; pointer-events: none;";
+                            document.body.appendChild(toast);
+                            setTimeout(() => toast.remove(), 2000);
+
+                            switch (cmd.action) {
+                                case 'downloadStory': baixarStoryAtual(); break;
+                                case 'openSettings': abrirModalConfiguracoes(); break;
+                                case 'closeMenu':
+                                    const m = document.querySelector('.assistive-menu');
+                                    if (m) m.style.display = 'none';
+                                    break;
+                                case 'toggleReelsScroll': toggleRolagemAutomaticaReels(); break;
+                                case 'downloadReel': baixarReelAtual(); break;
+                                case 'openCloseFriends': abrirModalAmigosProximos(); break;
+                                case 'openHideStory': abrirModalOcultarStory(); break;
+                                case 'openMuted': abrirModalContasSilenciadas(); break;
+                                case 'openNotFollowingBack': iniciarProcessoNaoSegueDeVolta(); break;
+                                case 'openFollowing': iniciarProcessoSeguindo(); break;
+                                case 'openBlocked': iniciarProcessoBloqueados(); break;
+                                case 'analyzeReels': iniciarAnaliseReels(); break;
+                                case 'openInteractions': abrirModalInteracoes(); break;
+                            }
+                        }
+                    }
+                };
+
+                // --- Funções auxiliares ---
+                function findSidebarContainer() {
+                    const homeLink = document.querySelector('a[href="/"]');
+                    const exploreLink = document.querySelector('a[href="/explore/"]');
+                    if (homeLink && exploreLink) {
+                        let parent = homeLink.parentElement;
+                        while (parent) {
+                            if (parent.contains(exploreLink)) return parent;
+                            parent = parent.parentElement;
+                        }
+                    }
+                    return document.querySelector('div.x78zum5.xaw8158.xh8yej3');
+                }
+
+                function findItemToClone(container, link) {
+                    if (!container || !link) return null;
+                    let element = link;
+                    while (element && element.parentElement) {
+                        if (element.parentElement === container) return element;
+                        element = element.parentElement;
+                    }
+                    return null;
+                }
+
+                // Tenta encontrar o container da sidebar oficial usando o seletor fornecido
+                const sidebarContainer = findSidebarContainer();
+                if (!sidebarContainer) return; // Aguarda o carregamento da sidebar
+
+                // Add dynamic styles
+                if (!document.getElementById("dynamicMenuStyle")) {
+                    const style = document.createElement("style");
+                    style.id = "dynamicMenuStyle";
+                    document.head.appendChild(style);
+
+                    function updateColors() {
+                        style.innerHTML = `
+                            .assistive-menu {
+                                position: fixed;
+                                top: 50%;
+                                left: 50%;
+                                transform: translate(-50%, -50%);
+                                display: none;
+                                flex-direction: column;
+                                gap: 10px;
+                                z-index: 2147483647;
+                                background: white;
+                                padding: 20px;
+                                border-radius: 12px;
+                                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                                width: 300px;
+                                max-height: 80vh;
+                                overflow-y: auto;
+                            }
+                            .menu-item {
+                                display: flex;
+                                align-items: center;
+                                gap: 10px;
+                            }
+                            .menu-item button {
+                                width: 50px;
+                                height: 50px;
+                                border-radius: 50%;
+                                border: none;
+                                background: transparent;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                cursor: pointer;
+                                transition: background 0.2s;
+                                color: inherit;
+                            }
+                            .menu-item button:hover {
+                                background: rgba(0, 0, 0, 0.05);
+                                border-radius: 8px;
+                            }
+                            .menu-item span {
+                                font-size: 14px;
+                                color: black;
+                                font-weight: 500;
+                            }
+                            .submenu-modal {
+                                background: white;
+                                color: black;
+                            }
+                                    .submenu-modal h2, .submenu-modal span, .submenu-modal th, .submenu-modal td, .submenu-modal li span, .submenu-modal label {
+                                color: black !important;
+                            }
+                                    .submenu-modal input, .submenu-modal select, .submenu-modal option {
+                                        background: white !important;
+                                        color: black !important;
+                                    }
+                            .dark-mode .assistive-menu {
+                                background: black !important;
+                                border: 1px solid #333;
+                            }
+                            .dark-mode .menu-item span {
+                                color: white !important;
+                            }
+                            .dark-mode .menu-item button {
+                                color: white;
+                            }
+                            .dark-mode .menu-item button:hover {
+                                background: rgba(255, 255, 255, 0.1);
+                            }
+                            .dark-mode #allCloseFriendsDiv {
+                                background: black;
+                                color: white;
+                            }
+                            .dark-mode #allHideStoryDiv {
+                                background: black;
+                                color: white;
+                            }
+                            .dark-mode #naoSegueDeVoltaDiv {
+                                background: black;
+                                color: white;
+                            }
+                            .dark-mode .submenu-modal {
+                                background: black !important;
+                                color: white !important;
+                            }
+                            .dark-mode .submenu-modal h2 {
+                                color: white !important;
+                            }
+                                    .dark-mode .submenu-modal span, .dark-mode .submenu-modal th, .dark-mode .submenu-modal td, .dark-mode .submenu-modal li span, .dark-mode .submenu-modal a, .dark-mode .submenu-modal label {
+                                color: white !important;
+                            }
+                            /* Correção para visibilidade de categorias no modo escuro */
+                            .dark-mode .category-item-container {
+                                background: #262626 !important;
+                            }
+
+                            /* Modal de Interações - Padrão de Fontes e Cores */
+                            #interacoesModal, #interacoesModal * {
+                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+                            }
+                            #interacoesModal {
+                                border: 1px solid #ccc;
+                            }
+                            .dark-mode #interacoesModal {
+                                border: 1px solid #333 !important;
+                            }
+                            .submenu-modal .interacoes-input {
+                                width: 100%;
+                                padding: 11px 14px;
+                                border-radius: 8px;
+                                box-sizing: border-box;
+                                font-size: 14px;
+                                outline: none;
+                                transition: border-color 0.2s, background 0.2s;
+                                background: #ffffff !important;
+                                color: #000000 !important;
+                                border: 1px solid #dbdbdb !important;
+                            }
+                            .dark-mode .submenu-modal .interacoes-input {
+                                background: #262626 !important;
+                                color: #ffffff !important;
+                                border: 1px solid #555 !important;
+                            }
+                            .submenu-modal #interacoesSuggestions {
+                                position: absolute;
+                                top: calc(100% + 4px);
+                                left: 0;
+                                right: 0;
+                                border-radius: 8px;
+                                max-height: 220px;
+                                overflow-y: auto;
+                                overflow-x: hidden;
+                                z-index: 10001;
+                                display: none;
+                                scrollbar-width: thin;
+                                background: #ffffff !important;
+                                border: 1px solid #dbdbdb !important;
+                                box-shadow: 0 8px 24px rgba(0,0,0,0.15) !important;
+                            }
+                            .dark-mode .submenu-modal #interacoesSuggestions {
+                                background: #262626 !important;
+                                border: 1px solid #444 !important;
+                                box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
+                            }
+                            .submenu-modal .interacoes-suggestion-item {
+                                color: #000000 !important;
+                            }
+                            .submenu-modal .interacoes-suggestion-item:hover {
+                                background: rgba(0, 0, 0, 0.06) !important;
+                            }
+                            .dark-mode .submenu-modal .interacoes-suggestion-item {
+                                color: #ffffff !important;
+                            }
+                            .dark-mode .submenu-modal .interacoes-suggestion-item:hover {
+                                background: rgba(255, 255, 255, 0.1) !important;
+                            }
+                            .submenu-modal #interacoesUserNameDisplay {
+                                color: #262626 !important;
+                            }
+                            .submenu-modal #interacoesUserBioDisplay {
+                                color: #737373 !important;
+                            }
+                            .submenu-modal #detalhesTitulo {
+                                color: #262626 !important;
+                            }
+                            .submenu-modal .interacoes-status-text {
+                                color: #262626 !important;
+                            }
+                            .dark-mode .submenu-modal #interacoesUserNameDisplay {
+                                color: #ffffff !important;
+                            }
+                            .dark-mode .submenu-modal #interacoesUserBioDisplay {
+                                color: #a8a8a8 !important;
+                            }
+                            .dark-mode .submenu-modal #detalhesTitulo {
+                                color: #ffffff !important;
+                            }
+                            .dark-mode .submenu-modal .interacoes-status-text {
+                                color: #e0e0e0 !important;
+                            }
+
+                            /* Tema Claro: Modal Claro -> Cards Escuros */
+                            .submenu-modal .interacoes-stat-card {
+                                background: #262626 !important;
+                                border: 1px solid #3d3d3d !important;
+                                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+                            }
+                            .submenu-modal .interacoes-stat-card .card-count {
+                                color: #0095f6 !important;
+                            }
+                            .submenu-modal .interacoes-stat-card .card-label,
+                            .submenu-modal .interacoes-stat-card span,
+                            .submenu-modal .interacoes-stat-card div:not(.card-count) {
+                                color: #ffffff !important;
+                            }
+
+                            /* Tema Escuro: Modal Escuro -> Cards Claros */
+                            .dark-mode .submenu-modal .interacoes-stat-card {
+                                background: #ffffff !important;
+                                border: 1px solid #e0e0e0 !important;
+                                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15) !important;
+                            }
+                            .dark-mode .submenu-modal .interacoes-stat-card .card-count {
+                                color: #0095f6 !important;
+                            }
+                            .dark-mode .submenu-modal .interacoes-stat-card .card-label,
+                            .dark-mode .submenu-modal .interacoes-stat-card span,
+                            .dark-mode .submenu-modal .interacoes-stat-card div:not(.card-count) {
+                                color: #262626 !important;
+                            }
+
+                            /* Badges da Coluna Tipo de Bloqueio com alto contraste */
+                            .submenu-modal .badge-tipo-bloqueio,
+                            .dark-mode .submenu-modal .badge-tipo-bloqueio {
+                                display: inline-flex;
+                                align-items: center;
+                                gap: 4px;
+                                padding: 4px 10px;
+                                border-radius: 12px;
+                                font-size: 11px;
+                                font-weight: 700 !important;
+                            }
+                            .submenu-modal .badge-auto-blocked,
+                            .dark-mode .submenu-modal .badge-auto-blocked {
+                                background: #fde8e8 !important;
+                                color: #b71c1c !important;
+                                border: 1px solid #f8b4b4 !important;
+                            }
+                            .submenu-modal .badge-standard,
+                            .dark-mode .submenu-modal .badge-standard {
+                                background: #e8f4fd !important;
+                                color: #0d47a1 !important;
+                                border: 1px solid #90caf9 !important;
+                            }
+
+                            .menu-item-button {
+                                background: #f8f9fa; border: 1px solid #dbdbdb; padding: 10px; border-radius: 8px; cursor: pointer; text-align: left; font-size: 16px; color: black;
+                            }
+                            .dark-mode #reelsSubmenuModal .menu-item-button {
+                                background: #262626 !important;
+                                color: white !important;
+                                border-color: #555 !important;
+                            }
+                            .tab-container {
+                                display: flex;
+                                border-bottom: 1px solid #dbdbdb;
+                                margin-bottom: 15px;
+                            }
+                            .tab-button {
+                                padding: 10px 20px;
+                                cursor: pointer;
+                                border: none;
+                                background-color: transparent;
+                                color: #8e8e8e;
+                                font-weight: 600;
+                            }
+                            .tab-button.active {
+                                color: #262626;
+                                border-bottom: 2px solid #262626;
+                            }
+                            .modal-header {
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                                padding: 10px;
+                                background-color: #f0f0f0;
+                                border-bottom: 1px solid #dbdbdb;
+                                cursor: move; /* Para arrastar a janela */
+                                border-top-left-radius: 10px;
+                                border-top-right-radius: 10px;
+                            }
+                            .dark-mode .modal-header {
+                                background-color: #262626;
+                                border-bottom: 1px solid #363636;
+                            }
+                            .modal-title { font-weight: bold; }
+                            .modal-controls button {
+                                background: none; border: none; font-size: 16px;
+                                cursor: pointer; padding: 5px;
+                                color: #8e8e8e;
+                            }
+                            @keyframes rgb-border-animation {
+                                0% { border-color: rgb(255, 0, 0); }
+                                15% { border-color: rgb(255, 128, 0); }
+                                30% { border-color: rgb(255, 255, 0); }
+                                45% { border-color: rgb(0, 255, 0); }
+                                60% { border-color: rgb(0, 128, 255); }
+                                75% { border-color: rgb(128, 0, 255); }
+                                90% { border-color: rgb(255, 0, 255); }
+                                100% { border-color: rgb(255, 0, 0); }
+                            }
+                            .rgb-border-effect {
+                                border-style: solid !important;
+                                border-width: 2px !important;
+                                animation: rgb-border-animation 5s linear infinite;
+                            }
+
+                            /* Loading Spinner */
+                            .loading-overlay {
+                                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                                background: rgba(255, 255, 255, 0.7);
+                                display: flex; flex-direction: column; justify-content: center; align-items: center;
+                                z-index: 10005; border-radius: 10px;
+                            }
+                            .dark-mode .loading-overlay { background: rgba(0, 0, 0, 0.7); }
+                            .spinner {
+                                width: 40px; height: 40px;
+                                border: 4px solid #f3f3f3;
+                                border-top: 4px solid #3498db;
+                                border-radius: 50%;
+                                animation: spin 1s linear infinite;
+                            }
+                            .loading-text { margin-top: 10px; font-weight: bold; color: #0095f6; font-size: 16px; font-family: sans-serif; }
+                            @keyframes spin {
+                                0% { transform: rotate(0deg); }
+                                100% { transform: rotate(360deg); }
+                            }
+                            .info-tooltip { position: relative; display: inline-block; cursor: help; color: #8e8e8e; vertical-align: middle; }
+                            .info-tooltip .tooltip-text { visibility: hidden; width: 220px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100000; top: 100%; margin-top: 10px; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; font-size: 12px; font-weight: normal; line-height: 1.4; box-shadow: 0 2px 10px rgba(0,0,0,0.2); pointer-events: none; }
+                            .info-tooltip .tooltip-text::after { content: ""; position: absolute; bottom: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: transparent transparent #333 transparent; }
+                            .info-tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
+
+                            /* Toggle Switch Styles */
+                            .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+                            .switch input { opacity: 0; width: 0; height: 0; }
+                            .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
+                            .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
+                            input:checked + .slider { background-color: #0095f6; }
+                            input:checked + .slider:before { transform: translateX(20px); }
+                            .toggle-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; font-size: 16px; color: black; }
+                            .dark-mode .toggle-item { background: #262626 !important; color: white !important; border-color: #555 !important; }
+
+                            /* Loading Spinner */
+                            .loading-overlay {
+                                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                                background: rgba(255, 255, 255, 0.7);
+                                display: flex; flex-direction: column; justify-content: center; align-items: center;
+                                z-index: 10005; border-radius: 10px;
+                            }
+                            .dark-mode .loading-overlay { background: rgba(0, 0, 0, 0.7); }
+                            .spinner {
+                                width: 40px; height: 40px;
+                                border: 4px solid #f3f3f3;
+                                border-top: 4px solid #3498db;
+                                border-radius: 50%;
+                                animation: spin 1s linear infinite;
+                            }
+                            .loading-text { margin-top: 10px; font-weight: bold; color: #0095f6; font-size: 16px; font-family: sans-serif; }
+                            @keyframes spin {
+                                0% { transform: rotate(0deg); }
+                                100% { transform: rotate(360deg); }
+                            }
+                        `;
+                    }
+
+                    updateColors();
+                }
+
+                // Create menu
+                let menu = document.querySelector('.assistive-menu');
+                if (!menu) {
+                    menu = document.createElement("div");
+                    menu.className = "assistive-menu";
+                    menu.innerHTML = `
+                        <div class="menu-item">
+                            <button id="curtidasBtn"><svg aria-label="Curtidas" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M16.792 3.904A4.989 4.989 0 0 1 21.5 9.122c0 3.072-2.652 4.959-5.197 7.222-2.512 2.243-3.865 3.469-4.303 3.752-.477-.309-2.143-1.823-4.303-3.752C5.141 14.072 2.5 12.167 2.5 9.122a4.989 4.989 0 0 1 4.708-5.218 4.21 4.21 0 0 1 3.675 1.941c.843.118 3.377.135 4.234-.149a4.21 4.21 0 0 1 1.675-1.792z"></path></svg></button>
+                            <span>${getText('likes')}</span>
+                        </div>
+                        <div class="menu-item">
+                            <button id="comentariosBtn"><svg aria-label="Comentários" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M20.656 17.008a9.993 9.993 0 1 0-3.59 3.615L22 22z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2"></path></svg></button>
+                            <span>${getText('comments')}</span>
+                        </div>
+                        <div class="menu-item">
+                            <button id="bloqueadosBtn"><svg aria-label="Bloqueados" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"></circle><line x1="4.93" y1="19.07" x2="19.07" y2="4.93" stroke="currentColor" stroke-width="2"></line></svg></button>
+                            <span>${getText('blocked')}</span>
+                        </div>
+                        <div class="menu-item">
+                            <button id="mensagensBtn"><svg aria-label="Mensagens" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><line fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2" x1="22" x2="9.218" y1="3" y2="10.083"></line><polygon fill="none" points="11.698 20.334 22 3.001 2 3.001 9.218 10.084 11.698 20.334" stroke="currentColor" stroke-linejoin="round" stroke-width="2"></polygon></svg></button>
+                            <span>${getText('messages')}</span>
+                        </div>
+                        <div class="menu-item">
+                            <button id="naoSegueDeVoltaBtn"><svg aria-label="Não segue de volta" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8.009 8.009 0 0 1-8 8z"></path><path d="M15.5 11h-7a1 1 0 0 0 0 2h7a1 1 0 0 0 0-2z"></path></svg></button>
+                            <span>${getText('notFollowingBack')}</span>
+                        </div>
+                        <div class="menu-item">
+                            <button id="seguindoBtn"><svg aria-label="Seguindo" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12.004 12.002c3.309 0 6-2.691 6-6s-2.691-6-6-6-6 2.691-6 6 2.691 6 6 6zm0-10c2.206 0 4 1.794 4 4s-1.794 4-4 4-4-1.794-4-4 1.794-4 4-4zm0 12c-2.67 0-8 1.337-8 4v2h16v-2c0-2.663-5.33-4-8-4zm-6 4c.22-.72 3.02-2 6-2s5.78 1.28 6 2H6.004z"></path></svg></button>
+                            <span>${getText('following')}</span>
+                        </div>
+                        <div class="menu-item">
+                            <button id="closeFriendsBtn"><svg aria-label="Amigos Próximos" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" fill="none" r="10" stroke="currentColor" stroke-width="2"></circle><polygon points="12 16.63 7.85 19.33 9.15 14.48 5.24 11.24 10.19 10.96 12 6.38 13.81 10.96 18.76 11.24 14.85 14.48 16.15 19.33 12 16.63" fill="currentColor"></polygon></svg></button>
+                            <span>${getText('closeFriends')}</span>
+                        </div>
+                        <div class="menu-item">
+                            <button id="hideStoryBtn"><svg aria-label="Ocultar Story" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill="none" stroke="currentColor" stroke-width="2"></path><line x1="2" y1="2" x2="22" y2="22" stroke="currentColor" stroke-width="2"></line></svg></button>
+                            <span>${getText('hideStory')}</span>
+                        </div>
+                        <div class="menu-item">
+                            <button id="mutedAccountsBtn"><svg aria-label="Contas Silenciadas" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M11 5L6 9H2v6h4l5 4V5z" fill="none" stroke="currentColor" stroke-width="2"></path><line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2"></line><line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2"></line></svg></button>
+                            <span>${getText('mutedAccounts')}</span>
+                        </div>
+                        <div class="menu-item">
+                            <button id="interacoesBtn"><svg aria-label="Interações" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"></path></svg></button>
+                            <span>${getText('interactions')}</span>
+                        </div>
+
+                        <div class="menu-item">
+                            <button id="reelsMenuBtn"><svg aria-label="Reels" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12.87 1.51l-2.54 2.6-2.53-2.6a.86.86 0 0 0-.61-.25c-.23 0-.45.09-.61.25l-2.54 2.6-2.53-2.6A.86.86 0 0 0 .9 1.26c-.23 0-.45.09-.61.25L.1 1.7a.88.88 0 0 0 0 1.23l2.54 2.6-2.53 2.6a.88.88 0 0 0 0 1.23l.19.19c.16.16.38.25.61.25.23 0 .45-.09.61-.25l2.54-2.6 2.53 2.6c.16.16.38.25.61.25.23 0 .45-.09.61-.25l2.54-2.6 2.53 2.6c.16.16.38.25.61.25.23 0 .45-.09.61-.25l.19-.19a.88.88 0 0 0 0-1.23l-2.53-2.6 2.53-2.6a.88.88 0 0 0 0-1.23l-.19-.19a.86.86 0 0 0-.61-.25z" fill="currentColor"></path><rect height="16" rx="3" ry="3" width="18" x="3" y="7" fill="none" stroke="currentColor" stroke-width="2"></rect></svg></button>
+                            <span>${getText('reelsMenu')}</span>
+                        </div>
+                        <div class="menu-item">
+                            <button id="baixarStoryBtn"><svg aria-label="Baixar Story" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"></path></svg></button>
+                            <span>${getText('downloadStory')}</span>
+                        </div>
+                        <div class="menu-item">
+                            <button id="settingsBtn"><svg aria-label="Configurações" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><circle cx="12" cy="12" fill="none" r="3" stroke="currentColor" stroke-width="2"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.09 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"></path></svg></button>
+                            <span>${getText('settings')}</span>
+                        </div>
+                    `;
+
+                    document.body.appendChild(menu);
+                }
+
+                // Fechar submenu ao clicar fora (Comportamento nativo)
+                if (!document.body.dataset.menuClickListenerAttached) {
+                    document.addEventListener('click', (e) => {
+                        const menu = document.querySelector('.assistive-menu');
+                        const btn = document.getElementById('instagramToolsSidebarBtn');
+                        if (menu && menu.style.display === 'flex') {
+                            // Se o clique não foi no menu nem no botão que o abre
+                            if (!menu.contains(e.target) && (!btn || !btn.contains(e.target))) {
+                                menu.style.display = 'none';
+                            }
+                        }
+                    });
+                    document.body.dataset.menuClickListenerAttached = 'true';
+                }
+
+                const homeLink = sidebarContainer.querySelector('a[href="/"]');
+                const itemToClone = findItemToClone(sidebarContainer, homeLink);
+
+
+                if (itemToClone) {
+                    const newItem = itemToClone.cloneNode(true);
+                    const link = newItem.querySelector('a');
+                    if (link) {
+                        link.id = "instagramToolsSidebarBtn";
+                        link.href = "#";
+                        link.removeAttribute('aria-label');
+
+                        // Substitui o ícone original pelo ícone de engrenagem
+                        const svg = link.querySelector('svg');
+                        if (svg) {
+                            // SVG de Engrenagem estilo Instagram
+                            const newSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                            newSvg.setAttribute("aria-label", "Ferramentas");
+                            newSvg.setAttribute("class", "x1lliihq x1n2onr6 x5n08af");
+                            newSvg.setAttribute("fill", "currentColor");
+                            newSvg.setAttribute("height", "24");
+                            newSvg.setAttribute("role", "img");
+                            newSvg.setAttribute("viewBox", "0 0 24 24");
+                            newSvg.setAttribute("width", "24");
+                            newSvg.innerHTML = '<circle cx="12" cy="12" fill="none" r="3" stroke="currentColor" stroke-width="2"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.09 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"></path>';
+                            svg.replaceWith(newSvg);
+                        }
+
+                        // Adiciona o texto "IG Tools" (para visualização PC)
+                        // Procura por elementos de texto dentro do link clonado de forma mais abrangente
+                        const allDescendants = link.querySelectorAll('*');
+                        allDescendants.forEach(el => {
+                            // Verifica se é um elemento folha (sem filhos tags)
+                            if (el.children.length === 0 && el.textContent.trim().length > 0) {
+                                // Ignora se estiver dentro de um SVG ou for o próprio SVG
+                                if (el.closest('svg')) return;
+
+                                const text = el.textContent.trim();
+                                // Ignora números (notificações) e textos muito curtos
+                                if (isNaN(parseInt(text)) && text.length > 1) {
+                                    el.textContent = "IG Tools";
+                                }
+                            }
+                        });
+
+                        link.addEventListener("click", (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            // Lógica de posicionamento inteligente (PC vs Mobile)
+                            const isDesktop = window.innerWidth >= 1024;
+                            if (isDesktop) {
+                                const sidebar = findSidebarContainer();
+                                const rect = sidebar ? sidebar.getBoundingClientRect() : { right: 72 };
+                                menu.style.left = (rect.right + 15) + 'px';
+                                menu.style.bottom = '20px';
+                                menu.style.top = 'auto';
+                                menu.style.transform = 'none';
+                            } else {
+                                menu.style.left = '50%';
+                                menu.style.top = '50%';
+                                menu.style.bottom = 'auto';
+                                menu.style.transform = 'translate(-50%, -50%)';
+                            }
+
+                            menu.style.display = menu.style.display === "flex" ? "none" : "flex";
+                        });
+                    }
+                    sidebarContainer.appendChild(newItem);
+                }
+
+                function closeMenu() {
+                    menu.style.display = 'none';
+                }
+
+                // Functionality for buttons
+                let usernames = new Set();
+                let downloadStarted = false;
+                let scrollInterval; // Variável global para armazenar o intervalo
+                let isUnfollowing = false; // Flag para prevenir múltiplas execuções
+                let currentExtraction = ''; // Para rastrear se é seguidores ou seguindo
+                let isDarkMode = false;
+                let isReelsScrolling = false;
+                let currentVideoEndedListener = null;
+                let reelsScrollInterval = null;
+
+                // Cache global para listas de usuários, para evitar buscas repetidas
+                const userListCache = {
+                    muted: null,       // Será um Set de usernames
+                    mutedDetails: new Map(), // Map username -> status string
+                    closeFriends: null,  // Será um Set de usernames
+                    hiddenStory: null    // Será um Set de usernames
+                };
+
+                function extractUsernames() {
+                    document
+                        .querySelectorAll('a[href^="/"][role="link"]')
+                        .forEach((a) => {
+                            if (
+                                a.innerText.trim() &&
+                                ![
+                                    "Página inicial",
+                                    "Reels",
+                                    "Explorar",
+                                    "Messenger",
+                                    "Notificações",
+                                    "Criar",
+                                    "Pesquisar",
+                                    "Mais",
+                                    "Editar perfil",
+                                    "Itens Arquivados",
+                                    "seguidores",
+                                    "seguindo",
+                                    "Privacidade",
+                                    "Termos",
+                                    "Instagram Lite",
+                                    "Meta Verified",
+                                    "outras pessoas",
+                                    "Ver todos os 2 comentários",
+                                    "Localizações",
+                                ].includes(a.innerText.trim())
+                            ) {
+                                usernames.add(a.innerText.trim());
+                            }
+                        });
+                }
+
+                function getTotalFollowersOrFollowing(type) {
+                    // Encontra o cabeçalho principal da página de perfil.
+                    const header = document.querySelector('main header');
+                    if (!header) return 1;
+
+                    // Encontra todos os itens da lista de estatísticas (Posts, Seguidores, Seguindo).
+                    const stats = header.querySelectorAll('ul li');
+                    let targetStatElement;
+
+                    if (type === 'followers') {
+                        // Encontra o item que contém o texto "seguidores".
+                        targetStatElement = Array.from(stats).find(li => li.innerText.toLowerCase().includes('seguidores'));
+                    } else if (type === 'following') {
+                        // Encontra o item que contém o texto "seguindo".
+                        targetStatElement = Array.from(stats).find(li => li.innerText.toLowerCase().includes('seguindo'));
+                    }
+
+                    if (targetStatElement) {
+                        // Prioridade 1: Tenta encontrar um <span> com um atributo 'title', que geralmente tem o número exato.
+                        const titleSpan = targetStatElement.querySelector('span[title]');
+                        if (titleSpan && titleSpan.title) {
+                            return parseInt(titleSpan.title.replace(/\D/g, ''), 10) || 1;
+                        }
+                        // Prioridade 2 (Fallback): Extrai o número do texto visível.
+                        const numberString = targetStatElement.innerText.split(' ')[0].replace(/\./g, '').replace(/,/g, '');
+                        return parseInt(numberString, 10) || 1;
+                    }
+                    return 1; // Retorna 1 como fallback para evitar divisão por zero
+                }
+
+                function updateProgressBar(progress, total, message = "") {
+                    let bar = document.getElementById("progressBar");
+                    let fill = document.getElementById("progressFill");
+                    let text = document.getElementById("progressText");
+                    let closeButton = document.getElementById("progressCloseBtn");
+
+                    if (!bar) {
+                        bar = document.createElement("div");
+                        bar.id = "progressBar";
+                        bar.style.cssText =
+                            "position:fixed;top:20px;left:50%;transform:translateX(-50%);width:80%;height:30px;background:#e0e0e0;border-radius:15px;overflow:hidden;z-index:9999;color:black;font-weight:bold;font-size:14px;text-align:center;line-height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;box-shadow:0 4px 12px rgba(0,0,0,0.2);";
+
+                        fill = document.createElement("div");
+                        fill.id = "progressFill";
+                        fill.style.cssText =
+                            "height:100%;width:0%;background:#28a745;position:absolute;left:0;top:0;z-index:1;transition:width 0.25s ease-in-out;";
+
+                        text = document.createElement("div");
+                        text.id = "progressText";
+                        text.style.cssText = "position:relative;z-index:2;text-shadow:0 0 2px rgba(255,255,255,0.8);";
+                        text.innerText = "0%";
+
+                        closeButton = document.createElement("button");
+                        closeButton.id = "progressCloseBtn";
+                        closeButton.innerText = "Fechar";
+                        closeButton.style.cssText =
+                            "background:red;color:white;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;";
+
+                        closeButton.addEventListener("click", () => {
+                            if (scrollInterval) {
+                                clearInterval(scrollInterval); // Interrompe o processo de rolagem
+                                scrollInterval = null; // Reseta a variável
+                            }
+                            bar.remove(); // Remove a barra de progresso
+                            alert("Processo interrompido pelo usuário.");
+                        });
+
+                        bar.appendChild(fill);
+                        bar.appendChild(text);
+                        bar.appendChild(closeButton);
+                        document.body.appendChild(bar);
+                    }
+
+                    const percent = Math.min((progress / total) * 100, 100);
+
+                    // Atualizar a barra de progresso
+                    fill.style.width = percent + "%";
+                    text.innerText = `${Math.floor(percent)}% (${progress}/${total})`;
+                }
+
+                function startScroll(totalCount, onProgress) {
+                    // Busca dinâmica do contêiner de scroll (Desktop/Mobile)
+                    let scrollDiv = document.querySelector('div[role="dialog"] ._aano') ||
+                        document.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]');
+
+                    if (!scrollDiv) {
+                        scrollDiv = document.querySelector('div.xyi19xy.x1ccrb07.xtf3nb5.x1pc53ja.x1lliihq.x1iyjqo2.xs83m0k.xz65tgg.x1rife3k.x1n2onr6');
+                    }
+
+                    if (!scrollDiv) {
+                        alert("Div com scroll não encontrada.");
+                        return;
+                    }
+
+                    let waitTime = 0;
+                    scrollInterval = setInterval(() => {
+                        extractUsernames();
+                        onProgress(usernames.size, totalCount);
+
+                        if (scrollDiv.scrollTop + scrollDiv.clientHeight >= scrollDiv.scrollHeight) {
+                            waitTime += 2;
+                            if (waitTime >= 10) {
+                                clearInterval(scrollInterval);
+                                onProgress(usernames.size, totalCount, " - Concluído!");
+                            }
+                        } else {
+                            scrollDiv.scrollTop = scrollDiv.scrollHeight;
+                            waitTime = 0;
+                        }
+                    }, 2000);
+                }
+
+                function startDownload() {
+                    const csv = "Username\n" + [...usernames].join("\n");
+                    const a = document.createElement("a");
+                    a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+                    a.download = currentExtraction + ".csv";
+                    a.click();
+                    // Remove a barra de progresso após o download
+                    let bar = document.getElementById("progressBar");
+                    if (bar) bar.remove();
+                }
+
+                /**
+                 * Cria uma barra de progresso com um botão de cancelar.
+                 * @param {function} onCancel - Callback a ser executado quando o botão de cancelar é clicado.
+                 * @returns {object} - Um objeto com as funções { update, remove }.
+                 */
+                function createCancellableProgressBar() {
+                    document.getElementById("cancellableProgressBar")?.remove();
+
+                    const bar = document.createElement("div");
+                    bar.id = "cancellableProgressBar";
+                    bar.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);width:80%;height:30px;background:#ccc;z-index:2147483647;color:black;font-weight:bold;font-size:14px;text-align:center;line-height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;";
+
+                    const fill = document.createElement("div");
+                    fill.style.cssText = "height:100%;width:0%;background:#4caf50;position:absolute;left:0;top:0;z-index:-1;";
+
+                    const text = document.createElement("div");
+                    text.style.position = "relative";
+
+                    const closeButton = document.createElement("button");
+                    closeButton.innerText = "Cancelar";
+                    closeButton.style.cssText = "background:red;color:white;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;";
+
+                    bar.appendChild(fill);
+                    bar.appendChild(text);
+                    bar.appendChild(closeButton);
+                    document.body.appendChild(bar);
+
+                    const update = (current, total, message = '') => {
+                        const percent = total > 0 ? Math.min((current / total) * 100, 100) : 0;
+                        fill.style.width = `${percent}%`;
+                        text.innerText = `${message} ${Math.floor(percent)}% (${current}/${total})`;
+                    };
+
+                    return { bar, update, closeButton };
+                }
+
+                document
+                    .getElementById("curtidasBtn")
+                    .addEventListener("click", (e) => {
+                        e.preventDefault();
+                        history.pushState(null, null, "/your_activity/interactions/likes/");
+                        window.dispatchEvent(new Event("popstate"));
+                    });
+
+                document
+                    .getElementById("comentariosBtn")
+                    .addEventListener("click", (e) => {
+                        e.preventDefault();
+                        history.pushState(null, null, "/your_activity/interactions/comments/");
+                        window.dispatchEvent(new Event("popstate"));
+                    });
+
+                document
+                    .getElementById("mensagensBtn")
+                    .addEventListener("click", (e) => {
+                        e.preventDefault();
+                        history.pushState(null, null, "/direct/inbox/");
+                        window.dispatchEvent(new Event("popstate"));
+                    });
+
+                document
+                    .getElementById("bloqueadosBtn")
+                    .addEventListener("click", (e) => {
+                        closeMenu();
+                        iniciarProcessoBloqueados();
+                    });
+
+                document.getElementById("naoSegueDeVoltaBtn").addEventListener("click", () => {
+                    closeMenu();
+                    iniciarProcessoNaoSegueDeVolta();
+                });
+
+                document.getElementById("seguindoBtn").addEventListener("click", () => {
+                    closeMenu();
+                    iniciarProcessoSeguindo();
+                });
+
+                // --- NOVO MENU: AMIGOS PRÓXIMOS ---
+                document.getElementById("closeFriendsBtn").addEventListener("click", () => {
+                    closeMenu();
+                    console.log("Botão Amigos Próximos clicado");
+                    // Direcionar para a página de amigos próximos se não estiver lá
+                    if (window.location.pathname !== "/accounts/close_friends/") {
+                        console.log("Navegando para /accounts/close_friends/");
+                        history.pushState(null, null, "/accounts/close_friends/");
+                        window.dispatchEvent(new Event("popstate"));
+
+                        let modalStarted = false;
+                        // Espera o carregamento da página antes de abrir o modal
+                        let checkLoad = setInterval(async () => {
+                            if (document.querySelector('div[data-bloks-name="bk.components.Flexbox"]') && !modalStarted) {
+                                modalStarted = true;
+                                clearInterval(checkLoad);
+                                await new Promise(r => setTimeout(r, 1000)); // Delay extra para estabilidade
+                                await abrirModalAmigosProximos();
+                            }
+                        }, 500);
+                        // Timeout de segurança após 5s
+                        setTimeout(() => clearInterval(checkLoad), 5000);
+                    } else {
+                        console.log("Já na página /accounts/close_friends/, abrindo modal");
+                        abrirModalAmigosProximos();
+                    }
+                });
+
+                // --- NOVO MENU: OCULTAR STORY ---
+                document.getElementById("hideStoryBtn").addEventListener("click", () => {
+                    closeMenu();
+                    console.log("Botão Ocultar Story clicado");
+                    // Direcionar para a página de ocultar story se não estiver lá
+                    if (window.location.pathname !== "/accounts/hide_story_and_live_from/") {
+                        console.log("Navegando para /accounts/hide_story_and_live_from/");
+                        history.pushState(null, null, "/accounts/hide_story_and_live_from/");
+                        window.dispatchEvent(new Event("popstate"));
+
+                        let modalStarted = false;
+                        let checkLoad = setInterval(async () => {
+                            if (document.querySelector('div[data-bloks-name="bk.components.Flexbox"]') && !modalStarted) {
+                                modalStarted = true;
+                                clearInterval(checkLoad);
+                                await new Promise(r => setTimeout(r, 1000));
+                                await abrirModalOcultarStory();
+                            }
+                        }, 500);
+                        setTimeout(() => clearInterval(checkLoad), 5000);
+                    } else {
+                        console.log("Já na página /accounts/hide_story_and_live_from/, abrindo modal");
+                        abrirModalOcultarStory();
+                    }
+                });
+
+                document.getElementById("mutedAccountsBtn").addEventListener("click", () => {
+                    closeMenu();
+                    console.log("Botão Contas Silenciadas clicado");
+                    if (window.location.pathname !== "/accounts/muted_accounts/") {
+                        console.log("Navegando para /accounts/muted_accounts/");
+                        history.pushState(null, null, "/accounts/muted_accounts/");
+                        window.dispatchEvent(new Event("popstate"));
+
+                        let modalStarted = false;
+                        let checkLoad = setInterval(async () => {
+                            if (document.querySelector('div[data-bloks-name="bk.components.Flexbox"]') && !modalStarted) {
+                                modalStarted = true;
+                                clearInterval(checkLoad);
+                                await new Promise(r => setTimeout(r, 1000));
+                                await abrirModalContasSilenciadas();
+                            }
+                        }, 500);
+                        setTimeout(() => clearInterval(checkLoad), 5000);
+                    } else {
+                        abrirModalContasSilenciadas();
+                    }
+                });
+
+                document.getElementById("interacoesBtn").addEventListener("click", () => {
+                    closeMenu();
+                    abrirModalInteracoes();
+                });
+
+                // --- NOVO MENU: REELS ---
+                document.getElementById("reelsMenuBtn").addEventListener("click", () => {
+                    closeMenu();
+                    abrirModalReels();
+                });
+                document.getElementById("baixarStoryBtn").addEventListener("click", () => { baixarStoryAtual(); });
+
+                document.getElementById("settingsBtn").addEventListener("click", () => {
+                    closeMenu();
+                    abrirModalConfiguracoes();
+                });
+
+                function extractCloseFriendsUsernames(doc = document) {
+                    return new Promise((resolve) => {
+                        const users = new Map();
+                        let scrollInterval;
+                        let noNewUsersCount = 0;
+                        const maxIdleCount = 3;
+
+                        let cancelled = false;
+                        const { bar, update, closeButton } = createCancellableProgressBar();
+                        closeButton.onclick = () => { cancelled = true; finishExtraction(); };
+                        update(0, 0, "Carregando Amigos Próximos...");
+
+                        function finishExtraction() {
+                            clearInterval(scrollInterval);
+                            if (bar) bar.remove();
+                            resolve(cancelled ? [] : Array.from(users.values()));
+                        }
+
+                        function performScrollAndExtract() {
+                            const initialUserCount = users.size;
+                            const userElements = Array.from(doc.querySelectorAll('div.wbloks_1, div[data-bloks-name="bk.components.Flexbox"]'))
+                                .filter(el => el.querySelector('div[aria-label*="caixa de seleção"], div[role="button"][aria-label*="caixa de seleção"]') || (el.querySelector('img') && el.innerText && el.innerText.includes('\n')));
+
+                            userElements.forEach(userElement => {
+                                const spans = Array.from(userElement.querySelectorAll('span'));
+                                let username = spans.length > 0 ? spans[0].innerText.trim() : (userElement.innerText ? userElement.innerText.trim().split('\n')[0] : '');
+                                username = username.replace(/^@/, '');
+
+                                if (username && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
+                                    const imgTag = userElement.querySelector('img');
+                                    users.set(username, { username, photoUrl: imgTag ? imgTag.src : '' });
+                                }
+                            });
+
+                            update(users.size, users.size, `Encontrado(s) ${users.size}...`);
+
+                            if (users.size === initialUserCount) noNewUsersCount++;
+                            else noNewUsersCount = 0;
+
+                            if (noNewUsersCount >= (users.size > 0 ? maxIdleCount : 5)) {
+                                finishExtraction();
+                                return;
+                            }
+
+                            // Rolagem inteligente (Desktop e Mobile)
+                            const scrollContainer = doc.querySelector('div[role="dialog"] ._aano') ||
+                                doc.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]') ||
+                                doc.querySelector('main div[style*="overflow-y: auto"]') ||
+                                doc.querySelector('div[style*="overflow-y: auto"]') ||
+                                doc.querySelector('._aano') ||
+                                doc.documentElement;
+                            if (scrollContainer && scrollContainer !== doc.documentElement) {
+                                scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                            } else {
+                                window.scrollTo(0, document.body.scrollHeight);
+                            }
+                        }
+
+                        scrollInterval = setInterval(performScrollAndExtract, 1000);
+                    });
+                }
+
+                async function abrirModalAmigosProximos() {
+                    if (modalAberto) return; // Se modal já aberto, não faz nada
+
+                    modalAberto = true; // Marca que modal foi aberto para evitar loop infinito
+
+                    const users = await extractCloseFriendsUsernames();
+
+                    // Monta a div
+                    const div = document.createElement("div");
+                    div.id = "allCloseFriendsDiv";
+                    div.className = "submenu-modal";
+                    div.style.cssText = `
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 70vw;
+            max-width: 700px;
+            max-height: 85vh;
+            overflow: auto;
+            border: 2px solid #0095f6;
+            border-radius: 10px;
+            z-index: 2147483647;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        `;
+
+                    const itemsPerPage = loadSettings().itemsPerPage;
+                    let currentPage = 1;
+                    let currentTab = 'nao_selecionados'; // 'selecionados' or 'nao_selecionados'
+
+                    // Cache official checkbox states for performance
+                    const officialCheckboxStates = new Map();
+                    const flexboxes = Array.from(document.querySelectorAll('div.wbloks_1, [data-bloks-name="bk.components.Flexbox"]'));
+                    flexboxes.forEach(flex => {
+                        const spans = Array.from(flex.querySelectorAll('span'));
+                        const userText = spans.length > 0 ? spans[0].innerText.trim() : (flex.innerText && flex.innerText.trim().split('\n')[0]);
+                        if (userText) {
+                            const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"], div[aria-label*="caixa de seleção"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção') || el.getAttribute('role') === 'button');
+                            if (officialCheckboxContainer) {
+                                const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"], div.wbloks_1') || officialCheckboxContainer;
+                                const style = window.getComputedStyle(iconDiv);
+                                const bgColor = style.backgroundColor;
+                                const mask = style.maskImage || style.webkitMaskImage;
+                                const bgImg = style.backgroundImage;
+                                const isChecked = (bgColor === "rgb(0, 149, 246)" || bgColor === "rgb(74, 93, 249)" || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled')));
+                                officialCheckboxStates.set(userText, isChecked);
+                            }
+                        }
+                    });
+
+                    // Filtra e armazena no cache APENAS os usuários que estão realmente marcados
+                    const closeFriendsUsernames = users
+                        .filter(u => officialCheckboxStates.get(u.username) === true)
+                        .map(u => u.username);
+                    userListCache.closeFriends = new Set(closeFriendsUsernames);
+                    console.log(`Cache atualizado com ${userListCache.closeFriends.size} melhores amigos.`);
+
+                    // Gerenciamento de estado para os checkboxes do modal, similar a "Ocultar Story"
+                    const modalStates = new Map();
+                    users.forEach(({ username }) => {
+                        modalStates.set(username, officialCheckboxStates.get(username) || false);
+                    });
+
+                    // Armazena os estados iniciais para comparar no "Aplicar"
+                    const initialStates = new Map(modalStates);
+
+                    function renderPage(page) {
+                        let html = `
+                <div class="modal-header">
+                    <span class="modal-title">
+                        Amigos Próximos <span id="cfSelectedCount" style="font-size:12px; font-weight:normal; color:#0095f6;">(${Array.from(modalStates.values()).filter(v => v).length} selecionados)</span>
+                        <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie sua lista de Melhores Amigos. Selecione quem pode ver seus stories exclusivos (círculo verde).</span></div>
+                    </span>
+                    <div class="modal-controls"><button id="closeFriendsMinimizarBtn" title="Minimizar">_</button><button id="closeFriendsFecharBtn" title="Fechar">X</button></div>
+                </div>`;
+                        html += `
+                <div style="padding: 15px;">
+                    <button id="closeFriendsMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
+                    <button id="closeFriendsDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
+                    <button id="closeFriendsAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
+                </div>
+                <div style="padding: 0 15px 15px 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <button id="closeFriendsRefreshBtn" style="background: #1abc9c; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar Lista</button>
+                    <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; flex: 1; justify-content: flex-end; border: none; background: transparent;">
+                        <span style="font-size: 13px; font-weight: 500;">⚡ API</span>
+                        <label class="switch">
+                            <input type="checkbox" id="closeFriendsUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div style="margin-bottom:15px;">
+                        <input type="text" id="closeFriendsSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
+                </div>
+                <div class="tab-container">
+                    <button id="tabSelecionados" class="tab-button ${currentTab === 'selecionados' ? 'active' : ''}">Melhores Amigos</button>
+                    <button id="tabNaoSelecionados" class="tab-button ${currentTab === 'nao_selecionados' ? 'active' : ''}">Amigos</button>
+                </div>
+                <ul id="closeFriendsList" style='list-style:none;padding:0;max-height:40vh;overflow:auto;'>
+            `;
+
+                        // Filter users based on tab
+                        let filteredUsers = users;
+                        if (currentTab === 'selecionados') {
+                            filteredUsers = users.filter(({
+                                username
+                            }) => {
+                                return modalStates.get(username) === true;
+                            });
+                        } else if (currentTab === 'nao_selecionados') {
+                            filteredUsers = users.filter(({
+                                username
+                            }) => !modalStates.get(username));
+                        }
+
+                        const startIndex = (page - 1) * itemsPerPage;
+                        const endIndex = Math.min(startIndex + itemsPerPage, filteredUsers.length);
+                        const pageUsers = filteredUsers.slice(startIndex, endIndex);
+
+                        pageUsers.forEach(({ username, photoUrl }, idx) => {
+                            const isChecked = modalStates.get(username) || false;
+
+                            html += `
+                    <li style="padding:5px 0;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px;">
+                        <label class="custom-checkbox" for="cfcb_${username}" style="margin:0;">
+                            <input type="checkbox" class="closeFriendCheckbox" id="cfcb_${username}" data-username="${username}" ${isChecked ? "checked" : ""}>
+                            <span class="checkmark"></span>
+                        </label>
+                        <img src="${photoUrl || DEFAULT_AVATAR}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
+                        <span style="cursor:pointer; color: black;">${username}</span>
+                    </li>
+                `;
+                        });
+                        html += "</ul>";
+                        const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+                        html += `<div id="paginationControls" style="margin-top:20px; display:flex; justify-content:center; align-items:center; gap:10px;">`;
+                        if (totalPages > 1) {
+                            if (page > 1) html += `<button id="prevPageBtn">Anterior</button>`;
+                            html += `<span style="font-weight:bold;">Página ${page} de ${totalPages}</span>`;
+                            if (page < totalPages) html += `<button id="nextPageBtn">Próximo</button>`;
+                        }
+                        html += `</div>`;
+                        div.innerHTML = html;
+                        document.body.appendChild(div);
+
+                        document.getElementById("closeFriendsFecharBtn").onclick = () => {
+                            div.remove();
+                            modalAberto = false;
+                        };
+                        document.getElementById("closeFriendsMinimizarBtn").onclick = () => {
+                            const modal = document.getElementById('allCloseFriendsDiv');
+                            const contentToToggle = [
+                                modal.querySelector('input[type="text"]'),
+                                modal.querySelector('.tab-container'),
+                                modal.querySelector('ul'),
+                                modal.querySelector('#paginationControls')
+                            ].filter(Boolean);
+
+                            const btn = document.getElementById('closeFriendsMinimizarBtn');
+                            const isMinimized = modal.dataset.minimized === 'true';
+
+                            contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+
+                            modal.dataset.minimized = !isMinimized;
+                            btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
+                            modal.style.maxHeight = isMinimized ? '85vh' : 'none';
+                        };
+
+                        document.getElementById("closeFriendsRefreshBtn").onclick = () => {
+                            div.remove();
+                            modalAberto = false;
+                            abrirModalAmigosProximos();
+                        };
+
+                        document.getElementById("closeFriendsUseApiToggle").onchange = (e) => {
+                            saveSettings({ useApi: e.target.checked });
+                            showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
+                        };
+
+                        document.getElementById("closeFriendsMarcarTodosBtn").onclick = () => {
+                            // Filtra os usuários da aba atual e depois pega apenas os da página visível
+                            const filteredUsers = users.filter(({ username }) => {
+                                return currentTab === 'selecionados' ? modalStates.get(username) : !modalStates.get(username);
+                            });
+                            const startIndex = (currentPage - 1) * itemsPerPage;
+                            const endIndex = Math.min(startIndex + itemsPerPage, filteredUsers.length);
+                            const pageUsers = filteredUsers.slice(startIndex, endIndex);
+
+                            pageUsers.forEach(({ username }) => modalStates.set(username, true));
+                            renderPage(currentPage);
+                        };
+                        document.getElementById("closeFriendsDesmarcarTodosBtn").onclick = () => {
+                            // Filtra os usuários da aba atual e depois pega apenas os da página visível
+                            const filteredUsers = users.filter(({ username }) => {
+                                return currentTab === 'selecionados' ? modalStates.get(username) : !modalStates.get(username);
+                            });
+                            const startIndex = (currentPage - 1) * itemsPerPage;
+                            const endIndex = Math.min(startIndex + itemsPerPage, filteredUsers.length);
+                            const pageUsers = filteredUsers.slice(startIndex, endIndex);
+
+                            pageUsers.forEach(({ username }) => modalStates.set(username, false));
+                            renderPage(currentPage);
+                        };
+
+                        const searchInput = document.getElementById("closeFriendsSearchInput");
+                        searchInput.addEventListener("input", () => {
+                            const filter = searchInput.value.toLowerCase();
+                            const listItems = div.querySelectorAll("#closeFriendsList li");
+                            listItems.forEach(li => {
+                                // Seletor ajustado para ser mais específico
+                                const usernameSpan = li.querySelector('span[style*="cursor:pointer"]');
+                                if (usernameSpan) {
+                                    const text = usernameSpan.textContent.toLowerCase();
+                                    li.style.display = text.includes(filter) ? "" : "none";
+                                }
+                            });
+                        });
+
+                        document.getElementById("tabSelecionados").onclick = () => {
+                            if (currentTab !== 'selecionados') {
+                                currentTab = 'selecionados';
+                                currentPage = 1;
+                                renderPage(currentPage);
+                            }
+                        };
+                        document.getElementById("tabNaoSelecionados").onclick = () => {
+                            if (currentTab !== 'nao_selecionados') {
+                                currentTab = 'nao_selecionados';
+                                currentPage = 1;
+                                renderPage(currentPage);
+                            }
+                        };
+
+                        const prevBtn = document.getElementById("prevPageBtn");
+                        if (prevBtn) prevBtn.onclick = () => {
+                            currentPage--;
+                            renderPage(currentPage);
+                        };
+                        const nextBtn = document.getElementById("nextPageBtn");
+                        if (nextBtn) nextBtn.onclick = () => {
+                            currentPage++;
+                            renderPage(currentPage);
+                        };
+
+                        // Adiciona eventos para os checkboxes na página atual
+                        document.querySelectorAll('.closeFriendCheckbox').forEach(cb => {
+                            cb.addEventListener('change', () => {
+                                modalStates.set(cb.dataset.username, cb.checked);
+                                const countEl = document.getElementById('cfSelectedCount');
+                                if (countEl) {
+                                    countEl.innerText = `(${Array.from(modalStates.values()).filter(v => v).length} selecionados)`;
+                                }
+                            });
+                        });
+
+                        document.getElementById("closeFriendsAplicarBtn").onclick = async () => {
+                            isApplyingChanges = true;
+                            const changedUsers = Array.from(modalStates.entries()).filter(([username, checked]) => {
+                                return initialStates.get(username) !== checked;
+                            });
+                            if (changedUsers.length === 0) {
+                                alert("Nenhuma alteração para aplicar.");
+                                isApplyingChanges = false;
+                                return;
+                            }
+
+                            let cancelled = false;
+                            const { bar, update, closeButton } = createCancellableProgressBar();
+                            closeButton.onclick = () => {
+                                cancelled = true;
+                                isApplyingChanges = false;
+                                bar.remove();
+                                alert("Processo interrompido.");
+                            };
+                            const isCancelled = () => cancelled;
+
+                            toggleLoading(true, 0, "Aplicando alterações...");
+                            // --- LÓGICA API VS HUMANA ---
+                            if (loadSettings().useApi) {
+                                update(0, changedUsers.length, "Obtendo IDs e aplicando via API...");
+                                const adds = [];
+                                const removes = [];
+
+                                for (let i = 0; i < changedUsers.length; i++) {
+                                    if (isCancelled()) break;
+                                    const [username, isChecked] = changedUsers[i];
+                                    update(i + 1, changedUsers.length, `Processando ${username}...`);
+                                    const uid = await getUserId(username);
+                                    if (uid) {
+                                        if (isChecked) adds.push(uid);
+                                        else removes.push(uid);
+                                    }
+                                    await new Promise(r => setTimeout(r, 200));
+                                }
+
+                                if (!isCancelled() && (adds.length > 0 || removes.length > 0)) {
+                                    try {
+                                        const res = await executeGraphqlSetBesties(adds, removes);
+                                        if (res.success) {
+                                            alert("Alterações aplicadas via API com sucesso!");
+                                        } else {
+                                            console.error("[IG Tools] Erro ao aplicar via API GraphQL:", res);
+                                            alert("Erro ao aplicar via API. Verifique o console.");
+                                        }
+                                    } catch (e) { console.error(e); alert("Erro ao aplicar via API."); }
+                                    toggleLoading(false);
+                                }
+                                bar.remove(); isApplyingChanges = false; return;
+                            }
+
+                            if (window.location.pathname !== "/accounts/close_friends/") {
+                                history.pushState(null, null, "/accounts/close_friends/");
+                                window.dispatchEvent(new Event("popstate"));
+                                await new Promise(resolve => setTimeout(resolve, 1000));
+                            }
+                            async function toggleOfficialCheckbox(username) {
+                                return new Promise((resolve) => {
+                                    let attempts = 0;
+                                    function tryToggle() {
+                                        attempts++;
+                                        const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
+                                        let found = false;
+                                        for (const flex of flexboxes) {
+                                            const userText = flex.innerText && flex.innerText.trim().split('\n')[0];
+                                            if (userText === username) {
+                                                const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção'));
+                                                if (officialCheckboxContainer) {
+                                                    officialCheckboxContainer.click();
+                                                    found = true;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        if (found || attempts >= 30) {
+                                            resolve();
+                                        } else {
+                                            setTimeout(tryToggle, 300);
+                                        }
+                                    }
+                                    tryToggle();
+                                });
+                            }
+                            for (let i = 0; i < changedUsers.length; i++) {
+                                if (isCancelled()) break;
+                                update(i + 1, changedUsers.length, "Aplicando alterações:");
+                                const [username, isChecked] = changedUsers[i];
+                                await toggleOfficialCheckbox(username);
+                                await new Promise(resolve => setTimeout(resolve, 2000));
+                                // Atualiza o estado inicial para o próximo "Aplicar"
+                                initialStates.set(username, isChecked);
+                                toggleLoading(true, ((i + 1) / changedUsers.length) * 100, "Aplicando alterações...");
+                            }
+
+                            bar.remove();
+                            isApplyingChanges = false;
+                        };
+
+                        let isApplyingChanges = false;
+                        setTimeout(() => {
+                            const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
+                            flexboxes.forEach(flex => {
+                                const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção'));
+                                if (!officialCheckboxContainer) return;
+                                if (officialCheckboxContainer._customSyncListener) return;
+                                officialCheckboxContainer._customSyncListener = true;
+                                officialCheckboxContainer.addEventListener("click", function () {
+                                    if (isApplyingChanges) return;
+                                    const userText = flex.innerText && flex.innerText.trim().split('\n')[0];
+                                    const customCheckbox = document.querySelector(`.closeFriendCheckbox[data-username="${userText}"]`);
+                                    if (customCheckbox) {
+                                        const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"]');
+                                        let isChecked = false;
+                                        if (iconDiv) {
+                                            const style = window.getComputedStyle(iconDiv);
+                                            const mask = style.maskImage || style.webkitMaskImage;
+                                            const bgImg = style.backgroundImage;
+                                            isChecked = (style.backgroundColor === 'rgb(0, 149, 246)' || style.backgroundColor === 'rgb(74, 93, 249)' || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled')));
+                                        }
+                                        if (customCheckbox.checked !== isChecked) {
+                                            customCheckbox.checked = isChecked;
+                                        }
+                                    }
+                                });
+                            });
+                        }, 500);
+                        const aplicarBtn = document.getElementById("closeFriendsAplicarBtn");
+                        if (aplicarBtn) {
+                            const originalHandler = aplicarBtn.onclick;
+                            aplicarBtn.onclick = async function () {
+                                isApplyingChanges = true;
+                                if (originalHandler) {
+                                    await originalHandler.apply(this, arguments);
+                                }
+                                toggleLoading(false);
+                                isApplyingChanges = false;
+                            };
+                        }
+                    }
+
+                    renderPage(currentPage);
+                }
+
+                let tentativasUser = 0;
+                let modalAberto = false; // Flag para evitar loop infinito
+                // --- FIM DO MENU AMIGOS PRÓXIMOS ---
+
+                // --- NOVO MENU: OCULTAR STORY ---
+                function extractHideStoryUsernames(doc = document) {
+                    return new Promise((resolve) => {
+                        const users = new Map(); // Usar Map para evitar duplicados e manter a ordem
+                        let scrollInterval;
+                        let noNewUsersCount = 0;
+                        const maxIdleCount = 6; // Parar após 6 tentativas rápidas sem novos usuários (~2.4s)
+
+                        let cancelled = false;
+                        const { bar, update, closeButton } = createCancellableProgressBar();
+                        closeButton.onclick = () => {
+                            cancelled = true;
+                            finishExtraction();
+                        };
+                        update(0, 0, "Buscando e rolando a lista de usuários com story oculto...");
+
+                        function finishExtraction() {
+                            if (scrollInterval) clearInterval(scrollInterval);
+                            if (window._igHideStoryUsersCapture && window._igHideStoryUsersCapture.callbacks) {
+                                const idx = window._igHideStoryUsersCapture.callbacks.indexOf(networkCallback);
+                                if (idx !== -1) window._igHideStoryUsersCapture.callbacks.splice(idx, 1);
+                            }
+                            if (bar) bar.remove();
+                            console.log(`[IG Tools] Extração de Ocultar Story finalizada. Total de ${users.size} usuários encontrados.`);
+                            users.forEach(u => {
+                                if (u.username && u.pk) setCachedUserId(u.username, u.pk);
+                            });
+                            resolve(cancelled ? [] : Array.from(users.values()));
+                        }
+
+                        // 1. Tenta extrair dados JSON embutidos pelo Instagram SSR (scripts application/json)
+                        function tryExtractFromSSRScripts() {
+                            try {
+                                const scripts = Array.from(doc.querySelectorAll('script[type="application/json"]'));
+                                for (const script of scripts) {
+                                    const text = script.textContent || '';
+                                    if (!text.includes('hide_story') && !text.includes('story') && !text.includes('username')) continue;
+
+                                    const userRegex = /"username":"([a-zA-Z0-9._]+)"/g;
+                                    let match;
+                                    while ((match = userRegex.exec(text)) !== null) {
+                                        const uname = match[1];
+                                        if (!uname || uname === 'instagram' || uname === 'threads') continue;
+
+                                        const start = Math.max(0, match.index - 300);
+                                        const end = Math.min(text.length, match.index + 500);
+                                        const chunk = text.slice(start, end);
+
+                                        const picMatch = chunk.match(/"profile_pic_url":"([^"]+)"/);
+                                        const photoUrl = picMatch ? picMatch[1].replace(/\\/g, '').replace(/\\u0026/g, '&') : DEFAULT_AVATAR;
+
+                                        const pkMatch = chunk.match(/"pk":"?(\d+)"?/);
+                                        const pk = pkMatch ? pkMatch[1] : '';
+                                        if (pk) setCachedUserId(uname, pk);
+
+                                        let isChecked = false;
+                                        const chunkLower = chunk.toLowerCase();
+                                        if (chunkLower.includes('circle-check') || chunkLower.includes('"is_selected":true') || chunkLower.includes('"selected":true')) {
+                                            isChecked = true;
+                                        }
+
+                                        if (!users.has(uname)) {
+                                            users.set(uname, { username: uname, photoUrl, isChecked, pk });
+                                        }
+                                    }
+                                }
+                                if (users.size > 0) {
+                                    console.log(`[IG Tools] Extraídos ${users.size} usuários de Ocultar Story via scripts SSR.`);
+                                    update(users.size, users.size, `Carregados ${users.size} usuário(s) iniciais...`);
+                                }
+                            } catch (e) { }
+                        }
+
+                        tryExtractFromSSRScripts();
+
+                        // 2. Importa dados já capturados na sessão pelo interceptor de rede
+                        if (window._igHideStoryUsersCapture && window._igHideStoryUsersCapture.users) {
+                            window._igHideStoryUsersCapture.users.forEach(u => {
+                                if (!users.has(u.username)) {
+                                    users.set(u.username, { username: u.username, photoUrl: u.photoUrl, isChecked: u.isChecked || false, pk: u.pk });
+                                } else {
+                                    const cur = users.get(u.username);
+                                    if (!cur.pk && u.pk) cur.pk = u.pk;
+                                    if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && u.photoUrl !== DEFAULT_AVATAR) cur.photoUrl = u.photoUrl;
+                                    if (!cur.isChecked && u.isChecked) cur.isChecked = true;
+                                }
+                                if (u.pk) setCachedUserId(u.username, u.pk);
+                            });
+                        }
+
+                        // 3. Callback em tempo real para paginação assíncrona (com.instagram.pagination.async)
+                        function networkCallback(capturedArray) {
+                            let added = false;
+                            capturedArray.forEach(u => {
+                                if (!users.has(u.username)) {
+                                    users.set(u.username, { username: u.username, photoUrl: u.photoUrl, isChecked: u.isChecked || false, pk: u.pk });
+                                    added = true;
+                                } else {
+                                    const cur = users.get(u.username);
+                                    if (!cur.pk && u.pk) cur.pk = u.pk;
+                                    if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && u.photoUrl !== DEFAULT_AVATAR) cur.photoUrl = u.photoUrl;
+                                    if (!cur.isChecked && u.isChecked) cur.isChecked = true;
+                                }
+                                if (u.pk) setCachedUserId(u.username, u.pk);
+                            });
+                            if (added) {
+                                noNewUsersCount = 0;
+                                update(users.size, users.size, `Capturado(s) ${users.size} usuário(s)... Rolando...`);
+                            }
+                        }
+                        if (window._igHideStoryUsersCapture) {
+                            window._igHideStoryUsersCapture.callbacks.push(networkCallback);
+                        }
+
+                        // 4. Varredura no DOM combinada com rolagem acelerada (Turbo Scroll)
+                        function performScrollAndExtract() {
+                            if (cancelled) return;
+                            const initialUserCount = users.size;
+
+                            // Seletor para os elementos do DOM que contêm o nome de usuário
+                            const userElements = Array.from(doc.querySelectorAll('div.wbloks_1, div[data-bloks-name="bk.components.Flexbox"]'))
+                                .filter(el => el.querySelector('div[aria-label*="caixa de seleção"], div[role="button"][aria-label*="caixa de seleção"]') || (el.querySelector('img') && el.innerText && el.innerText.includes('\n')));
+
+                            userElements.forEach(userElement => {
+                                const spans = Array.from(userElement.querySelectorAll('span'));
+                                let username = spans.length > 0 ? spans[0].innerText.trim() : (userElement.innerText ? userElement.innerText.trim().split('\n')[0] : '');
+                                username = username.replace(/^@/, '');
+                                if (!username || username === 'Ver perfil') return;
+
+                                let isChecked = false;
+                                const checkboxContainer = userElement.querySelector('div[aria-label*="caixa de seleção"], div[role="button"][aria-label*="caixa de seleção"]') || userElement.querySelector('div[role="button"][tabindex="0"]');
+                                if (checkboxContainer) {
+                                    const icon = checkboxContainer.querySelector('[data-bloks-name="ig.components.Icon"], div.wbloks_1') || checkboxContainer;
+                                    if (icon) {
+                                        const style = window.getComputedStyle(icon);
+                                        const bg = style.backgroundColor;
+                                        const mask = style.maskImage || style.webkitMaskImage;
+                                        const bgImg = style.backgroundImage;
+                                        if (bg === 'rgb(0, 149, 246)' || bg === 'rgb(74, 93, 249)' || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled'))) {
+                                            isChecked = true;
+                                        }
+                                    }
+                                }
+
+                                if (/^[a-zA-Z0-9_.]+$/.test(username)) {
+                                    const imgTag = userElement.querySelector('img');
+                                    const photoUrl = imgTag ? imgTag.src : DEFAULT_AVATAR;
+
+                                    if (!users.has(username)) {
+                                        users.set(username, { username, photoUrl, isChecked, pk: getCachedUserId(username) || '' });
+                                    } else {
+                                        const u = users.get(username);
+                                        if (!u.isChecked && isChecked) u.isChecked = true;
+                                        if ((!u.photoUrl || u.photoUrl === DEFAULT_AVATAR) && photoUrl !== DEFAULT_AVATAR) u.photoUrl = photoUrl;
+                                    }
+                                }
+                            });
+
+                            update(users.size, users.size, `Encontrado(s) ${users.size} usuário(s)... Rolando...`);
+
+                            if (users.size === initialUserCount) {
+                                noNewUsersCount++;
+                            } else {
+                                noNewUsersCount = 0;
+                            }
+
+                            if (noNewUsersCount >= (users.size > 0 ? maxIdleCount : 8)) {
+                                console.log("[IG Tools] Nenhum novo usuário após tentativas sucessivas. Finalizando extração.");
+                                finishExtraction();
+                                return;
+                            }
+
+                            // Rolagem dinâmica (Desktop e Mobile)
+                            const scrollContainer = doc.querySelector('div[role="dialog"] ._aano') ||
+                                doc.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]') ||
+                                doc.querySelector('main div[style*="overflow-y: auto"]') ||
+                                doc.querySelector('div[style*="overflow-y: auto"]') ||
+                                doc.querySelector('._aano') ||
+                                doc.documentElement;
+                            if (scrollContainer && scrollContainer !== doc.documentElement) {
+                                scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                            } else {
+                                window.scrollTo(0, document.body.scrollHeight);
+                            }
+                        }
+
+                        // Inicia processo de rolagem rápida (400ms)
+                        scrollInterval = setInterval(performScrollAndExtract, 400);
+
+                        setTimeout(() => {
+                            if (scrollInterval) {
+                                console.log("[IG Tools] Timeout de segurança atingido. Finalizando extração.");
+                                finishExtraction();
+                            }
+                        }, 60000);
+                    });
+                }
+
+                async function abrirModalOcultarStory() {
+                    if (modalAbertoStory) return;
+                    modalAbertoStory = true;
+                    const users = await extractHideStoryUsernames();
+                    if (users.length === 0) {
+                        modalAbertoStory = false;
+                        return;
+                    }
+
+                    // Carrega caches de seguindo e seguidores para o filtro
+                    const [followingCache, followersCache] = await Promise.all([
+                        dbHelper.loadCache('following'),
+                        dbHelper.loadCache('followers')
+                    ]);
+                    const followingSet = new Set(followingCache ? Array.from(followingCache).map(u => String(u).toLowerCase()) : []);
+                    const followersSet = new Set(followersCache ? Array.from(followersCache).map(u => String(u).toLowerCase()) : []);
+
+                    const officialStates = new Map();
+                    users.forEach(u => {
+                        officialStates.set(u.username, u.isChecked || false);
+                    });
+                    const modalStates = new Map(officialStates);
+                    const itemsPerPage = loadSettings().itemsPerPage;
+                    let currentPage = 1;
+                    const div = document.createElement("div");
+                    div.id = "allHideStoryDiv";
+                    div.className = "submenu-modal";
+                    div.style.cssText = `
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 70vw;
+            max-width: 700px;
+            max-height: 85vh;
+            overflow: auto;
+            border: 2px solid #f39c12;
+            border-radius: 10px;
+            z-index: 2147483647;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        `;
+                    let currentTab = 'ocultados';
+                    let userFilterType = 'all'; // 'all', 'following', 'followers'
+
+                    div.innerHTML = `
+            <div class="modal-header">
+                <span class="modal-title">Ocultar Story <span id="hsSelectedCount" style="font-size:12px; font-weight:normal; color:#f39c12;">(${Array.from(modalStates.values()).filter(v => v).length} selecionados)</span> <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Selecione usuários para ocultar seus stories.</span></div></span>
+                <span class="modal-title">Ocultar Story <span id="hsSelectedCount" style="font-size:12px; font-weight:normal; color:#f39c12;">(${Array.from(modalStates.values()).filter(v => v).length} selecionados)</span> <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Selecione usuários para ocultar seus stories.</span></div></span>
+                <div class="modal-controls"><button id="hideStoryMinimizarBtn">_</button><button id="hideStoryFecharBtn">X</button></div>
+            </div>
+            <div style="padding: 15px;">
+                <button id="hideStoryMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
+                <button id="hideStoryDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
+                <button id="hideStoryAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
+            </div>
+            <div style="padding: 0 15px 15px 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <button id="hideStoryRefreshBtn" style="background: #1abc9c; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar (Scroll)</button>
+                <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; flex: 1; justify-content: flex-end; border: none; background: transparent;">
+                    <span style="font-size: 13px; font-weight: 500;">⚡ API</span>
+                    <label class="switch">
+                        <input type="checkbox" id="hideStoryUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div style="margin-bottom:15px; display: flex; gap: 10px; align-items: center; padding: 0 15px;">
+                <input type="text" id="hideStorySearchInput" placeholder="Pesquisar..." style="flex: 1; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
+                <select id="hideStoryUserFilter" style="padding: 6px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
+                    <option value="all">Todos</option>
+                    <option value="following">Seguindo</option>
+                    <option value="followers">Seguidores</option>
+                </select>
+            </div>
+            <div class="tab-container">
+                <button id="tabOcultados" class="tab-button active">Ocultados</button>
+                <button id="tabAmigos" class="tab-button">Amigos</button>
+            </div>
+            <div id="hideStoryListContent"></div>
+        `;
+                    document.body.appendChild(div);
+
+                    function renderList(page) {
+                        const listContainer = document.getElementById("hideStoryListContent");
+                        const searchTerm = document.getElementById('hideStorySearchInput').value.toLowerCase();
+
+                        let filteredUsers = users.filter(u => {
+                            const isMatch = u.username.toLowerCase().includes(searchTerm);
+                            const tabMatch = (currentTab === 'ocultados' ? modalStates.get(u.username) : !modalStates.get(u.username)); // Corrected to use modalStates
+
+                            let filterMatch = true;
+                            if (userFilterType === 'following') filterMatch = followingSet.has(String(u.username).toLowerCase());
+                            if (userFilterType === 'followers') filterMatch = followersSet.has(String(u.username).toLowerCase());
+
+                            return isMatch && tabMatch && filterMatch;
+                        });
+
+                        const startIndex = (page - 1) * itemsPerPage;
+                        const endIndex = Math.min(startIndex + itemsPerPage, filteredUsers.length);
+                        const pageUsers = filteredUsers.slice(startIndex, endIndex);
+
+                        let html = `<ul id="hideStoryList" style='list-style:none;padding:0;max-height:40vh;overflow:auto;'>`;
+                        pageUsers.forEach(({ username, photoUrl }, idx) => {
+                            const isChecked = modalStates.get(username) || false;
+                            html += `
+                    <li style="padding:5px 0;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px;">
+                    <label class="custom-checkbox" for="hsb_${username}" style="margin:0;">
+                        <input type="checkbox" class="hideStoryCheckbox" id="hsb_${username}" data-username="${username}" ${isChecked ? "checked" : ""}>
+                            <span class="checkmark"></span>
+                        </label>
+                        <img src="${photoUrl || DEFAULT_AVATAR}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
+                        <span style="cursor:pointer; color: black;">${username}</span>
+                    </li>
+                `;
+                        });
+                        html += "</ul>";
+
+                        const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+                        html += `<div id="paginationControls" style="margin-top:20px; display:flex; justify-content:center; align-items:center; gap:10px;">`;
+                        if (totalPages > 1) {
+                            if (page > 1) html += `<button id="prevPageBtn">Anterior</button>`;
+                            html += `<span style="font-weight:bold;">Página ${page} de ${totalPages}</span>`;
+                            if (page < totalPages) html += `<button id="nextPageBtn">Próximo</button>`;
+                        }
+                        html += `</div>`;
+
+                        listContainer.innerHTML = html;
+
+                        // Reatribui eventos
+                        document.querySelectorAll(".hideStoryCheckbox").forEach(cb => {
+                            cb.onchange = () => {
+                                modalStates.set(cb.dataset.username, cb.checked);
+                                const countEl = document.getElementById('hsSelectedCount');
+                                if (countEl) {
+                                    countEl.innerText = `(${Array.from(modalStates.values()).filter(v => v).length} selecionados)`;
+                                }
+                            };
+                        });
+                        const prevBtn = document.getElementById("prevPageBtn");
+                        if (prevBtn) prevBtn.onclick = () => {
+                            currentPage--;
+                            renderList(currentPage);
+                        };
+                        const nextBtn = document.getElementById("nextPageBtn");
+                        if (nextBtn) nextBtn.onclick = () => {
+                            currentPage++;
+                            renderList(currentPage);
+                        };
+                    }
+
+                    document.getElementById("hideStorySearchInput").oninput = () => { currentPage = 1; renderList(1); };
+                    document.getElementById("hideStoryUserFilter").onchange = (e) => { userFilterType = e.target.value; currentPage = 1; renderList(1); };
+                    document.getElementById("tabOcultados").onclick = (e) => {
+                        currentTab = 'ocultados';
+                        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                        e.target.classList.add('active');
+                        renderList(1);
+                    };
+                    document.getElementById("tabAmigos").onclick = (e) => {
+                        currentTab = 'amigos';
+                        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                        e.target.classList.add('active');
+                        renderList(1);
+                    };
+                    document.getElementById("hideStoryFecharBtn").onclick = () => { div.remove(); modalAbertoStory = false; };
+
+                    document.getElementById("hideStoryMarcarTodosBtn").onclick = () => {
+                        users.forEach(u => modalStates.set(u.username, true));
+                        renderList(currentPage);
+                    };
+                    document.getElementById("hideStoryDesmarcarTodosBtn").onclick = () => {
+                        users.forEach(u => modalStates.set(u.username, false));
+                        renderList(currentPage);
+                    };
+
+                    document.getElementById("hideStoryRefreshBtn").onclick = () => {
+                        div.remove();
+                        modalAbertoStory = false;
+                        abrirModalOcultarStory();
+                    };
+                    document.getElementById("hideStoryUseApiToggle").onchange = (e) => {
+                        saveSettings({ useApi: e.target.checked });
+                        showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
+                    };
+
+                    document.getElementById("hideStoryAplicarBtn").onclick = async () => {
+                        isApplyingChangesStory = true;
+                        const changedUsers = Array.from(modalStates.entries()).filter(([username, checked]) => officialStates.get(username) !== checked).map(([username, checked]) => ({ dataset: { username }, checked }));
+                        if (changedUsers.length === 0) {
+                            alert("Nenhuma alteração para aplicar.");
+                            isApplyingChangesStory = false;
+                            return;
+                        }
+
+                        let cancelled = false;
+                        const { bar, update, closeButton } = createCancellableProgressBar();
+                        closeButton.onclick = () => {
+                            cancelled = true;
+                            isApplyingChangesStory = false;
+                            bar.remove();
+                            alert("Processo interrompido.");
+                        };
+                        const isCancelled = () => cancelled;
+
+                        toggleLoading(true, 0, "Aplicando alterações...");
+                        // --- LÓGICA API VS HUMANA ---
+                        if (loadSettings().useApi) {
+                            update(0, changedUsers.length, "Obtendo IDs e aplicando via API...");
+                            for (let i = 0; i < changedUsers.length; i++) {
+                                if (isCancelled()) break;
+                                const { dataset: { username }, checked } = changedUsers[i];
+                                update(i + 1, changedUsers.length, `Aplicando para ${username}...`);
+                                const uid = getCachedUserId(username) || await getUserId(username);
+                                if (uid) {
+                                    try {
+                                        const res = await executeWbloksHideStory(uid, username, checked ? 'hide' : 'unhide');
+                                        if (res.success) officialStates.set(username, checked);
+                                    } catch (e) { console.error(`Erro API Hide Story para ${username}`, e); }
+                                }
+                                await new Promise(r => setTimeout(r, 500));
+                            }
+                            bar.remove(); isApplyingChangesStory = false; renderList(currentPage); alert("Processo via API concluído."); return;
+                            toggleLoading(false);
+                        }
+
+                        if (window.location.pathname !== "/accounts/hide_story_and_live_from/") {
+                            history.pushState(null, null, "/accounts/hide_story_and_live_from/");
+                            window.dispatchEvent(new Event("popstate"));
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                        }
+                        async function toggleOfficialCheckbox(username) {
+                            return new Promise((resolve) => {
+                                let attempts = 0;
+                                function tryToggle() {
+                                    attempts++;
+                                    const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
+                                    let found = false;
+                                    for (const flex of flexboxes) {
+                                        const userText = flex.innerText && flex.innerText.trim().split('\n')[0];
+                                        if (userText === username) {
+                                            const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção'));
+                                            if (officialCheckboxContainer) {
+                                                officialCheckboxContainer.click();
+                                                found = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if (found || attempts >= 30) {
+                                        resolve();
+                                    } else {
+                                        setTimeout(tryToggle, 300);
+                                    }
+                                }
+                                tryToggle();
+                            });
+                        }
+                        for (let i = 0; i < changedUsers.length; i++) {
+                            if (isCancelled()) break;
+                            update(i + 1, changedUsers.length, "Aplicando alterações:");
+                            await toggleOfficialCheckbox(changedUsers[i].dataset.username);
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                            officialStates.set(changedUsers[i].dataset.username, changedUsers[i].checked);
+                            // Redesenha a página atual para refletir a mudança em tempo real
+                            toggleLoading(true, ((i + 1) / changedUsers.length) * 100, "Aplicando alterações...");
+                            renderList(currentPage);
+                        }
+                        bar.remove();
+                        isApplyingChangesStory = false;
+                    };
+                    let isApplyingChangesStory = false;
+                    setTimeout(() => {
+                        const flexboxes = Array.from(document.querySelectorAll('div.wbloks_1, [data-bloks-name="bk.components.Flexbox"]'));
+                        flexboxes.forEach(flex => {
+                            const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"], div[aria-label*="caixa de seleção"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção') || el.getAttribute('role') === 'button');
+                            if (!officialCheckboxContainer) return;
+                            if (officialCheckboxContainer._customSyncListenerStory) return;
+                            officialCheckboxContainer._customSyncListenerStory = true;
+                            officialCheckboxContainer.addEventListener("click", function () {
+                                if (isApplyingChangesStory) return;
+                                const spans = Array.from(flex.querySelectorAll('span'));
+                                const userText = spans.length > 0 ? spans[0].innerText.trim() : (flex.innerText && flex.innerText.trim().split('\n')[0]);
+                                const customCheckbox = document.querySelector(`.hideStoryCheckbox[data-username="${userText}"]`);
+                                if (customCheckbox) {
+                                    const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"], div.wbloks_1') || officialCheckboxContainer;
+                                    let isChecked = false;
+                                    if (iconDiv) {
+                                        const style = window.getComputedStyle(iconDiv);
+                                        const mask = style.maskImage || style.webkitMaskImage;
+                                        const bgImg = style.backgroundImage;
+                                        isChecked = (style.backgroundColor === 'rgb(0, 149, 246)' || style.backgroundColor === 'rgb(74, 93, 249)' || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled')));
+                                    }
+                                    if (customCheckbox.checked !== isChecked) {
+                                        customCheckbox.checked = isChecked;
+                                    }
+                                }
+                            });
+                        });
+                    }, 500);
+                    const aplicarBtn = document.getElementById("hideStoryAplicarBtn");
+                    if (aplicarBtn) {
+                        const originalHandler = aplicarBtn.onclick;
+                        aplicarBtn.onclick = async function () {
+                            isApplyingChangesStory = true;
+                            if (originalHandler) {
+                                await originalHandler.apply(this, arguments);
+                            }
+                            toggleLoading(false);
+                            isApplyingChangesStory = false;
+                        };
+                    }
+
+                    // Inicializa a lista
+                    renderList(1);
+                }
+
+                function showUnmuteOptionsModal(onConfirm) {
+                    const div = document.createElement("div");
+                    div.className = "submenu-modal";
+                    div.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; padding: 20px; border: 1px solid #ccc; border-radius: 10px; z-index: 2147483648; text-align: center; background: white; color: black;`;
+                    if (loadSettings().rgbBorder) div.classList.add('rgb-border-effect');
+
+                    div.innerHTML = `
+            <h3 style="margin-top:0;">O que deseja reativar?</h3>
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+                <button id="optStories" style="padding: 10px; cursor: pointer; background: #f0f0f0; border: 1px solid #ccc; border-radius: 5px; color: black;">Stories</button>
+                <button id="optPosts" style="padding: 10px; cursor: pointer; background: #f0f0f0; border: 1px solid #ccc; border-radius: 5px; color: black;">Publicações</button>
+                <button id="optAll" style="padding: 10px; cursor: pointer; background: #0095f6; color: white; border: none; border-radius: 5px;">Ambos</button>
+                <button id="optCancel" style="padding: 10px; cursor: pointer; background: #e74c3c; color: white; border: none; border-radius: 5px;">Cancelar</button>
+            </div>
+        `;
+                    document.body.appendChild(div);
+                    const close = () => div.remove();
+                    document.getElementById('optStories').onclick = () => { close(); onConfirm('stories'); };
+                    document.getElementById('optPosts').onclick = () => { close(); onConfirm('posts'); };
+                    document.getElementById('optAll').onclick = () => { close(); onConfirm('all'); };
+                    document.getElementById('optCancel').onclick = close;
+                }
+
+                let modalAbertoStory = false;
+                // --- FIM DO MENU OCULTAR STORY ---
+
+                // --- NOVO MENU: CONTAS SILENCIADAS ---
+                function extractMutedAccountsUsernames(doc = document) {
+                    return new Promise((resolve) => {
+                        const users = new Map(); // Usar Map para evitar duplicados e manter a ordem
+                        let scrollInterval;
+                        let noNewUsersCount = 0;
+                        const maxIdleCount = 6; // Parar após 6 tentativas rápidas sem novos usuários (~2.4 segundos)
+
+                        let cancelled = false;
+                        const { bar, update, closeButton } = createCancellableProgressBar();
+                        closeButton.onclick = () => {
+                            cancelled = true;
+                            finishExtraction();
+                        };
+                        update(0, 0, "Buscando e rolando a lista de contas silenciadas...");
+
+                        function finishExtraction() {
+                            if (scrollInterval) clearInterval(scrollInterval);
+                            // Remove o listener de rede registrado
+                            if (window._igMutedUsersCapture && window._igMutedUsersCapture.callbacks) {
+                                const idx = window._igMutedUsersCapture.callbacks.indexOf(networkCallback);
+                                if (idx !== -1) window._igMutedUsersCapture.callbacks.splice(idx, 1);
+                            }
+                            if (bar) bar.remove();
+                            console.log(`[IG Tools] Extração de silenciados finalizada. Total de ${users.size} usuários encontrados.`);
+                            // Garante que todos os pk capturados estejam no cache do localStorage
+                            users.forEach(u => {
+                                if (u.username && u.pk) setCachedUserId(u.username, u.pk);
+                            });
+                            resolve(cancelled ? [] : Array.from(users.values()));
+                        }
+
+                        // 1. Tenta extrair dados JSON embutidos pelo Instagram SSR (scripts application/json)
+                        function tryExtractFromSSRScripts() {
+                            try {
+                                const scripts = Array.from(doc.querySelectorAll('script[type="application/json"]'));
+                                for (const script of scripts) {
+                                    const text = script.textContent || '';
+                                    if (!text.includes('muted') && !text.includes('username')) continue;
+
+                                    const userRegex = /"username":"([a-zA-Z0-9._]+)"/g;
+                                    let match;
+                                    while ((match = userRegex.exec(text)) !== null) {
+                                        const uname = match[1];
+                                        if (!uname || uname === 'instagram' || uname === 'threads') continue;
+
+                                        const start = Math.max(0, match.index - 300);
+                                        const end = Math.min(text.length, match.index + 500);
+                                        const chunk = text.slice(start, end);
+
+                                        const picMatch = chunk.match(/"profile_pic_url":"([^"]+)"/);
+                                        const photoUrl = picMatch ? picMatch[1].replace(/\\/g, '').replace(/\\u0026/g, '&') : DEFAULT_AVATAR;
+
+                                        const pkMatch = chunk.match(/"pk":"?(\d+)"?/);
+                                        const pk = pkMatch ? pkMatch[1] : '';
+                                        if (pk) setCachedUserId(uname, pk);
+
+                                        let status = "Silenciado";
+                                        const chunkLower = chunk.toLowerCase();
+                                        if (chunkLower.includes('posts e story') || chunkLower.includes('publicações e stories') || chunkLower.includes('stories e publicações') || chunkLower.includes('posts and stories')) {
+                                            status = "Stories e Publicações";
+                                        } else if (chunkLower.includes('story') || chunkLower.includes('stories')) {
+                                            status = "Stories";
+                                        } else if (chunkLower.includes('post') || chunkLower.includes('publica')) {
+                                            status = "Publicações";
+                                        }
+
+                                        if (!users.has(uname)) {
+                                            users.set(uname, { username: uname, photoUrl, isChecked: false, status, pk });
+                                        }
+                                    }
+                                }
+                                if (users.size > 0) {
+                                    console.log(`[IG Tools] Extraídos ${users.size} silenciados via scripts SSR.`);
+                                    update(users.size, users.size, `Carregados ${users.size} usuário(s) iniciais...`);
+                                }
+                            } catch (e) { }
+                        }
+
+                        tryExtractFromSSRScripts();
+
+                        // 2. Importa dados já capturados na sessão pelo interceptor de rede
+                        if (window._igMutedUsersCapture && window._igMutedUsersCapture.users) {
+                            window._igMutedUsersCapture.users.forEach(u => {
+                                if (!users.has(u.username)) {
+                                    users.set(u.username, { username: u.username, photoUrl: u.photoUrl, isChecked: false, status: u.status, pk: u.pk });
+                                } else {
+                                    const cur = users.get(u.username);
+                                    if (!cur.pk && u.pk) cur.pk = u.pk;
+                                    if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && u.photoUrl !== DEFAULT_AVATAR) cur.photoUrl = u.photoUrl;
+                                }
+                                if (u.pk) setCachedUserId(u.username, u.pk);
+                            });
+                        }
+
+                        // 3. Callback em tempo real para respostas da paginação assíncrona (com.instagram.pagination.async)
+                        function networkCallback(capturedArray) {
+                            let added = false;
+                            capturedArray.forEach(u => {
+                                if (!users.has(u.username)) {
+                                    users.set(u.username, { username: u.username, photoUrl: u.photoUrl, isChecked: false, status: u.status, pk: u.pk });
+                                    added = true;
+                                } else {
+                                    const cur = users.get(u.username);
+                                    if (!cur.pk && u.pk) cur.pk = u.pk;
+                                    if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && u.photoUrl !== DEFAULT_AVATAR) cur.photoUrl = u.photoUrl;
+                                    if (cur.status === 'Silenciado' && u.status !== 'Silenciado') cur.status = u.status;
+                                }
+                                if (u.pk) setCachedUserId(u.username, u.pk);
+                            });
+                            if (added) {
+                                noNewUsersCount = 0;
+                                update(users.size, users.size, `Capturado(s) ${users.size} usuário(s)... Rolando...`);
+                            }
+                        }
+                        if (window._igMutedUsersCapture) {
+                            window._igMutedUsersCapture.callbacks.push(networkCallback);
+                        }
+
+                        // 4. Varredura no DOM combinada com rolagem acelerada (Turbo Scroll)
+                        function performScrollAndExtract() {
+                            if (cancelled) return;
+                            const initialUserCount = users.size;
+
+                            // Seletor para os elementos do DOM que contêm o nome de usuário
+                            const userElements = Array.from(doc.querySelectorAll('div.wbloks_1, div[data-bloks-name="bk.components.Flexbox"]'))
+                                .filter(el => el.querySelector('div[aria-label*="Ver perfil"]') || (el.querySelector('img') && el.innerText && el.innerText.includes('\n')));
+
+                            userElements.forEach(userElement => {
+                                const spans = Array.from(userElement.querySelectorAll('span'));
+                                let username = spans.length > 0 ? spans[0].innerText.trim() : (userElement.innerText ? userElement.innerText.trim().split('\n')[0] : '');
+                                username = username.replace(/^@/, '');
+                                if (username === 'Ver perfil' || !username) return;
+
+                                if (/^[a-zA-Z0-9_.]+$/.test(username)) {
+                                    const imgTag = userElement.querySelector('img');
+                                    const photoUrl = imgTag ? imgTag.src : '';
+
+                                    // Extrai o status do texto do elemento (ex: "Posts e story silenciados")
+                                    let status = "Silenciado";
+                                    const statusSpan = spans.find(s => {
+                                        const t = s.innerText.toLowerCase();
+                                        return (t.includes('silenci') || t.includes('muted')) && t !== username.toLowerCase();
+                                    });
+
+                                    if (statusSpan) status = statusSpan.innerText.trim();
+                                    else {
+                                        const textLines = userElement.innerText.split('\n');
+                                        const statusLine = textLines.find(l => l.toLowerCase().includes('silenci') || l.toLowerCase().includes('muted'));
+                                        if (statusLine) status = statusLine;
+                                    }
+
+                                    if (!users.has(username)) {
+                                        users.set(username, { username, photoUrl, isChecked: false, status, pk: getCachedUserId(username) || '' });
+                                    } else {
+                                        const cur = users.get(username);
+                                        if (status !== 'Silenciado') cur.status = status;
+                                        if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && photoUrl) cur.photoUrl = photoUrl;
+                                    }
+                                }
+                            });
+
+                            update(users.size, users.size, `Encontrado(s) ${users.size} usuário(s)... Rolando...`);
+
+                            // Lógica de parada: se não encontrar novos usuários (DOM + Rede) por várias iterações
+                            if (users.size === initialUserCount) {
+                                noNewUsersCount++;
+                            } else {
+                                noNewUsersCount = 0;
+                            }
+
+                            if (noNewUsersCount >= (users.size > 0 ? maxIdleCount : 8)) {
+                                console.log("[IG Tools] Nenhum novo usuário após tentativas sucessivas. Finalizando extração.");
+                                finishExtraction();
+                                return;
+                            }
+
+                            // Rolagem dinâmica acelerada (Desktop e Mobile)
+                            const scrollContainer = doc.querySelector('div[role="dialog"] ._aano') ||
+                                doc.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]') ||
+                                doc.querySelector('main div[style*="overflow-y: auto"]') ||
+                                doc.querySelector('div[style*="overflow-y: auto"]') ||
+                                doc.querySelector('._aano') ||
+                                doc.documentElement;
+                            if (scrollContainer && scrollContainer !== doc.documentElement) {
+                                scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                            } else {
+                                window.scrollTo(0, document.body.scrollHeight);
+                            }
+                        }
+
+                        // Inicia o processo de rolagem rápida sincronizada (400ms em vez de 1000ms)
+                        scrollInterval = setInterval(performScrollAndExtract, 400);
+
+                        // Timeout de segurança
+                        setTimeout(() => {
+                            if (scrollInterval) {
+                                console.log("[IG Tools] Timeout de segurança atingido. Finalizando extração.");
+                                finishExtraction();
+                            }
+                        }, 60000);
+                    });
+                }
+
+
+                async function abrirModalContasSilenciadas() {
+                    if (modalAbertoMuted) return;
+                    modalAbertoMuted = true;
+                    const users = await extractMutedAccountsUsernames();
+
+                    if (!users || users.length === 0) {
+                        modalAbertoMuted = false;
+                        return;
+                    }
+
+                    // Armazena a lista no cache global
+                    userListCache.muted = new Set(users.map(u => u.username));
+                    userListCache.mutedDetails = new Map(users.map(u => [u.username, u.status]));
+                    console.log(`Cache atualizado com ${userListCache.muted.size} contas silenciadas.`);
+
+                    const modalStates = new Map();
+                    users.forEach(({ username }) => modalStates.set(username, false)); // Inicia todos desmarcados
+
+                    const itemsPerPage = loadSettings().itemsPerPage;
+                    let currentPage = 1;
+
+                    const div = document.createElement("div");
+                    div.id = "allMutedAccountsDiv";
+                    div.className = "submenu-modal";
+                    div.style.cssText = `
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 70vw;
+            max-width: 700px;
+            max-height: 85vh;
+            overflow: auto;
+            border: 2px solid #8e44ad;
+            border-radius: 10px;
+            z-index: 2147483647;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        `;
+                    div.innerHTML = `
+            <div class="modal-header">
+                <span class="modal-title">Contas Silenciadas <span id="mutedSelectedCount" style="font-size:12px; font-weight:normal; color:#8e44ad;">(${Array.from(modalStates.values()).filter(v => v).length} selecionados)</span> <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie contas silenciadas.</span></div></span>
+                <span class="modal-title">Contas Silenciadas <span id="mutedSelectedCount" style="font-size:12px; font-weight:normal; color:#8e44ad;">(${Array.from(modalStates.values()).filter(v => v).length} selecionados)</span> <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie contas silenciadas.</span></div></span>
+                <div class="modal-controls"><button id="mutedMinimizarBtn">_</button><button id="mutedFecharBtn">X</button></div>
+            </div>
+            <div style="padding: 15px;">
+                <button id="mutedMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
+                <button id="mutedDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
+                <button id="mutedAplicarBtn" style="background:#8e44ad;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Reativar Som</button>
+            </div>
+            <div style="padding: 0 15px 15px 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <button id="mutedRefreshBtn" style="background: #1abc9c; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar (Scroll)</button>
+                <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; flex: 1; justify-content: flex-end; border: none; background: transparent;">
+                    <span style="font-size: 13px; font-weight: 500;">⚡ API</span>
+                    <label class="switch">
+                        <input type="checkbox" id="mutedUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div style="margin-bottom:15px; padding: 0 15px;">
+                <input type="text" id="mutedSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
+            </div>
+            <div id="mutedListContent"></div>
+        `;
+                    document.body.appendChild(div);
+
+                    function renderList(page) {
+                        const listContainer = document.getElementById("mutedListContent");
+                        const searchTerm = document.getElementById('mutedSearchInput').value.toLowerCase();
+
+                        const filteredUsers = users.filter(u => u.username.toLowerCase().includes(searchTerm));
+
+                        const startIndex = (page - 1) * itemsPerPage;
+                        const endIndex = Math.min(startIndex + itemsPerPage, filteredUsers.length);
+                        const pageUsers = filteredUsers.slice(startIndex, endIndex);
+
+                        let html = `<ul id="mutedList" style='list-style:none;padding:0;max-height:40vh;overflow:auto;'>`;
+                        pageUsers.forEach(({ username, photoUrl, status }, idx) => {
+                            const globalIdx = startIndex + idx;
+                            const isChecked = modalStates.get(username) || false;
+
+                            // --- Lógica de Status Silenciado ---
+                            let mutedDetailText = '';
+                            const detail = status || '';
+                            const dLower = detail.toLowerCase();
+                            if ((dLower.includes('stories') || dLower.includes('story')) && (dLower.includes('publicações') || dLower.includes('posts'))) {
+                                mutedDetailText = '(Stories e Publicações)';
+                            } else if (dLower.includes('stories') || dLower.includes('story')) {
+                                mutedDetailText = '(Stories)';
+                            } else if (dLower.includes('publicações') || dLower.includes('posts')) {
+                                mutedDetailText = '(Publicações)';
+                            } else if (detail) { // Fallback
+                                mutedDetailText = `(${detail})`;
+                            }
+                            // --- Fim da Lógica ---
+
+                            html += `
+                    <li style="padding:5px 0;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px;">
+                        <label class="custom-checkbox" for="muted_cb_${globalIdx}" style="margin:0;">
+                            <input type="checkbox" class="mutedCheckbox" data-username="${username}" ${isChecked ? "checked" : ""}>
+                            <span class="checkmark"></span>
+                        </label>
+                        <img src="${photoUrl || DEFAULT_AVATAR}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
+                        <div style="display:flex; flex-direction:column;"><span style="cursor:pointer; color: black; font-weight:bold;">${username}</span>${mutedDetailText ? `<span style="font-size:11px; color:gray;">${mutedDetailText}</span>` : ''}</div>
+                    </li>
+                `;
+                        });
+                        html += "</ul>";
+
+                        const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+                        html += `<div id="paginationControls" style="margin-top:20px; display:flex; justify-content:center; align-items:center; gap:10px;">`;
+                        if (totalPages > 1) {
+                            if (page > 1) html += `<button id="prevPageBtn">Anterior</button>`;
+                            html += `<span style="font-weight:bold;">Página ${page} de ${totalPages}</span>`;
+                            if (page < totalPages) html += `<button id="nextPageBtn">Próximo</button>`;
+                        }
+                        html += `</div>`;
+                        listContainer.innerHTML = html;
+
+                        document.querySelectorAll(".mutedCheckbox").forEach(cb => {
+                            cb.onchange = () => {
+                                modalStates.set(cb.dataset.username, cb.checked);
+                                const countEl = document.getElementById('mutedSelectedCount');
+                                if (countEl) {
+                                    countEl.innerText = `(${Array.from(modalStates.values()).filter(v => v).length} selecionados)`;
+                                }
+                            };
+                        });
+                        const prevBtn = document.getElementById("prevPageBtn");
+                        if (prevBtn) prevBtn.onclick = () => { currentPage--; renderList(currentPage); };
+                        const nextBtn = document.getElementById("nextPageBtn");
+                        if (nextBtn) nextBtn.onclick = () => { currentPage++; renderList(currentPage); };
+                    }
+
+                    renderList(1);
+
+                    document.getElementById("mutedSearchInput").oninput = () => { currentPage = 1; renderList(1); };
+                    document.getElementById("mutedFecharBtn").onclick = () => { div.remove(); modalAbertoMuted = false; };
+                    document.getElementById("mutedMinimizarBtn").onclick = () => {
+                        const modal = document.getElementById('allMutedAccountsDiv');
+                        const contentToToggle = [modal.querySelector('input[type="text"]'), document.getElementById('mutedListContent')].filter(Boolean);
+                        const btn = document.getElementById('mutedMinimizarBtn');
+                        const isMinimized = modal.dataset.minimized === 'true';
+                        contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+                        modal.dataset.minimized = !isMinimized;
+                        btn.textContent = isMinimized ? '_' : '□';
+                        modal.style.maxHeight = isMinimized ? '85vh' : 'auto';
+                    };
+                    document.getElementById("mutedMarcarTodosBtn").onclick = () => {
+                        users.forEach(u => modalStates.set(u.username, true));
+                        renderList(currentPage);
+                    };
+                    document.getElementById("mutedDesmarcarTodosBtn").onclick = () => {
+                        users.forEach(u => modalStates.set(u.username, false));
+                        renderList(currentPage);
+                    };
+
+                    document.getElementById("mutedRefreshBtn").onclick = () => {
+                        div.remove();
+                        modalAbertoMuted = false;
+                        abrirModalContasSilenciadas();
+                    };
+                    document.getElementById("mutedUseApiToggle").onchange = (e) => {
+                        saveSettings({ useApi: e.target.checked });
+                        showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
+                    };
+                }
+
+                async function unmuteUsers(usersToUnmute, callback, actionType = 'mute', targetType = 'all') {
+                    let cancelled = false;
+                    const { bar, update, closeButton } = createCancellableProgressBar();
+                    closeButton.onclick = () => {
+                        cancelled = true;
+                        bar.remove();
+                        alert("Processo interrompido.");
+                    };
+                    const isCancelled = () => cancelled;
+                    const isUnmute = actionType === 'unmute' || actionType === false;
+                    toggleLoading(true, 0, isUnmute ? "Reativando som..." : "Silenciando contas...");
+
+                    const originalPath = window.location.pathname;
+
+                    // --- LÓGICA API VS HUMANA ---
+                    if (loadSettings().useApi) {
+                        for (let i = 0; i < usersToUnmute.length; i++) {
+                            if (isCancelled()) break;
+                            const username = usersToUnmute[i];
+                            toggleLoading(true, ((i + 1) / usersToUnmute.length) * 100, "Processando via API...");
+                            update(i + 1, usersToUnmute.length, `Processando ${username} via API...`);
+                            let uid = null;
+                            if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                const item = seguindoList.find(x => x?.username?.toLowerCase() === username.toLowerCase());
+                                if (item?.id) uid = String(item.id);
+                            }
+                            if (!uid) uid = getCachedUserId(username) || await getUserId(username);
+                            if (uid) {
+                                try {
+                                    let successStories = false;
+                                    let successPosts = false;
+                                    const action = isUnmute ? 'unmute' : 'mute';
+
+                                    if (targetType === 'stories' || targetType === 'all') {
+                                        const res = await executeGraphqlMute(uid, 'stories', action);
+                                        successStories = res.success;
+                                    }
+                                    if (targetType === 'posts' || targetType === 'all') {
+                                        const res = await executeGraphqlMute(uid, 'posts', action);
+                                        successPosts = res.success;
+                                    }
+
+                                    if (successStories || successPosts) {
+                                        if (!userListCache.muted) userListCache.muted = new Set();
+                                        if (!userListCache.mutedDetails) userListCache.mutedDetails = new Map();
+
+                                        if (isUnmute) {
+                                            userListCache.muted.delete(username);
+                                            userListCache.mutedDetails.delete(username);
+                                        } else {
+                                            userListCache.muted.add(username);
+                                            userListCache.mutedDetails.set(username, targetType === 'all' ? 'Stories e Publicações' : (targetType === 'stories' ? 'Stories' : 'Publicações'));
+                                        }
+                                        await dbHelper.saveCache('muted', Array.from(userListCache.muted).map(u => ({ username: u, status: userListCache.mutedDetails.get(u) || '' })));
+                                        console.log(`[IG Tools Mute] Usuário ${username} ${isUnmute ? 'reativado' : 'silenciado'} com sucesso via API GraphQL!`);
+                                    } else {
+                                        console.warn(`[IG Tools Mute] Não foi possível ${isUnmute ? 'reativar' : 'silenciar'} ${username} via GraphQL.`);
+                                    }
+                                } catch (e) {
+                                    console.error(`Erro API Mute ${username}`, e);
+                                }
+                            } else {
+                                console.warn(`[IG Tools Mute] ID não encontrado para ${username}`);
+                            }
+                            await new Promise(r => setTimeout(r, 400));
+                        } // End of for loop
+                        bar.remove(); if (callback) callback(); return;
+                    }
+
+                    for (let i = 0; i < usersToUnmute.length; i++) {
+                        if (isCancelled()) break;
+                        const username = usersToUnmute[i];
+                        update(i + 1, usersToUnmute.length, toggleMode ? "Alterando status de silenciar:" : "Reativando som:");
+
+                        // 1. Navegar para o perfil do usuário
+                        history.pushState(null, null, `/${username}/`);
+                        window.dispatchEvent(new Event("popstate"));
+                        await new Promise(resolve => setTimeout(resolve, 4000)); // Espera o perfil carregar
+
+                        // 2. Clicar no botão "Seguindo"
+                        // Seletor aprimorado para iPhone: procura em mais tipos de elementos e verifica o texto de forma mais flexível.
+                        const followingButton = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"]')).find(el => {
+                            const text = el.innerText.trim();
+                            return text === 'Seguindo' || text === 'Following';
+                        });
+                        if (!followingButton) {
+                            console.warn(`Botão 'Seguindo' não encontrado para ${username}. Pulando.`);
+                            continue;
+                        }
+                        simulateClick(followingButton);
+                        await new Promise(resolve => setTimeout(resolve, 1500)); // Espera o menu dropdown aparecer
+
+                        // 3. Clicar na opção "Silenciar"
+                        // Seletor mais robusto, similar ao de unfollow, para encontrar a opção "Silenciar"
+                        const muteOption = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"], div[role="menuitem"]')).find(el =>
+                            el.innerText.trim() === 'Silenciar' ||
+                            (el.querySelector('span') && el.querySelector('span').innerText.trim() === 'Silenciar')
+                        );
+                        if (!muteOption) {
+                            console.warn(`Opção 'Silenciar' não encontrada para ${username}. Pulando.`);
+                            // Tenta fechar o menu se ele abriu
+                            if (followingButton) simulateClick(followingButton);
+                            continue;
+                        }
+                        simulateClick(muteOption);
+                        await new Promise(resolve => setTimeout(resolve, 2000)); // Espera o modal de silenciar abrir
+
+                        // 4. Desativar os toggles de "Publicações" e "Stories"
+                        console.log('Procurando opções "Publicações" e "Stories" para alterar o estado...');
+                        let optionsToToggle = [];
+                        if (targetType === 'posts' || targetType === 'all') optionsToToggle.push('Publicações', 'Posts');
+                        if (targetType === 'stories' || targetType === 'all') optionsToToggle.push('Stories');
+
+                        let togglesClicked = 0;
+
+                        for (const optionText of optionsToToggle) {
+                            // Encontra o elemento de texto ("Publicações" ou "Stories") em toda a página
+                            const textElement = Array.from(document.querySelectorAll('span, div')).find(el => el.innerText.trim() === optionText);
+
+                            if (!textElement) {
+                                console.log(`Elemento de texto para "${optionText}" não encontrado.`);
+                                continue;
+                            }
+                            console.log(`Elemento de texto para "${optionText}" encontrado:`, textElement);
+
+                            // Sobe na árvore DOM para encontrar o contêiner da linha inteira, que é clicável
+                            const rowContainer = textElement.closest('div[role="button"]');
+                            if (rowContainer) {
+                                console.log(`Contêiner clicável para "${optionText}" encontrado:`, rowContainer);
+                                const stateIndicator = rowContainer.querySelector('input[type="checkbox"], div[role="switch"]');
+
+                                if (stateIndicator) {
+                                    const isChecked = stateIndicator.getAttribute('aria-checked');
+                                    console.log(`Indicador de estado para "${optionText}" encontrado. Estado (aria-checked): ${isChecked}. Modo Toggle: ${toggleMode}`);
+
+                                    if (toggleMode || isChecked === 'true') {
+                                        console.log(`Tentando alterar o estado de "${optionText}".`);
+
+                                        // --- LÓGICA DE TESTE A/B ---
+                                        if (optionText === 'Publicações' || optionText === 'Posts') {
+                                            console.log(`Usando método 1 (clique no input) para "${optionText}".`);
+                                            simulateClick(stateIndicator, true);
+                                        } else if (optionText === 'Stories') {
+                                            console.log(`Usando método 2 (clique no container) para "${optionText}".`);
+                                            simulateClick(rowContainer);
+                                        }
+                                        // --- FIM DA LÓGICA ---
+
+                                        await new Promise(resolve => setTimeout(resolve, 500)); // Pausa final
+                                    } else {
+                                        console.log(`Estado de "${optionText}" já é 'false' e o modo toggle está desativado. Nenhuma ação necessária.`);
+                                    }
+                                } else {
+                                    console.warn(`Indicador de estado (checkbox/switch) não encontrado para "${optionText}".`);
+                                }
+                            } else {
+                                console.warn(`Contêiner clicável (div[role="button"]) não encontrado para a opção: "${optionText}".`);
+                            }
+                        }
+
+                        // 5. Clicar no botão "Salvar" se ele existir (desktop) ou aguardar se não existir (mobile).
+                        console.log('Procurando pelo botão "Salvar" ou "Concluído"...');
+                        const saveButton = Array.from(document.querySelectorAll('button, div[role="button"]')).find(
+                            btn => ['Salvar', 'Save', 'Concluído', 'Done'].includes(btn.innerText.trim())
+                        );
+
+                        if (saveButton) {
+                            console.log('Botão "Salvar" encontrado (Desktop). Clicando...', saveButton);
+                            simulateClick(saveButton);
+                            await new Promise(resolve => setTimeout(resolve, 2000)); // Pausa após clicar em salvar.
+                        } else {
+                            console.warn('Botão "Salvar" não encontrado (Mobile). A ação deve salvar automaticamente. Aguardando...');
+                            await new Promise(resolve => setTimeout(resolve, 3000)); // Pausa maior para mobile.
+                        }
+
+                        // Remove a linha do modal para feedback visual imediato
+                        const modalLi = document.querySelector(`#mutedList li input[data-username="${username}"]`);
+                        if (modalLi) modalLi.closest('li').remove();
+
+                        // No mobile, o modal de silenciar pode não fechar sozinho. Clicamos em "Voltar".
+                        // O seletor foi melhorado para encontrar o botão que contém o SVG com o aria-label correto.
+                        const backButton = document.querySelector('button svg[aria-label="Voltar"], button svg[aria-label="Back"]')?.closest('button');
+                        if (backButton) {
+                            console.log("Botão 'Voltar' do mobile encontrado. Clicando para salvar a alteração...");
+                            simulateClick(backButton);
+                            await new Promise(resolve => setTimeout(resolve, 1000)); // Pausa extra após fechar o modal.
+                        }
+                    }
+
+                    bar.remove();
+
+                    // Retorna para a página original de contas silenciadas
+                    history.pushState(null, null, originalPath);
+                    window.dispatchEvent(new Event("popstate"));
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+
+                    if (callback) callback();
+                }
+
+                let modalAbertoMuted = false;
+                // --- FIM DO MENU CONTAS SILENCIADAS ---
+
+                // Cache persistente de contas bloqueadas (permite abertura INSTANTÂNEA em 0ms)
+                let cachedBlockedAccounts = [];
+                try {
+                    const saved = localStorage.getItem('ig_tools_cached_blocked');
+                    if (saved) {
+                        const parsed = JSON.parse(saved);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            cachedBlockedAccounts = parsed;
+                        }
+                    }
+                } catch (_) { }
+
+                async function fetchBlockedAccountsWbloks() {
+                    try {
+                        const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                        const jazoest = computeJazoest(fbDtsg) || '25862';
+                        const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                        const spin = getSpinParams();
+
+                        const dyn = getInstagramFormToken('__dyn') || '';
+                        const csr = getInstagramFormToken('__csr') || '';
+                        const hsdp = getInstagramFormToken('__hsdp') || '';
+                        const hblp = getInstagramFormToken('__hblp') || '';
+                        const sjsp = getInstagramFormToken('__sjsp') || getInstagramFormToken('_sjsp') || '';
+                        const sParam = getInstagramFormToken('__s') || '';
+                        const hsi = getInstagramFormToken('__hsi') || '';
+                        const hs = getInstagramFormToken('__hs') || '';
+
+                        const url = 'https://www.instagram.com/async/wbloks/fetch/?appid=com.instagram.portable_settings.blocked_accounts.blocked_accounts_reloader&type=action&__bkv=62077fc559de123afe03ebeb18194a88ba5d4e6874d9a07873752f3792adb8a0';
+
+                        const body = new URLSearchParams({
+                            params: JSON.stringify({
+                                container_id_of_list: "2073224587",
+                                container_id_of_rows: "2073224588"
+                            }),
+                            __crn: 'comet.igweb.PolarisBlockedAccountsSettingsRoute',
+                            __comet_req: '7',
+                            server_timestamps: 'true',
+                            __d: 'www',
+                            __user: '0',
+                            __a: '1',
+                            __req: '7',
+                            __hs: hs,
+                            dpr: String(window.devicePixelRatio || 1),
+                            __ccg: 'EXCELLENT',
+                            __rev: spin.spin_r || '1048608279',
+                            __s: sParam,
+                            __hsi: hsi,
+                            __dyn: dyn,
+                            __csr: csr,
+                            __hsdp: hsdp,
+                            __hblp: hblp,
+                            __sjsp: sjsp,
+                            _sjsp: sjsp,
+                            __spin_r: spin.spin_r || '1048608279',
+                            __spin_b: spin.spin_b || 'trunk',
+                            __spin_t: spin.spin_t || String(Math.floor(Date.now() / 1000))
+                        });
+
+                        if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                        if (jazoest) body.append('jazoest', jazoest);
+                        if (lsd) body.append('lsd', lsd);
+
+                        const headers = {
+                            ...getApiHeaders(true),
+                            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                            'X-FB-LSD': lsd
+                        };
+
+                        console.log('[IG Tools Bloqueados] Buscando contas bloqueadas via Wbloks endpoint...');
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers,
+                            body: body.toString(),
+                            credentials: 'include',
+                            cache: 'no-store'
+                        });
+
+                        if (!response.ok) {
+                            console.warn('[IG Tools Bloqueados] Resposta Wbloks HTTP', response.status);
+                            return null;
+                        }
+
+                        const rawText = await response.text();
+                        let cleanedText = rawText.trim();
+                        if (cleanedText.startsWith('for (;;);')) {
+                            cleanedText = cleanedText.slice(9).trim();
+                        }
+
+                        let parsedJson = null;
+                        try {
+                            parsedJson = JSON.parse(cleanedText);
+                        } catch (e) {
+                            const lines = cleanedText.split('\n');
+                            for (const line of lines) {
+                                try {
+                                    const p = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
+                                    if (p?.payload || p?.data) {
+                                        parsedJson = p;
+                                        break;
+                                    }
+                                } catch (_) { }
+                            }
+                        }
+
+                        let lispyStr = '';
+                        if (parsedJson?.payload?.layout?.bloks_payload?.data) {
+                            const items = parsedJson.payload.layout.bloks_payload.data;
+                            for (const it of items) {
+                                if (it?.data?.initial_lispy) {
+                                    lispyStr = it.data.initial_lispy;
+                                    break;
+                                }
+                            }
+                        }
+
+                        const textToSearch = lispyStr || cleanedText;
+                        const users = [];
+                        const seen = new Set();
+
+                        // Regex para extrair usuários do Lispy do Wbloks:
+                        // (bk.action.array.Make, "user_id", "username", "secondary_text", (bk.action.bool.Const, false), "profile_pic_url", (bk.action.bool.Const, is_auto_blocked))
+                        const itemRegex = /\(bk\.action\.array\.Make,\s*"(\d+)",\s*"([^"]+)",\s*"((?:\\.|[^"\\])*)",\s*\(bk\.action\.bool\.Const,\s*(?:true|false)\),\s*"((?:\\.|[^"\\])+)",\s*\(bk\.action\.bool\.Const,\s*(true|false)\)/g;
+
+                        let match;
+                        while ((match = itemRegex.exec(textToSearch)) !== null) {
+                            const pk = match[1];
+                            const uname = match[2];
+                            let rawSec = match[3];
+                            let picUrl = match[4].replace(/\\/g, '');
+                            const isAutoBlocked = match[5] === 'true';
+
+                            try {
+                                rawSec = JSON.parse(`"${rawSec}"`);
+                            } catch (_) { }
+
+                            if (uname && !seen.has(uname)) {
+                                seen.add(uname);
+                                const isAutoText = rawSec.toLowerCase().includes('outras contas') || rawSec.toLowerCase().includes('other accounts');
+                                const fullName = isAutoText ? '' : rawSec;
+                                const secondaryText = isAutoText ? 'Inclui outras contas que o usuário tiver ou criar' : rawSec;
+
+                                if (pk) setCachedUserId(uname, pk);
+
+                                users.push({
+                                    username: uname,
+                                    pk: pk,
+                                    id: pk,
+                                    fullName: fullName,
+                                    secondaryText: secondaryText,
+                                    photoUrl: picUrl || DEFAULT_AVATAR,
+                                    isAutoBlocked: isAutoBlocked || isAutoText
+                                });
+                            }
+                        }
+
+                        console.log(`[IG Tools Bloqueados] Extraídos ${users.length} usuários via Wbloks com sucesso.`);
+                        return users.length > 0 ? users : null;
+                    } catch (err) {
+                        console.error('[IG Tools Bloqueados] Erro ao buscar Wbloks:', err);
+                        return null;
+                    }
+                }
+
+                function extractBlockedAccountsUsernames(doc = document) {
+                    return new Promise(async (resolve) => {
+                        const wbloksUsers = await fetchBlockedAccountsWbloks();
+                        if (wbloksUsers && wbloksUsers.length > 0) {
+                            resolve(wbloksUsers);
+                            return;
+                        }
+
+                        const users = new Map();
+                        let scrollInterval;
+                        let noNewUsersCount = 0;
+                        const maxIdleCount = 6;
+
+                        let cancelled = false;
+                        const { bar, update, closeButton } = createCancellableProgressBar();
+                        closeButton.onclick = () => {
+                            cancelled = true;
+                            finishExtraction();
+                        };
+                        update(0, 0, "Buscando e rolando a lista de contas bloqueadas...");
+
+                        function finishExtraction() {
+                            if (scrollInterval) clearInterval(scrollInterval);
+                            if (window._igBlockedUsersCapture && window._igBlockedUsersCapture.callbacks) {
+                                const idx = window._igBlockedUsersCapture.callbacks.indexOf(networkCallback);
+                                if (idx !== -1) window._igBlockedUsersCapture.callbacks.splice(idx, 1);
+                            }
+                            if (bar) bar.remove();
+                            console.log(`[IG Tools] Extração de bloqueados finalizada. Total de ${users.size} usuários.`);
+                            users.forEach(u => {
+                                if (u.username && u.pk) setCachedUserId(u.username, u.pk);
+                            });
+                            resolve(cancelled ? [] : Array.from(users.values()));
+                        }
+
+                        function tryExtractFromSSRScripts() {
+                            try {
+                                const scripts = Array.from(doc.querySelectorAll('script[type="application/json"]'));
+                                for (const script of scripts) {
+                                    const text = script.textContent || '';
+                                    if (!text.includes('blocked') && !text.includes('username')) continue;
+                                    const userRegex = /"username":"([a-zA-Z0-9._]+)"/g;
+                                    let m;
+                                    while ((m = userRegex.exec(text)) !== null) {
+                                        const uname = m[1];
+                                        if (!uname || uname === 'instagram' || uname === 'threads') continue;
+
+                                        const start = Math.max(0, m.index - 300);
+                                        const end = Math.min(text.length, m.index + 500);
+                                        const chunk = text.slice(start, end);
+
+                                        const picMatch = chunk.match(/"profile_pic_url":"([^"]+)"/);
+                                        const photoUrl = picMatch ? picMatch[1].replace(/\\/g, '') : DEFAULT_AVATAR;
+
+                                        const pkMatch = chunk.match(/"pk":"?(\d+)"?/);
+                                        const pk = pkMatch ? pkMatch[1] : '';
+                                        if (pk) setCachedUserId(uname, pk);
+
+                                        if (!users.has(uname)) {
+                                            users.set(uname, { username: uname, photoUrl, pk, id: pk, fullName: '', secondaryText: '', isAutoBlocked: false });
+                                        }
+                                    }
+                                }
+                                if (users.size > 0) {
+                                    update(users.size, users.size, `Carregados ${users.size} usuário(s) iniciais...`);
+                                }
+                            } catch (e) { }
+                        }
+
+                        tryExtractFromSSRScripts();
+
+                        if (window._igBlockedUsersCapture && window._igBlockedUsersCapture.users) {
+                            window._igBlockedUsersCapture.users.forEach(u => {
+                                if (!users.has(u.username)) {
+                                    users.set(u.username, { username: u.username, photoUrl: u.photoUrl, pk: u.pk, id: u.pk, fullName: '', secondaryText: '', isAutoBlocked: false });
+                                } else {
+                                    const cur = users.get(u.username);
+                                    if (!cur.pk && u.pk) { cur.pk = u.pk; cur.id = u.pk; }
+                                    if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && u.photoUrl !== DEFAULT_AVATAR) cur.photoUrl = u.photoUrl;
+                                }
+                                if (u.pk) setCachedUserId(u.username, u.pk);
+                            });
+                        }
+
+                        function networkCallback(capturedArray) {
+                            let added = false;
+                            capturedArray.forEach(u => {
+                                if (!users.has(u.username)) {
+                                    users.set(u.username, { username: u.username, photoUrl: u.photoUrl, pk: u.pk, id: u.pk, fullName: '', secondaryText: '', isAutoBlocked: false });
+                                    added = true;
+                                } else {
+                                    const cur = users.get(u.username);
+                                    if (!cur.pk && u.pk) { cur.pk = u.pk; cur.id = u.pk; }
+                                    if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && u.photoUrl !== DEFAULT_AVATAR) cur.photoUrl = u.photoUrl;
+                                }
+                                if (u.pk) setCachedUserId(u.username, u.pk);
+                            });
+                            if (added) {
+                                noNewUsersCount = 0;
+                                update(users.size, users.size, `Capturado(s) ${users.size} usuário(s)... Rolando...`);
+                            }
+                        }
+                        if (window._igBlockedUsersCapture) {
+                            window._igBlockedUsersCapture.callbacks.push(networkCallback);
+                        }
+
+                        function performScrollAndExtract() {
+                            if (cancelled) return;
+                            const initialUserCount = users.size;
+
+                            const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')).filter(el =>
+                                el.querySelector('span[data-bloks-name="bk.components.Text"]') || (el.querySelector('img') && el.innerText && el.innerText.includes('\n'))
+                            );
+                            const genericElements = userElements.length === 0
+                                ? Array.from(doc.querySelectorAll('ul > li, [role="listitem"], [role="list"] > div'))
+                                : [];
+                            const elements = userElements.length > 0 ? userElements : genericElements;
+
+                            elements.forEach(el => {
+                                let username = '';
+                                const bloksSpan = el.querySelector('span[data-bloks-name="bk.components.Text"]');
+                                if (bloksSpan) {
+                                    username = bloksSpan.innerText.trim();
+                                } else {
+                                    const spans = el.querySelectorAll('span, p, div');
+                                    for (const span of spans) {
+                                        const t = span.innerText?.trim() || '';
+                                        if (/^[a-zA-Z0-9._]{3,30}$/.test(t) && !t.includes(' ')) {
+                                            username = t; break;
+                                        }
+                                    }
+                                }
+
+                                if (username && /^[a-zA-Z0-9_.]{3,30}$/.test(username)) {
+                                    const imgTag = el.querySelector('img');
+                                    const photoUrl = imgTag ? imgTag.src : DEFAULT_AVATAR;
+                                    const pk = getCachedUserId(username) || '';
+                                    if (!users.has(username)) {
+                                        users.set(username, { username, photoUrl, pk, id: pk, fullName: '', secondaryText: '', isAutoBlocked: false });
+                                    } else {
+                                        const cur = users.get(username);
+                                        if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && photoUrl !== DEFAULT_AVATAR) cur.photoUrl = photoUrl;
+                                        if (!cur.pk && pk) { cur.pk = pk; cur.id = pk; }
+                                    }
+                                }
+                            });
+
+                            update(users.size, users.size, `Encontrado(s) ${users.size} usuário(s)... Rolando...`);
+
+                            if (users.size === initialUserCount) {
+                                noNewUsersCount++;
+                            } else {
+                                noNewUsersCount = 0;
+                            }
+
+                            if (noNewUsersCount >= (users.size > 0 ? maxIdleCount : 8)) {
+                                finishExtraction();
+                                return;
+                            }
+
+                            const scrollContainer = doc.querySelector('div[role="dialog"] ._aano') ||
+                                doc.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]') ||
+                                doc.querySelector('main div[style*="overflow-y: auto"]') ||
+                                doc.querySelector('div[style*="overflow-y: auto"]') ||
+                                doc.querySelector('._aano') ||
+                                doc.documentElement;
+                            if (scrollContainer && scrollContainer !== doc.documentElement) {
+                                scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                            } else {
+                                window.scrollTo(0, document.body.scrollHeight);
+                            }
+                        }
+
+                        scrollInterval = setInterval(performScrollAndExtract, 400);
+
+                        setTimeout(() => {
+                            if (scrollInterval) {
+                                finishExtraction();
+                            }
+                        }, 60000);
+                    });
+                }
+
+                let blockedList = []; // Declarado no escopo compartilhado para unblockUsers
+                let modalAbertoBlocked = false;
+
+                async function iniciarProcessoBloqueados() {
+                    const existingModal = document.getElementById("blockedAccountsModal") || document.getElementById("allBlockedAccountsDiv");
+                    if (existingModal) {
+                        existingModal.remove();
+                    }
+                    if (modalAbertoBlocked) return;
+                    modalAbertoBlocked = true;
+
+                    // 1. CARREGAMENTO INSTANTÂNEO VIA CACHE (0ms)
+                    blockedList = (Array.isArray(cachedBlockedAccounts) && cachedBlockedAccounts.length > 0)
+                        ? [...cachedBlockedAccounts]
+                        : [];
+
+                    const selectedUsers = new Set();
+                    let currentPage = 1;
+                    let sortConfig = { key: 'username', direction: 'ascending' };
+
+                    // 2. MONTAGEM IMEDIATA DO MODAL NA TELA (Sem tela cheia de carregamento)
+                    const div = document.createElement("div");
+                    div.id = "blockedAccountsModal";
+                    div.className = "submenu-modal";
+                    div.style.cssText = `
+                        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                        width: 90%; max-width: 800px; max-height: 90vh; border: 1px solid #ccc;
+                        border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
+                    `;
+
+                    div.innerHTML = `
+                        <div class="modal-header">
+                            <span class="modal-title">
+                                Gerenciador de Contas Bloqueadas <span id="blockedSelectedCount" style="font-size:12px; font-weight:normal; color:#e74c3c;">(0 selecionados)</span>
+                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie as contas que você bloqueou no Instagram. Filtre, pesquise, importe do backup oficial e desbloqueie em lote ou individualmente.</span></div>
+                            </span>
+                            <div class="modal-controls">
+                                <button id="blockedMinimizarBtn" title="Minimizar">_</button>
+                                <button id="blockedFecharBtn" title="Fechar">X</button>
+                            </div>
+                        </div>
+                        <div style="padding: 15px 0 10px 0;">
+                            <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+                                    <button id="blockedRefreshBtn" title="Atualizar dados do Instagram" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">🔄 Atualizar</button>
+                                    <button id="blockedImportJsonBtn" title="Importar arquivo JSON de dados baixados da Meta/Instagram" style="background: #34495e; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer; font-weight: 600;">📥 Importar JSON</button>
+                                    <input type="file" id="blockedJsonFileInput" accept=".json" style="display: none;">
+                                    <button id="blockedDesbloquearBtn" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">🔓 Desbloquear Selecionados</button>
+                                    <button id="blockedMarcarTodosBtn" style="background: #0095f6; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">Selecionar Página</button>
+                                    <button id="blockedDesmarcarTodosBtn" style="background: #6c757d; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">Desmarcar Todos</button>
+                                </div>
+                                <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; display: flex; align-items: center;">
+                                    <span style="font-size: 14px; font-weight: 500;">⚡ Usar API</span>
+                                    <label class="switch"><input type="checkbox" id="blockedUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}><span class="slider"></span></label>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 15px; display: flex; gap: 10px;">
+                            <input type="text" id="blockedSearchInput" placeholder="Pesquisar por @usuário, nome ou ID..." style="flex: 2; padding: 8px 12px; height: 40px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; outline: none; box-sizing: border-box;">
+                            <select id="blockedFilterSelect" style="flex: 1; padding: 0 10px; height: 40px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; cursor: pointer; outline: none; box-sizing: border-box;">
+                                <option value="all">Todos (${blockedList.length})</option>
+                                <option value="auto_blocked">🔒 Inclui novas contas (Auto-bloqueio)</option>
+                                <option value="standard">👤 Bloqueio padrão</option>
+                            </select>
+                        </div>
+                        <div id="statusBloqueados" style="margin-top: 5px; font-weight: bold; font-size: 13px; color: #555;">Total: ${blockedList.length} contas bloqueadas.</div>
+                        <div id="tabelaBloqueadosContainer" style="display: block; margin-top: 15px;"></div>
+                    `;
+
+                    document.body.appendChild(div);
+
+                    const container = document.getElementById("tabelaBloqueadosContainer");
+
+                    const updateCounts = (paginatedUsers = []) => {
+                        const countEl = document.getElementById('blockedSelectedCount');
+                        if (countEl) countEl.innerText = `(${selectedUsers.size} selecionados)`;
+
+                        const selectAllCb = document.getElementById('selectAllBlockedCheckbox');
+                        if (selectAllCb && paginatedUsers.length > 0) {
+                            selectAllCb.checked = paginatedUsers.every(u => selectedUsers.has(u.username));
+                        }
+
+                        const filterSelect = document.getElementById('blockedFilterSelect');
+                        if (filterSelect && filterSelect.options.length > 0) {
+                            filterSelect.options[0].text = `Todos (${blockedList.length})`;
+                        }
+                    };
+
+                    const renderList = (page) => {
+                        const itemsPerPage = loadSettings().itemsPerPage || 10;
+                        const startIndex = (page - 1) * itemsPerPage;
+                        const endIndex = startIndex + itemsPerPage;
+
+                        const searchTerm = (document.getElementById('blockedSearchInput')?.value || '').toLowerCase().trim();
+                        const filterValue = document.getElementById('blockedFilterSelect')?.value || 'all';
+
+                        let filteredUsers = blockedList;
+
+                        if (searchTerm) {
+                            filteredUsers = filteredUsers.filter(u =>
+                                (u.username && u.username.toLowerCase().includes(searchTerm)) ||
+                                (u.fullName && u.fullName.toLowerCase().includes(searchTerm)) ||
+                                (u.secondaryText && u.secondaryText.toLowerCase().includes(searchTerm)) ||
+                                (u.pk && u.pk.includes(searchTerm))
+                            );
+                        }
+
+                        if (filterValue === 'auto_blocked') {
+                            filteredUsers = filteredUsers.filter(u => u.isAutoBlocked);
+                        } else if (filterValue === 'standard') {
+                            filteredUsers = filteredUsers.filter(u => !u.isAutoBlocked);
+                        }
+
+                        const sortedUsers = [...filteredUsers].sort((a, b) => {
+                            let valA = '';
+                            let valB = '';
+                            if (sortConfig.key === 'username') {
+                                valA = (a.username || '').toLowerCase();
+                                valB = (b.username || '').toLowerCase();
+                            } else if (sortConfig.key === 'pk') {
+                                valA = Number(a.pk) || 0;
+                                valB = Number(b.pk) || 0;
+                            } else if (sortConfig.key === 'isAutoBlocked') {
+                                valA = a.isAutoBlocked ? 1 : 0;
+                                valB = b.isAutoBlocked ? 1 : 0;
+                            }
+
+                            if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+                            if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
+                            return 0;
+                        });
+
+                        const totalPages = Math.max(1, Math.ceil(sortedUsers.length / itemsPerPage));
+                        if (page > totalPages) page = totalPages;
+                        currentPage = page;
+
+                        const paginatedUsers = sortedUsers.slice(startIndex, endIndex);
+
+                        const statusEl = document.getElementById('statusBloqueados');
+                        if (statusEl) {
+                            statusEl.innerText = `Mostrando ${filteredUsers.length} de ${blockedList.length} contas bloqueadas.`;
+                        }
+
+                        let tableHtml = `
+                            <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                                <thead style="cursor: pointer;">
+                                    <tr style="text-align: left; border-bottom: 2px solid #dbdbdb;">
+                                        <th style="padding: 8px; width: 30px;"><input type="checkbox" id="selectAllBlockedCheckbox" title="Selecionar Todos da Página"></th>
+                                        <th style="padding: 8px;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                        <th style="padding: 8px; text-align: center;" data-sort-key="pk">ID (PK) ${sortConfig.key === 'pk' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                        <th style="padding: 8px; text-align: center;" data-sort-key="isAutoBlocked">Tipo de Bloqueio ${sortConfig.key === 'isAutoBlocked' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                        <th style="padding: 8px; text-align: center;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                        `;
+
+                        if (paginatedUsers.length === 0) {
+                            tableHtml += `<tr><td colspan="5" style="text-align: center; padding: 25px; color: #888;">Nenhum usuário encontrado com os filtros aplicados.</td></tr>`;
+                        } else {
+                            paginatedUsers.forEach(userObj => {
+                                const { username, photoUrl, pk, fullName, secondaryText, isAutoBlocked } = userObj;
+                                const isChecked = selectedUsers.has(username);
+
+                                tableHtml += `
+                                    <tr style="border-bottom: 1px solid #dbdbdb;" data-username="${username}">
+                                        <td style="padding: 8px;"><input type="checkbox" class="user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
+                                        <td style="padding: 8px; display: flex; align-items: center; gap: 10px;">
+                                            <img src="${photoUrl || DEFAULT_AVATAR}" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${username}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                                            <div style="display: flex; flex-direction: column;">
+                                                <div style="display: flex; align-items: center; gap: 6px;">
+                                                    <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration: none; color: inherit; font-weight: 600;">${username}</a>
+                                                </div>
+                                                ${fullName ? `<span style="font-size: 12px; color: #666;">${fullName}</span>` : ''}
+                                                ${secondaryText ? `<span style="font-size: 11px; color: ${isAutoBlocked ? '#e74c3c' : '#777'};">${secondaryText}</span>` : ''}
+                                            </div>
+                                        </td>
+                                        <td style="text-align: center; padding: 8px; font-family: monospace; font-size: 12px; color: #555;">${pk || '-'}</td>
+                                        <td style="text-align: center; padding: 8px;">
+                                            ${isAutoBlocked
+                                        ? `<span class="badge-tipo-bloqueio badge-auto-blocked" style="background: #fde8e8; color: #b71c1c !important; border: 1px solid #f8b4b4; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">🔒 + Novas contas</span>`
+                                        : `<span class="badge-tipo-bloqueio badge-standard" style="background: #e8f4fd; color: #0d47a1 !important; border: 1px solid #90caf9; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">👤 Padrão</span>`
+                                    }
+                                        </td>
+                                        <td style="text-align: center; padding: 8px;">
+                                            <button class="btn-unblock-row" data-username="${username}" data-uid="${pk}" style="background: #2ecc71; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">Desbloquear</button>
+                                        </td>
+                                    </tr>
+                                `;
+                            });
+                        }
+
+                        tableHtml += `</tbody></table>`;
+
+                        let paginationHtml = `<div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px;">`;
+                        if (page > 1) paginationHtml += `<button id="prevBlockedPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Anterior</button>`;
+                        paginationHtml += `<span style="font-size: 13px; font-weight: 600;">Página ${page} de ${totalPages}</span>`;
+                        if (page < totalPages) paginationHtml += `<button id="nextBlockedPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Próximo</button>`;
+                        paginationHtml += `</div>`;
+
+                        container.innerHTML = tableHtml + paginationHtml;
+
+                        // Checkbox individual listeners
+                        container.querySelectorAll('.user-checkbox').forEach(cb => {
+                            cb.addEventListener('change', (e) => {
+                                const uname = e.target.dataset.username;
+                                if (e.target.checked) selectedUsers.add(uname);
+                                else selectedUsers.delete(uname);
+                                updateCounts(paginatedUsers);
+                            });
+                        });
+
+                        // Select all checkbox listener
+                        const selectAllCb = document.getElementById('selectAllBlockedCheckbox');
+                        if (selectAllCb) {
+                            selectAllCb.checked = paginatedUsers.length > 0 && paginatedUsers.every(u => selectedUsers.has(u.username));
+                            selectAllCb.onchange = (e) => {
+                                const isChecked = e.target.checked;
+                                paginatedUsers.forEach(u => {
+                                    if (isChecked) selectedUsers.add(u.username);
+                                    else selectedUsers.delete(u.username);
+                                });
+                                container.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = isChecked);
+                                updateCounts(paginatedUsers);
+                            };
+                        }
+
+                        // Sorting listeners
+                        container.querySelectorAll('th[data-sort-key]').forEach(th => {
+                            th.addEventListener('click', () => {
+                                const key = th.dataset.sortKey;
+                                if (sortConfig.key === key) {
+                                    sortConfig.direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+                                } else {
+                                    sortConfig.key = key;
+                                    sortConfig.direction = 'ascending';
+                                }
+                                renderList(currentPage);
+                            });
+                        });
+
+                        // Pagination button listeners
+                        const prevBtn = document.getElementById('prevBlockedPageBtn');
+                        if (prevBtn) prevBtn.onclick = () => renderList(currentPage - 1);
+                        const nextBtn = document.getElementById('nextBlockedPageBtn');
+                        if (nextBtn) nextBtn.onclick = () => renderList(currentPage + 1);
+
+                        // Individual unblock button listeners
+                        container.querySelectorAll('.btn-unblock-row').forEach(btn => {
+                            btn.addEventListener('click', async (e) => {
+                                const targetBtn = e.currentTarget;
+                                const uname = targetBtn.dataset.username;
+                                if (!confirm(`Deseja desbloquear o usuário @${uname}?`)) return;
+
+                                targetBtn.disabled = true;
+                                targetBtn.textContent = 'Processando...';
+
+                                await unblockUsers([uname], (unblocked) => {
+                                    if (unblocked && unblocked.includes(uname)) {
+                                        blockedList = blockedList.filter(u => u.username !== uname);
+                                        cachedBlockedAccounts = blockedList;
+                                        try {
+                                            localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(blockedList));
+                                        } catch (_) { }
+                                        selectedUsers.delete(uname);
+                                        showToast(`Usuário @${uname} desbloqueado!`);
+                                        updateCounts();
+                                        const visibleRows = container.querySelectorAll('tbody tr[data-username]');
+                                        if (visibleRows.length <= 1 && currentPage > 1) {
+                                            renderList(currentPage - 1);
+                                        } else {
+                                            renderList(currentPage);
+                                        }
+                                    } else {
+                                        targetBtn.disabled = false;
+                                        targetBtn.textContent = 'Desbloquear';
+                                    }
+                                });
+                            });
+                        });
+                    };
+
+                    // Função para buscar e sincronizar dados com a Meta em segundo plano
+                    async function sincronizarBloqueados(showFeedback = false) {
+                        const refreshBtn = document.getElementById("blockedRefreshBtn");
+                        try {
+                            if (showFeedback && refreshBtn) {
+                                refreshBtn.disabled = true;
+                                refreshBtn.textContent = "🔄 Buscando...";
+                            }
+
+                            let wbloksUsers = await fetchBlockedAccountsWbloks();
+
+                            if ((!wbloksUsers || wbloksUsers.length === 0) && window.location.pathname === '/accounts/blocked_accounts/') {
+                                wbloksUsers = await extractBlockedAccountsUsernames();
+                            }
+
+                            if (wbloksUsers && wbloksUsers.length > 0) {
+                                const map = new Map();
+                                blockedList.forEach(u => map.set(u.username.toLowerCase(), u));
+
+                                let addedCount = 0;
+                                wbloksUsers.forEach(u => {
+                                    const k = u.username.toLowerCase();
+                                    if (map.has(k)) {
+                                        const cur = map.get(k);
+                                        if (u.pk) cur.pk = u.pk;
+                                        if (u.isAutoBlocked) cur.isAutoBlocked = true;
+                                        if (u.secondaryText) cur.secondaryText = u.secondaryText;
+                                        if (u.photoUrl && u.photoUrl !== DEFAULT_AVATAR) cur.photoUrl = u.photoUrl;
+                                    } else {
+                                        map.set(k, u);
+                                        addedCount++;
+                                    }
+                                });
+
+                                blockedList = Array.from(map.values());
+                                cachedBlockedAccounts = blockedList;
+                                try {
+                                    localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(blockedList));
+                                } catch (_) { }
+
+                                renderList(currentPage);
+                                updateCounts();
+                                if (showFeedback) showToast(`Sincronizado! ${blockedList.length} contas encontradas (+${addedCount} novas).`);
+                            } else if (blockedList.length === 0) {
+                                container.innerHTML = `
+                                    <div style="text-align: center; padding: 30px 15px; color: #666;">
+                                        <div style="font-size: 15px; font-weight: 600; margin-bottom: 8px;">Nenhuma conta encontrada via requisição direta.</div>
+                                        <div style="font-size: 13px; color: #888; max-width: 520px; margin: 0 auto 15px;">
+                                            Você pode tentar clicar em <b>🔄 Atualizar</b> novamente ou usar o botão <b>📥 Importar JSON</b> com o arquivo baixado da Central de Contas Meta.
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        } catch (err) {
+                            console.error('[IG Tools Bloqueados] Erro na sincronização:', err);
+                            if (showFeedback) showToast('Erro ao sincronizar contas com o Instagram.');
+                        } finally {
+                            if (refreshBtn) {
+                                refreshBtn.disabled = false;
+                                refreshBtn.textContent = "🔄 Atualizar";
+                            }
+                        }
+                    }
+
+                    // 3. FLUXO DE EXIBIÇÃO: SE HOUVER CACHE, MOSTRA JÁ. SE NÃO, MOSTRA LOADING LIMPO
+                    if (blockedList.length > 0) {
+                        renderList(1);
+                        sincronizarBloqueados(false); // Sincroniza discretamente em segundo plano
+                    } else {
+                        container.innerHTML = `
+                            <div style="text-align: center; padding: 40px 20px; color: #555;">
+                                <div style="display: inline-block; width: 32px; height: 32px; border: 3px solid rgba(0,149,246,0.2); border-top-color: #0095f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 12px;"></div>
+                                <div style="font-weight: 600; font-size: 14px;">Carregando contas bloqueadas...</div>
+                                <div style="font-size: 12px; color: #888; margin-top: 4px;">Consultando o Instagram em segundo plano...</div>
+                            </div>
+                        `;
+                        sincronizarBloqueados(false);
+                    }
+
+                    // Static header button listeners
+                    document.getElementById("blockedFecharBtn").onclick = () => {
+                        div.remove();
+                        modalAbertoBlocked = false;
+                    };
+
+                    document.getElementById("blockedMinimizarBtn").onclick = () => {
+                        const modal = document.getElementById('blockedAccountsModal');
+                        if (!modal) return;
+                        const contentToToggle = [
+                            modal.querySelector('#blockedSearchInput')?.parentElement,
+                            modal.querySelector('#statusBloqueados'),
+                            modal.querySelector('#tabelaBloqueadosContainer')
+                        ].filter(Boolean);
+
+                        const btn = document.getElementById('blockedMinimizarBtn');
+                        const isMinimized = modal.dataset.minimized === 'true';
+
+                        contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+                        modal.dataset.minimized = !isMinimized;
+                        btn.textContent = isMinimized ? '_' : '⬜';
+                        btn.title = isMinimized ? 'Minimizar' : 'Maximizar';
+                        modal.style.maxHeight = isMinimized ? '90vh' : 'auto';
+                    };
+
+                    // Botão Atualizar (sincroniza sem fechar o modal)
+                    document.getElementById("blockedRefreshBtn").onclick = () => {
+                        sincronizarBloqueados(true);
+                    };
+
+                    // Botão Importar JSON oficial do Instagram
+                    const importBtn = document.getElementById("blockedImportJsonBtn");
+                    const fileInput = document.getElementById("blockedJsonFileInput");
+                    if (importBtn && fileInput) {
+                        importBtn.onclick = () => fileInput.click();
+                        fileInput.onchange = (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                                try {
+                                    const json = JSON.parse(event.target.result);
+                                    let imported = [];
+
+                                    // Formato oficial da exportação Meta (Central de Contas)
+                                    if (Array.isArray(json.relationships_blocked_users)) {
+                                        imported = json.relationships_blocked_users.map(item => {
+                                            const uname = item.title || item.string_list_data?.[0]?.value || '';
+                                            let dateText = '';
+                                            const ts = item.string_list_data?.[0]?.timestamp;
+                                            if (ts) dateText = `Bloqueado em ${new Date(ts * 1000).toLocaleDateString()}`;
+                                            return {
+                                                username: uname,
+                                                pk: '',
+                                                id: '',
+                                                fullName: '',
+                                                secondaryText: dateText || 'Importado de JSON oficial',
+                                                photoUrl: DEFAULT_AVATAR,
+                                                isAutoBlocked: false
+                                            };
+                                        }).filter(u => !!u.username);
+                                    } else if (Array.isArray(json.blocked_accounts)) {
+                                        imported = json.blocked_accounts.map(item => ({
+                                            username: item.username || item.title || item,
+                                            pk: String(item.pk || item.id || ''),
+                                            id: String(item.pk || item.id || ''),
+                                            fullName: item.full_name || '',
+                                            secondaryText: 'Importado de JSON oficial',
+                                            photoUrl: item.profile_pic_url || DEFAULT_AVATAR,
+                                            isAutoBlocked: false
+                                        })).filter(u => !!u.username);
+                                    } else if (Array.isArray(json)) {
+                                        imported = json.map(item => {
+                                            const uname = typeof item === 'string' ? item : (item.username || item.title || '');
+                                            return {
+                                                username: uname,
+                                                pk: String(item.pk || item.id || ''),
+                                                id: String(item.pk || item.id || ''),
+                                                fullName: item.full_name || item.fullName || '',
+                                                secondaryText: 'Importado de JSON oficial',
+                                                photoUrl: item.photoUrl || DEFAULT_AVATAR,
+                                                isAutoBlocked: false
+                                            };
+                                        }).filter(u => !!u.username);
+                                    }
+
+                                    if (imported.length === 0) {
+                                        alert('Nenhum usuário bloqueado foi encontrado no arquivo JSON selecionado. Certifique-se de exportar "Seguidores e bloqueados" da Central de Contas Meta.');
+                                        return;
+                                    }
+
+                                    const map = new Map();
+                                    blockedList.forEach(u => map.set(u.username.toLowerCase(), u));
+                                    let newCount = 0;
+                                    imported.forEach(u => {
+                                        const k = u.username.toLowerCase();
+                                        if (!map.has(k)) {
+                                            map.set(k, u);
+                                            newCount++;
+                                        }
+                                    });
+
+                                    blockedList = Array.from(map.values());
+                                    cachedBlockedAccounts = blockedList;
+                                    try {
+                                        localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(blockedList));
+                                    } catch (_) { }
+
+                                    renderList(1);
+                                    updateCounts();
+                                    showToast(`✅ ${newCount} novas contas importadas! Total: ${blockedList.length}.`);
+                                } catch (err) {
+                                    console.error('[IG Tools] Erro ao ler JSON de bloqueados:', err);
+                                    alert('Erro ao processar arquivo JSON: ' + err.message);
+                                }
+                                fileInput.value = '';
+                            };
+                            reader.readAsText(file);
+                        };
+                    }
+
+                    document.getElementById("blockedMarcarTodosBtn").onclick = () => {
+                        const itemsPerPage = loadSettings().itemsPerPage || 10;
+                        const startIndex = (currentPage - 1) * itemsPerPage;
+                        const pageUsers = blockedList.slice(startIndex, startIndex + itemsPerPage);
+                        pageUsers.forEach(u => selectedUsers.add(u.username));
+                        container.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = true);
+                        updateCounts(pageUsers);
+                    };
+
+                    document.getElementById("blockedDesmarcarTodosBtn").onclick = () => {
+                        selectedUsers.clear();
+                        container.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = false);
+                        updateCounts();
+                    };
+
+                    const searchInput = document.getElementById("blockedSearchInput");
+                    if (searchInput) {
+                        searchInput.addEventListener("input", () => renderList(1));
+                    }
+
+                    const filterSelect = document.getElementById("blockedFilterSelect");
+                    if (filterSelect) {
+                        filterSelect.addEventListener("change", () => renderList(1));
+                    }
+
+                    const apiToggle = document.getElementById("blockedUseApiToggle");
+                    if (apiToggle) {
+                        apiToggle.addEventListener("change", (e) => {
+                            const s = loadSettings();
+                            s.useApi = e.target.checked;
+                            saveSettings(s);
+                            showToast(`Modo API ${s.useApi ? 'ativado' : 'desativado'}.`);
+                        });
+                    }
+
+                    // Bulk unblock listener
+                    document.getElementById("blockedDesbloquearBtn").onclick = async () => {
+                        if (selectedUsers.size === 0) {
+                            alert("Nenhum usuário selecionado para desbloquear.");
+                            return;
+                        }
+
+                        const count = selectedUsers.size;
+                        if (!confirm(`Deseja desbloquear os ${count} usuário(s) selecionado(s)?`)) return;
+
+                        const desbloquearBtn = document.getElementById("blockedDesbloquearBtn");
+                        desbloquearBtn.disabled = true;
+                        desbloquearBtn.textContent = "Processando...";
+                        toggleLoading(true, 0, "Desbloqueando contas...");
+
+                        const usersToUnblock = Array.from(selectedUsers);
+
+                        await unblockUsers(usersToUnblock, (unblocked) => {
+                            desbloquearBtn.disabled = false;
+                            desbloquearBtn.textContent = "🔓 Desbloquear Selecionados";
+                            toggleLoading(false);
+
+                            if (unblocked && unblocked.length > 0) {
+                                const unblockedSet = new Set(unblocked);
+                                blockedList = blockedList.filter(u => !unblockedSet.has(u.username));
+                                cachedBlockedAccounts = blockedList;
+                                try {
+                                    localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(blockedList));
+                                } catch (_) { }
+                                unblocked.forEach(u => selectedUsers.delete(u));
+                                alert(`${unblocked.length} usuário(s) tiveram o bloqueio removido com sucesso.`);
+                            } else {
+                                alert("Nenhum usuário pôde ser desbloqueado.");
+                            }
+
+                            updateCounts();
+                            const totalPages = Math.max(1, Math.ceil(blockedList.length / (loadSettings().itemsPerPage || 10)));
+                            if (currentPage > totalPages) currentPage = totalPages;
+                            renderList(currentPage);
+                        });
+                    };
+                }
+
+                async function unblockUsers(usersToUnblock, onComplete) {
+                    let cancelled = false;
+                    const { bar, update, closeButton } = createCancellableProgressBar();
+                    closeButton.onclick = () => {
+                        cancelled = true;
+                        bar.remove();
+                        showToast("Processo de desbloqueio interrompido.");
+                    };
+                    toggleLoading(true, 0, "Desbloqueando contas via GraphQL...");
+
+                    const delay = loadSettings().unfollowDelay || 1200;
+                    const successfullyUnblocked = [];
+
+                    for (let i = 0; i < usersToUnblock.length; i++) {
+                        if (cancelled) break;
+                        const username = usersToUnblock[i];
+                        const percent = Math.round(((i + 1) / usersToUnblock.length) * 100);
+                        update(i + 1, usersToUnblock.length, `Desbloqueando @${username}...`);
+                        toggleLoading(true, percent, `Desbloqueando @${username} (${i + 1}/${usersToUnblock.length})...`);
+
+                        let uid = getCachedUserId(username);
+                        if (!uid && Array.isArray(blockedList)) {
+                            const item = blockedList.find(x => x?.username?.toLowerCase() === username.toLowerCase());
+                            if (item?.pk || item?.id) {
+                                uid = String(item.pk || item.id);
+                                setCachedUserId(username, uid);
+                            }
+                        }
+                        if (!uid) {
+                            uid = await getUserId(username);
+                        }
+
+                        if (!uid) {
+                            console.warn(`[IG Tools] ID não encontrado para @${username}`);
+                            showToast(`⚠️ ID de @${username} não encontrado`);
+                            continue;
+                        }
+
+                        const res = await executeApiUnblock(uid, username);
+                        if (res.success) {
+                            successfullyUnblocked.push(username);
+                            showToast(`🔓 Desbloqueou @${username}`);
+
+                            // Feedback visual imediato na tabela
+                            const rows = document.querySelectorAll(`tr[data-username="${username}"]`);
+                            rows.forEach(r => r.remove());
+                        } else {
+                            showToast(`❌ Falha ao desbloquear @${username}`);
+                        }
+
+                        if (i < usersToUnblock.length - 1) {
+                            await new Promise(r => setTimeout(r, delay));
+                        }
+                    }
+
+                    bar.remove();
+                    toggleLoading(false);
+
+                    if (onComplete) onComplete(successfullyUnblocked);
+                }
+
+                // --- FIM DO MENU CONTAS BLOQUEADAS ---
+
+                // Verifica se há um pedido de reabertura do modal de bloqueados após navegação forçada
+                if (sessionStorage.getItem('ig_tools_reopen_blocked') === '1' &&
+                    window.location.pathname === '/accounts/blocked_accounts/') {
+                    sessionStorage.removeItem('ig_tools_reopen_blocked');
+                    // Aguarda a página carregar os elementos e reabre o modal no modo scroll
+                    setTimeout(() => {
+                        console.log('[IG Tools] Reabrindo modal de bloqueados após navegação forçada (modo scroll)...');
+                        iniciarProcessoBloqueados();
+                    }, 2500);
+                }
+
+                function simulateClick(element, triggerChangeEvent = false) {
+                    if (!element) return;
+                    const dispatch = (event) => element.dispatchEvent(event);
+
+                    // Simula eventos de toque, mais confiáveis em mobile
+                    dispatch(new TouchEvent('touchstart', { bubbles: true, cancelable: true, view: window }));
+                    dispatch(new TouchEvent('touchend', { bubbles: true, cancelable: true, view: window }));
+
+                    // Mantém os eventos de mouse como fallback
+                    dispatch(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                    dispatch(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                    dispatch(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                    if (triggerChangeEvent) {
+                        dispatch(new Event('change', { bubbles: true }));
+                    }
+                }
+
+
+                // --- FUNÇÃO PARA BAIXAR STORY ATUAL (IMAGEM OU VÍDEO) ---
+                function baixarStoryAtual() {
+                    if (!window.location.href.includes('/stories/')) {
+                        alert('Esta função só pode ser usada na tela de visualização de Stories.');
+                        return;
+                    }
+
+                    // Função auxiliar para verificar se um elemento está visível na tela
+                    const isElementVisible = (el) => {
+                        if (!el) return false;
+                        const rect = el.getBoundingClientRect();
+                        const viewHeight = window.innerHeight || document.documentElement.clientHeight;
+
+                        // Considera visível se pelo menos 50% da altura do elemento estiver na tela.
+                        // Isso ajuda a ignorar elementos pré-carregados fora da tela.
+                        return (
+                            rect.bottom > 0 &&
+                            rect.top < viewHeight &&
+                            rect.width > 0 &&
+                            rect.height > 0
+                        );
+                    };
+
+                    let visibleImage;
+                    let visibleVideo;
+
+                    // 1. Tentar encontrar um vídeo visível primeiro
+                    visibleVideo = Array.from(document.querySelectorAll('video')).find(isElementVisible);
+
+                    if (isMobileDevice()) {
+                        // Lógica para celular: Procura por uma imagem que tenha 'srcset', um indicador comum para a imagem principal do story.
+                        // Isso é mais robusto do que um seletor de CSS fixo.
+                        visibleImage = Array.from(document.querySelectorAll('img[src]')).find(img => {
+                            const rect = img.getBoundingClientRect();
+                            return isElementVisible(img) && rect.height > (window.innerHeight * 0.5);
+                        });
+                    } else {
+                        // Lógica para PC: Encontra a imagem grande que está visível.
+                        visibleImage = Array.from(document.querySelectorAll('section img')).find(img => {
+                            const rect = img.getBoundingClientRect();
+                            return isElementVisible(img) && rect.height > (window.innerHeight * 0.5);
+                        });
+                    }
+
+                    if (visibleVideo && visibleVideo.src) {
+                        console.log("Vídeo do story encontrado:", visibleVideo.src);
+                        // Se for um blob, pode ser uma imagem com música.
+                        if (visibleVideo.src.startsWith('blob:')) {
+                            console.log("Vídeo é um blob, tentando capturar como imagem.");
+                            // Tirar "print" do vídeo
+                            const canvas = document.createElement('canvas');
+                            canvas.width = visibleVideo.videoWidth;
+                            canvas.height = visibleVideo.videoHeight;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(visibleVideo, 0, 0, canvas.width, canvas.height);
+                            const dataUrl = canvas.toDataURL('image/png');
+                            downloadMedia(dataUrl, `story_img_${Date.now()}.png`);
+                        } else {
+                            // Se for um vídeo normal, tenta baixar diretamente.
+                            downloadMedia(visibleVideo.src, `story_video_${Date.now()}.mp4`);
+                        }
+                        return;
+                    }
+
+                    // 2. Se não houver vídeo, procurar por uma imagem visível
+                    if (visibleImage && visibleImage.src) {
+                        console.log("Imagem do story encontrada:", visibleImage.src);
+                        // Prioriza a imagem de maior resolução do srcset, se disponível.
+                        const imageUrl = visibleImage.srcset
+                            ? visibleImage.srcset.split(',').slice(-1)[0].trim().split(' ')[0]
+                            : visibleImage.src;
+
+                        downloadMedia(imageUrl, `story_img_${Date.now()}.jpg`);
+                        return;
+                    }
+
+                    // 3. Se não encontrar nenhum dos dois
+                    alert('Nenhuma imagem ou vídeo de story encontrado para baixar.');
+                }
+
+                // --- BOTÃO FLUTUANTE AUTOMÁTICO PARA STORIES ---
+                function injectStoryFloatingButton() {
+                    if (window.location.href.includes('/stories/')) {
+                        if (!document.getElementById("storyFloatingDownloadBtn")) {
+                            const btn = document.createElement("button");
+                            btn.id = "storyFloatingDownloadBtn";
+                            btn.innerHTML = "⬇️";
+                            btn.title = "Baixar Story Atual";
+                            btn.style.cssText = `
+                                    position: fixed;
+                                    top: 20px;
+                                    left: 20px;
+                                    z-index: 2147483647;
+                                    background: rgba(255, 255, 255, 0.2);
+                                    color: white;
+                                    border: 1px solid rgba(255, 255, 255, 0.5);
+                                    border-radius: 50%;
+                                    width: 45px;
+                                    height: 45px;
+                                    font-size: 20px;
+                                    cursor: pointer;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    backdrop-filter: blur(4px);
+                                    transition: all 0.3s ease;
+                                `;
+                            btn.onmouseover = () => { btn.style.background = "rgba(255, 255, 255, 0.4)"; btn.style.transform = "scale(1.1)"; };
+                            btn.onmouseout = () => { btn.style.background = "rgba(255, 255, 255, 0.2)"; btn.style.transform = "scale(1)"; };
+                            btn.onclick = (e) => {
+                                e.stopPropagation();
+                                baixarStoryAtual();
+                            };
+                            document.body.appendChild(btn);
+                        }
+                    } else {
+                        const btn = document.getElementById("storyFloatingDownloadBtn");
+                        if (btn) btn.remove();
+                    }
+                }
+                setInterval(injectStoryFloatingButton, 1000);
+
+                // --- LÓGICA UNIFICADA PARA "NÃO SEGUE DE VOLTA" ---
+                async function iniciarProcessoNaoSegueDeVolta(initialTab = 'tabNaoSegueDeVolta') {
+                    const pathParts = window.location.pathname.split('/').filter(Boolean);
+                    if (document.getElementById("naoSegueDeVoltaDiv")) return; // Evita abrir múltiplos modais
+                    const username = pathParts[0];
+                    const appID = '936619743392459'; // ID público do app web do Instagram
+                    if (!username || pathParts.length > 1 && !['followers', 'following'].includes(pathParts[1])) {
+                        alert("Por favor, vá para a página de perfil de um usuário para usar esta função.");
+                        return;
+                    }
+                    // 1. Criar o modal de progresso
+                    const div = document.createElement("div");
+                    div.id = "naoSegueDeVoltaDiv";
+                    div.className = "submenu-modal";
+                    let processoCancelado = false; // Variável de controle de cancelamento
+
+                    div.style.cssText = `
+                            position: fixed;
+                            top: 50%;
+                            left: 50%;
+                            transform: translate(-50%, -50%);
+                            width: 90%;
+                            max-width: 800px;
+                            max-height: 90vh;
+                            border: 1px solid #ccc;
+                            border-radius: 10px;
+                            padding: 20px;
+                            z-index: 10000;
+                            overflow: auto;
+                        `;
+                    div.innerHTML = `
+                            <div class="modal-header">
+                                <span class="modal-title">
+                                    Análise de Seguidores <span id="naoSegueSelectedCount" style="font-size: 12px; font-weight: normal; margin-left: 10px; color: #0095f6;">(0 selecionados)</span>
+                                    <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Veja quem você segue mas não te segue de volta. Também mostra novos seguidores e histórico de unfollows.</span></div>
+                                </span>
+                                <div class="modal-controls">
+                                    <button id="naoSegueDeVoltaMinimizarBtn" title="Minimizar">_</button>
+                                    <button id="fecharSubmenuBtn" title="Fechar">X</button>
+                                </div>
+                            </div>
+                            <div id="statusNaoSegue" style="margin-top: 20px; font-weight: bold;"></div>
+                            <div id="tabelaContainer" style="display: block; margin-top: 15px;"></div>
+                        `;
+                    document.body.appendChild(div);
+                    toggleLoading(false); // Remove loading after modal is created
+
+                    document.getElementById("fecharSubmenuBtn").addEventListener("click", () => {
+                        processoCancelado = true; // Sinaliza que o processo deve ser cancelado
+                        document.getElementById("progressBar")?.remove();
+                        div.remove();
+                    });
+
+                    document.getElementById("naoSegueDeVoltaMinimizarBtn").onclick = () => {
+                        const modal = document.getElementById('naoSegueDeVoltaDiv');
+                        const contentToToggle = [
+                            modal.querySelector('.tab-container'),
+                            modal.querySelector('#statusNaoSegue'),
+                            modal.querySelector('#tabelaContainer')
+                        ].filter(Boolean);
+
+                        const btn = document.getElementById('naoSegueDeVoltaMinimizarBtn');
+                        const isMinimized = modal.dataset.minimized === 'true';
+
+                        contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+                        modal.dataset.minimized = !isMinimized;
+                        btn.textContent = isMinimized ? '_' : '□';
+                        modal.style.maxHeight = isMinimized ? '90vh' : 'auto';
+                    };
+
+                    const statusDiv = document.getElementById("statusNaoSegue");
+                    const selectedUsers = new Set();
+
+                    // Cache para armazenar os dados e evitar novas buscas
+                    const cachedData = {
+                        seguindo: null,
+                        seguidores: null,
+                        naoSegueDeVolta: null,
+                        novosSeguidores: null,
+                        unfollows: null,
+                        seguidoresPerdidos: null,
+                        exceptions: null,
+                        profileInfo: null,
+                        userDetails: new Map()
+                    };
+
+                    // Variável compartilhada para as listas, acessível pelo unfollowUsers
+                    const updateSelectedCountDisplay = () => {
+                        const countEl = document.getElementById('naoSegueSelectedCount');
+                        if (countEl) {
+                            countEl.innerText = `(${selectedUsers.size} selecionados)`;
+                        }
+                    };
+
+                    let lists = {};
+                    let currentTabId = 'tabNaoSegueDeVolta';
+
+                    // Função para extrair lista de usuários via API (muito mais rápido)
+                    const fetchUserListAPI = async (userId, type, total) => {
+                        const userList = new Set();
+                        let nextMaxId = '';
+                        let hasNextPage = true;
+
+                        // --- Lógica da Barra de Progresso ---
+                        let bar = document.getElementById("progressBar");
+                        if (bar) bar.remove();
+
+                        bar = document.createElement("div");
+                        bar.id = "progressBar";
+                        bar.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);width:80%;height:30px;background:#e0e0e0;border-radius:15px;overflow:hidden;z-index:10001;color:black;font-weight:bold;font-size:14px;text-align:center;line-height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 15px;box-shadow:0 4px 12px rgba(0,0,0,0.2);";
+
+                        const fill = document.createElement("div");
+                        fill.style.cssText = "height:100%;width:0%;background:#28a745;position:absolute;left:0;top:0;z-index:1;transition:width 0.25s ease-in-out;";
+
+                        const text = document.createElement("div");
+                        text.style.cssText = "position:relative;z-index:2;text-shadow:0 0 2px rgba(255,255,255,0.8);";
+
+                        const closeButton = document.createElement("button");
+                        closeButton.innerText = "Cancelar";
+                        closeButton.style.cssText = "position:relative;z-index:2;background:#dc3545;color:white;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-weight:bold;";
+                        closeButton.onclick = () => { processoCancelado = true; bar.remove(); statusDiv.innerText = "Processo interrompido."; };
+
+                        bar.appendChild(fill);
+                        bar.appendChild(text);
+                        bar.appendChild(closeButton);
+                        document.body.appendChild(bar);
+
+                        const updateLocalProgressBar = (progress, totalCount, message) => {
+                            const totalNum = Number(totalCount) || 0;
+                            let percent = totalNum > 0 ? Math.min((progress / totalNum) * 100, 100) : Math.min(progress * 2, 95);
+                            fill.style.width = `${percent}%`;
+                            const textTotal = totalNum > 0 ? totalNum : '?';
+                            text.innerText = `${message} ${Math.floor(percent)}% (${progress}/${textTotal})`;
+                        };
+                        // --- Fim da lógica da Barra de Progresso ---
+
+                        let hasError = false;
+                        while (hasNextPage && !processoCancelado && !hasError) {
+                            try {
+                                const batchSize = loadSettings().requestBatchSize || 50;
+                                const delay = loadSettings().requestDelay || 250;
+                                const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=${batchSize}&max_id=${nextMaxId}`, {
+                                    headers: { 'X-IG-App-ID': appID }
+                                });
+                                if (!response.ok) throw new Error(`Erro na API: ${response.status} - ${response.statusText}`);
+                                const data = await response.json();
+
+                                data.users.forEach(user => {
+                                    const lowerUsername = user.username.toLowerCase();
+                                    userList.add(lowerUsername);
+                                    cachedData.userDetails.set(lowerUsername, {
+                                        username: user.username,
+                                        photoUrl: user.profile_pic_url,
+                                        id: user.pk || user.id
+                                    });
+                                });
+                                updateLocalProgressBar(userList.size, total, `Extraindo ${type}:`);
+
+                                if (data.next_max_id) {
+                                    nextMaxId = data.next_max_id;
+                                } else {
+                                    hasNextPage = false;
+                                }
+                                await new Promise(r => setTimeout(r, delay)); // Pausa configurável
+                            } catch (error) {
+                                console.error(`Erro ao buscar ${type}:`, error);
+                                alert(`Ocorreu um erro ao buscar a lista de ${type}: ${error.message}.\n\nIsso geralmente ocorre por muitas requisições (Erro 429). Tente aumentar o 'Intervalo Requisições' nas configurações ou aguarde alguns minutos.`);
+                                hasError = true;
+                                hasNextPage = false; // Interrompe em caso de erro
+                            }
+                        }
+                        let progressBarElement = document.getElementById("progressBar");
+                        if (progressBarElement) progressBarElement.remove();
+                        if (hasError) return null;
+                        return processoCancelado ? null : userList;
+                    };
+
+                    // Função principal que carrega os dados UMA VEZ
+                    async function carregarDadosIniciais() {
+                        statusDiv.innerText = 'Carregando dados do Banco de Dados...';
+
+                        // 1. Carrega dados do DB (Sem requisições API)
+                        let dbFollowers = await dbHelper.loadCache('followers');
+                        let dbFollowing = await dbHelper.loadCache('following');
+                        let dbExceptions = await dbHelper.loadExceptions();
+
+                        // Função para normalizar Sets e popular detalhes
+                        const normalizeAndCache = (set) => {
+                            const newSet = new Set();
+                            if (set) {
+                                set.forEach(u => {
+                                    if (u) newSet.add(u.toLowerCase());
+                                });
+                                if (set.details) {
+                                    set.details.forEach((val, key) => cachedData.userDetails.set(key.toLowerCase(), val));
+                                }
+                            }
+                            return newSet;
+                        };
+
+                        dbFollowers = normalizeAndCache(dbFollowers);
+                        dbFollowing = normalizeAndCache(dbFollowing);
+                        cachedData.exceptions = dbExceptions || new Set();
+
+                        cachedData.seguidores = dbFollowers;
+                        cachedData.seguindo = dbFollowing;
+
+                        // 2. Calcula listas baseadas no DB
+                        // Filtra quem não segue de volta E quem não está na lista de exceções (corrigidos)
+                        cachedData.naoSegueDeVolta = [...dbFollowing].filter(user => !dbFollowers.has(user) && !cachedData.exceptions.has(user));
+
+                        // Tenta buscar info básica do perfil (leve) apenas para ter o ID caso o usuário queira atualizar
+                        cachedData.profileInfo = await safeFetchProfileInfo(username);
+
+                        // Calcula listas
+                        const toObjects = (names) => names.map(name => cachedData.userDetails.get(name) || { username: name, photoUrl: null });
+
+                        // Listas iniciais (Novos estarão vazios até atualizar)
+                        let listNaoSegueDeVolta = toObjects(cachedData.naoSegueDeVolta);
+                        let listNovosSeguidores = [];
+                        let listNovosSeguindo = [];
+                        let listSeguidoresPerdidos = [];
+                        let listNaoSigoDeVolta = toObjects([...dbFollowers].filter(u => !dbFollowing.has(u)));
+                        let listHistorico = await dbHelper.loadUnfollowHistory();
+
+                        const totalFollowers = cachedData.profileInfo ? cachedData.profileInfo.data.user.edge_followed_by.count : 'N/A';
+                        const totalFollowing = cachedData.profileInfo ? cachedData.profileInfo.data.user.edge_follow.count : 'N/A';
+
+                        statusDiv.innerText = `Dados carregados do cache. Seguidores: ${dbFollowers.size} (Oficial: ${totalFollowers}) | Seguindo: ${dbFollowing.size} (Oficial: ${totalFollowing})`;
+
+                        const tabelaContainer = document.getElementById("tabelaContainer");
+
+                        // Adiciona abas
+                        const tabsHtml = `
+                                <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                                    <button id="btnUpdateApi" style="background: #0095f6; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar Dados</button>
+                                    <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; border: 1px solid #dbdbdb;">
+                                        <span style="font-size: 14px; font-weight: 500;">⚡ ${getText('useApi')}</span>
+                                        <label class="switch">
+                                            <input type="checkbox" id="naoSegueUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}>
+                                            <span class="slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 15px; padding: 0 5px;">
+                                    <input type="text" id="naoSegueSearchInput" placeholder="Pesquisar usuários nesta lista..." style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; box-sizing: border-box; outline: none;">
+                                </div>
+                                <div class="cards-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px;">
+                                    <div id="tabNaoSegueDeVolta" class="card-tab active" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Não Segue de Volta</div>
+                                        <div id="countNaoSegue" style="font-size: 20px; font-weight: bold; color: #e74c3c;">${listNaoSegueDeVolta.length}</div>
+                                    </div>
+                                    <div id="tabNovosSeguidores" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Novos Seguidores</div>
+                                        <div id="countNovosSeguidores" style="font-size: 20px; font-weight: bold; color: #2ecc71;">${listNovosSeguidores.length}</div>
+                                    </div>
+                                    <div id="tabNovosSeguindo" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Novos Seguindo</div>
+                                        <div id="countNovosSeguindo" style="font-size: 20px; font-weight: bold; color: #0095f6;">${listNovosSeguindo.length}</div>
+                                    </div>
+                                    <div id="tabSeguidoresPerdidos" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Seguidores Perdidos</div>
+                                        <div id="countSeguidoresPerdidos" style="font-size: 20px; font-weight: bold; color: #e74c3c;">${listSeguidoresPerdidos.length}</div>
+                                    </div>
+                                    <div id="tabNaoSigoDeVolta" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Não Sigo de Volta</div>
+                                        <div id="countNaoSigo" style="font-size: 20px; font-weight: bold; color: #f39c12;">${listNaoSigoDeVolta.length}</div>
+                                    </div>
+                                    <div id="tabHistorico" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Histórico</div>
+                                        <div id="countHistorico" style="font-size: 20px; font-weight: bold; color: #333;">${listHistorico.length}</div>
+                                    </div>
+                                </div>
+                                <div id="tabContent"></div>
+                            `;
+
+                        tabelaContainer.innerHTML = tabsHtml;
+
+                        // Referências para as listas (usando let para poder atualizar)
+                        lists = {
+                            'tabNaoSegueDeVolta': listNaoSegueDeVolta,
+                            'tabNovosSeguidores': listNovosSeguidores,
+                            'tabNovosSeguindo': listNovosSeguindo,
+                            'tabSeguidoresPerdidos': listSeguidoresPerdidos,
+                            'tabNaoSigoDeVolta': listNaoSigoDeVolta,
+                            'tabHistorico': listHistorico
+                        };
+
+                        currentTabId = 'tabNaoSegueDeVolta';
+                        let currentList = lists[currentTabId];
+
+                        async function renderCurrentTab() {
+                            // Atualiza classe active
+                            document.querySelectorAll('.card-tab').forEach(b => {
+                                b.style.borderColor = '#dbdbdb';
+                                b.style.background = '#f8f9fa';
+                            });
+
+                            const contentDiv = document.getElementById("tabContent");
+                            if (!currentTabId) {
+                                contentDiv.innerHTML = '';
+                                return;
+                            }
+
+                            const activeBtn = document.getElementById(currentTabId);
+                            if (activeBtn) {
+                                activeBtn.style.borderColor = '#0095f6';
+                                activeBtn.style.background = '#e8f0fe';
+                            }
+
+                            if (currentTabId === 'tabHistorico') {
+                                currentList = await dbHelper.loadUnfollowHistory();
+                                const countHistEl = document.getElementById('countHistorico');
+                                if (countHistEl) countHistEl.innerText = currentList.length;
+                            } else {
+                                currentList = lists[currentTabId];
+                            }
+
+                            // Filtragem por busca
+                            const searchTerm = document.getElementById('naoSegueSearchInput')?.value.toLowerCase() || '';
+                            let filteredList = currentList;
+                            if (searchTerm && Array.isArray(currentList)) {
+                                filteredList = currentList.filter(u => {
+                                    const username = (u && typeof u === 'object') ? u.username : String(u);
+                                    return username.toLowerCase().includes(searchTerm);
+                                });
+                            }
+
+                            const tableId = currentTabId === 'tabHistorico' ? 'historicoTable' : 'naoSegueDeVoltaTable';
+                            contentDiv.innerHTML = `
+                                    <div style="margin-bottom: 10px;">
+                                    </div>
+                                    <table id="${tableId}" style="width: 100%; border-collapse: collapse; margin-top: 20px;"></table>
+                                    <div style="margin-top: 20px;">
+                                        <button id="selecionarTodosBtn">Selecionar Todos</button>
+                                        <button id="desmarcarTodosBtn">Desmarcar Todos</button>
+                                        ${(currentTabId === 'tabNaoSegueDeVolta' || currentTabId === 'tabSeguidoresPerdidos') ? `
+                                            <button id="unfollowBtn">Unfollow</button>
+                                            <button id="bloquearBtn" style="margin-left: 10px; background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Bloquear</button>
+                                            ${currentTabId === 'tabNaoSegueDeVolta' ? `<button id="corrigirBtn" style="margin-left: 10px; background-color: #f39c12; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;" title="Remove usuários selecionados desta lista permanentemente">Corrigir (Já Sigo)</button>` : ''}
+                                        ` : ''}
+                                        ${currentTabId === 'tabNaoSigoDeVolta' ? `<button id="followBackBtn" style="background:#0095f6;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">Seguir de Volta</button>` : ''}
+                                        ${currentTabId === 'tabHistorico' ? `
+                                            <button id="seguirNovamenteBtn" style="background:#0095f6;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;margin-right:10px;">Seguir Novamente</button>
+                                            <button id="limparHistoricoBtn" style="background:#e74c3c;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">Limpar Selecionados</button>
+                                        ` : ''}
+                                    </div>
+                                `;
+
+                            preencherTabela(filteredList, true, currentTabId === 'tabHistorico', selectedUsers, updateSelectedCountDisplay);
+
+                            const selecionarTodosNaTabela = () => {
+                                document.querySelectorAll(`#${tableId} .unfollowCheckbox`).forEach(cb => {
+                                    cb.checked = true;
+                                    selectedUsers.add(cb.dataset.username);
+                                });
+                                updateSelectedCountDisplay();
+                            };
+                            const desmarcarTodosNaTabela = () => {
+                                document.querySelectorAll(`#${tableId} .unfollowCheckbox`).forEach(cb => {
+                                    cb.checked = false;
+                                    selectedUsers.delete(cb.dataset.username);
+                                });
+                                updateSelectedCountDisplay();
+                            };
+
+                            document.getElementById("selecionarTodosBtn").onclick = selecionarTodosNaTabela;
+                            document.getElementById("desmarcarTodosBtn").onclick = desmarcarTodosNaTabela;
+
+
+                            if (document.getElementById("unfollowBtn")) {
+                                document.getElementById("unfollowBtn").onclick = () => unfollowSelecionados(selectedUsers, updateSelectedCountDisplay);
+                            }
+                            if (document.getElementById("bloquearBtn")) {
+                                document.getElementById("bloquearBtn").onclick = () => bloquearSelecionados(selectedUsers, updateSelectedCountDisplay);
+                            }
+                            if (document.getElementById("corrigirBtn")) {
+                                document.getElementById("corrigirBtn").onclick = async () => {
+                                    const selecionados = Array.from(selectedUsers);
+                                    if (selecionados.length === 0) return alert("Selecione os usuários que você já segue para corrigir.");
+
+                                    if (confirm(`Marcar ${selecionados.length} usuários como 'Já Sigo'? Eles não aparecerão mais nesta lista.`)) {
+                                        const { bar, update, closeButton } = createCancellableProgressBar();
+                                        let cancelled = false;
+                                        closeButton.onclick = () => { cancelled = true; bar.remove(); alert("Processo interrompido."); };
+
+                                        update(0, selecionados.length, "Corrigindo...");
+                                        for (const u of selecionados) {
+                                            await dbHelper.saveException(u);
+                                            cachedData.exceptions.add(u);
+                                        }
+                                        // Recalcula a lista
+                                        cachedData.naoSegueDeVolta = [...cachedData.seguindo].filter(user => !cachedData.seguidores.has(user) && !cachedData.exceptions.has(user)); // Recalculate
+                                        lists['tabNaoSegueDeVolta'] = toObjects(cachedData.naoSegueDeVolta);
+                                        currentList = lists['tabNaoSegueDeVolta'];
+                                        document.getElementById('countNaoSegue').innerText = currentList.length;
+                                        renderCurrentTab();
+                                    }
+                                };
+                            }
+                            if (document.getElementById("followBackBtn")) {
+                                document.getElementById("followBackBtn").onclick = async () => {
+                                    const selecionados = Array.from(selectedUsers);
+                                    if (selecionados.length === 0) return alert("Selecione os usuários para seguir de volta.");
+
+                                    const btn = document.getElementById("followBackBtn");
+                                    btn.disabled = true;
+                                    btn.textContent = "Processando...";
+                                    processoCancelado = false;
+
+                                    followUsers(selecionados, 0, async () => {
+                                        btn.disabled = false;
+                                        btn.textContent = "Seguir de Volta";
+                                        selectedUsers.clear();
+                                        document.querySelectorAll('#naoSegueDeVoltaTable .unfollowCheckbox, #historicoTable .unfollowCheckbox').forEach(cb => {
+                                            cb.checked = false;
+                                        });
+                                        const selectAllCb = document.getElementById('selectAllCheckbox');
+                                        if (selectAllCb) selectAllCb.checked = false;
+                                        if (updateSelectedCountDisplay) updateSelectedCountDisplay();
+                                        if (document.getElementById('naoSegueSelectedCount')) document.getElementById('naoSegueSelectedCount').innerText = '(0 selecionados)';
+                                        showToast(`Processo de seguir finalizado.`);
+                                        renderCurrentTab();
+                                    }, selectedUsers, updateSelectedCountDisplay);
+                                };
+                            }
+                            if (document.getElementById("seguirNovamenteBtn")) {
+                                document.getElementById("seguirNovamenteBtn").onclick = async () => {
+                                    const selecionados = Array.from(selectedUsers);
+                                    if (selecionados.length === 0) return alert("Selecione usuários para seguir.");
+
+                                    const btn = document.getElementById("seguirNovamenteBtn");
+                                    btn.disabled = true;
+                                    btn.textContent = "Processando...";
+                                    processoCancelado = false;
+
+                                    followUsers(selecionados, 0, async () => {
+                                        btn.disabled = false;
+                                        btn.textContent = "Seguir Novamente";
+                                        const seguidos = selecionados.filter(username => !selectedUsers.has(username));
+                                        if (seguidos.length > 0) {
+                                            await dbHelper.deleteUnfollowHistory(seguidos);
+                                        }
+                                        selectedUsers.clear();
+                                        document.querySelectorAll('#naoSegueDeVoltaTable .unfollowCheckbox, #historicoTable .unfollowCheckbox').forEach(cb => {
+                                            cb.checked = false;
+                                        });
+                                        const selectAllCb = document.getElementById('selectAllCheckbox');
+                                        if (selectAllCb) selectAllCb.checked = false;
+                                        if (updateSelectedCountDisplay) updateSelectedCountDisplay();
+                                        if (document.getElementById('naoSegueSelectedCount')) document.getElementById('naoSegueSelectedCount').innerText = '(0 selecionados)';
+                                        showToast(`${seguidos.length} usuário(s) seguido(s) e removido(s) do histórico.`);
+                                        renderCurrentTab();
+                                    }, selectedUsers, updateSelectedCountDisplay);
+                                };
+                            }
+                            if (document.getElementById("limparHistoricoBtn")) {
+                                document.getElementById("limparHistoricoBtn").onclick = async () => {
+                                    const selecionados = Array.from(document.querySelectorAll(".unfollowCheckbox:checked")).map(cb => cb.dataset.username); // Use selectedUsers
+                                    if (selecionados.length === 0) return alert("Selecione itens para limpar.");
+                                    if (confirm(`Excluir ${selecionados.length} itens do histórico?`)) {
+                                        await dbHelper.deleteUnfollowHistory(selecionados);
+                                        renderCurrentTab();
+                                    }
+                                };
+                            }
+                        }
+
+                        renderCurrentTab();
+
+                        // Listener para o campo de busca
+                        const searchInput = document.getElementById("naoSegueSearchInput");
+                        if (searchInput) {
+                            searchInput.addEventListener('input', () => renderCurrentTab());
+                        }
+
+                        // Event listeners para as abas
+                        const tabs = ['tabNaoSegueDeVolta', 'tabNovosSeguidores', 'tabNovosSeguindo', 'tabSeguidoresPerdidos', 'tabNaoSigoDeVolta', 'tabHistorico'];
+
+                        tabs.forEach(tabId => {
+                            document.getElementById(tabId).addEventListener('click', () => {
+                                currentTabId = tabId;
+                                renderCurrentTab();
+                            });
+                        });
+
+                        document.getElementById('naoSegueUseApiToggle').onchange = (e) => {
+                            saveSettings({ useApi: e.target.checked });
+                            showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
+                        };
+
+                        // Lógica do Botão Atualizar
+                        document.getElementById("btnUpdateApi").onclick = () => {
+                            showUpdateOptionsModalNaoSegue();
+                        };
+
+                        function showUpdateOptionsModalNaoSegue() {
+                            const div = document.createElement("div");
+                            div.className = "submenu-modal";
+                            div.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; padding: 20px; border: 1px solid #ccc; border-radius: 10px; z-index: 2147483648; background: white; color: black; display: flex; flex-direction: column; gap: 10px;`;
+                            if (loadSettings().rgbBorder) div.classList.add('rgb-border-effect');
+
+                            div.innerHTML = `
+                                    <h3 style="margin: 0 0 10px 0;">O que deseja atualizar?</h3>
+                                    <label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="chkFollowers" checked> Seguidores</label>
+                                    <label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="chkFollowing" checked> Seguindo</label>
+                                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                                        <button id="btnUpdateSelectedNaoSegue" style="flex: 1; padding: 8px; background: #0095f6; color: white; border: none; border-radius: 5px; cursor: pointer;">Atualizar</button>
+                                        <button id="btnCancelUpdateNaoSegue" style="flex: 1; padding: 8px; background: #e74c3c; color: white; border: none; border-radius: 5px; cursor: pointer;">Cancelar</button>
+                                    </div>
+                                `;
+                            document.body.appendChild(div);
+
+                            document.getElementById('btnCancelUpdateNaoSegue').onclick = () => div.remove();
+                            document.getElementById('btnUpdateSelectedNaoSegue').onclick = async () => {
+                                const updateFollowers = document.getElementById('chkFollowers').checked;
+                                const updateFollowing = document.getElementById('chkFollowing').checked;
+                                div.remove();
+
+                                if (!updateFollowers && !updateFollowing) return alert("Selecione pelo menos uma opção.");
+
+                                await executarAtualizacao(updateFollowers, updateFollowing);
+                                selectedUsers.clear(); // Clear selection after update
+                            };
+                        }
+
+                        async function executarAtualizacao(updateFollowers, updateFollowing) {
+                            try {
+                                if (!cachedData.profileInfo || !cachedData.profileInfo.data?.user?.id) {
+                                    statusDiv.innerText = "Buscando ID do usuário...";
+                                    const info = await safeFetchProfileInfo(username);
+                                    if (info && info.data?.user?.id) {
+                                        cachedData.profileInfo = info;
+                                    } else {
+                                        // Fallback com ID obtido de cookies ou cache local para não travar no erro 429
+                                        const fallbackId = getActorId() || getCachedUserId(username);
+                                        if (fallbackId) {
+                                            console.log("[IG Tools] Usando fallback de ID local após 429:", fallbackId);
+                                            cachedData.profileInfo = {
+                                                data: {
+                                                    user: {
+                                                        id: fallbackId,
+                                                        edge_follow: { count: 1000 },
+                                                        edge_followed_by: { count: 1000 }
+                                                    }
+                                                }
+                                            };
+                                        } else {
+                                            alert("Instagram limitou consultas de perfil (HTTP 429). Aguarde 1 minuto e tente novamente.");
+                                            return;
+                                        }
+                                    }
+                                }
+                                toggleLoading(true, null, "Atualizando dados...");
+
+                                const userId = cachedData.profileInfo.data.user.id;
+                                const totalFollowing = cachedData.profileInfo.data.user.edge_follow.count;
+                                const totalFollowers = cachedData.profileInfo.data.user.edge_followed_by.count;
+
+                                let apiFollowing = null;
+                                let apiFollowers = null;
+
+                                // 1. Baixar Seguindo
+                                if (updateFollowing) {
+                                    apiFollowing = await fetchUserListAPI(userId, 'following', totalFollowing);
+                                    if (processoCancelado || !apiFollowing) return;
+                                } else {
+                                    apiFollowing = cachedData.seguindo;
+                                }
+
+                                // 2. Baixar Seguidores
+                                if (updateFollowers) {
+                                    apiFollowers = await fetchUserListAPI(userId, 'followers', totalFollowers);
+                                    if (processoCancelado || !apiFollowers) return;
+                                } else {
+                                    apiFollowers = cachedData.seguidores;
+                                }
+
+                                statusDiv.innerText = "Calculando diferenças e salvando no Banco de Dados...";
+
+                                // 3. Calcular Novos (Comparando API vs DB Antigo)
+                                let novosSeguidoresSet = [];
+                                if (updateFollowers && apiFollowers) {
+                                    novosSeguidoresSet = [...apiFollowers].filter(u => !cachedData.seguidores.has(u));
+                                }
+
+                                let novosSeguindoSet = [];
+                                if (updateFollowing && apiFollowing) {
+                                    novosSeguindoSet = [...apiFollowing].filter(u => !cachedData.seguindo.has(u));
+                                }
+
+                                let seguidoresPerdidosSet = [];
+                                if (updateFollowers && apiFollowers) {
+                                    seguidoresPerdidosSet = [...cachedData.seguidores].filter(u => !apiFollowers.has(u));
+                                }
+
+                                // 4. Salvar no DB (com proteção contra erros de rede/nuvem)
+                                try {
+                                    if (updateFollowers && apiFollowers) {
+                                        const followersToSave = [...apiFollowers].map(u => cachedData.userDetails.get(u) || { username: u, photoUrl: null });
+                                        await dbHelper.saveCache('followers', followersToSave);
+                                        cachedData.seguidores = apiFollowers;
+                                    }
+
+                                    if (updateFollowing && apiFollowing) {
+                                        const followingToSave = [...apiFollowing].map(u => cachedData.userDetails.get(u) || { username: u, photoUrl: null });
+                                        await dbHelper.saveCache('following', followingToSave);
+                                        cachedData.seguindo = apiFollowing;
+                                    }
+                                } catch (saveErr) {
+                                    console.warn("[IG Tools] Erro ao sincronizar nuvem, dados preservados localmente:", saveErr);
+                                }
+
+                                // 5. Atualizar Cache em Memória e Listas
+                                if (apiFollowing && apiFollowers) {
+                                    cachedData.naoSegueDeVolta = [...apiFollowing].filter(user => !apiFollowers.has(user) && !cachedData.exceptions.has(user));
+                                    lists['tabNaoSegueDeVolta'] = toObjects(cachedData.naoSegueDeVolta);
+                                }
+
+                                if (updateFollowers && apiFollowers) {
+                                    lists['tabNovosSeguidores'] = toObjects(novosSeguidoresSet);
+                                    lists['tabSeguidoresPerdidos'] = toObjects(seguidoresPerdidosSet);
+                                }
+
+                                if (updateFollowing && apiFollowing) {
+                                    lists['tabNovosSeguindo'] = toObjects(novosSeguindoSet);
+                                }
+
+                                if (cachedData.seguidores && cachedData.seguindo) {
+                                    lists['tabNaoSigoDeVolta'] = toObjects([...cachedData.seguidores].filter(u => !cachedData.seguindo.has(u)));
+                                }
+
+                                // Atualizar Contadores
+                                if (document.getElementById('countNaoSegue')) document.getElementById('countNaoSegue').innerText = lists['tabNaoSegueDeVolta']?.length || 0;
+                                if (document.getElementById('countNovosSeguidores')) document.getElementById('countNovosSeguidores').innerText = lists['tabNovosSeguidores']?.length || 0;
+                                if (document.getElementById('countNovosSeguindo')) document.getElementById('countNovosSeguindo').innerText = lists['tabNovosSeguindo']?.length || 0;
+                                if (document.getElementById('countSeguidoresPerdidos')) document.getElementById('countSeguidoresPerdidos').innerText = lists['tabSeguidoresPerdidos']?.length || 0;
+                                if (document.getElementById('countNaoSigo')) document.getElementById('countNaoSigo').innerText = lists['tabNaoSigoDeVolta']?.length || 0;
+
+                                statusDiv.innerText = "Dados atualizados com sucesso!";
+                                currentList = lists[currentTabId];
+                                renderCurrentTab();
+                            } catch (errGeral) {
+                                console.error("[IG Tools] Erro na atualização:", errGeral);
+                                statusDiv.innerText = "Processo finalizado com avisos.";
+                            } finally {
+                                toggleLoading(false);
+                            }
+                        }
+                    }
+
+                    // As funções de unfollow são movidas para cá para ter acesso ao escopo de `cachedData`, `statusDiv`, etc.
+                    function selecionarTodos() {
+                        const tableId = currentTabId === 'tabHistorico' ? 'historicoTable' : 'naoSegueDeVoltaTable';
+                        document.querySelectorAll(`#${tableId} .unfollowCheckbox`).forEach((checkbox) => {
+                            checkbox.checked = true;
+                        });
+                    }
+
+                    function desmarcarTodos() {
+                        const tableId = currentTabId === 'tabHistorico' ? 'historicoTable' : 'naoSegueDeVoltaTable';
+                        document.querySelectorAll(`#${tableId} .unfollowCheckbox`).forEach((checkbox) => {
+                            checkbox.checked = false;
+                        });
+                    }
+
+                    async function bloquearSelecionados(usersSet, updateCountCb) {
+                        const selecionados = Array.from(usersSet);
+                        if (selecionados.length === 0) {
+                            alert("Nenhum usuário selecionado para Bloquear.");
+                            return;
+                        }
+                        if (!confirm(`Bloquear ${selecionados.length} usuário(s)? Atenção: o Instagram deixará de seguir e bloqueará estes perfis.`)) {
+                            return;
+                        }
+
+                        const btn = document.getElementById("bloquearBtn");
+                        if (btn) {
+                            btn.disabled = true;
+                            btn.textContent = "Processando...";
+                        }
+
+                        toggleLoading(true, 0, "Iniciando Bloqueio...");
+                        const blockDelay = loadSettings().unfollowDelay || 1500;
+
+                        for (let i = 0; i < selecionados.length; i++) {
+                            if (processoCancelado) break;
+                            const username = selecionados[i];
+                            const percent = Math.round(((i + 1) / selecionados.length) * 100);
+                            toggleLoading(true, percent, `Bloqueando ${username} (${i + 1}/${selecionados.length})...`);
+                            if (statusDiv) statusDiv.innerText = `Bloqueando ${username} (${i + 1}/${selecionados.length})...`;
+
+                            let uid = getCachedUserId(username);
+                            if (!uid && typeof cachedData !== 'undefined' && cachedData?.userDetails) {
+                                const details = cachedData.userDetails.get(username.toLowerCase());
+                                if (details?.id) uid = String(details.id);
+                            }
+                            if (!uid) {
+                                uid = await getUserId(username);
+                            }
+
+                            if (!uid) {
+                                console.warn(`[IG Tools] Não foi possível obter o ID de ${username}`);
+                                showToast(`⚠️ ID de ${username} não encontrado`);
+                                continue;
+                            }
+
+                            try {
+                                console.log(`[IG Tools Block] Bloqueando ${username} (UID: ${uid})...`);
+                                const apiResult = await executeGraphqlBlockMany([uid]);
+                                if (apiResult.success || apiResult.result?.status === 'ok') {
+                                    showToast(`🚫 Bloqueou ${username}`);
+                                    usersSet.delete(username);
+                                    if (updateCountCb) updateCountCb();
+
+                                    // Remove da aba atual e atualiza contador
+                                    const activeTab = currentTabId || 'tabNaoSegueDeVolta';
+                                    const naoSegueList = (typeof lists !== 'undefined' && lists) ? lists[activeTab] : null;
+                                    if (naoSegueList) {
+                                        const userIndex = naoSegueList.findIndex(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() === username.toLowerCase());
+                                        if (userIndex > -1) naoSegueList.splice(userIndex, 1);
+                                        const countEl = document.getElementById(activeTab === 'tabNaoSegueDeVolta' ? 'countNaoSegue' : (activeTab === 'tabSeguidoresPerdidos' ? 'countSeguidoresPerdidos' : ''));
+                                        if (countEl) countEl.innerText = naoSegueList.length;
+                                    }
+
+                                    // Remove do cache de seguindo
+                                    const lowerUser = username.toLowerCase();
+                                    if (typeof cachedData !== 'undefined' && cachedData?.seguindo && cachedData.seguindo.has(lowerUser)) {
+                                        cachedData.seguindo.delete(lowerUser);
+                                        const newFollowingList = Array.from(cachedData.seguindo).map(u =>
+                                            cachedData.userDetails ? (cachedData.userDetails.get(u) || { username: u, photoUrl: null }) : { username: u, photoUrl: null }
+                                        );
+                                        dbHelper.saveCache('following', newFollowingList).catch(e => console.error(e));
+                                    }
+                                    if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                        seguindoList = seguindoList.filter(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() !== lowerUser);
+                                        dbHelper.saveCache('following', seguindoList).catch(e => console.error(e));
+                                    }
+
+                                    // Remove da tabela na tela
+                                    const rows = document.querySelectorAll(`tr[data-username="${username}"]`);
+                                    rows.forEach(r => r.remove());
+                                } else {
+                                    console.error(`[IG Tools Block] Falha ao bloquear ${username}:`, apiResult);
+                                    showToast(`❌ Falha ao bloquear ${username}`);
+                                }
+                            } catch (err) {
+                                console.error(`[IG Tools Block] Erro ao bloquear ${username}:`, err);
+                                showToast(`❌ Erro ao bloquear ${username}`);
+                            }
+
+                            if (i < selecionados.length - 1) {
+                                await new Promise(r => setTimeout(r, blockDelay));
+                            }
+                        }
+
+                        toggleLoading(false);
+                        usersSet.clear();
+                        document.querySelectorAll('#naoSegueDeVoltaTable .unfollowCheckbox, #historicoTable .unfollowCheckbox').forEach(cb => {
+                            cb.checked = false;
+                        });
+                        const selectAllCb = document.getElementById('selectAllCheckbox');
+                        if (selectAllCb) selectAllCb.checked = false;
+                        if (updateCountCb) updateCountCb();
+
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = "Bloquear";
+                        }
+                        if (statusDiv) statusDiv.innerText = "Processo de bloqueio finalizado.";
+                        alert("Processo de bloqueio finalizado.");
+                    }
+
+                    function unfollowSelecionados(usersSet, updateCountCb) {
+                        if (isUnfollowing) {
+                            alert("Processo de unfollow já em andamento.");
+                            return;
+                        }
+
+                        const selecionados = Array.from(usersSet);
+
+                        if (selecionados.length === 0) {
+                            alert("Nenhum usuário selecionado para Unfollow.");
+                            return;
+                        }
+
+                        const unfollowBtn = document.getElementById("unfollowBtn");
+                        unfollowBtn.disabled = true;
+                        unfollowBtn.textContent = "Processando...";
+                        isUnfollowing = true;
+
+                        toggleLoading(true, 0, "Iniciando Unfollows...");
+                        unfollowUsers(selecionados, 0, () => {
+                            toggleLoading(false);
+                            unfollowBtn.disabled = false;
+                            unfollowBtn.textContent = "Unfollow";
+                            isUnfollowing = false;
+                            usersSet.clear();
+                            document.querySelectorAll('#naoSegueDeVoltaTable .unfollowCheckbox, #historicoTable .unfollowCheckbox').forEach(cb => {
+                                cb.checked = false;
+                            });
+                            const selectAllCb = document.getElementById('selectAllCheckbox');
+                            if (selectAllCb) selectAllCb.checked = false;
+                            if (updateCountCb) updateCountCb();
+
+                            if (document.getElementById('naoSegueSelectedCount')) document.getElementById('naoSegueSelectedCount').innerText = `(0 selecionados)`;
+                            const tabHistorico = document.getElementById('tabHistorico');
+                            if (tabHistorico) tabHistorico.click();
+                        }, usersSet, updateCountCb);
+                    }
+
+                    function unfollowUsers(users, index, callback, selectedUsersSet, updateCountCb) {
+                        if (index >= users.length || processoCancelado) {
+                            if (!processoCancelado) {
+                                console.log("[IG Tools] Todos os usuários processados. Unfollow concluído.");
+                                showToast("✅ Unfollow concluído!");
+                                alert("Unfollow concluído.");
+                            }
+                            if (callback) callback();
+                            return;
+                        }
+
+                        const username = users[index];
+                        if (statusDiv) statusDiv.innerText = `Deixando de seguir ${username} (${index + 1}/${users.length})...`;
+
+                        // Helper para finalizar as atualizações de UI/Cache de um usuário
+                        const finishUserSuccess = (photoUrl, userId = null) => {
+                            dbHelper.saveUnfollowHistory({
+                                username: username,
+                                id: userId ? String(userId) : (getCachedUserId(username) || null),
+                                photoUrl: photoUrl || null,
+                                unfollowDate: new Date().toISOString()
+                            }).catch(err => console.error(`Falha ao salvar ${username} no histórico:`, err));
+
+                            if (selectedUsersSet) selectedUsersSet.delete(username);
+                            if (updateCountCb) updateCountCb();
+
+                            const naoSegueList = (typeof lists !== 'undefined' && lists) ? lists['tabNaoSegueDeVolta'] : null;
+                            if (naoSegueList) {
+                                const userIndex = naoSegueList.findIndex(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() === username.toLowerCase());
+                                if (userIndex > -1) naoSegueList.splice(userIndex, 1);
+                                const countSpan = document.getElementById('countNaoSegue');
+                                if (countSpan) countSpan.innerText = naoSegueList.length;
+                            }
+
+                            const lowerUser = username.toLowerCase();
+                            if (typeof cachedData !== 'undefined' && cachedData.seguindo && cachedData.seguindo.has(lowerUser)) {
+                                cachedData.seguindo.delete(lowerUser);
+                                const newFollowingList = Array.from(cachedData.seguindo).map(u =>
+                                    cachedData.userDetails ? (cachedData.userDetails.get(u) || { username: u, photoUrl: null }) : { username: u, photoUrl: null }
+                                );
+                                dbHelper.saveCache('following', newFollowingList).catch(e => console.error("Erro ao atualizar cache following:", e));
+                            }
+                            if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                seguindoList = seguindoList.filter(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() !== lowerUser);
+                                dbHelper.saveCache('following', seguindoList).catch(e => console.error("Erro ao atualizar cache following:", e));
+                            }
+
+                            const rows = document.querySelectorAll(`tr[data-username="${username}"]`);
+                            rows.forEach(r => r.remove());
+                        };
+
+                        // --- LÓGICA VIA API (GRAPHQL) ---
+                        if (loadSettings().useApi) {
+                            if (statusDiv) statusDiv.innerText = `Deixando de seguir ${username} (${index + 1}/${users.length}) via GraphQL...`;
+                            toggleLoading(true, ((index + 1) / users.length) * 100, `Deixando de seguir ${username}...`);
+
+                            (async () => {
+                                let uid = getCachedUserId(username);
+                                if (!uid && typeof cachedData !== 'undefined' && cachedData?.userDetails) {
+                                    const details = cachedData.userDetails.get(username.toLowerCase());
+                                    if (details?.id) uid = String(details.id);
+                                }
+                                if (!uid) {
+                                    uid = await getUserId(username);
+                                }
+                                if (!uid) {
+                                    console.warn(`[IG Tools] Não foi possível obter o ID correto para ${username}; operação não executada.`);
+                                    showToast(`⚠️ ID de ${username} não encontrado. Atualize a lista e tente novamente.`);
+                                    setTimeout(() => unfollowUsers(users, index + 1, callback, selectedUsersSet, updateCountCb), loadSettings().unfollowDelay);
+                                    return;
+                                }
+
+                                try {
+                                    console.log('[IG Tools] Executando unfollow via GraphQL:', { username, uid: String(uid) });
+                                    const apiResult = await executeGraphqlUnfollow(uid);
+                                    console.log('[IG Tools] Resposta GraphQL do unfollow:', apiResult.result || apiResult.text);
+                                    if (apiResult.success || apiResult.result?.status === 'ok') {
+                                        console.log(`[IG Tools] Unfollow via GraphQL bem-sucedido para ${username}`);
+                                        const photoUrl = (typeof cachedData !== 'undefined' && cachedData?.userDetails) ? (cachedData.userDetails.get(username.toLowerCase())?.photoUrl || null) : null;
+                                        finishUserSuccess(photoUrl, uid);
+                                        showToast(`✅ Deixou de seguir ${username}`);
+                                    } else {
+                                        const errorText = apiResult.text;
+                                        console.error(`[IG Tools] GraphQL não confirmou o unfollow de ${username} (HTTP ${apiResult.response?.status}):`, errorText);
+                                        if (apiResult.response?.status === 400 || apiResult.response?.status === 429 || apiResult.response?.status === 403) {
+                                            showToast(`⚠️ Instagram bloqueou temporariamente o unfollow (HTTP ${apiResult.response?.status})`);
+                                        } else {
+                                            showToast(`❌ Falha no unfollow de ${username} (HTTP ${apiResult.response?.status || 'erro'})`);
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.error(`[IG Tools] Erro na requisição GraphQL de Unfollow para ${username}:`, e);
+                                }
+
+                                setTimeout(() => unfollowUsers(users, index + 1, callback, selectedUsersSet, updateCountCb), loadSettings().unfollowDelay);
+                            })();
+                            return;
+                        }
+
+                        // --- LÓGICA VIA NAVEGAÇÃO DOM (HUMANA) ---
+                        toggleLoading(true, ((index + 1) / users.length) * 100, `Deixando de seguir ${username}...`);
+                        if (!window.location.pathname.includes(`/${username}`)) {
+                            history.pushState(null, null, `/${username}/`);
+                            window.dispatchEvent(new Event("popstate"));
+                        }
+
+                        const unfollowDelay = loadSettings().unfollowDelay;
+
+                        setTimeout(() => {
+                            if (processoCancelado) { if (callback) callback(); return; }
+
+                            function findFollowButton() {
+                                const ariaMatch = document.querySelector('header button[aria-label*="Seguindo"], header button[aria-label*="Following"], header div[role="button"][aria-label*="Seguindo"], header div[role="button"][aria-label*="Following"], button[aria-label*="Seguindo"], button[aria-label*="Following"]');
+                                if (ariaMatch) return ariaMatch;
+
+                                const candidates = Array.from(document.querySelectorAll('header button, header div[role="button"], main button, main div[role="button"], button, div[role="button"]'));
+                                for (const el of candidates) {
+                                    const txt = (el.textContent || '').trim();
+                                    if (['Seguindo', 'Following', 'Siguiendo'].includes(txt)) {
+                                        return el;
+                                    }
+                                }
+                                return null;
+                            }
+
+                            const followBtn = findFollowButton();
+
+                            if (followBtn) {
+                                followBtn.click();
+                                console.log(`[IG Tools] Botão 'Seguindo' clicado para ${username}`);
+
+                                setTimeout(() => {
+                                    if (processoCancelado) { if (callback) callback(); return; }
+
+                                    function findConfirmButton() {
+                                        const dialogs = Array.from(document.querySelectorAll('div[role="dialog"], div[aria-modal="true"], div[tabindex="-1"]'));
+                                        for (const dialog of dialogs) {
+                                            const btns = Array.from(dialog.querySelectorAll('button, div[role="button"], span[role="button"]'));
+                                            const match = btns.find(b => {
+                                                const txt = (b.textContent || '').trim();
+                                                const aria = b.getAttribute('aria-label') || '';
+                                                return ['Deixar de seguir', 'Unfollow', 'Dejar de seguir'].some(t => txt.includes(t) || aria.includes(t));
+                                            });
+                                            if (match) return match;
+                                        }
+
+                                        const allBtns = Array.from(document.querySelectorAll('button, div[role="button"]'));
+                                        return allBtns.find(b => {
+                                            const txt = (b.textContent || '').trim();
+                                            const aria = b.getAttribute('aria-label') || '';
+                                            return ['Deixar de seguir', 'Unfollow', 'Dejar de seguir'].some(t => txt.includes(t) || aria.includes(t));
+                                        });
+                                    }
+
+                                    const confirmBtn = findConfirmButton();
+
+                                    if (confirmBtn) {
+                                        confirmBtn.click();
+                                        console.log(`[IG Tools] Unfollow confirmado no modal para ${username}`);
+
+                                        const photoUrl = cachedData.userDetails.get(username.toLowerCase())?.photoUrl || null;
+                                        finishUserSuccess(photoUrl);
+
+                                        setTimeout(() => {
+                                            unfollowUsers(users, index + 1, callback, selectedUsersSet, updateCountCb);
+                                        }, unfollowDelay);
+
+                                    } else {
+                                        console.warn(`[IG Tools] Botão de confirmação no modal não encontrado para ${username}`);
+                                        alert(`Não foi possível encontrar a confirmação no modal para ${username}. Pulando.`);
+                                        unfollowUsers(users, index + 1, callback, selectedUsersSet, updateCountCb);
+                                    }
+                                }, 2000);
+
+                            } else {
+                                console.warn(`[IG Tools] Botão 'Seguindo' não encontrado no perfil de ${username}`);
+                                alert(`Botão 'Seguindo' não encontrado para ${username}. Dica: Ative o 'Modo API' nas configurações para unfollows automáticos em segundo plano.`);
+                                unfollowUsers(users, index + 1, callback, selectedUsersSet, updateCountCb);
+                            }
+                        }, 3500);
+                    }
+
+                    function followUsers(users, index, callback, selectedUsersSet, updateCountCb) {
+                        if (index >= users.length || processoCancelado) {
+                            toggleLoading(false);
+                            document.querySelectorAll('#naoSegueDeVoltaTable .unfollowCheckbox, #historicoTable .unfollowCheckbox').forEach(cb => {
+                                cb.checked = false;
+                            });
+                            const selectAllCb = document.getElementById('selectAllCheckbox');
+                            if (selectAllCb) selectAllCb.checked = false;
+                            if (selectedUsersSet) selectedUsersSet.clear();
+                            if (updateCountCb) updateCountCb();
+                            if (document.getElementById('naoSegueSelectedCount')) {
+                                document.getElementById('naoSegueSelectedCount').innerText = '(0 selecionados)';
+                            }
+                            if (!processoCancelado && users.length > 0) {
+                                alert("Processo de seguir concluído.");
+                            }
+                            if (callback) callback();
+                            return;
+                        }
+
+                        const username = users[index];
+                        toggleLoading(true, ((index + 1) / users.length) * 100, `Seguindo ${username}...`);
+                        if (statusDiv) statusDiv.innerText = `Seguindo ${username} (${index + 1}/${users.length})...`;
+
+                        (async () => {
+                            try {
+                                let uid = getCachedUserId(username);
+                                if (!uid && typeof cachedData !== 'undefined' && cachedData?.userDetails) {
+                                    const details = cachedData.userDetails.get(username.toLowerCase());
+                                    if (details?.id) uid = String(details.id);
+                                }
+                                if (!uid) {
+                                    uid = await getUserId(username);
+                                }
+                                if (uid) {
+                                    const apiResult = await executeGraphqlFollow(uid);
+                                    console.log('[IG Tools Follow] Resposta GraphQL do follow:', { username, uid: String(uid), result: apiResult.result || apiResult.text });
+                                    const isOk = apiResult.success || (apiResult.response && apiResult.response.ok && (
+                                        apiResult.result?.status === 'ok' ||
+                                        apiResult.result?.result === 'following' ||
+                                        apiResult.result?.result === 'requested' ||
+                                        apiResult.result?.friendship_status?.following === true ||
+                                        apiResult.result?.friendship_status?.outgoing_request === true
+                                    ));
+
+                                    if (isOk) {
+                                        if (selectedUsersSet) selectedUsersSet.delete(username);
+                                        if (updateCountCb) updateCountCb();
+                                        const lowerUser = username.toLowerCase();
+                                        if (typeof cachedData !== 'undefined' && cachedData.seguindo) {
+                                            cachedData.seguindo.add(lowerUser);
+                                        }
+                                        if (typeof lists !== 'undefined' && lists && lists['tabNaoSigoDeVolta']) {
+                                            const uIdx = lists['tabNaoSigoDeVolta'].findIndex(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() === lowerUser);
+                                            if (uIdx > -1) {
+                                                lists['tabNaoSigoDeVolta'].splice(uIdx, 1);
+                                                const countSpan = document.getElementById('countNaoSigo');
+                                                if (countSpan) countSpan.innerText = lists['tabNaoSigoDeVolta'].length;
+                                            }
+                                        }
+                                        const rows = document.querySelectorAll(`tr[data-username="${username}"]`);
+                                        rows.forEach(r => r.remove());
+
+                                        showToast(`✅ Agora você está seguindo ${username}`);
+                                    } else {
+                                        const errorMsg = apiResult.result?.message || `HTTP ${apiResult.response?.status || 'erro'}`;
+                                        console.error(`[IG Tools] API não confirmou o follow de ${username}:`, apiResult.text);
+                                        showToast(`❌ Falha ao seguir ${username} (${errorMsg})`);
+                                    }
+                                } else {
+                                    console.warn(`[IG Tools] Não foi possível encontrar ID de ${username}`);
+                                    showToast(`⚠️ ID de ${username} não encontrado. Pulando.`);
+                                }
+                            } catch (e) {
+                                console.error(`Erro ao seguir ${username}`, e);
+                                showToast(`❌ Erro ao seguir ${username}`);
+                            }
+
+                            const delay = loadSettings().requestDelay || 1500;
+                            setTimeout(() => followUsers(users, index + 1, callback, selectedUsersSet, updateCountCb), delay);
+                        })();
+                    }
+
+                    carregarDadosIniciais();
+                }
+
+                // --- LÓGICA PARA "SEGUINDO" ---
+                async function iniciarProcessoSeguindo(updateOptions = null) {
+                    if (document.getElementById("seguindoModal")) return;
+
+                    const originalPath = window.location.pathname;
+
+                    const pathParts = window.location.pathname.split('/').filter(Boolean);
+                    const username = pathParts[0];
+                    const appID = '936619743392459';
+                    if (!username || (pathParts.length > 1 && !['followers', 'following'].includes(pathParts[1]))) {
+                        alert("Por favor, vá para a página de perfil de um usuário para usar esta função.");
+                        toggleLoading(false);
+                        return;
+                    }
+
+                    // Helper para verificar o que atualizar
+                    const shouldUpdate = (key) => {
+                        if (!updateOptions) return false;
+                        if (updateOptions === true) return true; // Suporte a legado/tudo
+                        return !!updateOptions[key];
+                    };
+                    const isUpdate = updateOptions !== null;
+
+                    // 1. Criar o modal de status da automação SE for atualização forçada
+                    if (isUpdate) {
+                        const statusModal = document.createElement("div");
+                        statusModal.id = "automationStatusModal";
+                        statusModal.className = "submenu-modal";
+                        statusModal.style.cssText = `
+                                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                                width: 90%; max-width: 500px; border: 1px solid #ccc;
+                                border-radius: 10px; padding: 20px; z-index: 10001;
+                            `;
+                        statusModal.innerHTML = `
+                                <div class="modal-header">
+                                    <span class="modal-title">Coletando Dados...</span>
+                                </div>
+                                <div style="padding: 15px;">
+                                    <p>Por favor, aguarde. O script está navegando para buscar as informações necessárias.</p>
+                                    <ul style="list-style: none; padding: 0; margin-top: 20px;">
+                                        <li id="status-step-1" style="margin-bottom: 10px;"><span>⏳</span> Carregando lista de "Seguindo"...</li>
+                                <li id="status-step-2" style="margin-bottom: 10px;"><span>⏳</span> Carregando "Melhores Amigos"...</li>
+                                <li id="status-step-3" style="margin-bottom: 10px;"><span>⏳</span> Carregando "Ocultar Stories"...</li>
+                                <li id="status-step-4" style="margin-bottom: 10px;"><span>⏳</span> Carregando "Contas Silenciadas"...</li>
+                                </ul>
+                            <div id="automation-result" style="margin-top: 20px; font-weight: bold; color: red;"></div>
+                            `;
+                        document.body.appendChild(statusModal);
+                    }
+
+                    const updateStatus = (step, success, message = '') => {
+                        if (!isUpdate) return;
+                        const stepLi = document.getElementById(`status-step-${step}`);
+                        if (stepLi) {
+                            stepLi.innerHTML = `<span>${success ? '✅' : '❌'}</span> ${stepLi.innerText.substring(2)} ${message}`;
+                        }
+                    };
+
+                    const fetchAndCache = async (url, extractorFn, cacheKey, step) => {
+                        try {
+                            if (cacheKey === 'closeFriends') {
+                                try {
+                                    const apiRes = await fetch('https://www.instagram.com/api/v1/friendships/besties/', {
+                                        headers: getApiHeaders(),
+                                        credentials: 'include'
+                                    });
+                                    if (apiRes.ok) {
+                                        const apiData = await apiRes.json();
+                                        if (apiData && Array.isArray(apiData.users)) {
+                                            const cfUsernames = apiData.users.map(u => u.username);
+                                            userListCache.closeFriends = new Set(cfUsernames);
+                                            const objectsToSave = apiData.users.map(u => ({ username: u.username, photoUrl: u.profile_pic_url }));
+                                            await dbHelper.saveCache('closeFriends', objectsToSave);
+                                            console.log(`[IG Tools] Close Friends atualizado via API: ${cfUsernames.length} usuário(s).`);
+                                            updateStatus(step, true);
+                                            return true;
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.warn("[IG Tools] Erro ao buscar besties via API, caindo para navegação DOM:", e);
+                                }
+                            }
+
+                            history.pushState(null, null, url);
+                            window.dispatchEvent(new Event("popstate"));
+                            await new Promise(r => setTimeout(r, 3000));
+
+                            const users = await extractorFn();
+                            let filteredUsersToSave = [];
+
+                            if (url.includes('muted_accounts')) {
+                                filteredUsersToSave = users;
+                                userListCache[cacheKey] = new Set(users.map(u => u.username));
+                                userListCache.mutedDetails = new Map(users.map(u => [u.username, u.status]));
+                            } else {
+                                const officialStates = new Map();
+                                const flexboxes = Array.from(document.querySelectorAll('div.wbloks_1, [data-bloks-name="bk.components.Flexbox"]'));
+                                flexboxes.forEach(flex => {
+                                    const spans = Array.from(flex.querySelectorAll('span'));
+                                    const userText = spans.length > 0 ? spans[0].innerText.trim() : (flex.innerText && flex.innerText.trim().split('\n')[0]);
+                                    if (userText) {
+                                        const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"], div[aria-label*="caixa de seleção"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção') || el.getAttribute('role') === 'button');
+                                        if (officialCheckboxContainer) {
+                                            const ariaChecked = officialCheckboxContainer.getAttribute('aria-checked') || officialCheckboxContainer.getAttribute('aria-selected');
+                                            let isChecked = ariaChecked === 'true';
+                                            if (!isChecked && ariaChecked !== 'false') {
+                                                const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"], div.wbloks_1') || officialCheckboxContainer;
+                                                const style = window.getComputedStyle(iconDiv);
+                                                const bgColor = style.backgroundColor;
+                                                const mask = style.maskImage || style.webkitMaskImage;
+                                                const bgImg = style.backgroundImage;
+                                                isChecked = (bgColor === "rgb(0, 149, 246)" || bgColor === "rgb(74, 93, 249)" || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled')));
+                                            }
+                                            officialStates.set(userText, isChecked);
+                                        }
+                                    }
+                                });
+                                filteredUsersToSave = users.filter(u => officialStates.get(u.username) === true);
+                                userListCache[cacheKey] = new Set(filteredUsersToSave.map(u => typeof u === 'string' ? u : u.username));
+                            }
+
+                            await dbHelper.saveCache(cacheKey, filteredUsersToSave);
+                            updateStatus(step, true);
+                            return true;
+                        } catch (error) {
+                            console.error(`Falha ao buscar dados para ${cacheKey}:`, error);
+                            updateStatus(step, false);
+                            return false;
+                        }
+                    };
+
+                    const div = document.createElement("div");
+                    div.id = "seguindoModal";
+                    div.className = "submenu-modal";
+                    let processoCancelado = false;
+
+                    let styleEl = document.getElementById("seguindoResponsiveStyle");
+                    if (!styleEl) {
+                        styleEl = document.createElement("style");
+                        styleEl.id = "seguindoResponsiveStyle";
+                        document.head.appendChild(styleEl);
+                    }
+                    styleEl.textContent = `
+                        #seguindoModal {
+                            width: 96vw !important;
+                            max-width: 1420px !important;
+                            max-height: 94vh !important;
+                            box-sizing: border-box !important;
+                        }
+                        #tabelaSeguindoContainer {
+                            width: 100% !important;
+                            overflow-x: auto !important;
+                            -webkit-overflow-scrolling: touch !important;
+                            box-sizing: border-box !important;
+                            padding-bottom: 6px;
+                        }
+                        #tabelaSeguindoContainer::-webkit-scrollbar {
+                            height: 7px;
+                            width: 7px;
+                        }
+                        #tabelaSeguindoContainer::-webkit-scrollbar-track {
+                            background: rgba(150, 150, 150, 0.1);
+                            border-radius: 4px;
+                        }
+                        #tabelaSeguindoContainer::-webkit-scrollbar-thumb {
+                            background: #3498db;
+                            border-radius: 4px;
+                        }
+                        #tabelaSeguindoContainer table {
+                            width: 100% !important;
+                            min-width: 820px !important;
+                            border-collapse: separate !important;
+                            border-spacing: 0 !important;
+                        }
+                        @media screen and (max-width: 768px) {
+                            #seguindoModal {
+                                width: 98vw !important;
+                                max-width: 98vw !important;
+                                height: 96vh !important;
+                                max-height: 96vh !important;
+                                padding: 10px 6px !important;
+                                border-radius: 10px !important;
+                                top: 50% !important;
+                                left: 50% !important;
+                                transform: translate(-50%, -50%) !important;
+                            }
+                            #seguindoModal .modal-header {
+                                padding: 6px 8px !important;
+                            }
+                            #seguindoModal .modal-title {
+                                font-size: 13px !important;
+                            }
+                            .seguindo-header-actions {
+                                display: flex !important;
+                                flex-wrap: wrap !important;
+                                gap: 6px !important;
+                            }
+                            .seguindo-header-actions button {
+                                padding: 6px 8px !important;
+                                font-size: 11px !important;
+                                border-radius: 4px !important;
+                                flex: 1 1 calc(50% - 6px) !important;
+                                min-width: 110px !important;
+                                text-align: center !important;
+                            }
+                            .seguindo-search-bar {
+                                flex-direction: column !important;
+                                gap: 6px !important;
+                                margin: 0 0 8px 0 !important;
+                            }
+                            .seguindo-search-bar input,
+                            .seguindo-search-bar select {
+                                width: 100% !important;
+                                height: 36px !important;
+                                font-size: 12px !important;
+                                flex: none !important;
+                            }
+                            .seguindo-mobile-scroll-controls {
+                                display: flex !important;
+                            }
+                            #tabelaSeguindoContainer {
+                                border: 1px solid rgba(150, 150, 150, 0.25) !important;
+                                border-radius: 8px !important;
+                            }
+                            #tabelaSeguindoContainer table {
+                                min-width: 840px !important;
+                            }
+                            #tabelaSeguindoContainer th,
+                            #tabelaSeguindoContainer td {
+                                padding: 6px 4px !important;
+                                font-size: 11px !important;
+                            }
+                            #tabelaSeguindoContainer th.col-sticky-1,
+                            #tabelaSeguindoContainer td.col-sticky-1 {
+                                position: sticky !important;
+                                left: 0 !important;
+                                z-index: 5 !important;
+                                background: #ffffff !important;
+                            }
+                            #tabelaSeguindoContainer th.col-sticky-2,
+                            #tabelaSeguindoContainer td.col-sticky-2 {
+                                position: sticky !important;
+                                left: 32px !important;
+                                z-index: 5 !important;
+                                background: #ffffff !important;
+                                box-shadow: 3px 0 6px -2px rgba(0, 0, 0, 0.25) !important;
+                            }
+                            .dark-mode #tabelaSeguindoContainer th.col-sticky-1,
+                            .dark-mode #tabelaSeguindoContainer td.col-sticky-1,
+                            .dark-mode #tabelaSeguindoContainer th.col-sticky-2,
+                            .dark-mode #tabelaSeguindoContainer td.col-sticky-2 {
+                                background: #000000 !important;
+                                box-shadow: 3px 0 6px -2px rgba(255, 255, 255, 0.15) !important;
+                            }
+                        }
+                    `;
+
+                    div.style.cssText = `
+                            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                            width: 96vw; max-width: 1420px; max-height: 94vh; border: 1px solid #ccc;
+                            border-radius: 12px; padding: 16px 20px; z-index: 10000; overflow-y: auto; overflow-x: hidden;
+                            box-sizing: border-box;
+                        `;
+                    div.innerHTML = `
+                            <div class="modal-header">
+                                <span class="modal-title">
+                                    Gerenciador de "Seguindo" <span id="seguindoSelectedCount" style="font-size:12px; font-weight:normal; color:#3498db;">(0 selecionados)</span>
+                                    <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie quem você segue. Filtre por quem é Melhor Amigo, Silenciado ou tem Story Oculto.</span></div>
+                                </span>
+                                <div class="modal-controls"><button id="seguindoMinimizarBtn" title="Minimizar">_</button><button id="fecharSeguindoBtn" title="Fechar">X</button></div>
+                            </div>
+                            <div style="padding: 10px 0;">
+                                        <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                            <div class="seguindo-header-actions" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                    <button id="atualizarSeguindoBtn" title="Atualizar Dados" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">🔄️ Atualizar</button>
+                                            <button id="executarSeguindoBtn" style="background: #3498db; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">🚀 Executar</button>
+                                    <button id="unfollowSeguindoBtn" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">Deixar de Seguir</button>
+                                    <button id="blockSeguindoBtn" style="background: #c0392b; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">Bloquear</button>
+                                    <button id="loadStatsSeguindoBtn" style="background: #e67e22; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">Carregar Stats (Página)</button>
+                                </div>
+                                            <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px;">
+                                                <span style="font-size: 14px; font-weight: 500;">⚡ ${getText('useApi')}</span>
+                                                <label class="switch"><input type="checkbox" id="seguindoUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}><span class="slider"></span></label>
+                                            </div>
+                                        </div>
+                            </div>
+                            <div class="seguindo-search-bar" style="margin: 0 0 12px 0; display: flex; gap: 10px;">
+                                        <input type="text" id="seguindoSearchInput" placeholder="Pesquisar..." style="flex: 2; padding: 8px 12px; height: 40px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; outline: none; box-sizing: border-box;">
+                                        <select id="seguindoFilterSelect" style="flex: 1; padding: 0 10px; height: 40px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; cursor: pointer; outline: none; box-sizing: border-box;">
+                                    <option value="all">Todos</option>
+                                    <option value="no_category">⚪ Sem Categoria (Em Branco)</option>
+                                    <option value="muted_stories">Silenciado (Stories)</option>
+                                    <option value="muted_posts">Silenciado (Publicações)</option>
+                                    <option value="muted_all">Silenciado (Ambos)</option>
+                                    <option value="close_friends">Melhores Amigos</option>
+                                    <option value="hidden_stories">Ocultar Stories</option>
+                                </select>
+                            </div>
+                            <div id="statusSeguindo" style="margin-top: 10px; font-weight: bold; padding: 0;"></div>
+                            <div class="seguindo-mobile-scroll-controls" style="display: none; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 6px 0; padding: 6px 10px; background: rgba(52, 152, 219, 0.12); border-radius: 8px; border: 1px solid rgba(52, 152, 219, 0.25);">
+                                <button id="seguindoScrollStartBtn" type="button" style="background: #3498db; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 3px;">◀ Usuário</button>
+                                <span style="color: #2980b9; font-size: 11px; font-weight: 600; text-align: center; flex: 1;">↔️ Deslize para ver todas as 10 colunas</span>
+                                <button id="seguindoScrollEndBtn" type="button" style="background: #3498db; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 3px;">Interações ▶</button>
+                            </div>
+                            <div id="tabelaSeguindoContainer" style="display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; box-sizing: border-box;"></div>
+                        `;
+                    document.body.appendChild(div);
+
+                    const attachStaticListeners = () => {
+                        document.getElementById("fecharSeguindoBtn").addEventListener("click", () => {
+                            processoCancelado = true;
+                            document.getElementById("progressBar")?.remove();
+                            div.remove();
+                        });
+
+                        document.getElementById("seguindoMinimizarBtn").addEventListener("click", () => {
+                            const modal = document.getElementById('seguindoModal');
+                            const contentToToggle = [
+                                modal.querySelector('input[type="text"]')?.parentElement, // div da pesquisa
+                                modal.querySelector('.seguindo-mobile-scroll-controls'),
+                                modal.querySelector('#tabelaSeguindoContainer')
+                            ].filter(Boolean);
+
+                            const btn = document.getElementById('seguindoMinimizarBtn');
+                            const isMinimized = modal.dataset.minimized === 'true';
+
+                            contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+                            modal.dataset.minimized = !isMinimized;
+                            btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
+                            modal.style.maxHeight = isMinimized ? '90vh' : 'none';
+                        });
+
+                        document.getElementById("atualizarSeguindoBtn").addEventListener("click", () => {
+                            showUpdateOptionsModal();
+                        });
+
+                        const scrollStartBtn = document.getElementById("seguindoScrollStartBtn");
+                        if (scrollStartBtn) {
+                            scrollStartBtn.onclick = () => {
+                                const c = document.getElementById("tabelaSeguindoContainer");
+                                if (c) c.scrollTo({ left: 0, behavior: 'smooth' });
+                            };
+                        }
+                        const scrollEndBtn = document.getElementById("seguindoScrollEndBtn");
+                        if (scrollEndBtn) {
+                            scrollEndBtn.onclick = () => {
+                                const c = document.getElementById("tabelaSeguindoContainer");
+                                if (c) c.scrollTo({ left: c.scrollWidth, behavior: 'smooth' });
+                            };
+                        }
+                    };
+                    attachStaticListeners();
+
+                    const statusDiv = document.getElementById("statusSeguindo");
+                    const container = document.getElementById("tabelaSeguindoContainer");
+                    let seguindoList = [];
+                    let currentPaginatedUsers = []; // Armazena os usuários da página atual para "Carregar Stats"
+                    const selectedUsers = new Set(); // Armazena todos os usuários selecionados entre as páginas
+                    let allCategories = [];
+                    let userCategoryMap = new Map();
+                    const seguindoInteracoesCache = new Map();
+                    const activeInteracoesSubrows = new Set();
+
+                    const fetchUserListAPISeguindo = async (userId, type, total) => {
+                        const userList = [];
+                        let nextMaxId = '';
+                        let hasNextPage = true;
+                        let bar, fill, text;
+
+                        const setupProgressBar = () => {
+                            bar = document.createElement("div");
+                            bar.id = "progressBar";
+                            bar.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);width:80%;height:30px;background:#e0e0e0;border-radius:15px;overflow:hidden;z-index:10001;color:black;font-weight:bold;font-size:14px;text-align:center;line-height:30px;box-shadow:0 4px 12px rgba(0,0,0,0.2);";
+                            fill = document.createElement("div");
+                            fill.style.cssText = "height:100%;width:0%;background:#28a745;position:absolute;left:0;top:0;z-index:1;transition:width 0.25s ease-in-out;";
+                            text = document.createElement("div");
+                            text.style.cssText = "position:relative;z-index:2;width:100%;text-shadow:0 0 2px rgba(255,255,255,0.8);";
+                            bar.appendChild(fill);
+                            bar.appendChild(text);
+                            document.body.appendChild(bar);
+                        };
+
+                        const updateLocalProgressBar = (progress, totalCount) => {
+                            if (!bar) setupProgressBar();
+                            const totalNum = Number(totalCount) || 0;
+                            let percent = totalNum > 0 ? Math.min((progress / totalNum) * 100, 100) : Math.min(progress * 2, 95);
+                            fill.style.width = `${percent}%`;
+                            const textTotal = totalNum > 0 ? ' de ' + totalNum : '';
+                            text.innerText = `Buscando: ${progress}${textTotal} (${Math.floor(percent)}%)`;
+                        };
+
+                        while (hasNextPage && !processoCancelado) {
+                            const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=50&max_id=${nextMaxId}`, { headers: { 'X-IG-App-ID': appID } });
+                            const data = await response.json();
+                            data.users.forEach(user => {
+                                const pk = String(user.pk || user.id || '');
+                                if (pk) setCachedUserId(user.username, pk);
+                                userList.push({ username: user.username, photoUrl: user.profile_pic_url, id: pk });
+                            });
+                            updateLocalProgressBar(userList.length, total);
+                            hasNextPage = !!data.next_max_id;
+                            nextMaxId = data.next_max_id;
+                            await new Promise(r => setTimeout(r, 250));
+                        }
+                        if (bar) bar.remove();
+                        return processoCancelado ? null : userList;
+                    };
+
+                    // Carrega dados do DB sem navegação
+                    const loadCacheFromDB = async (key) => {
+                        try {
+                            const data = await dbHelper.loadCache(key);
+                            if (data) {
+                                userListCache[key] = data;
+                                if (key === 'muted' && data.details) {
+                                    userListCache.mutedDetails = new Map();
+                                    // Ensure mutedDetails is populated correctly from the stored array of objects
+                                    data.details.forEach((u, username) => userListCache.mutedDetails.set(username, u.status));
+                                } else if (key === 'muted' && Array.isArray(data)) {
+                                    // Fallback for older format or if details property is missing
+                                    userListCache.mutedDetails = new Map();
+                                    // Assuming each item in data is { username, status }
+                                    data.forEach(item => userListCache.mutedDetails.set(item.username, item.status));
+                                    data.details.forEach((u, username) => userListCache.mutedDetails.set(username, u.status));
+                                }
+                            } else { userListCache[key] = new Set(); }
+                        } catch (e) { userListCache[key] = new Set(); }
+                    };
+
+                    async function carregarSeguindo() {
+                        allCategories = await dbHelper.loadCategories();
+                        userCategoryMap = await dbHelper.loadAllUserCategories();
+
+                        statusDiv.innerText = 'Buscando informações do perfil...';
+                        const profileInfo = await safeFetchProfileInfo(username);
+                        if (processoCancelado) return;
+                        const userId = profileInfo?.data?.user?.id;
+                        if (!userId) {
+                            alert('Não foi possível obter as informações do perfil devido ao limite de requisições do Instagram (HTTP 429). Por favor, aguarde alguns minutos e tente novamente.');
+                            div.remove();
+                            return;
+                        }
+
+                        const totalFollowing = profileInfo.data?.user?.edge_follow?.count || 0;
+
+                        // Carrega caches do DB
+                        await Promise.all([
+                            loadCacheFromDB('closeFriends'),
+                            loadCacheFromDB('hiddenStory'),
+                            loadCacheFromDB('muted')
+                        ]);
+
+                        // Carrega seguindo (DB ou API)
+                        const dbFollowing = await dbHelper.loadCache('following');
+
+                        // Lógica de atualização seletiva
+                        if (shouldUpdate('closeFriends')) {
+                            await fetchAndCache('/accounts/close_friends/', extractCloseFriendsUsernames, 'closeFriends', 2);
+                        } else if (userListCache.closeFriends === null) { // Se não deve atualizar e não está em cache, tenta carregar do DB
+                            await loadCacheFromDB('closeFriends');
+                            if (isUpdate) updateStatus(2, true, '(Cache)');
+                        } else {
+                            if (isUpdate) updateStatus(2, true, '(Cache)');
+                        }
+
+
+
+                        if (shouldUpdate('hiddenStory')) {
+                            await fetchAndCache('/accounts/hide_story_and_live_from/', extractHideStoryUsernames, 'hiddenStory', 3);
+                        } else {
+                            await loadCacheFromDB('hiddenStory');
+                            if (isUpdate) updateStatus(3, true, '(Cache)');
+                        }
+
+                        if (shouldUpdate('muted')) {
+                            await fetchAndCache('/accounts/muted_accounts/', extractMutedAccountsUsernames, 'muted', 4);
+                        } else {
+                            await loadCacheFromDB('muted');
+                            if (isUpdate) updateStatus(4, true, '(Cache)');
+                        }
+
+                        if (!shouldUpdate('following') && dbFollowing) {
+                            if (dbFollowing.details) {
+                                seguindoList = Array.from(dbFollowing.details.values());
+                            } else if (dbFollowing instanceof Set) { // Handle older cache format where it's just a Set of usernames
+                                seguindoList = Array.from(dbFollowing).map(u => ({ username: u, photoUrl: DEFAULT_AVATAR }));
+                            } else { // Fallback if dbFollowing is not a Set or has no details
+                                seguindoList = [];
+                            }
+                            if (isUpdate) updateStatus(1, true, '(Cache)');
+                        } else {
+                            seguindoList = await fetchUserListAPISeguindo(userId, 'following', totalFollowing);
+                            if (seguindoList) {
+                                if (isUpdate) updateStatus(1, true);
+                                await dbHelper.saveCache('following', seguindoList);
+                            } else {
+                                if (isUpdate) updateStatus(1, false);
+                                seguindoList = []; // Ensure it's an empty array on failure
+                            }
+                        }
+
+                        // Retorna para a página original
+                        history.pushState(null, null, originalPath);
+                        window.dispatchEvent(new Event("popstate"));
+                        await new Promise(r => setTimeout(r, 500));
+
+                        if (isUpdate) {
+                            const statusModal = document.getElementById("automationStatusModal");
+                            if (statusModal) statusModal.remove();
+                            document.body.appendChild(div); // Re-adiciona o modal principal DEPOIS da navegação
+                            attachStaticListeners(); // Re-anexa os listeners estáticos
+                        }
+                        statusDiv.innerText = `Total: ${seguindoList.length} perfis seguidos.`;
+
+                        let currentPage = 1; // Reinicia a paginação
+                        const itemsPerPage = loadSettings().itemsPerPage;
+
+                        // Configuração para ordenação da tabela
+                        let sortConfig = { key: 'username', direction: 'ascending' };
+
+                        const renderList = (page) => {
+                            const startIndex = (page - 1) * itemsPerPage;
+                            const endIndex = startIndex + itemsPerPage;
+
+                            // Filtra por pesquisa antes de ordenar e paginar
+                            const searchTerm = document.getElementById('seguindoSearchInput')?.value.toLowerCase() || '';
+                            const filterValue = document.getElementById('seguindoFilterSelect')?.value || 'all';
+
+                            let filteredUsers = seguindoList;
+
+                            if (searchTerm) {
+                                // Aplica o filtro de pesquisa sobre a lista original
+                                filteredUsers = seguindoList.filter(user => user.username.toLowerCase().includes(searchTerm));
+                            }
+
+                            // Aplica o filtro de seleção (dropdown) sobre a lista já filtrada pela pesquisa (ou a lista completa)
+                            if (filterValue === 'close_friends') {
+                                filteredUsers = filteredUsers.filter(user => userListCache.closeFriends && userListCache.closeFriends.has(user.username));
+                            } else if (filterValue === 'hidden_stories') {
+                                filteredUsers = filteredUsers.filter(user => userListCache.hiddenStory && userListCache.hiddenStory.has(user.username));
+                            } else if (filterValue.startsWith('muted_')) {
+                                filteredUsers = filteredUsers.filter(user => {
+                                    if (userListCache.muted && userListCache.muted.has(user.username)) {
+                                        const detail = userListCache.mutedDetails.get(user.username) || '';
+                                        const dLower = detail.toLowerCase();
+                                        const isStories = dLower.includes('stories') || dLower.includes('story');
+                                        const isPosts = dLower.includes('publicações') || dLower.includes('posts');
+                                        if (filterValue === 'muted_all') return isStories && isPosts;
+                                        if (filterValue === 'muted_stories') return isStories && !isPosts;
+                                        if (filterValue === 'muted_posts') return isPosts && !isStories;
+                                    }
+                                    return false;
+                                });
+                            } else if (filterValue === 'no_category') {
+                                filteredUsers = filteredUsers.filter(user => {
+                                    const cats = userCategoryMap.get(user.username.toLowerCase());
+                                    return !cats || cats.length === 0;
+                                });
+                            } else if (filterValue.startsWith('category_')) {
+                                const categoryId = filterValue.replace('category_', '');
+                                filteredUsers = filteredUsers.filter(user => {
+                                    return userCategoryMap.get(user.username.toLowerCase())?.includes(categoryId);
+                                });
+                            }
+                            let tableHtml = `
+                                    <table style="width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 14px;">
+                                        <thead style="cursor: pointer;">
+                                            <tr style="text-align: left;">
+                                                <th class="col-sticky-1" style="padding: 8px 4px; width: 30px; text-align: center; border-bottom: 2px solid #dbdbdb;"><input type="checkbox" id="selectAllCheckbox" title="Selecionar Todos"></th>
+                                                <th class="col-sticky-2" style="padding: 8px 6px; min-width: 140px; border-bottom: 2px solid #dbdbdb;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="isMuted" title="${userListCache.muted === null ? 'Visite o menu Contas Silenciadas para carregar estes dados.' : ''}">Silenciado? ${userListCache.muted === null ? '??' : (sortConfig.key === 'isMuted' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
+                                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="isCloseFriend" title="${userListCache.closeFriends === null ? 'Visite o menu Amigos Próximos para carregar estes dados.' : ''}">Melhores Amigos? ${userListCache.closeFriends === null ? '??' : (sortConfig.key === 'isCloseFriend' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
+                                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="isStoryHidden" title="${userListCache.hiddenStory === null ? 'Visite o menu Ocultar Story para carregar estes dados.' : ''}">Ocultar Stories? ${userListCache.hiddenStory === null ? '??' : (sortConfig.key === 'isStoryHidden' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
+                                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="followers">Seguidores ${sortConfig.key === 'followers' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="following">Seguindo ${sortConfig.key === 'following' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="status">Status ${sortConfig.key === 'status' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                                <th style="padding: 8px 6px; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="categories">Categorias ${sortConfig.key === 'categories' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                                <th style="padding: 8px 6px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;">Interações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody style="max-height: 60vh; overflow-y: auto;">
+                                `;
+
+                            // Ordena a lista antes de paginar
+                            const sortedUsers = [...filteredUsers].sort((a, b) => { // Certifica que filteredUsers é um array
+                                // Se filteredUsers estiver vazio, não haverá erro aqui
+
+                                const getSortValue = (user, key) => {
+                                    if (key === 'username') return user.username.toLowerCase();
+                                    if (key === 'isMuted') return userListCache.muted ? (userListCache.muted.has(user.username) ? 1 : 2) : 3;
+                                    if (key === 'isCloseFriend') return userListCache.closeFriends ? (userListCache.closeFriends.has(user.username) ? 1 : 2) : 3;
+                                    if (key === 'isStoryHidden') return userListCache.hiddenStory ? (userListCache.hiddenStory.has(user.username) ? 1 : 2) : 3;
+                                    if (key === 'followers') return (user.followers || 0);
+                                    if (key === 'following') return (user.following || 0);
+                                    if (key === 'status') {
+                                        if (user.followers !== undefined && user.following !== undefined) {
+                                            if (user.following > user.followers) return 'Unfollow';
+                                        }
+                                        return '-';
+                                    }
+                                    if (key === 'categories') {
+                                        const catsA = userCategoryMap.get(user.username.toLowerCase()) || [];
+                                        const nameA = catsA.map(cid => allCategories.find(c => c.id === cid)?.name || '').sort().join(', ');
+                                        return nameA;
+                                    }
+                                    return 0;
+                                };
+
+                                const valA = getSortValue(a, sortConfig.key);
+                                const valB = getSortValue(b, sortConfig.key);
+
+                                if (valA < valB) {
+                                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                                }
+                                if (valA > valB) {
+                                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                                }
+                                return 0;
+                            });
+
+                            const paginatedUsers = sortedUsers.slice(startIndex, endIndex);
+                            currentPaginatedUsers = paginatedUsers;
+
+                            if (paginatedUsers.length === 0) {
+                                tableHtml += `<tr><td colspan="10" style="text-align: center; padding: 20px;">Nenhum usuário encontrado com os filtros aplicados.</td></tr>`;
+                            } else {
+
+                                paginatedUsers.forEach((userObj) => {
+                                    const { username, photoUrl } = userObj;
+                                    const isChecked = selectedUsers.has(username);
+                                    // Verifica os dados no cache global
+                                    const isMutedSimple = userListCache.muted ? (userListCache.muted.has(username) ? "Sim" : "Não") : "??";
+                                    let mutedDetailText = '';
+                                    if (isMutedSimple === "Sim") {
+                                        const detail = userListCache.mutedDetails.get(username) || '';
+                                        const dLower = detail.toLowerCase();
+                                        if ((dLower.includes('stories') || dLower.includes('story')) && (dLower.includes('publicações') || dLower.includes('posts'))) {
+                                            mutedDetailText = '(Stories e Publicações)';
+                                        } else if (dLower.includes('stories') || dLower.includes('story')) {
+                                            mutedDetailText = '(Stories)';
+                                        } else if (dLower.includes('publicações') || dLower.includes('posts')) {
+                                            mutedDetailText = '(Publicações)';
+                                        } else if (detail) { // Fallback
+                                            mutedDetailText = `(${detail})`;
+                                        }
+                                    }
+
+                                    const isCloseFriend = userListCache.closeFriends ? (userListCache.closeFriends.has(username) ? "Sim" : "Não") : "??";
+                                    const isStoryHidden = userListCache.hiddenStory ? (userListCache.hiddenStory.has(username) ? "Sim" : "Não") : "??";
+
+                                    const userCategories = userCategoryMap.get(username.toLowerCase()) || [];
+                                    const categorySpans = userCategories.map(catId => {
+                                        const category = allCategories.find(c => c.id === catId);
+                                        if (!category) return '';
+                                        return `<span style="background-color: ${category.color}; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-right: 4px; white-space: nowrap; display: inline-block; margin-bottom: 2px;">${category.name}</span>`;
+                                    }).join('');
+
+                                    const getStatusStyle = (status, type) => {
+                                        if (status === 'Sim') {
+                                            const colors = {
+                                                muted: { bg: '#e74c3c', text: 'white' },
+                                                closeFriend: { bg: '#2ecc71', text: 'white' },
+                                                storyHidden: { bg: '#f39c12', text: 'white' }
+                                            };
+                                            return `background-color: ${colors[type].bg}; color: ${colors[type].text};`;
+                                        }
+                                        if (status === 'Não') {
+                                            return 'background-color: #ecf0f1; color: #7f8c8d;';
+                                        }
+                                        return ''; // Estilo padrão para '??'
+                                    };
+
+                                    let statusText = '-';
+                                    let statusStyle = '';
+                                    if (userObj.followers !== undefined && userObj.following !== undefined) {
+                                        if (userObj.following > userObj.followers) {
+                                            statusText = 'Unfollow';
+                                            statusStyle = 'color: #e74c3c; font-weight: bold;';
+                                        }
+                                    }
+
+                                    const cleanUser = username.toLowerCase();
+                                    const userInteractions = seguindoInteracoesCache.get(cleanUser);
+                                    const isSubrowOpen = activeInteracoesSubrows.has(cleanUser);
+                                    let btnInteracoesHtml = '';
+                                    if (userInteractions) {
+                                        btnInteracoesHtml = `
+                                            <button class="btn-seguindo-interacoes" data-username="${username}" data-userid="${userObj.id || ''}" style="background: ${userInteractions.total > 0 ? '#e74c3c' : '#7f8c8d'}; color: white; border: none; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;" title="Ver interações com @${username}">
+                                                <span>${userInteractions.total > 0 ? `❤️ ${userInteractions.total}` : '0'}</span>
+                                            </button>
+                                        `;
+                                    } else {
+                                        btnInteracoesHtml = `
+                                            <button class="btn-seguindo-interacoes" data-username="${username}" data-userid="${userObj.id || ''}" style="background: #0095f6; color: white; border: none; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;" title="Ver interações com @${username}">
+                                                <span>🔍 Interações</span>
+                                            </button>
+                                        `;
+                                    }
+
+                                    tableHtml += `
+                                        <tr style="border-bottom: 1px solid #dbdbdb;" data-username="${username}">
+                                            <td class="col-sticky-1" style="padding: 6px 4px; text-align: center; border-bottom: 1px solid #dbdbdb;"><input type="checkbox" class="user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
+                                            <td class="col-sticky-2" style="padding: 6px 6px; border-bottom: 1px solid #dbdbdb;">
+                                                <div style="display:flex; align-items:center; gap:8px;">
+                                                    <img src="${photoUrl || DEFAULT_AVATAR}" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${username}" style="width:34px; height:34px; border-radius:50%; object-fit:cover; flex-shrink: 0;">
+                                                    <div style="display:flex; flex-direction:column; overflow: hidden; max-width: 140px;">
+                                                        <div style="display:flex; align-items:center; gap:4px; overflow: hidden;">
+                                                            <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600; font-size:13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${username}</a>
+                                                            ${loadSettings().validateProfileStatus ? `<span class="seguindo-privacy-badge" data-username="${username}"></span>` : ''}
+                                                        </div>
+                                                        ${mutedDetailText ? `<span style="font-size:10px; color:gray; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${mutedDetailText}">${mutedDetailText}</span>` : ''}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td style="text-align: center; padding: 6px 4px; border-bottom: 1px solid #dbdbdb;"><span style="padding: 3px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; display: inline-block; ${getStatusStyle(isMutedSimple, 'muted')}">${isMutedSimple}</span></td>
+                                            <td style="text-align: center; padding: 6px 4px; border-bottom: 1px solid #dbdbdb;"><span style="padding: 3px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; display: inline-block; ${getStatusStyle(isCloseFriend, 'closeFriend')}">${isCloseFriend}</span></td>
+                                            <td style="text-align: center; padding: 6px 4px; border-bottom: 1px solid #dbdbdb;"><span style="padding: 3px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; display: inline-block; ${getStatusStyle(isStoryHidden, 'storyHidden')}">${isStoryHidden}</span></td>
+                                            <td style="text-align: center; padding: 6px 4px; font-size: 12px; border-bottom: 1px solid #dbdbdb; white-space: nowrap;">${userObj.followers !== undefined ? userObj.followers.toLocaleString() : '-'}</td>
+                                            <td style="text-align: center; padding: 6px 4px; font-size: 12px; border-bottom: 1px solid #dbdbdb; white-space: nowrap;">${userObj.following !== undefined ? userObj.following.toLocaleString() : '-'}</td>
+                                            <td style="text-align: center; padding: 6px 4px; font-size: 12px; border-bottom: 1px solid #dbdbdb; white-space: nowrap; ${statusStyle}">${statusText}</td>
+                                            <td style="padding: 6px 6px; min-width: 90px; border-bottom: 1px solid #dbdbdb;">${categorySpans}</td>
+                                            <td style="text-align: center; padding: 6px 6px; white-space: nowrap; border-bottom: 1px solid #dbdbdb;">${btnInteracoesHtml}</td>
+                                        </tr>
+                                        <tr class="subrow-interacoes" id="subrow-interacoes-${cleanUser}" style="display: ${isSubrowOpen ? 'table-row' : 'none'}; background: rgba(0, 149, 246, 0.04); border-bottom: 2px solid rgba(0, 149, 246, 0.2);">
+                                            <td colspan="10" style="padding: 10px 14px; border-bottom: 2px solid rgba(0, 149, 246, 0.2);">
+                                                <div id="subrow-content-${cleanUser}"></div>
+                                            </td>
+                                        </tr>
+                                    `;
+                                });
+                            }
+                            tableHtml += `</tbody></table>`;
+
+                            const totalPages = Math.ceil(sortedUsers.length / itemsPerPage);
+                            let paginationHtml = `<div style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:20px;">`;
+                            if (page > 1) paginationHtml += `<button id="prevPageBtn" style="padding:5px 10px;">Anterior</button>`;
+                            paginationHtml += `<span>Página ${page} de ${totalPages}</span>`;
+                            if (page < totalPages) paginationHtml += `<button id="nextPageBtn" style="padding:5px 10px;">Próximo</button>`;
+                            paginationHtml += `</div>`;
+
+                            container.innerHTML = tableHtml + paginationHtml;
+
+                            // Carrega os badges de privacidade para a lista do modal Seguindo
+                            if (loadSettings().validateProfileStatus) {
+                                container.querySelectorAll('.seguindo-privacy-badge').forEach(async (badgeSpan) => {
+                                    const u = badgeSpan.getAttribute('data-username');
+                                    if (!u) return;
+
+                                    const renderBadge = (isPrivate) => {
+                                        badgeSpan.style.cssText = `
+                                                display: inline-flex;
+                                                align-items: center;
+                                                justify-content: center;
+                                                padding: 2px 6px;
+                                                font-size: 10px;
+                                                font-weight: bold;
+                                                border-radius: 4px;
+                                                color: #ffffff;
+                                                line-height: 1;
+                                            `;
+                                        if (isPrivate) {
+                                            badgeSpan.innerText = 'P';
+                                            badgeSpan.style.backgroundColor = '#e1306c';
+                                            badgeSpan.title = 'Perfil Privado';
+                                        } else {
+                                            badgeSpan.innerText = 'A';
+                                            badgeSpan.style.backgroundColor = '#28a745';
+                                            badgeSpan.title = 'Perfil Público';
+                                        }
+                                    };
+
+                                    if (privacyCache.has(u)) {
+                                        renderBadge(privacyCache.get(u));
+                                    } else {
+                                        const isPrivate = await checkProfilePrivacy(u);
+                                        if (isPrivate !== null) {
+                                            renderBadge(isPrivate);
+                                        }
+                                    }
+                                });
+                            }
+
+                            const prevBtn = document.getElementById("prevPageBtn");
+                            if (prevBtn) prevBtn.onclick = () => renderList(--currentPage);
+                            const nextBtn = document.getElementById("nextPageBtn");
+                            if (nextBtn) nextBtn.onclick = () => renderList(++currentPage);
+
+                            // Adiciona eventos aos checkboxes individuais para atualizar o Set
+                            document.querySelectorAll('#seguindoModal .user-checkbox').forEach(checkbox => {
+                                checkbox.addEventListener('change', (e) => {
+                                    const username = e.target.dataset.username;
+                                    if (e.target.checked) selectedUsers.add(username);
+                                    else selectedUsers.delete(username);
+                                    if (document.getElementById('seguindoSelectedCount')) document.getElementById('seguindoSelectedCount').innerText = `(${selectedUsers.size} selecionados)`;
+                                });
+                            });
+
+                            // Adiciona evento para o checkbox "selecionar tudo"
+                            const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+                            if (selectAllCheckbox) {
+                                selectAllCheckbox.addEventListener('change', (e) => {
+                                    const isChecked = e.target.checked;
+                                    document.querySelectorAll('#tabelaSeguindoContainer .user-checkbox').forEach(checkbox => {
+                                        checkbox.checked = isChecked;
+                                        const username = checkbox.dataset.username;
+                                        if (isChecked) selectedUsers.add(username);
+                                        else selectedUsers.delete(username);
+                                    });
+                                    if (document.getElementById('seguindoSelectedCount')) document.getElementById('seguindoSelectedCount').innerText = `(${selectedUsers.size} selecionados)`;
+                                });
+                            }
+
+                            // Evento para a barra de pesquisa
+                            const searchInput = document.getElementById("seguindoSearchInput");
+                            searchInput.oninput = () => {
+                                renderList(1); // Volta para a primeira página ao pesquisar
+                            };
+
+                            // Evento para o filtro
+                            const filterSelect = document.getElementById("seguindoFilterSelect");
+                            filterSelect.onchange = () => {
+                                renderList(1);
+                            };
+
+                            document.getElementById('seguindoUseApiToggle').onchange = (e) => {
+                                saveSettings({ useApi: e.target.checked });
+                                showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
+                            };
+
+                            // Popula o filtro de categorias
+                            Array.from(filterSelect.options).forEach(opt => {
+                                if (opt.value.startsWith('category_')) opt.remove();
+                            });
+                            if (allCategories.length > 0) {
+                                allCategories.forEach(cat => {
+                                    const option = document.createElement('option');
+                                    option.value = `category_${cat.id}`;
+                                    option.textContent = `Categoria: ${cat.name}`;
+                                    filterSelect.appendChild(option);
+                                });
+                            } else {
+                                const option = document.createElement('option');
+                                option.value = `no_categories`;
+                                option.textContent = `Nenhuma categoria`;
+                                option.disabled = true;
+                                filterSelect.appendChild(option);
+                            }
+                            // Restaura o valor do filtro após repopular as opções para evitar que ele volte para "Todos"
+                            filterSelect.value = filterValue;
+
+                            // Adiciona eventos de clique para ordenação nos cabeçalhos
+                            document.querySelectorAll('#seguindoModal th[data-sort-key]').forEach(th => {
+                                th.addEventListener('click', () => {
+                                    const key = th.dataset.sortKey;
+                                    if (sortConfig.key === key) {
+                                        sortConfig.direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+                                    } else {
+                                        sortConfig = { key, direction: 'ascending' };
+                                    }
+                                    renderList(1); // Volta para a primeira página ao reordenar
+                                });
+                            });
+
+                            // Eventos de clique para os botões de Interações
+                            document.querySelectorAll('#seguindoModal .btn-seguindo-interacoes').forEach(btn => {
+                                btn.addEventListener('click', async (e) => {
+                                    e.stopPropagation();
+                                    const username = btn.dataset.username;
+                                    const explicitUid = btn.dataset.userid || null;
+                                    if (!username) return;
+                                    const cleanUser = username.toLowerCase();
+                                    const subrow = document.getElementById(`subrow-interacoes-${cleanUser}`);
+                                    const contentDiv = document.getElementById(`subrow-content-${cleanUser}`);
+                                    if (!subrow || !contentDiv) return;
+
+                                    if (subrow.style.display !== 'none') {
+                                        subrow.style.display = 'none';
+                                        activeInteracoesSubrows.delete(cleanUser);
+                                        return;
+                                    }
+
+                                    subrow.style.display = 'table-row';
+                                    activeInteracoesSubrows.add(cleanUser);
+
+                                    if (seguindoInteracoesCache.has(cleanUser)) {
+                                        renderSubrowInteracoesContent(username, seguindoInteracoesCache.get(cleanUser), contentDiv, btn);
+                                    } else {
+                                        await carregarInteracoesUsuario(username, explicitUid, contentDiv, btn);
+                                    }
+                                });
+                            });
+
+                            // Se havia sublinhas ativas antes da paginação/filtro/ordenação, preenche os dados
+                            activeInteracoesSubrows.forEach(cleanUser => {
+                                const contentDiv = document.getElementById(`subrow-content-${cleanUser}`);
+                                const btn = document.querySelector(`.btn-seguindo-interacoes[data-username="${cleanUser}"]`);
+                                if (contentDiv && seguindoInteracoesCache.has(cleanUser)) {
+                                    renderSubrowInteracoesContent(cleanUser, seguindoInteracoesCache.get(cleanUser), contentDiv, btn);
+                                }
+                            });
+                        };
+
+                        const carregarInteracoesUsuario = async (username, explicitUid, contentDiv, btn, forceReload = false) => {
+                            const cleanUser = username.toLowerCase();
+                            btn.disabled = true;
+                            btn.style.opacity = '0.7';
+                            contentDiv.innerHTML = `
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 10px; padding: 18px; color: var(--ig-primary-text, #333); font-size: 13px;">
+                                    <div class="spinner" style="width: 16px; height: 16px; border: 2px solid #ccc; border-top-color: #0095f6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                                    <span id="subrow-status-${cleanUser}">Buscando publicações, stories e destaques de <strong>@${username}</strong>...</span>
+                                </div>
+                            `;
+
+                            try {
+                                const updateStatus = (msg) => {
+                                    const statusEl = document.getElementById(`subrow-status-${cleanUser}`);
+                                    if (statusEl) statusEl.innerHTML = `${msg} (<strong>@${username}</strong>)`;
+                                };
+
+                                const data = await fetchUserInteractionsData(cleanUser, explicitUid, updateStatus);
+                                seguindoInteracoesCache.set(cleanUser, data);
+
+                                btn.disabled = false;
+                                btn.style.opacity = '1';
+                                btn.innerHTML = `<span>${data.total > 0 ? `❤️ ${data.total}` : '0'}</span>`;
+                                btn.style.background = data.total > 0 ? '#e74c3c' : '#7f8c8d';
+
+                                renderSubrowInteracoesContent(username, data, contentDiv, btn);
+                            } catch (err) {
+                                console.error(`[IG Tools] Erro ao carregar interações de @${username}:`, err);
+                                btn.disabled = false;
+                                btn.style.opacity = '1';
+                                contentDiv.innerHTML = `
+                                    <div style="text-align: center; padding: 15px; color: #e74c3c; font-size: 13px;">
+                                        Erro ao buscar interações: ${err.message || 'Falha na requisição'}.
+                                        <button class="btn-tentar-novamente" style="margin-left: 10px; background: #3498db; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px;">Tentar novamente</button>
+                                    </div>
+                                `;
+                                const retryBtn = contentDiv.querySelector('.btn-tentar-novamente');
+                                if (retryBtn) {
+                                    retryBtn.onclick = () => carregarInteracoesUsuario(username, explicitUid, contentDiv, btn, true);
+                                }
+                            }
+                        };
+
+                        const updateLocalState = async (users, dbStore) => {
+                            if (dbStore === 'following') {
+                                const lowerUsers = users.map(u => (typeof u === 'string' ? u : u.username).toLowerCase());
+                                seguindoList = seguindoList.filter(user => {
+                                    const uName = (typeof user === 'object' ? user?.username : user) || '';
+                                    return !lowerUsers.includes(uName.toLowerCase());
+                                });
+                                await dbHelper.saveCache('following', seguindoList);
+                                if (statusDiv) statusDiv.innerText = `Total: ${seguindoList.length} perfis seguidos.`;
+                            } else if (dbStore && dbStore !== 'exec') {
+                                if (!userListCache[dbStore]) userListCache[dbStore] = new Set();
+                                users.forEach(u => {
+                                    if (userListCache[dbStore].has(u)) userListCache[dbStore].delete(u);
+                                    else userListCache[dbStore].add(u);
+                                });
+                                await dbHelper.saveCache(dbStore, Array.from(userListCache[dbStore]));
+                            }
+                            userCategoryMap = await dbHelper.loadAllUserCategories();
+                            renderList(currentPage);
+                            selectedUsers.clear();
+                            if (document.getElementById('seguindoSelectedCount')) {
+                                document.getElementById('seguindoSelectedCount').innerText = `(0 selecionados)`;
+                            }
+                        };
+
+                        const getFollowersAndFollowing = async (username, existingId = null) => {
+                            let uid = existingId || getCachedUserId(username);
+                            if (!uid && typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                const item = seguindoList.find(x => (typeof x === 'object' ? x?.username : x)?.toLowerCase() === username.toLowerCase());
+                                if (item && typeof item === 'object') {
+                                    const foundId = item.id || item.pk || item.pk_id;
+                                    if (foundId) {
+                                        uid = String(foundId);
+                                        setCachedUserId(username, uid);
+                                    }
+                                }
+                            }
+                            if (!uid) {
+                                uid = await getUserId(username);
+                            }
+
+                            if (uid) {
+                                const graphqlStats = await executeGraphqlUserHoverCard(uid);
+                                if (graphqlStats) return graphqlStats;
+                            }
+
+                            const info = await safeFetchProfileInfo(username);
+                            if (info && info.data?.user && info.data.user.edge_followed_by?.count !== undefined) {
+                                return {
+                                    followers: info.data.user.edge_followed_by?.count || 0,
+                                    following: info.data.user.edge_follow?.count || 0
+                                };
+                            }
+                            return null;
+                        };
+
+                        document.getElementById('executarSeguindoBtn').onclick = () => abrirModalExecutarSeguindo(Array.from(selectedUsers), updateLocalState);
+                        document.getElementById('unfollowSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'unfollow', updateLocalState);
+                        document.getElementById('blockSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'block', updateLocalState);
+
+                        async function abrirModalExecutarSeguindo(selectedUsernames, updateCallback) {
+                            if (selectedUsernames.length === 0) return alert("Selecione pelo menos um usuário na tabela.");
+                            if (document.getElementById("executarModal")) return;
+
+                            const categories = await dbHelper.loadCategories();
+                            const execDiv = document.createElement("div");
+                            execDiv.id = "executarModal";
+                            execDiv.className = "submenu-modal";
+                            execDiv.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 400px; border: 1px solid #ccc; border-radius: 10px; z-index: 10002; max-height: 80vh; overflow-y: auto; padding: 20px;`;
+                            if (loadSettings().rgbBorder) execDiv.classList.add('rgb-border-effect');
+
+                            execDiv.innerHTML = `
+                                    <div class="modal-header" style="margin: -20px -20px 20px -20px;">
+                                        <span class="modal-title">Executar Ações (${selectedUsernames.length})</span>
+                                        <div class="modal-controls"><button id="fecharExecutarBtn">X</button></div>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 15px;">
+                                        <div class="toggle-item"><span>🔇 Silenciar</span><label class="switch"><input type="checkbox" id="execMuteToggle"><span class="slider"></span></label></div>
+                                        <div id="muteSubOptions" style="display: none; margin-left: 20px; flex-direction: column; gap: 10px; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 8px;">
+                                            <div style="display: flex; gap: 10px;">
+                                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="muteAction" value="mute" checked> Silenciar</label>
+                                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="muteAction" value="unmute"> Reativar Som</label>
+                                            </div>
+                                            <div class="toggle-item" style="background: transparent; border: none; padding: 0;"><span style="font-size: 14px;">Stories</span><label class="switch"><input type="checkbox" id="execMuteStories" checked><span class="slider"></span></label></div>
+                                            <div class="toggle-item" style="background: transparent; border: none; padding: 0;"><span style="font-size: 14px;">Publicações</span><label class="switch"><input type="checkbox" id="execMutePosts" checked><span class="slider"></span></label></div>
+                                        </div>
+                                        <div class="toggle-item"><span>🌟 Melhores Amigos</span><label class="switch"><input type="checkbox" id="execCFToggle"><span class="slider"></span></label></div>
+                                        <div id="cfSubOptions" style="display: none; margin-left: 20px; flex-direction: column; gap: 10px; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 8px;">
+                                            <div style="display: flex; gap: 10px;">
+                                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="cfAction" value="add" checked> Adicionar</label>
+                                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="cfAction" value="remove"> Remover</label>
+                                            </div>
+                                        </div>
+                                        <div class="toggle-item"><span>👁️ Ocultar Story</span><label class="switch"><input type="checkbox" id="execHideToggle"><span class="slider"></span></label></div>
+                                        <div id="hideSubOptions" style="display: none; margin-left: 20px; flex-direction: column; gap: 10px; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 8px;">
+                                            <div style="display: flex; gap: 10px;">
+                                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="hideAction" value="hide" checked> Ocultar</label>
+                                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="hideAction" value="unhide"> Desocultar</label>
+                                            </div>
+                                        </div>
+                                        <div class="toggle-item"><span>📁 Categorias</span><label class="switch"><input type="checkbox" id="execCatToggle"><span class="slider"></span></label></div>
+                                        <div id="catSubOptions" style="display: none; margin-left: 20px; flex-direction: column; gap: 10px; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 8px;">
+                                            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="catAction" value="add" checked> Adicionar</label>
+                                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="catAction" value="remove"> Remover</label>
+                                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><input type="radio" name="catAction" value="replace"> Substituir</label>
+                                            </div>
+                                            <div style="max-height: 150px; overflow-y: auto; border: 1px solid #eee; padding: 5px; border-radius: 5px;">
+                                            ${categories.length === 0 ? '<p style="font-size: 12px; color: gray;">Nenhuma categoria cadastrada.</p>' :
+                                    categories.map(cat => `<div class="toggle-item" style="background: transparent; border: none; padding: 0;"><div style="display: flex; align-items: center; gap: 5px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: ${cat.color};"></span><span style="font-size: 14px;">${cat.name}</span></div><label class="switch"><input type="checkbox" class="execCatItem" value="${cat.id}"><span class="slider"></span></label></div>`).join('')
+                                }
+                                            </div>
+                                        </div>
+                                        <button id="aplicarExecutarBtn" style="margin-top: 10px; background: #3498db; color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold;">Aplicar Ações</button>
+                                    </div>
+                                `;
+                            document.body.appendChild(execDiv);
+
+                            document.getElementById('execMuteToggle').onchange = (e) => document.getElementById('muteSubOptions').style.display = e.target.checked ? 'flex' : 'none';
+                            document.getElementById('execCFToggle').onchange = (e) => document.getElementById('cfSubOptions').style.display = e.target.checked ? 'flex' : 'none';
+                            document.getElementById('execHideToggle').onchange = (e) => document.getElementById('hideSubOptions').style.display = e.target.checked ? 'flex' : 'none';
+                            document.getElementById('execCatToggle').onchange = (e) => document.getElementById('catSubOptions').style.display = e.target.checked ? 'flex' : 'none';
+                            document.getElementById('fecharExecutarBtn').onclick = () => execDiv.remove();
+
+                            document.getElementById('aplicarExecutarBtn').onclick = async () => {
+                                const doMute = document.getElementById('execMuteToggle').checked;
+                                const doCF = document.getElementById('execCFToggle').checked;
+                                const doHide = document.getElementById('execHideToggle').checked;
+                                const doCat = document.getElementById('execCatToggle').checked;
+                                const cfAction = execDiv.querySelector('input[name="cfAction"]:checked')?.value || 'add';
+                                const muteAction = execDiv.querySelector('input[name="muteAction"]:checked')?.value || 'mute';
+                                const hideAction = execDiv.querySelector('input[name="hideAction"]:checked')?.value || 'hide';
+                                const catAction = execDiv.querySelector('input[name="catAction"]:checked')?.value || 'add';
+
+                                if (!doMute && !doCF && !doHide && !doCat) return alert("Selecione pelo menos uma ação.");
+
+                                // Mute options
+                                const muteType = (document.getElementById('execMuteStories').checked && document.getElementById('execMutePosts').checked) ? 'all' : (document.getElementById('execMuteStories').checked ? 'stories' : 'posts');
+                                const selectedCats = Array.from(execDiv.querySelectorAll('.execCatItem:checked')).map(i => i.value);
+                                execDiv.remove(); // Fecha o modal de seleção de ações
+
+                                toggleLoading(true);
+                                try { // Wrap the async operations in a try-finally to ensure loading is toggled off
+                                    // 1. Processar Categorias Primeiro (Rápido e Local)
+                                    if (doCat) {
+                                        const total = selectedUsernames.length;
+                                        const oldUserCategoryMap = new Map(userCategoryMap); // Captura estado anterior
+                                        let allUserCategories = await dbHelper.loadAllUserCategories();
+
+                                        for (let i = 0; i < total; i++) {
+                                            const u = selectedUsernames[i];
+                                            toggleLoading(true, (i / total) * 100);
+                                            const lowerUsername = u.toLowerCase();
+                                            const existing = allUserCategories.get(lowerUsername) || [];
+                                            let updated;
+
+                                            if (catAction === 'add') {
+                                                updated = Array.from(new Set([...existing, ...selectedCats]));
+                                            } else if (catAction === 'remove') {
+                                                updated = existing.filter(catId => !selectedCats.includes(catId));
+                                            } else if (catAction === 'replace') {
+                                                updated = selectedCats;
+                                            }
+                                            allUserCategories.set(lowerUsername, updated);
+                                        }
+                                        await dbHelper.saveAllUserCategories(allUserCategories); // Save the updated map
+                                        userCategoryMap = allUserCategories;
+
+                                        // 2. Sincronizar Ações Automáticas (Adicionar ou Remover conforme a mudança de categorias)
+                                        const toCF = []; const fromCF = [];
+                                        const toMute = []; const fromMute = [];
+                                        const toHide = []; const fromHide = [];
+
+                                        const catsMap = new Map(categories.map(c => [c.id, c]));
+
+                                        for (const u of selectedUsernames) {
+                                            const lowerU = u.toLowerCase();
+                                            const newCats = userCategoryMap.get(lowerU) || [];
+                                            const oldCats = oldUserCategoryMap.get(lowerU) || [];
+
+                                            // Determina o estado desejado baseado em TODAS as categorias atuais do usuário
+                                            let wantsCF = false; let wantsMute = false; let wantsHide = false;
+                                            newCats.forEach(cid => {
+                                                const cat = catsMap.get(cid);
+                                                if (cat?.actions) {
+                                                    if (cat.actions.cf) wantsCF = true;
+                                                    if (cat.actions.mute) wantsMute = true;
+                                                    if (cat.actions.hide) wantsHide = true;
+                                                }
+                                            });
+
+                                            const isCurrentlyCF = userListCache.closeFriends?.has(u);
+                                            const isCurrentlyMuted = userListCache.muted?.has(u);
+                                            const isCurrentlyHidden = userListCache.hiddenStory?.has(u);
+
+                                            // Sincronização Close Friends
+                                            if (wantsCF && !isCurrentlyCF) toCF.push(u);
+                                            else if (!wantsCF && isCurrentlyCF) {
+                                                // Só remove se ele estava em uma categoria que exigia CF antes
+                                                if (oldCats.some(cid => catsMap.get(cid)?.actions?.cf)) fromCF.push(u);
+                                            }
+
+                                            // Sincronização Mute
+                                            if (wantsMute && !isCurrentlyMuted) toMute.push(u);
+                                            else if (!wantsMute && isCurrentlyMuted) {
+                                                if (oldCats.some(cid => catsMap.get(cid)?.actions?.mute)) fromMute.push(u);
+                                            }
+
+                                            // Sincronização Ocultar Story
+                                            if (wantsHide && !isCurrentlyHidden) toHide.push(u);
+                                            else if (!wantsHide && isCurrentlyHidden) {
+                                                if (oldCats.some(cid => catsMap.get(cid)?.actions?.hide)) fromHide.push(u);
+                                            }
+                                        }
+
+                                        if (toCF.length || fromCF.length || toMute.length || fromMute.length || toHide.length || fromHide.length) {
+                                            showToast("⚡ Sincronizando ações automáticas das categorias...");
+
+                                            // Ações de Inclusão
+                                            if (toCF.length) {
+                                                if (loadSettings().useApi) {
+                                                    const uids = [];
+                                                    for (const u of toCF) {
+                                                        let uid = null;
+                                                        if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                                            const item = seguindoList.find(x => x?.username?.toLowerCase() === u.toLowerCase());
+                                                            if (item?.id) uid = String(item.id);
+                                                        }
+                                                        if (!uid) uid = getCachedUserId(u) || await getUserId(u);
+                                                        if (uid) uids.push(uid);
+                                                    }
+                                                    if (uids.length) {
+                                                        const res = await executeGraphqlSetBesties(uids, []);
+                                                        if (res.success) {
+                                                            if (!userListCache.closeFriends) userListCache.closeFriends = new Set();
+                                                            toCF.forEach(u => userListCache.closeFriends.add(u));
+                                                            await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
+                                                        }
+                                                    }
+                                                } else {
+                                                    await toggleListMembership(toCF, '/accounts/close_friends/', 'closeFriends', () => { });
+                                                }
+                                            }
+                                            if (toMute.length) await new Promise(resolve => unmuteUsers(toMute, resolve, 'mute', 'all'));
+                                            if (toHide.length) {
+                                                if (loadSettings().useApi) {
+                                                    for (const u of toHide) {
+                                                        let uid = getCachedUserId(u) || await getUserId(u);
+                                                        if (uid) {
+                                                            const res = await executeWbloksHideStory(uid, u, 'hide');
+                                                            if (res.success) {
+                                                                if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
+                                                                userListCache.hiddenStory.add(u);
+                                                            }
+                                                        }
+                                                    }
+                                                    if (userListCache.hiddenStory) await dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
+                                                } else {
+                                                    await toggleListMembership(toHide, '/accounts/hide_story_and_live_from/', 'hiddenStory', () => { });
+                                                }
+                                            }
+
+                                            // Ações de Remoção (Inversão)
+                                            if (fromCF.length) {
+                                                if (loadSettings().useApi) {
+                                                    const uids = [];
+                                                    for (const u of fromCF) {
+                                                        let uid = null;
+                                                        if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                                            const item = seguindoList.find(x => x?.username?.toLowerCase() === u.toLowerCase());
+                                                            if (item?.id) uid = String(item.id);
+                                                        }
+                                                        if (!uid) uid = getCachedUserId(u) || await getUserId(u);
+                                                        if (uid) uids.push(uid);
+                                                    }
+                                                    if (uids.length) {
+                                                        const res = await executeGraphqlSetBesties([], uids);
+                                                        if (res.success) {
+                                                            if (userListCache.closeFriends) fromCF.forEach(u => userListCache.closeFriends.delete(u));
+                                                            await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
+                                                        }
+                                                    }
+                                                } else {
+                                                    await toggleListMembership(fromCF, '/accounts/close_friends/', 'closeFriends', () => { });
+                                                }
+                                            }
+                                            if (fromMute.length) await new Promise(resolve => unmuteUsers(fromMute, resolve, 'unmute', 'all'));
+                                            if (fromHide.length) {
+                                                if (loadSettings().useApi) {
+                                                    for (const u of fromHide) {
+                                                        let uid = getCachedUserId(u) || await getUserId(u);
+                                                        if (uid) {
+                                                            const res = await executeWbloksHideStory(uid, u, 'unhide');
+                                                            if (res.success) {
+                                                                if (userListCache.hiddenStory) userListCache.hiddenStory.delete(u);
+                                                            }
+                                                        }
+                                                    }
+                                                    if (userListCache.hiddenStory) await dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
+                                                } else {
+                                                    await toggleListMembership(fromHide, '/accounts/hide_story_and_live_from/', 'hiddenStory', () => { });
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if (doMute) {
+                                        await new Promise(resolve => unmuteUsers(selectedUsernames, resolve, muteAction, muteType));
+                                        // userListCache.muted e mutedDetails já são atualizados dentro de unmuteUsers
+                                    }
+                                    if (doCF) {
+                                        if (loadSettings().useApi) {
+                                            toggleLoading(true, 0, `Aplicando Melhores Amigos (${cfAction === 'remove' ? 'Remover' : 'Adicionar'}) via API GraphQL...`);
+                                            const adds = [];
+                                            const removes = [];
+                                            const total = selectedUsernames.length;
+
+                                            for (let i = 0; i < total; i++) {
+                                                const u = selectedUsernames[i];
+                                                toggleLoading(true, (i / total) * 100, `Obtendo ID de ${u}...`);
+                                                let uid = null;
+                                                if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                                    const item = seguindoList.find(x => x?.username?.toLowerCase() === u.toLowerCase());
+                                                    if (item?.id) uid = String(item.id);
+                                                }
+                                                if (!uid) uid = getCachedUserId(u);
+                                                if (!uid) uid = await getUserId(u);
+
+                                                if (uid) {
+                                                    if (cfAction === 'remove') removes.push(uid);
+                                                    else adds.push(uid);
+                                                } else {
+                                                    console.warn(`[IG Tools Besties] Não foi possível encontrar o ID de ${u}`);
+                                                }
+                                            }
+
+                                            if (adds.length > 0 || removes.length > 0) {
+                                                toggleLoading(true, 90, "Enviando para o Instagram via API GraphQL...");
+                                                const res = await executeGraphqlSetBesties(adds, removes);
+                                                if (res.success) {
+                                                    if (!userListCache.closeFriends) userListCache.closeFriends = new Set();
+                                                    selectedUsernames.forEach(u => {
+                                                        if (cfAction === 'remove') userListCache.closeFriends.delete(u);
+                                                        else userListCache.closeFriends.add(u);
+                                                    });
+                                                    await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
+                                                    console.log(`[IG Tools] Melhores Amigos atualizados via GraphQL API com sucesso!`, { adds, removes });
+                                                    showToast(`🌟 Melhores Amigos: ${cfAction === 'remove' ? 'removido(s)' : 'adicionado(s)'} com sucesso!`);
+                                                } else {
+                                                    console.error("[IG Tools] Erro ao aplicar Melhores Amigos via GraphQL:", res);
+                                                    showToast("⚠️ Erro na resposta da API do Instagram. Veja o Console (F12).");
+                                                }
+                                            } else {
+                                                showToast("⚠️ Não foi possível identificar o ID do(s) usuário(s) selecionado(s).");
+                                            }
+                                        } else {
+                                            await toggleListMembership(selectedUsernames, '/accounts/close_friends/', 'closeFriends', () => { });
+                                        }
+                                    }
+                                    if (doHide) {
+                                        if (loadSettings().useApi) {
+                                            toggleLoading(true, 0, `Processando Ocultar Story (${hideAction === 'unhide' ? 'Desocultar' : 'Ocultar'})...`);
+                                            const total = selectedUsernames.length;
+                                            for (let i = 0; i < total; i++) {
+                                                const u = selectedUsernames[i];
+                                                toggleLoading(true, ((i + 1) / total) * 100, `Processando ${u}...`);
+                                                let uid = null;
+                                                if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                                    const item = seguindoList.find(x => x?.username?.toLowerCase() === u.toLowerCase());
+                                                    if (item?.id) uid = String(item.id);
+                                                }
+                                                if (!uid) uid = getCachedUserId(u);
+                                                if (!uid) uid = await getUserId(u);
+                                                if (uid) {
+                                                    const res = await executeWbloksHideStory(uid, u, hideAction);
+                                                    if (res.success) {
+                                                        if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
+                                                        if (hideAction === 'unhide') {
+                                                            userListCache.hiddenStory.delete(u);
+                                                        } else {
+                                                            userListCache.hiddenStory.add(u);
+                                                        }
+                                                        console.log(`[IG Tools HideStory] Usuário ${u} ${hideAction === 'unhide' ? 'desocultado' : 'ocultado'} com sucesso!`);
+                                                    } else {
+                                                        console.warn(`[IG Tools HideStory] Falha ao processar ${u}:`, res);
+                                                    }
+                                                } else {
+                                                    console.warn(`[IG Tools HideStory] ID não encontrado para ${u}`);
+                                                }
+                                                await new Promise(r => setTimeout(r, loadSettings().requestDelay || 400));
+                                            }
+                                            if (userListCache.hiddenStory) {
+                                                await dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
+                                            }
+                                            showToast(`👁️ Stories: ${hideAction === 'unhide' ? 'desocultado(s)' : 'ocultado(s)'} com sucesso!`);
+                                        } else {
+                                            await toggleListMembership(selectedUsernames, '/accounts/hide_story_and_live_from/', 'hiddenStory', () => { });
+                                        }
+                                    }
+                                    toggleLoading(true, 100);
+                                } finally { // Ensure loading is toggled off even if an error occurs
+                                    toggleLoading(false);
+                                }
+
+                                if (updateCallback) await updateCallback(selectedUsernames, 'exec');
+                                showToast("Ações concluídas!");
+                            };
+                        }
+
+                        document.getElementById('loadStatsSeguindoBtn').onclick = async () => {
+                            const btn = document.getElementById('loadStatsSeguindoBtn');
+                            btn.disabled = true;
+                            const originalText = btn.textContent;
+                            btn.textContent = 'Carregando...';
+
+                            for (let i = 0; i < currentPaginatedUsers.length; i++) {
+                                if (processoCancelado) break;
+                                const user = currentPaginatedUsers[i];
+
+                                btn.textContent = `Carregando (${i + 1}/${currentPaginatedUsers.length})...`;
+                                const stats = await getFollowersAndFollowing(user.username, user.id || user.pk);
+                                if (stats) {
+                                    user.followers = stats.followers;
+                                    user.following = stats.following;
+
+                                    const mainUser = seguindoList.find(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() === user.username.toLowerCase());
+                                    if (mainUser && typeof mainUser === 'object') {
+                                        mainUser.followers = stats.followers;
+                                        mainUser.following = stats.following;
+                                    }
+
+                                    // Atualiza a linha visual na tabela em tempo real
+                                    const tr = document.querySelector(`tr[data-username="${user.username}"]`);
+                                    if (tr) {
+                                        const tds = tr.querySelectorAll('td');
+                                        if (tds[4]) tds[4].textContent = stats.followers.toLocaleString();
+                                        if (tds[5]) tds[5].textContent = stats.following.toLocaleString();
+                                        if (tds[6]) {
+                                            if (stats.following > stats.followers) {
+                                                tds[6].textContent = 'Unfollow';
+                                                tds[6].style.cssText = 'color: #e74c3c; font-weight: bold; text-align: center; padding: 8px;';
+                                            } else {
+                                                tds[6].textContent = '-';
+                                                tds[6].style.cssText = 'text-align: center; padding: 8px;';
+                                            }
+                                        }
+
+                                        if (stats.isPrivate !== null && typeof privacyCache !== 'undefined') {
+                                            privacyCache.set(user.username.toLowerCase(), stats.isPrivate);
+                                            const badge = tr.querySelector('.seguindo-privacy-badge');
+                                            if (badge) {
+                                                badge.innerText = stats.isPrivate ? 'P' : 'A';
+                                                badge.style.cssText = `display: inline-flex; align-items: center; justify-content: center; padding: 2px 6px; font-size: 10px; font-weight: bold; border-radius: 4px; color: #ffffff; line-height: 1; background-color: ${stats.isPrivate ? '#e1306c' : '#28a745'};`;
+                                                badge.title = stats.isPrivate ? 'Perfil Privado' : 'Perfil Público';
+                                            }
+                                        }
+                                    }
+                                }
+                                await new Promise(r => setTimeout(r, 350));
+                            }
+                            await dbHelper.saveCache('following', seguindoList);
+                            btn.disabled = false;
+                            btn.textContent = originalText;
+                            renderList(currentPage);
+                        };
+
+                        renderList(currentPage);
+                    }
+                    carregarSeguindo();
+                }
+
+                function showUpdateOptionsModal() {
+                    const div = document.createElement("div");
+                    div.className = "submenu-modal";
+                    div.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; padding: 20px; border: 1px solid #ccc; border-radius: 10px; z-index: 2147483648; background: white; color: black; display: flex; flex-direction: column; gap: 10px;`;
+                    if (loadSettings().rgbBorder) div.classList.add('rgb-border-effect');
+
+                    div.innerHTML = `
+                            <h3 style="margin: 0 0 10px 0;">O que deseja atualizar?</h3>
+                            <label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="chkCloseFriends" checked> Melhores Amigos</label>
+                            <label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="chkHiddenStory" checked> Ocultar Stories</label>
+                            <label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="chkMuted" checked> Contas Silenciadas</label>
+                            <label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="chkFollowing" checked> Lista Seguindo</label>
+                            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                                <button id="btnUpdateSelected" style="flex: 1; padding: 8px; background: #0095f6; color: white; border: none; border-radius: 5px; cursor: pointer;">Atualizar</button>
+                                <button id="btnCancelUpdate" style="flex: 1; padding: 8px; background: #e74c3c; color: white; border: none; border-radius: 5px; cursor: pointer;">Cancelar</button>
+                            </div>
+                        `;
+                    document.body.appendChild(div);
+
+                    document.getElementById('btnCancelUpdate').onclick = () => div.remove();
+                    document.getElementById('btnUpdateSelected').onclick = () => {
+                        const options = {
+                            closeFriends: document.getElementById('chkCloseFriends').checked,
+                            hiddenStory: document.getElementById('chkHiddenStory').checked,
+                            muted: document.getElementById('chkMuted').checked,
+                            following: document.getElementById('chkFollowing').checked
+                        };
+                        div.remove();
+                        const seguindoModal = document.getElementById("seguindoModal");
+                        if (seguindoModal) seguindoModal.remove();
+                        iniciarProcessoSeguindo(options);
+                    };
+                }
+
+                function abrirModalConfiguracoes() {
+                    if (document.getElementById("settingsModal")) return;
+
+                    const div = document.createElement("div");
+                    div.id = "settingsModal";
+                    div.className = "submenu-modal";
+                    div.style.cssText = `
+                            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                            width: 90%; max-width: 350px; border: 1px solid #ccc;
+                            border-radius: 10px; z-index: 10001;
+                        `;
+                    if (loadSettings().rgbBorder) {
+                        div.classList.add('rgb-border-effect');
+                    }
+
+                    const settings = loadSettings();
+
+                    div.innerHTML = `
+                            <div class="modal-header">
+                                <span class="modal-title">
+                                    ${getText('settings')}
+                                    <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Ajuste a aparência, atalhos e parâmetros de funcionamento do script.</span></div>
+                                </span>
+                                <div class="modal-controls">
+                                    <button id="fecharSettingsBtn" title="Fechar">X</button>
+                                </div>
+                            </div>
+                            <div style="padding: 15px;">
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                            <div class="toggle-item">
+                                                <span>🌙 ${getText('darkMode')}</span>
+                                                <label class="switch"><input type="checkbox" id="settingsDarkModeToggle" ${settings.darkMode ? 'checked' : ''}><span class="slider"></span></label>
+                                            </div>
+                                            <div class="toggle-item">
+                                                <span>🌈 ${getText('rgbBorder')}</span>
+                                                <label class="switch"><input type="checkbox" id="settingsRgbBorderToggle" ${settings.rgbBorder ? 'checked' : ''}><span class="slider"></span></label>
+                                            </div>
+                                            <div class="toggle-item">
+                                                <span>👻 ${getText('anonymousStories')}</span>
+                                                <label class="switch"><input type="checkbox" id="settingsAnonymousStoriesToggle" ${settings.anonymousStories ? 'checked' : ''}><span class="slider"></span></label>
+                                            </div>
+                                            <div class="toggle-item">
+                                                <span>⚡ ${getText('useApi')}</span>
+                                                <label class="switch"><input type="checkbox" id="settingsUseApiToggle" ${settings.useApi ? 'checked' : ''}><span class="slider"></span></label>
+                                            </div>
+                                            <div class="toggle-item">
+                                                <span>👁️‍🗨️ ${getText('validateProfileStatus')}</span>
+                                                <label class="switch"><input type="checkbox" id="settingsValidateProfileToggle" ${settings.validateProfileStatus ? 'checked' : ''}><span class="slider"></span></label>
+                                            </div>
+                                            <div class="toggle-item">
+                                                <span>☁️ Google Drive</span>
+                                                <button id="googleLoginBtn" style="padding: 5px 10px; border-radius: 5px; cursor: pointer;">Login</button>
+                                            </div>
+                                    <button id="settingsVoiceBtn" class="menu-item-button">🎙️ Comandos de Voz</button>
+                                            <button id="settingsManageCategoriesBtn" class="menu-item-button">📁 Gerenciar Categorias</button>
+                                    <button id="settingsShortcutsBtn" class="menu-item-button">⌨️ ${getText('shortcuts')}</button>
+                                    <button id="settingsParamsBtn" class="menu-item-button">🔧 ${getText('parameters')}</button>
+                                    <button id="settingsLangBtn" class="menu-item-button">🌐 ${getText('language')}</button>
+                                </div>
+                            </div>
+                        `;
+                    document.body.appendChild(div);
+
+                    document.getElementById("fecharSettingsBtn").onclick = () => div.remove();
+
+                    document.getElementById("googleLoginBtn").onclick = () => googleAuth.login();
+
+                    document.getElementById("settingsDarkModeToggle").onchange = (e) => {
+                        toggleDarkMode(e.target.checked);
+                        saveSettings({ darkMode: e.target.checked });
+                    };
+
+                    document.getElementById("settingsRgbBorderToggle").onchange = (e) => {
+                        toggleRgbBorder(e.target.checked);
+                        saveSettings({ rgbBorder: e.target.checked });
+                    };
+
+                    document.getElementById("settingsAnonymousStoriesToggle").onchange = (e) => {
+                        toggleAnonymousStories(e.target.checked);
+                        saveSettings({ anonymousStories: e.target.checked });
+                        showToast(`Stories Anônimo: ${e.target.checked ? 'ON' : 'OFF'}`);
+                    };
+
+                    document.getElementById("settingsUseApiToggle").onchange = (e) => {
+                        toggleUseApi(e.target.checked);
+                        saveSettings({ useApi: e.target.checked });
+                        // Also update the API toggle in other modals if they are open
+                        const cfApiToggle = document.getElementById('closeFriendsUseApiToggle');
+                        if (cfApiToggle) cfApiToggle.checked = e.target.checked;
+                        const hsApiToggle = document.getElementById('hideStoryUseApiToggle');
+                        if (hsApiToggle) hsApiToggle.checked = e.target.checked;
+                        showToast(`Modo API: ${e.target.checked ? 'ON' : 'OFF'}`);
+                    };
+
+                    document.getElementById("settingsValidateProfileToggle").onchange = (e) => {
+                        saveSettings({ validateProfileStatus: e.target.checked });
+                        showToast(`Validação de Status: ${e.target.checked ? 'ON' : 'OFF'}`);
+                    };
+
+                    document.getElementById("settingsVoiceBtn").onclick = () => {
+                        div.remove();
+                        abrirModalComandosVoz();
+                    };
+
+                    document.getElementById("settingsManageCategoriesBtn").onclick = () => {
+                        div.remove();
+                        abrirModalGerenciarCategorias();
+                    };
+
+                    document.getElementById("settingsShortcutsBtn").onclick = () => {
+                        div.remove();
+                        abrirModalAtalhos();
+                    };
+
+                    document.getElementById("settingsParamsBtn").onclick = () => {
+                        div.remove(); // Fecha o modal de config para abrir o de parâmetros
+                        abrirModalParametros();
+                    };
+
+                    document.getElementById("settingsLangBtn").onclick = () => {
+                        div.remove();
+                        abrirModalIdioma();
+                    };
+                }
+
+                function abrirModalIdioma() {
+                    if (document.getElementById("langModal")) return;
+                    const div = document.createElement("div");
+                    div.id = "langModal";
+                    div.className = "submenu-modal";
+                    div.style.cssText = `
+                            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                            width: 90%; max-width: 300px; border: 1px solid #ccc;
+                            border-radius: 10px; z-index: 10001;
+                        `;
+                    if (loadSettings().rgbBorder) {
+                        div.classList.add('rgb-border-effect');
+                    }
+
+                    const languages = [
+                        { code: 'pt-BR', name: '🇧🇷 Português' },
+                        { code: 'en-US', name: '🇺🇸 English' },
+                        { code: 'es-ES', name: '🇪🇸 Español' },
+                        { code: 'fr-FR', name: '🇫🇷 Français' },
+                        { code: 'it-IT', name: '🇮🇹 Italiano' },
+                        { code: 'de-DE', name: '🇩🇪 Deutsch' }
+                    ];
+
+                    let html = `<div class="modal-header"><span class="modal-title">${getText('language')}</span><div class="modal-controls"><button id="fecharLangBtn">X</button></div></div><div style="padding: 15px; display: flex; flex-direction: column; gap: 10px;">`;
+                    languages.forEach(lang => { html += `<button class="menu-item-button lang-option" data-lang="${lang.code}">${lang.name}</button>`; });
+                    html += `</div>`;
+                    div.innerHTML = html;
+                    document.body.appendChild(div);
+
+                    document.getElementById("fecharLangBtn").onclick = () => div.remove();
+                    div.querySelectorAll('.lang-option').forEach(btn => {
+                        btn.onclick = () => { saveSettings({ language: btn.dataset.lang }); div.remove(); const oldMenu = document.querySelector('.assistive-menu'); if (oldMenu) oldMenu.remove(); };
+                    });
+                }
+
+                function renderShortcuts() {
+                    const list = document.getElementById('shortcuts-list');
+                    if (!list) return;
+
+                    const shortcuts = getShortcuts();
+                    list.innerHTML = '';
+
+                    if (shortcuts.length === 0) {
+                        list.innerHTML = '<p style="color: #8e8e8e; text-align: center;">Nenhum atalho configurado.</p>';
+                        return;
+                    }
+
+                    shortcuts.forEach((shortcut, index) => {
+                        const item = document.createElement('div');
+                        item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #efefef;';
+
+                        const keyText = formatShortcutForDisplay(shortcut);
+                        const actionText = shortcut.xpath
+                            ? `XPath: ${shortcut.xpath.substring(0, 25)}${shortcut.xpath.length > 25 ? '...' : ''}`
+                            : (shortcut.link ? `Link: ${shortcut.link.substring(0, 25)}${shortcut.link.length > 25 ? '...' : ''}` : 'Nenhuma ação definida');
+
+                        item.innerHTML = `
+                                <div>
+                                    <strong style="font-size: 16px;">${keyText}</strong>
+                                    <span style="font-size: 12px; color: #8e8e8e; margin-left: 10px;">${actionText}</span>
+                                </div>
+                                <button data-index="${index}" class="delete-shortcut-btn" style="background: #ed4956; color: white; border: none; border-radius: 5px; cursor: pointer; padding: 4px 8px;">Excluir</button>
+                            `;
+                        list.appendChild(item);
+                    });
+
+                    document.querySelectorAll('.delete-shortcut-btn').forEach(button => {
+                        button.onclick = (e) => {
+                            const indexToDelete = parseInt(e.target.dataset.index, 10);
+                            let currentShortcuts = getShortcuts();
+                            currentShortcuts.splice(indexToDelete, 1);
+                            saveShortcuts(currentShortcuts);
+                            renderShortcuts(); // Re-render a lista
+                        };
+                    });
+                }
+
+
+                function abrirModalComandosVoz() {
+                    if (document.getElementById("voiceCommandsModal")) return;
+
+                    const div = document.createElement("div");
+                    div.id = "voiceCommandsModal";
+                    div.className = "submenu-modal";
+                    div.style.cssText = `
+                            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                            width: 90%; max-width: 500px; border: 1px solid #ccc;
+                            border-radius: 10px; z-index: 10001; max-height: 90vh; overflow-y: auto;
+                        `;
+                    if (loadSettings().rgbBorder) {
+                        div.classList.add('rgb-border-effect');
+                    }
+
+                    const isListening = voiceControl.isListening;
+
+                    // Available actions mapping
+                    const availableActions = [
+                        { value: "downloadStory", label: "Baixar Story" },
+                        { value: "openSettings", label: "Abrir Configurações" },
+                        { value: "closeMenu", label: "Fechar Menu" },
+                        { value: "toggleReelsScroll", label: "Rolar Reels" },
+                        { value: "downloadReel", label: "Baixar Reel" },
+                        { value: "openCloseFriends", label: "Amigos Próximos" },
+                        { value: "openHideStory", label: "Ocultar Story" },
+                        { value: "openMuted", label: "Contas Silenciadas" },
+                        { value: "openNotFollowingBack", label: "Não Segue de Volta" },
+                        { value: "openFollowing", label: "Seguindo" },
+                        { value: "openBlocked", label: "Bloqueados" },
+                        { value: "analyzeReels", label: "Análise Reels" },
+                        { value: "openInteractions", label: "Interações" }
+                    ];
+
+                    div.innerHTML = `
+                            <div class="modal-header">
+                                <span class="modal-title">
+                                    Comandos de Voz
+                                    <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Controle o script usando sua voz.</span></div>
+                                </span>
+                                <div class="modal-controls">
+                                    <button id="fecharVoiceBtn" title="Fechar">X</button>
+                                </div>
+                            </div>
+                            <div style="padding: 20px;">
+                                <div style="margin-bottom: 20px; text-align: center;">
+                                    <button id="toggleVoiceBtn" style="background: ${isListening ? '#e74c3c' : '#2ecc71'}; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-size: 16px; font-weight: bold;">
+                                        ${isListening ? '🛑 Parar Escuta' : '🎙️ Iniciar Escuta'}
+                                    </button>
+                                    <p id="voiceStatusText" style="font-size: 12px; color: #666; margin-top: 5px;">Status: ${isListening ? 'Ouvindo...' : 'Parado'}</p>
+                                </div>
+
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                    <h3 style="font-size: 16px; margin: 0;">Lista de Comandos</h3>
+                                    <button id="addVoiceCommandBtn" style="background: #0095f6; color: white; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-weight: bold; font-size: 18px;">+</button>
+                                </div>
+
+                                <div id="voiceCommandForm" style="display: none; background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #dbdbdb;">
+                                    <h4 id="formTitle" style="margin-top: 0; margin-bottom: 10px; font-size: 14px;">Novo Comando</h4>
+                                    <input type="hidden" id="editIndex" value="-1">
+                                    <div style="margin-bottom: 10px;">
+                                        <label style="display: block; font-size: 12px; margin-bottom: 5px;">Frase de Comando:</label>
+                                        <input type="text" id="commandPhrase" placeholder="Ex: abrir menu" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; color: black;">
+                                    </div>
+                                    <div style="margin-bottom: 10px;">
+                                        <label style="display: block; font-size: 12px; margin-bottom: 5px;">Ação:</label>
+                                        <select id="commandAction" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; color: black;">
+                                            ${availableActions.map(a => `<option value="${a.value}">${a.label}</option>`).join('')}
+                                        </select>
+                                    </div>
+                                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                                        <button id="cancelCommandBtn" style="background: #ccc; color: black; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">Cancelar</button>
+                                        <button id="saveCommandBtn" style="background: #0095f6; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">Salvar</button>
+                                    </div>
+                                </div>
+
+                                <div id="voiceCommandsList" style="max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 5px;"></div>
+                            </div>
+                        `;
+                    document.body.appendChild(div);
+
+                    const formDiv = document.getElementById('voiceCommandForm');
+                    const phraseInput = document.getElementById('commandPhrase');
+                    const actionSelect = document.getElementById('commandAction');
+                    const editIndexInput = document.getElementById('editIndex');
+                    const formTitle = document.getElementById('formTitle');
+
+                    const renderList = () => {
+                        const list = document.getElementById('voiceCommandsList');
+                        list.innerHTML = '';
+                        if (voiceControl.commands.length === 0) {
+                            list.innerHTML = '<div style="padding: 15px; text-align: center; color: #888;">Nenhum comando configurado.</div>';
+                            return;
+                        }
+                        voiceControl.commands.forEach((cmd, index) => {
+                            const item = document.createElement('div');
+                            item.style.cssText = "padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;";
+
+                            const actionLabel = availableActions.find(a => a.value === cmd.action)?.label || cmd.action;
+
+                            item.innerHTML = `
+                                    <div>
+                                        <div style="font-weight: bold; color: #333;">"${cmd.phrase}"</div>
+                                        <div style="font-size: 12px; color: #888;">Ação: ${actionLabel}</div>
+                                    </div>
+                                    <div style="display: flex; gap: 5px;">
+                                        <button class="edit-voice-btn" data-index="${index}" style="background: #f39c12; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 12px;">✏️</button>
+                                        <button class="delete-voice-btn" data-index="${index}" style="background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 12px;">🗑️</button>
+                                    </div>
+                                `;
+                            list.appendChild(item);
+                        });
+
+                        document.querySelectorAll('.delete-voice-btn').forEach(btn => {
+                            btn.onclick = (e) => {
+                                const idx = parseInt(e.target.dataset.index);
+                                if (confirm('Excluir este comando?')) {
+                                    voiceControl.commands.splice(idx, 1);
+                                    voiceControl.saveCommands();
+                                    renderList();
+                                }
+                            };
+                        });
+
+                        document.querySelectorAll('.edit-voice-btn').forEach(btn => {
+                            btn.onclick = (e) => {
+                                const idx = parseInt(e.target.dataset.index);
+                                const cmd = voiceControl.commands[idx];
+                                phraseInput.value = cmd.phrase;
+                                actionSelect.value = cmd.action;
+                                editIndexInput.value = idx;
+                                formTitle.innerText = "Editar Comando";
+                                formDiv.style.display = 'block';
+                                phraseInput.focus();
+                            };
+                        });
+                    };
+
+                    renderList();
+
+                    document.getElementById("fecharVoiceBtn").onclick = () => div.remove();
+
+                    document.getElementById("toggleVoiceBtn").onclick = () => {
+                        const listening = voiceControl.toggle();
+                        const btn = document.getElementById("toggleVoiceBtn");
+                        const status = document.getElementById("voiceStatusText");
+
+                        if (listening) {
+                            btn.style.background = '#e74c3c';
+                            btn.innerText = '🛑 Parar Escuta';
+                            status.innerText = 'Status: Ouvindo...';
+                        } else {
+                            btn.style.background = '#2ecc71';
+                            btn.innerText = '🎙️ Iniciar Escuta';
+                            status.innerText = 'Status: Parado';
+                        }
+                    };
+
+                    document.getElementById("addVoiceCommandBtn").onclick = () => {
+                        phraseInput.value = '';
+                        actionSelect.selectedIndex = 0;
+                        editIndexInput.value = -1;
+                        formTitle.innerText = "Novo Comando";
+                        formDiv.style.display = 'block';
+                        phraseInput.focus();
+                    };
+
+                    document.getElementById("cancelCommandBtn").onclick = () => {
+                        formDiv.style.display = 'none';
+                    };
+
+                    document.getElementById("saveCommandBtn").onclick = () => {
+                        const phrase = phraseInput.value.trim().toLowerCase();
+                        const action = actionSelect.value;
+                        const idx = parseInt(editIndexInput.value);
+
+                        if (!phrase) return alert("Digite uma frase para o comando.");
+
+                        const newCmd = {
+                            phrase,
+                            action,
+                            description: availableActions.find(a => a.value === action)?.label
+                        };
+
+                        if (idx >= 0) {
+                            voiceControl.commands[idx] = newCmd;
+                        } else {
+                            if (voiceControl.commands.some(c => c.phrase === phrase)) {
+                                return alert("Já existe um comando com essa frase.");
+                            }
+                            voiceControl.commands.push(newCmd);
+                        }
+
+                        voiceControl.saveCommands();
+                        renderList();
+                        formDiv.style.display = 'none';
+                    };
+                }
+
+
+                function abrirModalAtalhos() {
+                    if (document.getElementById("shortcutsModal")) return;
+
+                    const div = document.createElement("div");
+                    div.id = "shortcutsModal";
+                    div.className = "submenu-modal";
+                    div.style.cssText = `
+                            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                            width: 90%; max-width: 500px; border: 1px solid #ccc;
+                            border-radius: 10px; z-index: 10001;
+                        `;
+                    if (loadSettings().rgbBorder) {
+                        div.classList.add('rgb-border-effect');
+                    }
+
+                    div.innerHTML = `
+                            <div class="modal-header">
+                                <span class="modal-title">
+                                    Configurar Atalhos
+                                    <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Crie atalhos de teclado para ações rápidas ou navegação.</span></div>
+                                </span>
+                                <div class="modal-controls">
+                                    <button id="fecharShortcutsBtn" title="Fechar">X</button>
+                                </div>
+                            </div>
+                            <div style="padding: 20px;">
+                                <form id="shortcut-form" style="display: flex; flex-direction: column; gap: 15px;">
+                                    <input type="text" id="shortcut-key" placeholder="Clique aqui e pressione as teclas do atalho" required readonly style="padding: 8px; color: black; border: 1px solid #ccc; border-radius: 5px; cursor: pointer; background: #fff;">
+
+                                    <div style="display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; background: #f8f9fa; border-radius: 8px; border: 1px solid #dbdbdb; font-size: 11px; color: black;">
+                                        <span style="width: 100%; font-weight: bold; margin-bottom: 2px;">Modo de Captura:</span>
+                                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="radio" name="captureType" value="xpath" checked> XPath Inteligente</label>
+                                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="radio" name="captureType" value="fullXpath"> XPath Full</label>
+                                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="radio" name="captureType" value="selector"> Seletor CSS</label>
+                                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="radio" name="captureType" value="html"> OuterHTML</label>
+                                    </div>
+
+                                    <div style="display:flex; gap:10px;">
+                                        <input type="text" id="shortcut-xpath" placeholder="O resultado aparecerá aqui após capturar..." style="flex:1; padding: 8px; color: black; border: 1px solid #ccc; border-radius: 5px;">
+                                        <button type="button" id="btnPickElement" style="background:#8e44ad; color:white; border:none; padding:8px 12px; border-radius:5px; cursor:pointer;" title="Selecionar elemento na página">🎯</button>
+                                    </div>
+                                    <input type="text" id="shortcut-link" placeholder="Link de Acesso (opcional)" style="padding: 8px; color: black; border: 1px solid #ccc; border-radius: 5px;">
+                                    <button type="submit" style="background:#0095f6;color:white;border:none;padding:10px;border-radius:5px;cursor:pointer;">Salvar Atalho</button>
+                                </form>
+                                <hr style="border: none; border-top: 1px solid #efefef; margin: 20px 0;">
+                                <h3 style="margin-bottom: 10px; font-size: 16px;">Atalhos Salvos</h3>
+                                <div id="shortcuts-list" style="max-height: 200px; overflow-y: auto;"></div>
+                            </div>
+                        `;
+                    document.body.appendChild(div);
+
+                    renderShortcuts();
+
+                    const keyInput = document.getElementById('shortcut-key');
+                    let capturedShortcut = null;
+
+                    const handleShortcutKeyDown = (e) => { // Make sure this is defined
+                        // Ignora se for apenas uma tecla modificadora
+                        if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
+                            return;
+                        }
+
+                        e.preventDefault();
+                        e.stopPropagation();
+
+                        capturedShortcut = {
+                            key: e.key.toLowerCase(),
+                            ctrlKey: e.ctrlKey,
+                            altKey: e.altKey,
+                            shiftKey: e.shiftKey,
+                        };
+
+                        keyInput.value = formatShortcutForDisplay(capturedShortcut);
+                        // Mantém o listener até o blur para permitir trocar a tecla
+                        keyInput.style.borderColor = '#ccc';
+                    };
+
+                    keyInput.addEventListener('focus', () => {
+                        keyInput.value = 'Pressione as teclas do atalho...';
+                        keyInput.style.borderColor = '#0095f6';
+                        // Usa 'true' para capturar o evento antes de outros listeners
+                        document.addEventListener('keydown', handleShortcutKeyDown, true);
+                    });
+
+                    keyInput.addEventListener('blur', () => {
+                        keyInput.style.borderColor = '#ccc';
+                        document.removeEventListener('keydown', handleShortcutKeyDown, true);
+                        if (keyInput.value === 'Pressione as teclas do atalho...') {
+                            keyInput.value = capturedShortcut ? formatShortcutForDisplay(capturedShortcut) : '';
+                        }
+                    });
+
+                    document.getElementById('btnPickElement').onclick = () => {
+                        const captureType = div.querySelector('input[name="captureType"]:checked').value;
+                        startElementPicker((target) => {
+                            let result = "";
+                            if (captureType === 'xpath') result = getFullXPath(target);
+                            else if (captureType === 'fullXpath') result = getAbsoluteXPath(target);
+                            else if (captureType === 'selector') result = getCssSelector(target);
+                            else if (captureType === 'html') result = target.outerHTML;
+
+                            document.getElementById('shortcut-xpath').value = result;
+                            showToast("✅ Capturado com sucesso!");
+                        });
+                    };
+
+                    document.getElementById("fecharShortcutsBtn").onclick = () => {
+                        document.removeEventListener('keydown', handleShortcutKeyDown, true);
+                        div.remove();
+                    };
+
+                    document.getElementById("shortcut-form").onsubmit = (e) => {
+                        e.preventDefault();
+                        const xpathInput = document.getElementById('shortcut-xpath');
+                        const linkInput = document.getElementById('shortcut-link');
+
+                        const xpath = xpathInput.value.trim();
+                        const link = linkInput.value.trim();
+
+                        if (!capturedShortcut || !capturedShortcut.key) {
+                            alert("Por favor, defina uma tecla de atalho válida.");
+                            return;
+                        }
+                        if (!xpath && !link) {
+                            alert("Você deve fornecer um XPath ou um Link.");
+                            return;
+                        }
+
+                        const newShortcut = { ...capturedShortcut, xpath, link };
+                        const shortcuts = getShortcuts();
+
+                        // Verifica se já existe um atalho com a mesma tecla
+                        const existingIndex = shortcuts.findIndex(s =>
+                            s.key.toLowerCase() === newShortcut.key.toLowerCase() &&
+                            !!s.ctrlKey === newShortcut.ctrlKey &&
+                            !!s.altKey === newShortcut.altKey &&
+                            !!s.shiftKey === newShortcut.shiftKey
+                        );
+                        if (existingIndex > -1) {
+                            if (confirm(`Já existe um atalho para '${formatShortcutForDisplay(newShortcut)}'. Deseja substituí-lo?`)) {
+                                shortcuts[existingIndex] = newShortcut;
+                            } else {
+                                return;
+                            }
+                        } else {
+                            shortcuts.push(newShortcut);
+                        }
+
+                        saveShortcuts(shortcuts);
+                        renderShortcuts();
+
+                        // Limpa o formulário
+                        keyInput.value = '';
+                        capturedShortcut = null;
+                        xpathInput.value = '';
+                        linkInput.value = '';
+                    };
+                }
+
+                function abrirModalParametros() {
+                    if (document.getElementById("paramsModal")) return;
+
+                    const div = document.createElement("div");
+                    div.id = "paramsModal";
+                    div.className = "submenu-modal";
+                    div.style.cssText = `
+                            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                            width: 90%; max-width: 500px; border: 1px solid #ccc;
+                            border-radius: 10px; z-index: 10001; max-height: 90vh; overflow-y: auto;
+                        `;
+                    if (loadSettings().rgbBorder) {
+                        div.classList.add('rgb-border-effect');
+                    }
+
+                    const settings = loadSettings();
+
+                    div.innerHTML = `
+                            <div class="modal-header">
+                                <span class="modal-title">
+                                    Parâmetros do Script
+                                    <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Ajuste delays e limites para evitar bloqueios do Instagram.</span></div>
+                                </span>
+                                <div class="modal-controls">
+                                    <button id="fecharParamsBtn" title="Fechar">X</button>
+                                </div>
+                            </div>
+                            <div style="padding: 20px; display: flex; flex-direction: column; gap: 15px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <label for="unfollowDelayInput">Atraso para Unfollow (ms)</label>
+                                    <input type="number" id="unfollowDelayInput" value="${settings.unfollowDelay}" style="width: 80px; color: black;">
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <label for="requestDelayInput">Intervalo Requisições (ms)</label>
+                                    <input type="number" id="requestDelayInput" value="${settings.requestDelay || 250}" style="width: 80px; color: black;">
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <label for="requestBatchSizeInput">Itens por Requisição (API)</label>
+                                    <input type="number" id="requestBatchSizeInput" value="${settings.requestBatchSize || 50}" style="width: 80px; color: black;">
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <label for="maxRequestsInput" title="0 para ilimitado">Limite Total de Requisições</label>
+                                    <input type="number" id="maxRequestsInput" value="${settings.maxRequests || 0}" style="width: 80px; color: black;">
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <label for="itemsPerPageInput">Itens por Página nas Tabelas</label>
+                                    <input type="number" id="itemsPerPageInput" value="${settings.itemsPerPage}" style="width: 80px; color: black;">
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <label for="languageSelect">Idioma</label>
+                                    <select id="languageSelect" style="width: 120px; color: black;">
+                                        <option value="pt-BR" ${settings.language === 'pt-BR' ? 'selected' : ''}>🇧🇷 Português</option>
+                                        <option value="en-US" ${settings.language === 'en-US' ? 'selected' : ''}>🇺🇸 English</option>
+                                    </select>
+                                </div>
+
+                                <hr style="border: 1px solid #eee; width: 100%;">
+
+                                <h3 style="margin: 0; font-size: 16px;">Notificações de Unfollow por E-mail</h3>
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <label for="unfollowEmailEnabledToggle">Ativar Envio de E-mail</label>
+                                        <label class="switch"><input type="checkbox" id="unfollowEmailEnabledToggle" ${settings.unfollowEmailEnabled ? 'checked' : ''}><span class="slider"></span></label>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                                        <label for="unfollowEmailRecipientInput">E-mail Destinatário</label>
+                                        <input type="email" id="unfollowEmailRecipientInput" value="${settings.unfollowEmailRecipient || ''}" placeholder="seu-email@gmail.com" style="width: 100%; padding: 8px; color: black; box-sizing: border-box; border: 1px solid #ccc; border-radius: 5px;">
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                                        <label for="unfollowEmailWebhookInput">URL Webhook Google Apps Script</label>
+                                        <input type="text" id="unfollowEmailWebhookInput" value="${settings.unfollowEmailWebhookUrl || ''}" placeholder="https://script.google.com/macros/s/.../exec" style="width: 100%; padding: 8px; color: black; box-sizing: border-box; border: 1px solid #ccc; border-radius: 5px;">
+                                    </div>
+                                    <button id="testUnfollowEmailBtn" style="background: #27ae60; color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 5px; transition: background 0.2s;">📧 Testar Envio (Enviar E-mail de Teste)</button>
+                                </div>
+
+                                <hr style="border: 1px solid #eee; width: 100%;">
+
+                                <h3 style="margin: 0; font-size: 16px;">Gerenciamento de Banco de Dados (IndexedDB)</h3>
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <select id="dbStoreSelect" style="padding: 5px; color: black;">
+                                        <option value="">Carregando tabelas...</option>
+                                    </select>
+                                    <div style="display: flex; gap: 10px;">
+                                        <button id="btnExportDB" style="flex: 1; background: #2ecc71; color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer;">Baixar .csv</button>
+                                        <button id="btnClearDB" style="flex: 1; background: #e74c3c; color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer;">Limpar Tabela</button>
+                                    </div>
+                                </div>
+
+                                <hr style="border: 1px solid #eee; width: 100%;">
+
+                                <button id="saveParamsBtn" style="background:#0095f6;color:white;border:none;padding:10px;border-radius:5px;cursor:pointer;">Salvar e Fechar</button>
+                            </div>
+                        `;
+                    document.body.appendChild(div);
+
+                    // Popula o Select com as tabelas do DB
+                    dbHelper.openDB().then(db => {
+                        const select = document.getElementById('dbStoreSelect'); // db is the _cache object here
+                        select.innerHTML = '<option value="">Selecione uma tabela...</option>';
+                        const storeNames = Object.keys(db); // No script3, o db carregado é o objeto JSON do Drive
+                        storeNames.forEach(name => {
+                            const option = document.createElement('option');
+                            option.value = name;
+                            option.innerText = name;
+                            select.appendChild(option);
+                        });
+                    });
+
+                    document.getElementById("fecharParamsBtn").onclick = () => div.remove();
+
+                    document.getElementById("testUnfollowEmailBtn").onclick = async () => {
+                        const recipient = document.getElementById("unfollowEmailRecipientInput").value.trim();
+                        const webhookUrl = document.getElementById("unfollowEmailWebhookInput").value.trim();
+                        if (!recipient || !webhookUrl) {
+                            alert("Por favor, preencha o E-mail Destinatário e a URL do Webhook antes de testar.");
+                            return;
+                        }
+
+                        const btn = document.getElementById("testUnfollowEmailBtn");
+                        const originalText = btn.innerText;
+                        btn.innerText = "⏳ Enviando...";
+                        btn.disabled = true;
+
+                        try {
+                            const testUnfollowers = [{ username: 'teste_alerta', photoUrl: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' }];
+                            await sendUnfollowEmailNotification(testUnfollowers, recipient, webhookUrl);
+                            alert("E-mail de teste enviado com sucesso! Verifique a sua caixa de entrada.");
+                        } catch (err) {
+                            alert("Erro ao enviar e-mail de teste: " + err);
+                        } finally {
+                            btn.innerText = originalText;
+                            btn.disabled = false;
+                        }
+                    };
+
+                    document.getElementById("saveParamsBtn").onclick = () => {
+                        const newSettings = {
+                            unfollowDelay: parseInt(document.getElementById("unfollowDelayInput").value, 10),
+                            requestDelay: parseInt(document.getElementById("requestDelayInput").value, 10),
+                            requestBatchSize: parseInt(document.getElementById("requestBatchSizeInput").value, 10),
+                            maxRequests: parseInt(document.getElementById("maxRequestsInput").value, 10),
+                            itemsPerPage: parseInt(document.getElementById("itemsPerPageInput").value, 10),
+                            language: document.getElementById("languageSelect").value,
+                            unfollowEmailEnabled: document.getElementById("unfollowEmailEnabledToggle").checked,
+                            unfollowEmailRecipient: document.getElementById("unfollowEmailRecipientInput").value.trim(),
+                            unfollowEmailWebhookUrl: document.getElementById("unfollowEmailWebhookInput").value.trim()
+                        };
+                        saveSettings(newSettings);
+                        alert("Parâmetros salvos!");
+                        div.remove();
+                    };
+
+                    document.getElementById("btnClearDB").onclick = async () => {
+                        const storeName = document.getElementById('dbStoreSelect').value;
+                        if (!storeName) return alert("Selecione uma tabela.");
+                        if (confirm(`Tem certeza que deseja limpar a tabela '${storeName}'? Isso não pode ser desfeito.`)) { // Use dbHelper.clearCache
+                            await dbHelper.clearCache(storeName);
+                            alert(`Tabela '${storeName}' limpa com sucesso.`);
+                            div.remove(); abrirModalParametros(); // Recarrega
+                        }
+                    };
+
+                    document.getElementById("btnExportDB").onclick = async () => {
+                        const storeName = document.getElementById('dbStoreSelect').value;
+                        if (!storeName) return alert("Selecione uma tabela.");
+
+                        await dbHelper.openDB(); // Ensure cache is loaded
+                        const result = dbHelper._cache[storeName];
+                        if (!result || (Array.isArray(result) && result.length === 0)) return alert("Tabela vazia.");
+
+                        const dataToExport = Array.isArray(result) ? result : [result];
+                        const firstItem = dataToExport[0];
+                        const keys = typeof firstItem === 'object' ? Object.keys(firstItem) : ['value'];
+
+                        const csvContent = [ // Correct CSV generation
+                            keys.join(','),
+                            ...dataToExport.map(row => keys.map(k => {
+                                let val = typeof row === 'object' ? row[k] : row;
+                                return `"${String(val || '').replace(/"/g, '""')}"`;
+                            }).join(','))
+                        ].join('\n');
+
+                        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement("a");
+                        link.href = url;
+                        link.download = `${storeName}_gdrive_backup.csv`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    };
+                }
+
+                async function abrirModalGerenciarCategorias() {
+                    if (document.getElementById("manageCategoriesModal")) return;
+
+                    const div = document.createElement("div");
+                    div.id = "manageCategoriesModal";
+                    div.className = "submenu-modal";
+                    div.style.cssText = `
+                            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                            width: 90%; max-width: 400px; border: 1px solid #ccc;
+                            border-radius: 10px; z-index: 10002; max-height: 80vh; overflow-y: auto;
+                        `;
+                    if (loadSettings().rgbBorder) div.classList.add('rgb-border-effect');
+
+                    const render = async () => {
+                        const categories = await dbHelper.loadCategories();
+                        let html = `
+                                <div class="modal-header">
+                                    <span class="modal-title">Gerenciar Categorias</span>
+                                    <div class="modal-controls"><button id="fecharCategoriasBtn" title="Fechar">X</button></div>
+                                </div>
+                                <div style="padding: 20px;">
+                                    <div style="margin-bottom: 20px;">
+                                        <h4 style="margin:0 0 10px 0;">Nova Categoria</h4>
+                                        <div style="display:flex; flex-direction:column; gap: 10px;">
+                                            <div style="display:flex; gap: 10px;">
+                                                <input type="text" id="newCategoryName" placeholder="Nome da Categoria" style="flex: 1; padding: 8px; color: black;">
+                                                <input type="color" id="newCategoryColor" value="#3498db" style="padding: 0; border: none; background: transparent; width: 40px; height: 40px; cursor: pointer;">
+                                            </div>
+                                            <div class="auto-actions-box">
+                                                <span style="width: 100%; font-weight: bold; margin-bottom: 2px;">Ações Automáticas:</span>
+                                                <div style="display:flex; align-items:center; gap:8px;">
+                                                    <span>🌟 Amigos Próximos</span><label class="switch"><input type="checkbox" id="newCatActionCF"><span class="slider"></span></label>
+                                                </div>
+                                                <div style="display:flex; align-items:center; gap:8px;">
+                                                    <span>🔇 Silenciar</span><label class="switch"><input type="checkbox" id="newCatActionMute"><span class="slider"></span></label>
+                                                </div>
+                                                <div style="display:flex; align-items:center; gap:8px;">
+                                                    <span>👁️ Ocultar Story</span><label class="switch"><input type="checkbox" id="newCatActionHide"><span class="slider"></span></label>
+                                                </div>
+                                            </div>
+                                            <button id="addCategoryBtn" style="padding: 8px 12px; background: #2ecc71; color: white; border: none; border-radius: 5px; font-weight: bold;">Adicionar</button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h4 style="margin:0 0 10px 0;">Categorias Existentes</h4>
+                                        <div id="categoriesList" style="display: flex; flex-direction: column; gap: 8px;">
+                                            ${categories.length === 0 ? '<p style="color: #888;">Nenhuma categoria criada.</p>' :
+                                categories.map(cat => `
+                                                <div class="category-item-container" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-radius: 5px;">
+                                                    <div>
+                                                        <span style="display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: ${cat.color}; margin-right: 8px; vertical-align: middle;"></span>
+                                                        <span style="font-weight: bold;">${cat.name}</span>
+                                                        <span style="font-size: 10px; color: #888; margin-left: 5px;" title="Ações Automáticas">
+                                                            ${cat.actions?.cf ? '🌟' : ''} ${cat.actions?.mute ? '🔇' : ''} ${cat.actions?.hide ? '👁️' : ''}
+                                                        </span>
+                                                    </div>
+                                                    <div style="display: flex; gap: 5px;">
+                                                        <button class="edit-category-btn" data-id="${cat.id}" style="background: #f39c12; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; line-height: 24px;" title="Editar">✎</button>
+                                                        <button class="delete-category-btn" data-id="${cat.id}" style="background: #e74c3c; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; line-height: 24px;" title="Excluir">X</button>
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        div.innerHTML = html;
+
+                        document.getElementById("fecharCategoriasBtn").onclick = () => div.remove();
+
+                        document.getElementById("addCategoryBtn").onclick = async () => {
+                            const nameInput = document.getElementById("newCategoryName");
+                            const colorInput = document.getElementById("newCategoryColor");
+                            const name = nameInput.value.trim();
+                            const categories = await dbHelper.loadCategories(); // Reload categories to check for duplicates
+                            if (!name) return alert("O nome da categoria não pode ser vazio.");
+
+                            await dbHelper.saveCategory({
+                                id: `cat_${Date.now()}`,
+                                name: name,
+                                color: colorInput.value,
+                                actions: {
+                                    cf: document.getElementById('newCatActionCF').checked,
+                                    mute: document.getElementById('newCatActionMute').checked,
+                                    hide: document.getElementById('newCatActionHide').checked
+                                }
+                            });
+                            nameInput.value = ''; // Clear input after adding
+                            render(); // Re-render the modal content
+                        };
+
+                        div.querySelectorAll('.edit-category-btn').forEach(btn => {
+                            btn.onclick = async (e) => {
+                                const id = e.target.dataset.id;
+                                const categories = await dbHelper.loadCategories();
+                                const cat = categories.find(c => c.id === id);
+                                if (!cat) return;
+
+                                const nameInput = document.getElementById("newCategoryName");
+                                const colorInput = document.getElementById("newCategoryColor");
+                                const cfCheck = document.getElementById('newCatActionCF');
+                                const muteCheck = document.getElementById('newCatActionMute');
+                                const hideCheck = document.getElementById('newCatActionHide');
+                                const addBtn = document.getElementById('addCategoryBtn');
+
+                                nameInput.value = cat.name;
+                                colorInput.value = cat.color;
+                                cfCheck.checked = !!cat.actions?.cf;
+                                muteCheck.checked = !!cat.actions?.mute;
+                                hideCheck.checked = !!cat.actions?.hide;
+
+                                addBtn.innerText = "Salvar Alterações";
+                                addBtn.style.background = "#3498db";
+
+                                const originalOnclick = addBtn.onclick;
+                                addBtn.onclick = async () => {
+                                    await dbHelper.saveCategory({
+                                        id: id,
+                                        name: nameInput.value.trim(),
+                                        color: colorInput.value,
+                                        actions: { cf: cfCheck.checked, mute: muteCheck.checked, hide: hideCheck.checked }
+                                    });
+                                    nameInput.value = ''; addBtn.innerText = "Adicionar"; addBtn.style.background = "#2ecc71";
+                                    cfCheck.checked = false; muteCheck.checked = false; hideCheck.checked = false;
+                                    addBtn.onclick = originalOnclick;
+                                    render();
+                                };
+                            };
+                        });
+
+                        div.querySelectorAll('.delete-category-btn').forEach(btn => {
+                            btn.onclick = async (e) => {
+                                const catId = e.target.dataset.id;
+                                if (confirm("Tem certeza que deseja excluir esta categoria? Ela será removida de todos os usuários.")) {
+                                    await dbHelper.deleteCategory(catId);
+                                    render();
+                                }
+                            };
+                        });
+                    };
+
+                    document.body.appendChild(div);
+                    await render();
+                }
+
+                async function abrirModalAdicionarACategoria(usernames) {
+                    if (usernames.length === 0) {
+                        return alert("Nenhum usuário selecionado.");
+                    }
+                    if (document.getElementById("addToCategoryModal")) return;
+
+                    const categories = await dbHelper.loadCategories();
+                    if (categories.length === 0) {
+                        return alert("Nenhuma categoria criada. Crie categorias em 'Gerenciar Categorias' primeiro.");
+                    }
+
+                    const div = document.createElement("div");
+                    div.id = "addToCategoryModal";
+                    div.className = "submenu-modal";
+                    div.style.cssText = `
+                            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                            width: 90%; max-width: 400px; border: 1px solid #ccc;
+                            border-radius: 10px; z-index: 10002;
+                        `;
+                    if (loadSettings().rgbBorder) div.classList.add('rgb-border-effect');
+
+                    let html = `
+                            <div class="modal-header">
+                                <span class="modal-title">Gerenciar Categorias para ${usernames.length} usuário(s)</span>
+                                <div class="modal-controls"><button id="fecharAddToCatBtn" title="Fechar">X</button></div>
+                            </div>
+                            <div style="padding: 20px;">
+                                <p style="margin-top: 0;">Selecione as categorias:</p>
+                                <div id="categoryChecklist" style="display: flex; flex-direction: column; gap: 10px; max-height: 200px; overflow-y: auto; margin-bottom: 20px;">
+                                    ${categories.map(cat => `
+                                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                            <input type="checkbox" class="category-checkbox" value="${cat.id}">
+                                            <span style="display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: ${cat.color};"></span>
+                                            <span>${cat.name}</span>
+                                        </label>
+                                    `).join('')}
+                                </div>
+                                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                                    <button id="cancelAddToCatBtn" style="background: #ccc; color: black; border: none; padding: 8px 16px; border-radius: 5px;">Cancelar</button>
+                                    <button id="removeUserCategoriesBtn" style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 5px;">Remover</button>
+                                    <button id="addUserCategoriesBtn" style="background: #0095f6; color: white; border: none; padding: 8px 16px; border-radius: 5px;">Adicionar</button>
+                                </div>
+                            </div>
+                        `;
+                    div.innerHTML = html;
+                    document.body.appendChild(div);
+
+                    const close = () => div.remove();
+                    document.getElementById("fecharAddToCatBtn").onclick = close;
+                    document.getElementById("cancelAddToCatBtn").onclick = close;
+
+                    document.getElementById("addUserCategoriesBtn").onclick = async () => {
+                        const selectedCategoryIds = Array.from(div.querySelectorAll('.category-checkbox:checked')).map(cb => cb.value);
+
+                        const allUserCategories = await dbHelper.loadAllUserCategories();
+
+                        toggleLoading(true, 0);
+                        for (const username of usernames) {
+                            const existingCategories = allUserCategories.get(username.toLowerCase()) || [];
+                            const newCategories = new Set([...existingCategories, ...selectedCategoryIds]);
+                            allUserCategories.set(username.toLowerCase(), Array.from(newCategories));
+                        }
+                        await dbHelper.saveAllUserCategories(allUserCategories);
+
+                        showToast(`✅ ${usernames.length} usuário(s) atualizados com sucesso!`);
+                        close();
+                        // Recarrega o modal de "Seguindo" para refletir as mudanças
+                        const seguindoModal = document.getElementById("seguindoModal");
+                        if (seguindoModal) {
+                            seguindoModal.remove();
+                            setTimeout(() => iniciarProcessoSeguindo(), 0);
+                        }
+                    };
+
+                    document.getElementById("removeUserCategoriesBtn").onclick = async () => {
+                        const selectedCategoryIds = Array.from(div.querySelectorAll('.category-checkbox:checked')).map(cb => cb.value);
+                        const allUserCategories = await dbHelper.loadAllUserCategories();
+
+                        toggleLoading(true, 0);
+                        for (const username of usernames) {
+                            const existingCategories = allUserCategories.get(username.toLowerCase()) || [];
+                            const newCategories = existingCategories.filter(id => !selectedCategoryIds.includes(id));
+                            allUserCategories.set(username.toLowerCase(), newCategories);
+                        }
+                        await dbHelper.saveAllUserCategories(allUserCategories);
+                        showToast(`✅ Categorias removidas de ${usernames.length} usuário(s)!`);
+                        close();
+                        // Recarrega o modal de "Seguindo" para refletir as mudanças
+                        const seguindoModal = document.getElementById("seguindoModal");
+                        if (seguindoModal) {
+                            seguindoModal.remove();
+                            // Adia a chamada para o próximo ciclo de eventos para garantir que o DOM seja atualizado
+                            // antes da verificação de existência do modal em iniciarProcessoSeguindo().
+                            setTimeout(() => iniciarProcessoSeguindo(), 0);
+                            toggleLoading(false);
+                        }
+                    };
+                }
+
+                // Adiciona a classe RGB em novos modais
+                const originalAppendChild = document.body.appendChild;
+                document.body.appendChild = function (node) {
+                    if (node.classList && (node.classList.contains('submenu-modal') || node.classList.contains('assistive-menu')) && loadSettings().rgbBorder) {
+                        node.classList.add('rgb-border-effect');
+                    }
+                    return originalAppendChild.apply(this, arguments);
+                };
+
+                // --- LÓGICA PARA O MENU DE REELS ---
+
+                function abrirModalReels() {
+                    if (document.getElementById("reelsSubmenuModal")) return;
+
+                    toggleLoading(true, null, "Carregando menu de Reels...");
+                    const div = document.createElement("div");
+                    div.id = "reelsSubmenuModal";
+                    div.className = "submenu-modal";
+                    div.style.cssText = `
+                            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                            width: 90%; max-width: 400px; border: 1px solid #ccc;
+                            border-radius: 10px; padding: 20px; z-index: 10000;
+                        `;
+                    div.innerHTML = `
+                            <div class="modal-header">
+                                <span class="modal-title">
+                                    Menu de Reels
+                                    <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Ferramentas para Reels: Download, Análise de Desempenho e Rolagem Automática.</span></div>
+                                </span>
+                                <div class="modal-controls">
+                                    <button id="fecharReelsSubmenuBtn" title="Fechar">X</button>
+                                </div>
+                            </div>
+                            <div style="padding: 15px;">
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <button id="analiseReelsBtn" class="menu-item-button">📊 Análise de Desempenho</button>
+                                <button id="baixarReelAtualBtn" class="menu-item-button">⬇️ Baixar Reel Atual</button>
+                                <button id="copiarLegendaReelBtn" class="menu-item-button">📋 Copiar Legenda</button>
+                                <button id="rolagemReelsBtn" class="menu-item-button">▶️ Rolagem Automática</button>
+                            </div>
+                        `;
+                    toggleLoading(false);
+                    document.body.appendChild(div);
+
+                    document.getElementById("fecharReelsSubmenuBtn").onclick = () => div.remove();
+                    document.getElementById("analiseReelsBtn").onclick = () => {
+                        div.remove();
+                        iniciarAnaliseReels();
+                    };
+                    document.getElementById("baixarReelAtualBtn").onclick = () => {
+                        baixarReelAtual();
+                    };
+                    document.getElementById("rolagemReelsBtn").onclick = () => {
+                        toggleRolagemAutomaticaReels();
+                    };
+                }
+
+                function toggleRolagemAutomaticaReels() {
+                    if (!window.location.pathname.startsWith('/reels/')) {
+                        alert("Esta função só pode ser usada na página de Reels.");
+                        return;
+                    }
+
+                    isReelsScrolling = !isReelsScrolling;
+                    const reelsModal = document.getElementById("reelsSubmenuModal");
+                    const scrollBtn = reelsModal ? reelsModal.querySelector("#rolagemReelsBtn") : null;
+
+                    if (isReelsScrolling) {
+                        console.log("Iniciando rolagem automática de Reels.");
+                        if (scrollBtn) scrollBtn.innerHTML = "⏸️ Parar Rolagem";
+                        startReelsAutoScroll();
+                    } else {
+                        console.log("Parando rolagem automática de Reels.");
+                        if (scrollBtn) scrollBtn.innerHTML = "▶️ Rolagem Automática";
+                        stopReelsAutoScroll();
+                    }
+                }
+
+                function stopReelsAutoScroll() {
+                    isReelsScrolling = false;
+                    // Remove o listener de qualquer vídeo que possa tê-lo
+                    document.querySelectorAll('video[data-reels-scroller="true"]').forEach(video => {
+                        if (video._timeUpdateListener) {
+                            video.removeEventListener('timeupdate', video._timeUpdateListener);
+                        }
+                        video.removeAttribute('data-reels-scroller');
+                    });
+                    if (reelsScrollInterval) {
+                        clearTimeout(reelsScrollInterval); // Limpa o timeout se houver
+                        reelsScrollInterval = null;
+                    }
+                    console.log("Rolagem automática de Reels parada.");
+                }
+
+                function startReelsAutoScroll() {
+                    if (!isReelsScrolling) return;
+
+                    // Encontra o vídeo que está visível na tela
+                    const visibleVideo = Array.from(document.querySelectorAll('video')).find(v => {
+                        const rect = v.getBoundingClientRect();
+                        return rect.top >= 0 && rect.bottom <= window.innerHeight && v.readyState > 2;
+                    });
+
+                    // Se encontrou um vídeo e ele ainda não tem nosso listener
+                    if (visibleVideo && !visibleVideo.hasAttribute('data-reels-scroller')) {
+                        visibleVideo.setAttribute('data-reels-scroller', 'true');
+
+                        const timeUpdateListener = () => {
+                            // Verifica se o vídeo está perto do fim (últimos 700ms)
+                            if (visibleVideo.duration - visibleVideo.currentTime <= 0.7) {
+                                console.log("Vídeo quase no fim, rolando para o próximo.");
+
+                                // Remove o listener para não disparar múltiplas vezes
+                                visibleVideo.removeEventListener('timeupdate', timeUpdateListener);
+
+                                // Lógica para encontrar o contêiner de rolagem dinamicamente
+                                let scrollableContainer = visibleVideo.parentElement;
+                                while (scrollableContainer) {
+                                    // O contêiner correto tem uma altura de rolagem maior que sua altura visível
+                                    if (scrollableContainer.scrollHeight > scrollableContainer.clientHeight) {
+                                        break; // Encontrou!
+                                    }
+                                    scrollableContainer = scrollableContainer.parentElement;
+                                }
+
+                                if (scrollableContainer) {
+                                    console.log("Contêiner de rolagem encontrado. Rolando...");
+                                    // Rola o contêiner para baixo na altura de um reel (altura da janela)
+                                    scrollableContainer.scrollBy({
+                                        top: scrollableContainer.clientHeight,
+                                        left: 0,
+                                        behavior: 'smooth'
+                                    });
+                                } else {
+                                    console.warn("Contêiner de rolagem não encontrado. Usando fallback de rolagem da janela.");
+                                    // Fallback para o método antigo se a busca dinâmica falhar
+                                    window.scrollBy({
+                                        top: window.innerHeight,
+                                        left: 0,
+                                        behavior: 'smooth'
+                                    });
+                                }
+
+                                // Após a rolagem, chama a função novamente para encontrar o novo vídeo
+                                // e adicionar o listener a ele.
+                                setTimeout(startReelsAutoScroll, 2000); // Aguarda a animação de rolagem
+                            }
+                        };
+                        visibleVideo._timeUpdateListener = timeUpdateListener;
+                        visibleVideo.addEventListener('timeupdate', timeUpdateListener);
+                    } else {
+                        // Se não encontrou um vídeo novo, tenta novamente em 1 segundo
+                        reelsScrollInterval = setTimeout(startReelsAutoScroll, 1000);
+                    }
+                }
+
+                async function iniciarAnaliseReels() {
+                    const pathParts = window.location.pathname.split('/').filter(Boolean);
+                    const username = pathParts[0];
+                    const appID = '936619743392459';
+                    if (!username || (pathParts.length > 1 && !['followers', 'following'].includes(pathParts[1]))) {
+                        alert("Por favor, vá para a sua página de perfil para usar esta função.");
+                        return;
+                    }
+
+                    toggleLoading(true, null, "Iniciando análise de Reels...");
+                    const statusModal = document.createElement("div");
+                    statusModal.id = "reelsAnalysisStatusModal";
+                    statusModal.className = "submenu-modal";
+                    statusModal.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 500px; border: 1px solid #ccc; border-radius: 10px; padding: 20px; z-index: 10001;`;
+                    statusModal.innerHTML = `<div class="modal-header"><span class="modal-title">Análise de Reels</span></div><div style="padding:15px;"><p id="reelsStatusText">Buscando informações do perfil...</p></div>`;
+                    document.body.appendChild(statusModal);
+
+                    const statusText = document.getElementById("reelsStatusText");
+
+                    try {
+                        const profileInfo = await safeFetchProfileInfo(username);
+                        const userId = profileInfo?.data?.user?.id;
+                        if (!userId) throw new Error("Não foi possível obter o ID do usuário (HTTP 429 ou perfil indisponível).");
+
+                        statusText.innerText = 'Buscando lista de Reels...';
+
+                        const reelsList = [];
+                        let nextMaxId = '';
+                        let hasNextPage = true;
+
+                        // O endpoint /api/v1/clips/user/ foi descontinuado. Usaremos GraphQL.
+                        const queryHash = 'd4d88dc1500312af6f937f7b804c68c3'; // Hash para a query de Reels do usuário
+
+                        while (hasNextPage) {
+                            const variables = { "user_id": userId, "first": 50, "after": nextMaxId };
+                            const url = `https://www.instagram.com/graphql/query/?query_hash=${queryHash}&variables=${encodeURIComponent(JSON.stringify(variables))}`;
+
+                            const response = await fetch(url, { headers: { 'X-IG-App-ID': appID } });
+                            if (!response.ok) throw new Error(`A resposta da rede não foi 'ok'. Status: ${response.status}`);
+                            const data = await response.json();
+
+                            const clipsData = data.data?.user?.edge_clips;
+                            if (clipsData?.edges) {
+                                clipsData.edges.forEach(({ node: item }) => {
+                                    reelsList.push({
+                                        id: item.id,
+                                        thumbnail: item.image_versions2.candidates[0].url,
+                                        views: item.play_count || 0,
+                                        likes: item.like_count || 0,
+                                        comments: item.comment_count || 0,
+                                        date: new Date(item.taken_at * 1000),
+                                        url: `https://www.instagram.com/reel/${item.code}/`
+                                    });
+                                });
+                                statusText.innerText = `Encontrados ${reelsList.length} Reels...`;
+                            }
+
+                            hasNextPage = clipsData?.page_info?.has_next_page || false;
+                            nextMaxId = clipsData?.page_info?.end_cursor || '';
+                            if (hasNextPage) await new Promise(r => setTimeout(r, 300));
+                        }
+
+                        statusModal.remove();
+                        toggleLoading(false);
+                        abrirModalTabelaReels(reelsList);
+
+                    } catch (error) {
+                        console.error("Erro na análise de Reels:", error);
+                        statusText.innerText = `Erro: ${error.message}. Tente novamente.`;
+                        setTimeout(() => statusModal.remove(), 3000);
+                    }
+                }
+
+                function abrirModalTabelaReels(reelsList) {
+                    const div = document.createElement("div");
+                    div.id = "reelsTableModal";
+                    toggleLoading(true, null, "Gerando tabela de Reels...");
+                    div.className = "submenu-modal";
+                    div.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 900px; max-height: 90vh; border: 1px solid #ccc; border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;`;
+
+                    let sortConfig = { key: 'date', direction: 'descending' };
+
+                    const renderTable = () => {
+                        const sortedList = [...reelsList].sort((a, b) => {
+                            const valA = a[sortConfig.key];
+                            const valB = b[sortConfig.key];
+                            if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+                            if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
+                            return 0;
+                        });
+
+                        const getSortArrow = (key) => sortConfig.key === key ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '';
+
+                        let tableHtml = `
+                                <div class="modal-header">
+                                    <span class="modal-title">
+                                        Análise de Desempenho dos Reels
+                                        <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Tabela com métricas de visualizações, curtidas e comentários dos seus Reels.</span></div>
+                                    </span>
+                                    <div class="modal-controls">
+                                        <button id="fecharReelsTableBtn" title="Fechar">X</button>
+                                    </div>
+                                </div>
+                                <div style="padding: 15px;">
+                                <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                                    <thead style="cursor: pointer;">
+                                        <tr style="text-align: left; border-bottom: 2px solid #dbdbdb;">
+                                            <th style="padding: 8px;">Reel</th>
+                                            <th style="padding: 8px; text-align: center;" data-sort-key="views">Visualizações ${getSortArrow('views')}</th>
+                                            <th style="padding: 8px; text-align: center;" data-sort-key="likes">Curtidas ${getSortArrow('likes')}</th>
+                                            <th style="padding: 8px; text-align: center;" data-sort-key="comments">Comentários ${getSortArrow('comments')}</th>
+                                            <th style="padding: 8px; text-align: right;" data-sort-key="date">Data ${getSortArrow('date')}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>`;
+
+                        sortedList.forEach(reel => {
+                            tableHtml += `
+                                    <tr style="border-bottom: 1px solid #dbdbdb;">
+                                        <td style="padding: 8px; display:flex; align-items:center; gap:10px;">
+                                            <a href="${reel.url}" target="_blank"><img src="${reel.thumbnail}" alt="Reel Thumbnail" style="width:50px; height:90px; object-fit:cover; border-radius:4px;"></a>
+                                        </td>
+                                        <td style="text-align: center; font-weight: 600;">${reel.views.toLocaleString('pt-BR')}</td>
+                                        <td style="text-align: center;">${reel.likes.toLocaleString('pt-BR')}</td>
+                                        <td style="text-align: center;">${reel.comments.toLocaleString('pt-BR')}</td>
+                                        <td style="text-align: right;">${reel.date.toLocaleDateString('pt-BR')}</td>
+                                    </tr>`;
+                        });
+                        tableHtml += `</tbody></table></div>`;
+                        tableHtml += `</tbody></table>`;
+                        div.innerHTML = tableHtml;
+
+                        document.querySelectorAll('#reelsTableModal th[data-sort-key]').forEach(th => {
+                            th.onclick = () => {
+                                const key = th.dataset.sortKey;
+                                if (sortConfig.key === key) {
+                                    sortConfig.direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+                                } else {
+                                    sortConfig = { key, direction: 'descending' };
+                                }
+                                renderTable();
+                            };
+                        });
+
+                        document.getElementById("fecharReelsTableBtn").onclick = () => div.remove();
+                        toggleLoading(false);
+                    };
+
+                    document.body.appendChild(div);
+                    renderTable();
+                }
+
+                // ========================================================
+                // FUNÇÕES COMPARTILHADAS DE INTERAÇÕES E DESCURTIR (UNLIKE)
+                // ========================================================
+
+                async function executeGraphqlUnlikeStory(mediaId) {
+                    try {
+                        const cleanMediaId = String(mediaId).split('_')[0];
+                        const actorId = getActorId();
+                        const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                        const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                        const jazoest = computeJazoest(fbDtsg) || '26452';
+                        const spin = getSpinParams();
+
+                        const variables = {
+                            input: {
+                                actor_id: actorId,
+                                client_mutation_id: String(Math.floor(Math.random() * 100) + 1),
+                                media_id: cleanMediaId
+                            }
+                        };
+
+                        const body = new URLSearchParams();
+                        body.append('__comet_req', '7');
+                        if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                        if (jazoest) body.append('jazoest', jazoest);
+                        if (lsd) body.append('lsd', lsd);
+                        if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                        body.append('__spin_b', spin.spin_b || 'trunk');
+                        if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                        body.append('__crn', 'comet.igweb.PolarisStoriesV3HighlightsRoute');
+                        body.append('fb_api_caller_class', 'RelayModern');
+                        body.append('fb_api_req_friendly_name', 'usePolarisStoriesV4LikeMutationUnlikeMutation');
+                        body.append('server_timestamps', 'true');
+                        body.append('variables', JSON.stringify(variables));
+                        body.append('doc_id', '26510485515280697');
+
+                        const headers = {
+                            ...getApiHeaders(true),
+                            'X-ASBD-ID': '359341',
+                            'X-CSRFToken': getCookie('csrftoken') || '',
+                            'X-FB-Friendly-Name': 'usePolarisStoriesV4LikeMutationUnlikeMutation',
+                            'X-FB-LSD': lsd,
+                            'X-IG-App-ID': '936619743392459',
+                            'X-IG-Max-Touch-Points': '0'
+                        };
+
+                        console.log(`[IG Tools Interações] Enviando mutação GraphQL para descurtir story (${cleanMediaId})...`, variables);
+                        const response = await fetch('https://www.instagram.com/api/graphql', {
+                            method: 'POST',
+                            headers,
+                            body: body.toString(),
+                            credentials: 'include',
+                            cache: 'no-store'
+                        });
+
+                        const rawText = await response.text();
+                        let cleanedText = rawText.trim();
+                        if (cleanedText.startsWith('for (;;);')) {
+                            cleanedText = cleanedText.slice(9).trim();
+                        }
+
+                        let data = null;
+                        try {
+                            data = JSON.parse(cleanedText);
+                        } catch (_) { }
+
+                        console.log('[IG Tools Interações] Resposta GraphQL Unlike Story:', { status: response.status, ok: response.ok, data });
+
+                        if (response.ok && (data?.data?.xig_unsend_story_like || !data?.errors)) {
+                            return true;
+                        }
+                        return false;
+                    } catch (e) {
+                        console.error('[IG Tools Interações] Erro ao descurtir story via GraphQL:', e);
+                        return false;
+                    }
+                }
+
+                async function executeGraphqlUnlikePost(mediaId, trackingToken = '') {
+                    try {
+                        const cleanMediaId = String(mediaId).split('_')[0];
+                        const actorId = getActorId();
+                        const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                        const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                        const jazoest = computeJazoest(fbDtsg) || '26456';
+                        const spin = getSpinParams();
+
+                        const inputObj = {
+                            actor_id: actorId,
+                            client_mutation_id: String(Math.floor(Math.random() * 100) + 1),
+                            media_id: cleanMediaId
+                        };
+                        if (trackingToken) {
+                            inputObj.tracking_token = trackingToken;
+                        }
+
+                        const variables = { input: inputObj };
+
+                        const body = new URLSearchParams();
+                        body.append('__comet_req', '7');
+                        if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                        if (jazoest) body.append('jazoest', jazoest);
+                        if (lsd) body.append('lsd', lsd);
+                        if (spin.spin_r) body.append('__spin_r', spin.spin_r);
+                        body.append('__spin_b', spin.spin_b || 'trunk');
+                        if (spin.spin_t) body.append('__spin_t', spin.spin_t);
+                        body.append('__crn', 'comet.igweb.PolarisDesktopPostRoute');
+                        body.append('fb_api_caller_class', 'RelayModern');
+                        body.append('fb_api_req_friendly_name', 'usePolarisLikeMediaXIGUnlikeMutation');
+                        body.append('server_timestamps', 'true');
+                        body.append('variables', JSON.stringify(variables));
+                        body.append('doc_id', '27345296031770102');
+
+                        const headers = {
+                            ...getApiHeaders(true),
+                            'X-ASBD-ID': '359341',
+                            'X-CSRFToken': getCookie('csrftoken') || '',
+                            'X-FB-Friendly-Name': 'usePolarisLikeMediaXIGUnlikeMutation',
+                            'X-FB-LSD': lsd,
+                            'X-IG-App-ID': '936619743392459',
+                            'X-IG-Max-Touch-Points': '0'
+                        };
+
+                        console.log(`[IG Tools Interações] Enviando mutação GraphQL para descurtir post (${cleanMediaId})...`, variables);
+                        const response = await fetch('https://www.instagram.com/api/graphql', {
+                            method: 'POST',
+                            headers,
+                            body: body.toString(),
+                            credentials: 'include',
+                            cache: 'no-store'
+                        });
+
+                        const rawText = await response.text();
+                        let cleanedText = rawText.trim();
+                        if (cleanedText.startsWith('for (;;);')) {
+                            cleanedText = cleanedText.slice(9).trim();
+                        }
+
+                        let data = null;
+                        try {
+                            data = JSON.parse(cleanedText);
+                        } catch (_) { }
+
+                        console.log('[IG Tools Interações] Resposta GraphQL Unlike Post:', { status: response.status, ok: response.ok, data });
+
+                        if (response.ok && (data?.data?.xig_media_unlike || !data?.errors)) {
+                            return true;
+                        }
+                        return false;
+                    } catch (e) {
+                        console.error('[IG Tools Interações] Erro ao descurtir post via GraphQL:', e);
+                        return false;
+                    }
+                }
+
+                async function unlikeMedia(itemOrId, maybeType) {
+                    try {
+                        const csrf = getCookie('csrftoken');
+                        if (!csrf) {
+                            alert("Erro: Token CSRF não encontrado. Recarregue a página.");
+                            return false;
+                        }
+
+                        const item = typeof itemOrId === 'object' ? itemOrId : { id: itemOrId, type: maybeType };
+                        const rawId = String(item.rawId || item.id || '');
+                        const cleanMediaId = rawId.split('_')[0];
+                        const type = item.type || maybeType || '';
+
+                        console.log(`[IG Tools Interações] Descurtindo ${type} (${cleanMediaId})...`);
+
+                        if (type && (type.includes('Story') || type.includes('Destaque'))) {
+                            const gqlSuccess = await executeGraphqlUnlikeStory(cleanMediaId);
+                            if (gqlSuccess) {
+                                console.log(`[IG Tools Interações] Sucesso ao descurtir story via GraphQL (${cleanMediaId})!`);
+                                return true;
+                            }
+
+                            console.warn(`[IG Tools Interações] GraphQL falhou, tentando fallback REST...`);
+                            const restUrl = `https://www.instagram.com/api/v1/story_interactions/unlike_story_like/`;
+                            let restRes = await fetch(restUrl, {
+                                method: 'POST',
+                                headers: {
+                                    ...getApiHeaders(true),
+                                    'X-CSRFToken': csrf
+                                },
+                                body: `media_id=${encodeURIComponent(cleanMediaId)}`,
+                                credentials: 'include'
+                            });
+                            if (restRes.ok) return true;
+
+                            const errText = await restRes.text();
+                            console.error("[IG Tools Interações] Falha ao descurtir via REST:", restRes.status, errText);
+                            alert(`Falha ao descurtir (${restRes.status}). Verifique o console.`);
+                            return false;
+                        } else {
+                            const gqlSuccess = await executeGraphqlUnlikePost(cleanMediaId, item.trackingToken);
+                            if (gqlSuccess) {
+                                console.log(`[IG Tools Interações] Sucesso ao descurtir post via GraphQL (${cleanMediaId})!`);
+                                return true;
+                            }
+
+                            console.warn(`[IG Tools Interações] GraphQL falhou para post, tentando fallback REST...`);
+                            const postUrl = `https://www.instagram.com/api/v1/web/likes/${cleanMediaId}/unlike/`;
+                            const postRes = await fetch(postUrl, {
+                                method: 'POST',
+                                headers: {
+                                    ...getApiHeaders(true),
+                                    'X-CSRFToken': csrf
+                                },
+                                body: '',
+                                credentials: 'include'
+                            });
+                            if (postRes.ok) {
+                                console.log(`[IG Tools Interações] Sucesso ao descurtir post (${cleanMediaId})!`);
+                                return true;
+                            }
+
+                            const errText = await postRes.text();
+                            console.error("[IG Tools Interações] Falha ao descurtir post:", postRes.status, errText);
+                            alert(`Falha ao descurtir post (${postRes.status}). Verifique o console.`);
+                            return false;
+                        }
+                    } catch (e) {
+                        console.error("[IG Tools Interações] Erro ao descurtir:", e);
+                        alert("Erro ao descurtir: " + e.message);
+                        return false;
+                    }
+                }
+
+                async function fetchUserInteractionsData(username, explicitUid = null, onProgress = null, maxPages = 10) {
+                    const cleanUsername = String(username).trim().toLowerCase();
+                    let targetUserId = explicitUid || getCachedUserId(cleanUsername);
+                    if (!targetUserId) {
+                        targetUserId = await getUserId(cleanUsername);
+                    }
+                    if (!targetUserId) {
+                        throw new Error("Não foi possível obter o ID do perfil.");
+                    }
+
+                    const likedPosts = [];
+                    const likedStories = [];
+                    const likedHighlights = [];
+
+                    // 1. Posts via GraphQL oficial (analisa com paginação segura)
+                    let totalPostsFound = 0;
+                    let hasNextPage = true;
+                    let endCursor = null;
+                    let pageNum = 0;
+
+                    while (hasNextPage && pageNum < maxPages) {
+                        pageNum++;
+                        const pct = Math.min(85, Math.floor((pageNum / maxPages) * 75));
+                        if (onProgress) onProgress(`Analisando publicações (pág ${pageNum})... (${likedPosts.length} curtidos)`, pct);
+                        const connection = await executeGraphqlProfilePosts(cleanUsername, endCursor);
+                        if (!connection || !Array.isArray(connection.edges)) break;
+
+                        const edges = connection.edges;
+                        totalPostsFound += edges.length;
+
+                        for (const edge of edges) {
+                            const node = edge?.node;
+                            if (!node) continue;
+                            const code = node.code || node.shortcode;
+                            const isLiked = Boolean(node.has_liked || node.viewer_has_liked);
+                            const thumb = node.image_versions2?.candidates?.[0]?.url || node.display_url || node.thumbnail_src || '';
+                            const mediaId = node.id || node.pk;
+
+                            if (isLiked && code) {
+                                likedPosts.push({
+                                    type: 'Post',
+                                    url: `https://www.instagram.com/p/${code}/`,
+                                    thumb: thumb,
+                                    id: mediaId || code,
+                                    rawId: String(mediaId || code),
+                                    trackingToken: node.tracking_token || ''
+                                });
+                            }
+                        }
+                        hasNextPage = Boolean(connection.page_info?.has_next_page);
+                        endCursor = connection.page_info?.end_cursor;
+                        if (!endCursor) break;
+                        await new Promise(r => setTimeout(r, 250));
+                    }
+
+                    // 2. Extração de Stories (24h) e Destaques (Highlights) via API Oficial (Multi-camadas direta, independente de página)
+                    if (onProgress) onProgress('Buscando Stories e Destaques...', 90);
+
+                    const reelsToFetch = new Set();
+                    if (targetUserId) {
+                        reelsToFetch.add(String(targetUserId));
+                    }
+
+                    // Camada 1: GraphQL Oficial da Web para Destaques (query_hash d4d88dc1500312af6f937f7b804c68c3)
+                    if (targetUserId) {
+                        try {
+                            console.log(`[IG Tools Interações] Buscando destaques via GraphQL para ${targetUserId} (@${cleanUsername})...`);
+                            const gqlHlUrl = `https://www.instagram.com/graphql/query/?query_hash=d4d88dc1500312af6f937f7b804c68c3&variables=${encodeURIComponent(JSON.stringify({ user_id: String(targetUserId), include_highlight_reels: true }))}`;
+                            const gqlRes = await fetch(gqlHlUrl, {
+                                headers: {
+                                    'X-IG-App-ID': '936619743392459',
+                                    'X-Requested-With': 'XMLHttpRequest'
+                                },
+                                credentials: 'include'
+                            });
+                            if (gqlRes.ok) {
+                                const gqlData = await gqlRes.json();
+                                const edges = gqlData?.data?.user?.edge_highlight_reels?.edges || [];
+                                for (const edge of edges) {
+                                    const hId = edge?.node?.id;
+                                    if (hId) {
+                                        const rawHlId = String(hId);
+                                        const hlIdStr = rawHlId.startsWith('highlight:') ? rawHlId : `highlight:${rawHlId}`;
+                                        reelsToFetch.add(hlIdStr);
+                                    }
+                                }
+                                if (edges.length > 0) {
+                                    console.log(`[IG Tools Interações] GraphQL retornou ${edges.length} destaque(s).`);
+                                }
+                            }
+                        } catch (eGqlHl) {
+                            console.warn("[IG Tools Interações] Erro ao consultar destaques via GraphQL:", eGqlHl);
+                        }
+                    }
+
+                    // Camada 2: web_profile_info estruturado (com headers limpos, sem cabeçalhos inválidos)
+                    if (reelsToFetch.size <= 1) {
+                        try {
+                            console.log(`[IG Tools Interações] Buscando destaques via web_profile_info para @${cleanUsername}...`);
+                            const profileData = await safeFetchProfileInfo(cleanUsername);
+                            const hlEdges = profileData?.data?.user?.edge_highlight_reels?.edges || [];
+                            for (const edge of hlEdges) {
+                                const hId = edge?.node?.id;
+                                if (hId) {
+                                    const rawHlId = String(hId);
+                                    const hlIdStr = rawHlId.startsWith('highlight:') ? rawHlId : `highlight:${rawHlId}`;
+                                    reelsToFetch.add(hlIdStr);
+                                }
+                            }
+                            if (hlEdges.length > 0) {
+                                console.log(`[IG Tools Interações] web_profile_info retornou ${hlEdges.length} destaque(s).`);
+                            }
+                        } catch (eInfo) {
+                            console.warn("[IG Tools Interações] Erro ao consultar web_profile_info para destaques:", eInfo);
+                        }
+                    }
+
+                    // Camada 3: Verificação direta do DOM (APENAS se o navegador já estiver no perfil)
+                    try {
+                        const currentPath = (window.location.pathname || '').replace(/^\/|\/$/g, '').toLowerCase().split('/')[0];
+                        if (currentPath === cleanUsername && typeof document !== 'undefined') {
+                            if (reelsToFetch.size <= 1 && !document.querySelector('a[href*="/stories/highlights/"]')) {
+                                for (let wait = 0; wait < 3; wait++) {
+                                    await new Promise(r => setTimeout(r, 200));
+                                    if (document.querySelector('a[href*="/stories/highlights/"]')) break;
+                                }
+                            }
+                            document.querySelectorAll('a[href*="/stories/highlights/"]').forEach(a => {
+                                const m = (a.getAttribute('href') || '').match(/\/stories\/highlights\/(\d+)/);
+                                if (m && m[1]) reelsToFetch.add(`highlight:${m[1]}`);
+                            });
+
+                            const currentHl = (window.location.href || '').match(/\/stories\/highlights\/(\d+)/);
+                            if (currentHl && currentHl[1]) reelsToFetch.add(`highlight:${currentHl[1]}`);
+                        }
+                    } catch (eDom) {
+                        console.warn("[IG Tools Interações] Verificação DOM de destaques:", eDom);
+                    }
+
+                    // Camada 4: Fallback HTML puro do perfil (se nenhuma das anteriores localizou destaques)
+                    if (reelsToFetch.size <= 1) {
+                        try {
+                            console.log(`[IG Tools Interações] Buscando HTML do perfil @${cleanUsername} para extração de destaques...`);
+                            const profileHtmlRes = await fetch(`https://www.instagram.com/${cleanUsername}/`, {
+                                credentials: 'include',
+                                headers: {
+                                    'X-Requested-With': 'XMLHttpRequest'
+                                }
+                            });
+                            if (profileHtmlRes.ok) {
+                                const htmlText = await profileHtmlRes.text();
+                                const hlMatches = htmlText.matchAll(/\/stories\/highlights\/(\d+)/g);
+                                for (const match of hlMatches) {
+                                    if (match[1]) reelsToFetch.add(`highlight:${match[1]}`);
+                                }
+                                const jsonMatches = htmlText.matchAll(/"(?:id|reel_id)":\s*"?highlight:(\d+)"?/g);
+                                for (const match of jsonMatches) {
+                                    if (match[1]) reelsToFetch.add(`highlight:${match[1]}`);
+                                }
+                                const jsonMatches2 = htmlText.matchAll(/"highlight:(\d+)"/g);
+                                for (const match of jsonMatches2) {
+                                    if (match[1]) reelsToFetch.add(`highlight:${match[1]}`);
+                                }
+                                const jsonMatches3 = htmlText.matchAll(/highlight%3A(\d+)/g);
+                                for (const match of jsonMatches3) {
+                                    if (match[1]) reelsToFetch.add(`highlight:${match[1]}`);
+                                }
+                            }
+                        } catch (eHlHtml) {
+                            console.warn("[IG Tools Interações] Fallback HTML de destaques:", eHlHtml);
+                        }
+                    }
+
+                    console.log(`[IG Tools Interações] Buscando ${reelsToFetch.size} reel(s) (Stories 24h + Destaques)...`, Array.from(reelsToFetch));
+
+                    // D. Buscar reels_media em lotes de 5 via API oficial
+                    const reelIdList = Array.from(reelsToFetch);
+                    const batchSize = 5;
+                    for (let i = 0; i < reelIdList.length; i += batchSize) {
+                        const batch = reelIdList.slice(i, i + batchSize);
+                        const queryParams = batch.map(id => `reel_ids=${encodeURIComponent(id)}`).join('&');
+                        const reelsUrl = `https://www.instagram.com/api/v1/feed/reels_media/?${queryParams}`;
+
+                        try {
+                            const reelsRes = await fetch(reelsUrl, {
+                                headers: {
+                                    'X-IG-App-ID': '936619743392459',
+                                    'X-Requested-With': 'XMLHttpRequest'
+                                },
+                                credentials: 'include'
+                            });
+
+                            if (reelsRes.ok) {
+                                const reelsData = await reelsRes.json();
+                                const reelsList = Array.isArray(reelsData?.reels_media)
+                                    ? reelsData.reels_media
+                                    : Object.values(reelsData?.reels || {});
+
+                                for (const reel of reelsList) {
+                                    const reelId = String(reel?.id || '');
+                                    const isHighlight = reelId.startsWith('highlight:') || reel?.reel_type === 'highlight_reel' || (String(reelId) !== String(targetUserId));
+                                    const cleanHighlightId = reelId.replace(/^highlight:/, '');
+                                    const items = reel?.items || [];
+
+                                    for (const it of items) {
+                                        const hasLiked = Boolean(it.has_liked || it.viewer_has_liked);
+                                        if (hasLiked) {
+                                            const rawId = String(it.id || it.pk || '');
+                                            const cleanMediaId = rawId.split('_')[0];
+                                            const thumb = it.image_versions2?.candidates?.[0]?.url || it.display_url || '';
+
+                                            if (isHighlight) {
+                                                if (!likedHighlights.some(s => s.id === cleanMediaId)) {
+                                                    likedHighlights.push({
+                                                        type: 'Story (Destaque)',
+                                                        url: `https://www.instagram.com/stories/highlights/${cleanHighlightId}/?story_media_id=${cleanMediaId}`,
+                                                        thumb: thumb,
+                                                        id: cleanMediaId,
+                                                        rawId: rawId
+                                                    });
+                                                }
+                                            } else {
+                                                if (!likedStories.some(s => s.id === cleanMediaId)) {
+                                                    likedStories.push({
+                                                        type: 'Story (24h)',
+                                                        url: `https://www.instagram.com/stories/${cleanUsername}/${cleanMediaId}/`,
+                                                        thumb: thumb,
+                                                        id: cleanMediaId,
+                                                        rawId: rawId
+                                                    });
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (errBatch) {
+                            console.warn("[IG Tools Interações] Erro ao buscar lote de stories/destaques:", errBatch);
+                        }
+                        if (i + batchSize < reelIdList.length) {
+                            await new Promise(r => setTimeout(r, 250));
+                        }
+                    }
+
+                    console.log(`[IG Tools Interações] @${cleanUsername}: ${totalPostsFound} publicações analisadas. Curtidas encontradas: ${likedPosts.length}. Stories curtidos: ${likedStories.length}. Destaques curtidos: ${likedHighlights.length}`);
+
+                    return {
+                        likedPosts,
+                        likedStories,
+                        likedHighlights,
+                        total: likedPosts.length + likedStories.length + likedHighlights.length
+                    };
+                }
+
+                function renderSubrowInteracoesContent(username, data, containerEl, btnEl) {
+                    const isDark = document.body.classList.contains('dark-mode') || document.querySelector('.dark-mode');
+                    const allItems = [
+                        ...data.likedPosts,
+                        ...data.likedStories,
+                        ...data.likedHighlights
+                    ];
+
+                    let headerHtml = `
+                        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(150,150,150,0.2);">
+                            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 13px; font-weight: 600;">
+                                <span style="color: #0095f6;">Interações com @${username}:</span>
+                                <span style="background: rgba(0, 149, 246, 0.12); color: #0095f6; padding: 2px 8px; border-radius: 12px; font-size: 11px;">📸 ${data.likedPosts.length} Posts</span>
+                                <span style="background: rgba(231, 76, 60, 0.12); color: #e74c3c; padding: 2px 8px; border-radius: 12px; font-size: 11px;">⭕ ${data.likedStories.length} Stories</span>
+                                <span style="background: rgba(243, 156, 18, 0.12); color: #f39c12; padding: 2px 8px; border-radius: 12px; font-size: 11px;">⭐ ${data.likedHighlights.length} Destaques</span>
+                                <span style="font-weight: bold; font-size: 12px;">(Total: ${data.total})</span>
+                            </div>
+                            <button class="btn-recarregar-interacoes-subrow" style="background: transparent; border: 1px solid rgba(150,150,150,0.4); border-radius: 5px; padding: 3px 8px; font-size: 11px; cursor: pointer; color: inherit;">🔄 Recarregar</button>
+                        </div>
+                    `;
+
+                    if (allItems.length === 0) {
+                        containerEl.innerHTML = headerHtml + `
+                            <div style="text-align: center; padding: 12px; color: var(--ig-secondary-text, #888); font-size: 13px;">
+                                Nenhuma curtida encontrada nas publicações recentes, stories ou destaques de @${username}.
+                            </div>
+                        `;
+                        const reloadBtn = containerEl.querySelector('.btn-recarregar-interacoes-subrow');
+                        if (reloadBtn) {
+                            reloadBtn.onclick = () => carregarInteracoesUsuario(username, btnEl?.dataset?.userid || null, containerEl, btnEl, true);
+                        }
+                        return;
+                    }
+
+                    let gridHtml = `<div style="display: flex; flex-wrap: wrap; gap: 10px; max-height: 250px; overflow-y: auto; padding: 4px;">`;
+                    allItems.forEach((item) => {
+                        gridHtml += `
+                            <div class="item-interacao-card" data-id="${item.id}" style="position: relative; width: 90px; height: 115px; border-radius: 8px; overflow: hidden; border: 1px solid rgba(150,150,150,0.25); background: ${isDark ? '#262626' : '#fff'}; box-shadow: 0 2px 6px rgba(0,0,0,0.1); flex-shrink: 0; display: flex; flex-direction: column;">
+                                <div style="flex: 1; position: relative; cursor: pointer; overflow: hidden;" title="Abrir ${item.type}">
+                                    ${item.thumb ? `<img src="${item.thumb}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'">` : `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #999;">${item.type}</div>`}
+                                    <span style="position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,0.7); color: white; padding: 1px 5px; border-radius: 4px; font-size: 9px; font-weight: 600;">
+                                        ${item.type.includes('Post') ? 'Post' : item.type.includes('Destaque') ? 'Destaque' : 'Story'}
+                                    </span>
+                                </div>
+                                <button class="btn-unlike-subrow" title="Descurtir" style="position: absolute; bottom: 5px; right: 5px; width: 28px; height: 28px; border-radius: 50%; border: none; background: rgba(0,0,0,0.75); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; z-index: 5; transition: transform 0.15s, background 0.15s;">
+                                    💔
+                                </button>
+                            </div>
+                        `;
+                    });
+                    gridHtml += `</div>`;
+
+                    containerEl.innerHTML = headerHtml + gridHtml;
+
+                    // Recarregar
+                    const reloadBtn = containerEl.querySelector('.btn-recarregar-interacoes-subrow');
+                    if (reloadBtn) {
+                        reloadBtn.onclick = () => carregarInteracoesUsuario(username, btnEl?.dataset?.userid || null, containerEl, btnEl, true);
+                    }
+
+                    // Clique nas imagens para abrir e no botão de descurtir
+                    containerEl.querySelectorAll('.item-interacao-card').forEach((card) => {
+                        const itemId = card.dataset.id;
+                        const item = allItems.find(x => x.id === itemId);
+                        if (!item) return;
+
+                        const imgDiv = card.querySelector('div[title^="Abrir"]');
+                        if (imgDiv) {
+                            imgDiv.onclick = () => window.open(item.url, '_blank');
+                        }
+
+                        const unlikeBtn = card.querySelector('.btn-unlike-subrow');
+                        if (unlikeBtn) {
+                            unlikeBtn.onmouseover = () => { unlikeBtn.style.transform = "scale(1.15)"; unlikeBtn.style.background = "rgba(220, 38, 38, 0.9)"; };
+                            unlikeBtn.onmouseout = () => { unlikeBtn.style.transform = "scale(1)"; unlikeBtn.style.background = "rgba(0,0,0,0.75)"; };
+                            unlikeBtn.onclick = async (e) => {
+                                e.stopPropagation();
+                                unlikeBtn.disabled = true;
+                                unlikeBtn.style.opacity = "0.5";
+                                const success = await unlikeMedia(item);
+                                if (success) {
+                                    card.style.transition = 'opacity 0.2s, transform 0.2s';
+                                    card.style.opacity = '0';
+                                    card.style.transform = 'scale(0.8)';
+                                    setTimeout(() => {
+                                        card.remove();
+                                        const removeFromArray = (arr) => {
+                                            const i = arr.findIndex(x => x.id === item.id);
+                                            if (i !== -1) arr.splice(i, 1);
+                                        };
+                                        removeFromArray(data.likedPosts);
+                                        removeFromArray(data.likedStories);
+                                        removeFromArray(data.likedHighlights);
+                                        data.total = data.likedPosts.length + data.likedStories.length + data.likedHighlights.length;
+
+                                        if (btnEl) {
+                                            btnEl.innerHTML = `<span>${data.total > 0 ? `❤️ ${data.total}` : '0'}</span>`;
+                                            btnEl.style.background = data.total > 0 ? '#e74c3c' : '#7f8c8d';
+                                        }
+
+                                        renderSubrowInteracoesContent(username, data, containerEl, btnEl);
+                                    }, 200);
+                                } else {
+                                    unlikeBtn.disabled = false;
+                                    unlikeBtn.style.opacity = "1";
+                                }
+                            };
+                        }
+                    });
+                }
+
+                function abrirModalInteracoes() {
+                    if (document.getElementById("interacoesModal")) return;
+
+                    const div = document.createElement("div");
+                    div.id = "interacoesModal";
+                    div.className = "submenu-modal";
+                    div.style.cssText = `
+                        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                        width: 92%; max-width: 650px; min-height: 480px; max-height: 90vh;
+                        border-radius: 10px; z-index: 10000; overflow-y: auto; overflow-x: hidden;
+                        display: flex; flex-direction: column;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    `;
+                    if (loadSettings().rgbBorder) {
+                        div.classList.add('rgb-border-effect');
+                    }
+
+                    div.innerHTML = `
+                        <div class="modal-header">
+                            <span class="modal-title">
+                                Verificar Interações
+                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Verifique o que você curtiu de um usuário específico (Posts e Stories).</span></div>
+                            </span>
+                            <div class="modal-controls">
+                                <button id="fecharInteracoesBtn" title="Fechar">X</button>
+                            </div>
+                        </div>
+                        <div class="loading-overlay" style="display: none;"><div class="spinner"></div><div class="loading-text"></div></div>
+                        <div style="padding: 20px; flex: 1; display: flex; flex-direction: column;">
+                            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                                <div style="flex: 1; position: relative;">
+                                    <input type="text" id="interacoesUsernameInput" class="interacoes-input" placeholder="Digite o username..." autocomplete="off">
+                                    <div id="interacoesSuggestions"></div>
+                                </div>
+                                <button id="verificarInteracoesBtn" style="background: #0095f6; color: white; border: none; padding: 10px 22px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; white-space: nowrap; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; transition: background 0.2s;">Verificar</button>
+                            </div>
+                            <div id="interacoesUserProfile" style="display: none; flex-direction: column; align-items: center; margin-bottom: 20px;">
+                                <img id="interacoesUserPic" src="" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; border: 2px solid #0095f6;">
+                                <span id="interacoesUserNameDisplay" style="font-weight: bold; font-size: 16px;"></span>
+                                <span id="interacoesUserBioDisplay" style="font-size: 14px; text-align: center; margin-top: 5px; max-width: 85%; line-height: 1.4;"></span>
+                            </div>
+                            <div id="interacoesResultados" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px;">
+                                <!-- Cards serão inseridos aqui -->
+                            </div>
+                            <div id="interacoesDetalhes" style="margin-top: 15px; display: none;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <h3 id="detalhesTitulo" style="margin: 0; font-size: 16px;"></h3>
+                                    <button id="voltarCardsBtn" style="padding: 6px 14px; background: #0095f6; color: white; border: none; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">← Voltar</button>
+                                </div>
+                                <div id="detalhesLista" style="max-height: 320px; overflow-y: auto;"></div>
+                            </div>
+                        </div>
+                    `;
+                    toggleLoading(false);
+                    document.body.appendChild(div);
+
+                    document.getElementById("fecharInteracoesBtn").onclick = () => div.remove();
+
+                    // Lógica de Autocomplete
+                    const inputUsername = document.getElementById("interacoesUsernameInput");
+                    const suggestionsDiv = document.getElementById("interacoesSuggestions");
+                    let followingList = [];
+
+                    // Carrega a lista de seguindo do cache
+                    dbHelper.loadCache('following').then(data => {
+                        if (data) {
+                            if (data.details) {
+                                followingList = Array.from(data.details.keys());
+                            } else if (Array.isArray(data)) {
+                                followingList = data.map(x => typeof x === 'object' ? (x.username || '') : String(x)).filter(Boolean);
+                            } else if (data instanceof Set) {
+                                followingList = Array.from(data).map(x => typeof x === 'object' ? (x.username || '') : String(x)).filter(Boolean);
+                            }
+                        }
+                        if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList) && seguindoList.length > 0) {
+                            seguindoList.forEach(item => {
+                                const u = typeof item === 'object' ? item.username : item;
+                                if (u && !followingList.includes(u)) followingList.push(u);
+                            });
+                        }
+                    });
+
+                    inputUsername.addEventListener('input', () => {
+                        const val = inputUsername.value.toLowerCase();
+                        suggestionsDiv.innerHTML = '';
+                        if (!val) {
+                            suggestionsDiv.style.display = 'none';
+                            return;
+                        }
+
+                        const matches = followingList.filter(u => u.toLowerCase().includes(val)).slice(0, 10);
+
+                        if (matches.length > 0) {
+                            matches.forEach(u => {
+                                const item = document.createElement('div');
+                                item.style.cssText = 'padding: 10px 14px; cursor: pointer; border-bottom: 1px solid rgba(150,150,150,0.1); font-size: 14px; color: var(--ig-primary-text, inherit); display: flex; align-items: center; gap: 8px; transition: background 0.15s;';
+                                item.innerText = u;
+                                item.onmouseover = () => item.style.background = 'rgba(150, 150, 150, 0.15)';
+                                item.onmouseout = () => item.style.background = 'transparent';
+                                item.onclick = () => {
+                                    inputUsername.value = u;
+                                    suggestionsDiv.style.display = 'none';
+                                };
+                                suggestionsDiv.appendChild(item);
+                            });
+                            suggestionsDiv.style.display = 'block';
+                        } else {
+                            suggestionsDiv.style.display = 'none';
+                        }
+                    });
+
+                    // Fechar sugestões ao clicar fora
+                    document.addEventListener('click', (e) => {
+                        if (e.target !== inputUsername && e.target !== suggestionsDiv) {
+                            suggestionsDiv.style.display = 'none';
+                        }
+                    });
+
+                    let dataEuCurti = null;
+
+                    document.getElementById("verificarInteracoesBtn").onclick = async () => {
+                        const username = document.getElementById("interacoesUsernameInput").value.trim();
+                        if (!username) return alert("Digite um username.");
+
+                        const btn = document.getElementById("verificarInteracoesBtn");
+                        btn.disabled = true;
+                        btn.textContent = "Verificando...";
+                        toggleLoading(true, null, "Verificando interações...");
+
+                        const resultadosDiv = document.getElementById("interacoesResultados");
+                        const profileDiv = document.getElementById("interacoesUserProfile");
+
+                        resultadosDiv.innerHTML = '<p class="interacoes-status-text" style="text-align: center; padding: 20px; font-size: 14px; font-weight: 500;">Carregando interações...</p>';
+                        document.getElementById("interacoesDetalhes").style.display = "none";
+                        profileDiv.style.display = "none";
+
+                        // Buscar foto de perfil e bio de forma segura e sem CSP/400
+                        let photoUrl = DEFAULT_AVATAR;
+                        let bio = '';
+                        const cleanUsername = username.toLowerCase();
+
+                        // 1. Procura no cache local de detalhes
+                        if (typeof cachedData !== 'undefined' && cachedData?.userDetails?.has(cleanUsername)) {
+                            const cached = cachedData.userDetails.get(cleanUsername);
+                            if (cached?.profile_pic_url) photoUrl = cached.profile_pic_url;
+                            if (cached?.biography) bio = cached.biography;
+                        }
+
+                        // 2. Obter ID do usuário
+                        let targetUserId = await getUserId(username);
+
+                        // 3. Se tiver o ID, busca via GraphQL HoverCard (mais atual e sem erro 400)
+                        if (targetUserId) {
+                            try {
+                                const hoverData = await executeGraphqlUserHoverCard(targetUserId);
+                                if (hoverData) {
+                                    if (hoverData.profilePicUrl) photoUrl = hoverData.profilePicUrl;
+                                    if (hoverData.biography) bio = hoverData.biography;
+                                }
+                            } catch (_) { }
+                        }
+
+                        // 4. Fallback safeFetchProfileInfo apenas se ainda estiver sem foto
+                        if (photoUrl === DEFAULT_AVATAR) {
+                            try {
+                                const info = await safeFetchProfileInfo(username);
+                                if (info && info.data?.user) {
+                                    photoUrl = info.data.user.profile_pic_url || photoUrl;
+                                    bio = info.data.user.biography || bio;
+                                }
+                            } catch (_) { }
+                        }
+
+                        document.getElementById("interacoesUserPic").src = photoUrl;
+                        document.getElementById("interacoesUserNameDisplay").innerText = username;
+                        document.getElementById("interacoesUserBioDisplay").innerText = bio;
+                        profileDiv.style.display = "flex";
+
+                        try {
+                            if (!targetUserId) {
+                                throw new Error("Não foi possível obter o ID do usuário.");
+                            }
+
+                            // --- O QUE EU CURTI DELE (Usa o extrator unificado idêntico ao script3.js) ---
+                            resultadosDiv.innerHTML = '<p class="interacoes-status-text" style="text-align: center; padding: 20px; font-size: 14px; font-weight: 500;">Analisando publicações, stories e destaques via GraphQL/API...</p>';
+
+                            const data = await fetchUserInteractionsData(cleanUsername, targetUserId, (msg, pct) => {
+                                toggleLoading(true, pct, msg);
+                                const textEl = document.querySelector("#interacoesResultados .interacoes-status-text");
+                                if (textEl) textEl.innerText = msg;
+                            }, 25);
+
+                            const dadosReais = {
+                                fotosCurtidas: { count: data.likedPosts.length, items: data.likedPosts },
+                                storiesCurtidos: { count: data.likedStories.length, items: data.likedStories },
+                                destaquesCurtidos: { count: data.likedHighlights.length, items: data.likedHighlights },
+                                comentarios: { count: 0, items: [] }
+                            };
+                            dataEuCurti = dadosReais;
+                            renderizarCardsInteracoes(dadosReais);
+
+                        } catch (e) {
+                            console.error(e);
+                            resultadosDiv.innerHTML = `<p style="color:red;">Erro ao buscar dados: ${e.message}</p>`;
+                        } finally {
+                            toggleLoading(false);
+                            btn.disabled = false;
+                            btn.textContent = "Verificar";
+                        }
+                    };
+
+                    function renderizarCardsInteracoes(dados) {
+                        const container = document.getElementById("interacoesResultados");
+                        container.innerHTML = '';
+
+                        const mapLabels = {
+                            fotosCurtidas: 'Fotos Curtidas',
+                            storiesCurtidos: 'Stories Curtidos',
+                            destaquesCurtidos: 'Destaques Curtidos',
+                            comentarios: 'Comentários'
+                        };
+
+                        const isDarkMode = document.body.classList.contains('dark-mode') || loadSettings().darkMode;
+
+                        for (const [key, data] of Object.entries(dados)) {
+                            const card = document.createElement("div");
+                            card.className = "interacoes-stat-card";
+
+                            // Tema escuro: card claro | Tema claro: card escuro
+                            const bgCard = isDarkMode ? "#ffffff" : "#262626";
+                            const textCard = isDarkMode ? "#262626" : "#ffffff";
+                            const borderCard = isDarkMode ? "1px solid #e0e0e0" : "1px solid #3d3d3d";
+                            const shadowCard = isDarkMode ? "0 4px 14px rgba(0, 0, 0, 0.15)" : "0 4px 14px rgba(0, 0, 0, 0.25)";
+
+                            card.style.cssText = `
+                                border: ${borderCard};
+                                border-radius: 12px;
+                                padding: 18px 12px;
+                                text-align: center;
+                                cursor: pointer;
+                                background: ${bgCard};
+                                color: ${textCard};
+                                box-shadow: ${shadowCard};
+                                transition: transform 0.2s ease, box-shadow 0.2s ease;
+                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                            `;
+                            card.innerHTML = `
+                                <div class="card-count" style="font-size: 26px; font-weight: 700; color: #0095f6; margin-bottom: 6px; font-family: inherit;">${data.count}</div>
+                                <div class="card-label" style="font-size: 13px; font-weight: 600; color: ${textCard}; font-family: inherit;">${mapLabels[key] || key}</div>
+                            `;
+                            card.onmouseover = () => {
+                                card.style.transform = "translateY(-3px)";
+                                card.style.boxShadow = isDarkMode ? "0 8px 20px rgba(0, 0, 0, 0.25)" : "0 8px 20px rgba(0, 0, 0, 0.4)";
+                            };
+                            card.onmouseout = () => {
+                                card.style.transform = "translateY(0)";
+                                card.style.boxShadow = shadowCard;
+                            };
+                            card.onclick = () => mostrarDetalhesInteracao(mapLabels[key] || key, data.items);
+                            container.appendChild(card);
+                        }
+                    }
+
+                    function mostrarDetalhesInteracao(titulo, itens) {
+                        document.getElementById("interacoesResultados").style.display = "none";
+                        const detalhesDiv = document.getElementById("interacoesDetalhes");
+                        detalhesDiv.style.display = "block";
+                        document.getElementById("detalhesTitulo").innerText = `${titulo} (${itens.length})`;
+
+                        const lista = document.getElementById("detalhesLista");
+                        lista.innerHTML = '';
+
+                        const isDark = document.body.classList.contains('dark-mode') || loadSettings().darkMode;
+
+                        if (itens.length === 0) {
+                            lista.innerHTML = '<p style="color: var(--ig-secondary-text, #a8a8a8); text-align: center; padding: 25px; font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif;">Nenhum item encontrado.</p>';
+                        } else {
+                            const grid = document.createElement("div");
+                            grid.style.cssText = "display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; padding: 4px;";
+                            itens.forEach(item => {
+                                const div = document.createElement("div");
+                                div.style.cssText = `aspect-ratio: 1; overflow: hidden; border-radius: 8px; border: 1px solid ${isDark ? '#444' : '#dbdbdb'}; cursor: pointer; position: relative; background: ${isDark ? '#000' : '#f5f5f5'}; box-shadow: 0 2px 8px rgba(0,0,0,0.15);`;
+
+                                const contentDiv = document.createElement("div");
+                                contentDiv.style.cssText = "width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;";
+
+                                if (item.thumb) {
+                                    contentDiv.innerHTML = `<img src="${item.thumb}" style="width: 100%; height: 100%; object-fit: cover;">`;
+                                    contentDiv.onclick = () => window.open(item.url, '_blank');
+                                } else {
+                                    contentDiv.innerHTML = `<span style="font-size: 12px; color: ${isDark ? '#aaa' : '#666'}; text-align: center; padding: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">${item.type}</span>`;
+                                    contentDiv.onclick = () => window.open(item.url, '_blank');
+                                }
+                                div.appendChild(contentDiv);
+
+                                if (item.id) {
+                                    const unlikeBtn = document.createElement("button");
+                                    unlikeBtn.innerHTML = "💔";
+                                    unlikeBtn.title = "Descurtir";
+                                    unlikeBtn.style.cssText = "position: absolute; bottom: 6px; right: 6px; width: 32px; height: 32px; border-radius: 50%; border: none; background: rgba(0,0,0,0.75); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 15px; z-index: 10; transition: transform 0.15s, background 0.15s;";
+                                    unlikeBtn.onmouseover = () => { unlikeBtn.style.transform = "scale(1.15)"; unlikeBtn.style.background = "rgba(220, 38, 38, 0.9)"; };
+                                    unlikeBtn.onmouseout = () => { unlikeBtn.style.transform = "scale(1)"; unlikeBtn.style.background = "rgba(0,0,0,0.75)"; };
+                                    unlikeBtn.onclick = async (e) => {
+                                        e.stopPropagation();
+                                        // Descurtir diretamente sem tela de confirmação
+                                        unlikeBtn.disabled = true;
+                                        unlikeBtn.style.opacity = "0.5";
+                                        const success = await unlikeMedia(item);
+                                        if (success) {
+                                            div.remove();
+                                            const idx = itens.indexOf(item);
+                                            if (idx !== -1) itens.splice(idx, 1);
+                                            document.getElementById("detalhesTitulo").innerText = `${titulo} (${itens.length})`;
+
+                                            if (titulo.includes('Foto') || titulo.includes('Post')) {
+                                                if (dataEuCurti?.fotosCurtidas) dataEuCurti.fotosCurtidas.count = itens.length;
+                                            } else if (titulo.includes('Destaque')) {
+                                                if (dataEuCurti?.destaquesCurtidos) dataEuCurti.destaquesCurtidos.count = itens.length;
+                                            } else if (titulo.includes('Stori')) {
+                                                if (dataEuCurti?.storiesCurtidos) dataEuCurti.storiesCurtidos.count = itens.length;
+                                            }
+                                            renderizarCardsInteracoes(dataEuCurti);
+
+                                            if (itens.length === 0) {
+                                                lista.innerHTML = '<p style="color: var(--ig-secondary-text, #a8a8a8); text-align: center; padding: 25px; font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif;">Nenhum item restante.</p>';
+                                            }
+                                        } else {
+                                            unlikeBtn.disabled = false;
+                                            unlikeBtn.style.opacity = "1";
+                                        }
+                                    };
+                                    div.appendChild(unlikeBtn);
+                                }
+
+                                grid.appendChild(div);
+                            });
+                            lista.appendChild(grid);
+                        }
+
+                        document.getElementById("voltarCardsBtn").onclick = () => {
+                            detalhesDiv.style.display = "none";
+                            document.getElementById("interacoesResultados").style.display = "grid";
+                        };
+                    }
+                }
+
+                function baixarReelAtual() {
+                    // Função auxiliar para verificar se um elemento está visível na tela
+                    const isElementVisible = (el) => {
+                        if (!el) return false;
+                        const rect = el.getBoundingClientRect();
+                        const viewHeight = window.innerHeight || document.documentElement.clientHeight;
+                        const viewWidth = window.innerWidth || document.documentElement.clientWidth;
+                        // Considera visível se estiver dentro da viewport e tiver dimensões
+                        return (
+                            rect.top >= 0 &&
+                            rect.left >= 0 &&
+                            rect.bottom <= viewHeight &&
+                            rect.right <= viewWidth &&
+                            rect.width > 0 &&
+                            rect.height > 0
+                        );
+                    };
+
+                    // Encontra todos os vídeos na página e filtra pelo que está visível
+                    const videos = Array.from(document.querySelectorAll('video'));
+                    const visibleVideo = videos.find(isElementVisible);
+
+                    if (visibleVideo && visibleVideo.src) {
+                        console.log("Vídeo do Reel encontrado:", visibleVideo.src);
+
+                        // Tenta extrair o nome de usuário para o nome do arquivo
+                        const reelContainer = visibleVideo.closest('article, div[role="dialog"]');
+                        let username = 'reel';
+                        if (reelContainer) {
+                            const userLink = reelContainer.querySelector('header a[href^="/"]');
+                            if (userLink) username = userLink.href.split('/')[1];
+                        }
+                        downloadMedia(visibleVideo.src, `reel_${username}_${Date.now()}.mp4`);
+                    } else {
+                        alert('Nenhum vídeo de Reel visível encontrado. Abra o Reel que deseja baixar e tente novamente.');
+                    }
+                }
+
+                async function handleActionOnSelected(selectedUsers, actionType, updateCallback) {
+                    if (selectedUsers.length === 0) {
+                        alert("Nenhum usuário selecionado.");
+                        return;
+                    }
+
+                    const actionConfig = {
+                        mute: {
+                            buttonId: 'silenciarSeguindoBtn',
+                            text: 'Silenciar/Reativar',
+                            dbStore: 'muted',
+                            func: (users, cb) => {
+                                showUnmuteOptionsModal((targetType) => {
+                                    unmuteUsers(users, cb, true, targetType); // Passa `true` para ativar o modo toggle
+                                });
+                            }
+                        },
+                        closeFriends: {
+                            buttonId: 'closeFriendsSeguindoBtn',
+                            text: 'Melhores Amigos',
+                            dbStore: 'closeFriends',
+                            func: async (users, cb) => {
+                                if (loadSettings().useApi) {
+                                    const adds = [];
+                                    const removes = [];
+                                    for (const u of users) {
+                                        const uid = getCachedUserId(u) || await getUserId(u);
+                                        if (uid) {
+                                            const isCurrentlyCF = userListCache.closeFriends && userListCache.closeFriends.has(u);
+                                            if (isCurrentlyCF) removes.push(uid);
+                                            else adds.push(uid);
+                                        }
+                                    }
+                                    if (adds.length > 0 || removes.length > 0) {
+                                        const res = await executeGraphqlSetBesties(adds, removes);
+                                        if (res.success) {
+                                            if (!userListCache.closeFriends) userListCache.closeFriends = new Set();
+                                            users.forEach(u => {
+                                                if (userListCache.closeFriends.has(u)) userListCache.closeFriends.delete(u);
+                                                else userListCache.closeFriends.add(u);
+                                            });
+                                            await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
+                                        }
+                                    }
+                                    if (cb) cb();
+                                } else {
+                                    await toggleListMembership(users, '/accounts/close_friends/', 'closeFriends', cb);
+                                }
+                            }
+                        },
+                        hideStory: {
+                            buttonId: 'hideStorySeguindoBtn',
+                            text: 'Ocultar Story',
+                            dbStore: 'hiddenStory',
+                            // Revertido para o método original que navega para a página de lista, conforme solicitado.
+                            func: (users, cb) => toggleListMembership(users, '/accounts/hide_story_and_live_from/', 'hiddenStory', cb)
+                        },
+                        unfollow: {
+                            buttonId: 'unfollowSeguindoBtn',
+                            text: 'Deixar de Seguir',
+                            dbStore: 'following',
+                            func: async (users, cb) => {
+                                if (!confirm(`Deixar de seguir ${users.length} usuário(s)?`)) {
+                                    const b = document.getElementById('unfollowSeguindoBtn');
+                                    if (b) { b.disabled = false; b.textContent = 'Deixar de Seguir'; }
+                                    toggleLoading(false);
+                                    return;
+                                }
+
+                                if (loadSettings().useApi) {
+                                    const unfollowDelay = loadSettings().unfollowDelay || 1500;
+                                    for (let i = 0; i < users.length; i++) {
+                                        const username = users[i];
+                                        const percent = Math.round(((i + 1) / users.length) * 100);
+                                        toggleLoading(true, percent, `Deixando de seguir ${username} (${i + 1}/${users.length})...`);
+
+                                        let uid = getCachedUserId(username);
+                                        if (!uid && typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                            const item = seguindoList.find(x => (typeof x === 'object' ? x?.username : x)?.toLowerCase() === username.toLowerCase());
+                                            if (item && typeof item === 'object') {
+                                                const foundId = item.id || item.pk || item.pk_id;
+                                                if (foundId) {
+                                                    uid = String(foundId);
+                                                    setCachedUserId(username, uid);
+                                                }
+                                            }
+                                        }
+                                        if (!uid) {
+                                            uid = await getUserId(username);
+                                        }
+
+                                        if (!uid) {
+                                            console.warn(`[IG Tools] Não foi possível obter o ID de ${username}`);
+                                            showToast(`⚠️ ID de ${username} não encontrado`);
+                                            continue;
+                                        }
+
+                                        try {
+                                            console.log(`[IG Tools] Enviando unfollow via API para ${username} (UID: ${uid})...`);
+                                            const apiResult = await executeGraphqlUnfollow(uid);
+                                            console.log(`[IG Tools] Resultado unfollow para ${username}:`, apiResult);
+
+                                            if (apiResult.success || apiResult.result?.status === 'ok') {
+                                                showToast(`✅ Deixou de seguir ${username}`);
+
+                                                const photoUrl = (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList))
+                                                    ? (seguindoList.find(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() === username.toLowerCase())?.photoUrl || null)
+                                                    : null;
+
+                                                dbHelper.saveUnfollowHistory({
+                                                    username: username,
+                                                    id: String(uid),
+                                                    photoUrl: photoUrl,
+                                                    unfollowDate: new Date().toISOString()
+                                                }).catch(e => console.error("Erro ao salvar no histórico de unfollow:", e));
+
+                                                if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                                    seguindoList = seguindoList.filter(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() !== username.toLowerCase());
+                                                    await dbHelper.saveCache('following', seguindoList).catch(e => console.error(e));
+                                                }
+
+                                                const rows = document.querySelectorAll(`tr[data-username="${username}"]`);
+                                                rows.forEach(r => r.remove());
+                                            } else {
+                                                console.error(`[IG Tools] Falha no unfollow de ${username}:`, apiResult);
+                                                showToast(`❌ Falha ao deixar de seguir ${username}`);
+                                            }
+                                        } catch (err) {
+                                            console.error(`[IG Tools] Erro ao deixar de seguir ${username}:`, err);
+                                            showToast(`❌ Erro ao deixar de seguir ${username}`);
+                                        }
+
+                                        if (i < users.length - 1) {
+                                            await new Promise(r => setTimeout(r, unfollowDelay));
+                                        }
+                                    }
+
+                                    if (cb) await cb();
+                                } else {
+                                    await performActionOnProfile(users, ['Deixar de seguir', 'Unfollow'], cb);
+                                }
+                            }
+                        },
+                        block: {
+                            buttonId: 'blockSeguindoBtn',
+                            text: 'Bloquear',
+                            dbStore: 'following',
+                            func: async (users, cb) => {
+                                if (!confirm(`Bloquear ${users.length} usuário(s)? Atenção: o Instagram deixará de seguir e bloqueará estes perfis.`)) {
+                                    const b = document.getElementById('blockSeguindoBtn');
+                                    if (b) { b.disabled = false; b.textContent = 'Bloquear'; }
+                                    toggleLoading(false);
+                                    return;
+                                }
+
+                                if (loadSettings().useApi) {
+                                    const blockDelay = loadSettings().unfollowDelay || 1500;
+                                    for (let i = 0; i < users.length; i++) {
+                                        const username = users[i];
+                                        const percent = Math.round(((i + 1) / users.length) * 100);
+                                        toggleLoading(true, percent, `Bloqueando ${username} (${i + 1}/${users.length})...`);
+
+                                        let uid = getCachedUserId(username);
+                                        if (!uid && typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                            const item = seguindoList.find(x => (typeof x === 'object' ? x?.username : x)?.toLowerCase() === username.toLowerCase());
+                                            if (item && typeof item === 'object') {
+                                                const foundId = item.id || item.pk || item.pk_id;
+                                                if (foundId) {
+                                                    uid = String(foundId);
+                                                    setCachedUserId(username, uid);
+                                                }
+                                            }
+                                        }
+                                        if (!uid) {
+                                            uid = await getUserId(username);
+                                        }
+
+                                        if (!uid) {
+                                            console.warn(`[IG Tools] Não foi possível obter o ID de ${username}`);
+                                            showToast(`⚠️ ID de ${username} não encontrado`);
+                                            continue;
+                                        }
+
+                                        try {
+                                            console.log(`[IG Tools] Enviando bloqueio via API para ${username} (UID: ${uid})...`);
+                                            const apiResult = await executeGraphqlBlockMany([uid]);
+                                            console.log(`[IG Tools] Resultado bloqueio para ${username}:`, apiResult);
+
+                                            if (apiResult.success || apiResult.result?.status === 'ok') {
+                                                showToast(`🚫 Bloqueou ${username}`);
+
+                                                if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                                    seguindoList = seguindoList.filter(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() !== username.toLowerCase());
+                                                    await dbHelper.saveCache('following', seguindoList).catch(e => console.error(e));
+                                                }
+
+                                                const rows = document.querySelectorAll(`tr[data-username="${username}"]`);
+                                                rows.forEach(r => r.remove());
+                                            } else {
+                                                console.error(`[IG Tools] Falha ao bloquear ${username}:`, apiResult);
+                                                showToast(`❌ Falha ao bloquear ${username}`);
+                                            }
+                                        } catch (err) {
+                                            console.error(`[IG Tools] Erro ao bloquear ${username}:`, err);
+                                            showToast(`❌ Erro ao bloquear ${username}`);
+                                        }
+
+                                        if (i < users.length - 1) {
+                                            await new Promise(r => setTimeout(r, blockDelay));
+                                        }
+                                    }
+
+                                    if (cb) await cb();
+                                } else {
+                                    await performActionOnProfile(users, ['Bloquear', 'Block'], cb);
+                                }
+                            }
+                        }
+                    };
+
+                    const config = actionConfig[actionType];
+                    if (!config) return;
+
+                    const btn = document.getElementById(config.buttonId);
+                    btn.disabled = true;
+                    btn.textContent = 'Processando...';
+
+                    toggleLoading(true, 0, "Processando...");
+                    await config.func(selectedUsers, async () => {
+                        toggleLoading(false);
+                        btn.disabled = false;
+                        btn.textContent = config.text;
+                        alert(`Ação "${config.text}" concluída para ${selectedUsers.length} usuário(s).`);
+                        // Atualiza o estado localmente e re-renderiza
+                        if (updateCallback && config.dbStore) await updateCallback(selectedUsers, config.dbStore);
+                    }, selectedUsers, updateCallback); // Pass selectedUsers and updateCallback
+                }
+
+                async function performActionOnProfile(users, menuTexts, callback) {
+                    const originalPath = window.location.pathname;
+                    let cancelled = false;
+                    const { bar, update, closeButton } = createCancellableProgressBar();
+                    closeButton.onclick = () => {
+                        cancelled = true;
+                        bar.remove();
+                        alert("Processo interrompido.");
+                    };
+                    const isCancelled = () => cancelled;
+                    toggleLoading(true, 0, "Processando perfis...");
+
+                    // Função interna para ação humana (navegação e clique)
+                    const executeHumanAction = async (username) => {
+                        history.pushState(null, null, `/${username}/`);
+                        window.dispatchEvent(new Event("popstate"));
+                        await new Promise(resolve => setTimeout(resolve, 4000));
+
+                        const followingButton = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"]')).find(el => {
+                            const text = el.innerText.trim();
+                            return text === 'Seguindo' || text === 'Following';
+                        });
+                        if (!followingButton) { console.warn(`Botão 'Seguindo' não encontrado para ${username}.`); return; }
+                        simulateClick(followingButton);
+                        await new Promise(resolve => setTimeout(resolve, 1500));
+                        const actionOption = Array.from(document.querySelectorAll('div[role="button"], div[role="menuitem"]')).find(el =>
+                            menuTexts.some(text => el.innerText.includes(text))
+                        );
+                        if (actionOption) { simulateClick(actionOption); console.log(`Ação executada para ${username}.`); }
+                        // If the action is to add to close friends, and it was successful, add to cache
+                        else { console.warn(`Opção não encontrada para ${username}.`); simulateClick(followingButton); }
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    };
+
+                    // --- LÓGICA API VS HUMANA ---
+                    if (loadSettings().useApi) {
+                        for (let i = 0; i < users.length; i++) {
+                            if (isCancelled()) break;
+                            const username = users[i];
+                            update(i + 1, users.length, `Processando ${username}...`);
+                            toggleLoading(true, ((i + 1) / users.length) * 100, `Processando ${username}...`);
+                            const uid = await getUserId(username);
+                            let success = false;
+                            if (uid) {
+                                try {
+                                    if (menuTexts.some(t => t.includes('Amigos Próximos') || t.includes('Amigo próximo'))) {
+                                        const isCurrentlyCF = userListCache.closeFriends && userListCache.closeFriends.has(username);
+                                        const adds = isCurrentlyCF ? [] : [uid];
+                                        const removes = isCurrentlyCF ? [uid] : [];
+                                        const res = await executeGraphqlSetBesties(adds, removes);
+                                        if (res.success) {
+                                            success = true;
+                                            if (isCurrentlyCF) userListCache.closeFriends.delete(username);
+                                            else userListCache.closeFriends.add(username);
+                                            await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
+                                            console.log(`[IG Tools] GraphQL Success: ${username} (Close Friends)`);
+                                        }
+                                    } else if (menuTexts.some(t => t.includes('Desbloquear') || t.includes('Unblock'))) {
+                                        const res = await executeApiUnblock(uid, username);
+                                        if (res.success) {
+                                            success = true;
+                                            console.log(`[IG Tools] API Unblock Sucesso: ${username}`);
+                                        }
+                                    }
+                                } catch (e) { console.error(`Erro API Action ${username}`, e); }
+                            }
+
+                            if (!success) {
+                                console.log(`Fallback para humano: ${username}`);
+                                await executeHumanAction(username);
+                            } else {
+                                await new Promise(r => setTimeout(r, loadSettings().requestDelay || 500));
+                            }
+                        }
+                        bar.remove();
+                        history.pushState(null, null, originalPath); window.dispatchEvent(new Event("popstate"));
+                        if (callback) callback();
+                        return; // Exit after API processing
+                    }
+
+                    for (let i = 0; i < users.length; i++) {
+                        if (isCancelled()) break;
+                        update(i + 1, users.length, "Processando:");
+                        await executeHumanAction(users[i]);
+                    }
+                    // After human actions, update the cache based on the final state
+
+                    bar.remove();
+
+                    // Retorna para a página original
+                    history.pushState(null, null, originalPath);
+                    window.dispatchEvent(new Event("popstate"));
+                    await new Promise(r => setTimeout(r, 1000));
+
+                    if (callback) callback(users); // Pass the list of users that were processed
+                }
+
+                async function toggleListMembership(users, pageUrl, cacheKey, callback) {
+                    const originalPath = window.location.pathname;
+                    let cancelled = false;
+                    const { bar, update, closeButton } = createCancellableProgressBar();
+                    closeButton.onclick = () => {
+                        cancelled = true;
+                        bar.remove();
+                        alert("Processo interrompido.");
+                    };
+                    const isCancelled = () => cancelled;
+                    toggleLoading(true, 0, "Processando lista...");
+
+                    // Função interna para ação humana
+                    const executeHumanToggle = async (username) => {
+                        if (window.location.pathname !== pageUrl) {
+                            history.pushState(null, null, pageUrl);
+                            window.dispatchEvent(new Event("popstate"));
+                            await new Promise(r => setTimeout(r, 3000));
+                        }
+
+                        // Pesquisa pelo username
+                        const searchInput = document.querySelector('input[data-bloks-name="bk.components.TextInput"], input[placeholder*="Pesquisar"], input[placeholder*="Search"]');
+                        if (searchInput) {
+                            // Simula digitação (React friendly)
+                            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                            nativeInputValueSetter.call(searchInput, username);
+                            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+                            await new Promise(r => setTimeout(r, 3500));
+                        }
+
+                        const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"], div.wbloks_1'));
+                        let found = false;
+                        for (const flex of flexboxes) {
+                            const spans = Array.from(flex.querySelectorAll('span'));
+                            const userText = (spans.length > 0 ? spans[0].innerText.trim() : (flex.innerText && flex.innerText.trim().split('\n')[0])) || '';
+                            if (userText.toLowerCase() === username.toLowerCase()) {
+                                const checkboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"], div[aria-label*="caixa de seleção"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção') || el.getAttribute('aria-label')?.includes('Toggle checkbox') || el.getAttribute('role') === 'button');
+                                if (checkboxContainer) {
+                                    checkboxContainer.click();
+                                    found = true;
+                                    if (cacheKey === 'closeFriends') {
+                                        if (!userListCache.closeFriends) userListCache.closeFriends = new Set();
+                                        if (userListCache.closeFriends.has(username)) userListCache.closeFriends.delete(username);
+                                        else userListCache.closeFriends.add(username);
+                                        await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
+                                    } else if (cacheKey === 'hiddenStory') {
+                                        if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
+                                        if (userListCache.hiddenStory.has(username)) userListCache.hiddenStory.delete(username);
+                                        else userListCache.hiddenStory.add(username);
+                                        await dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
+                                    }
+                                    await new Promise(r => setTimeout(r, 2000)); // Espera 2s após o clique
+                                    break;
+                                }
+                            }
+                        }
+                        if (!found) {
+                            console.warn(`Não foi possível encontrar o checkbox para ${username} na página ${pageUrl}.`);
+                        }
+
+                        // Limpa a pesquisa se foi usada
+                        if (searchInput) {
+                            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                            nativeInputValueSetter.call(searchInput, "");
+                            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                            await new Promise(r => setTimeout(r, 1500));
+                        } else {
+                            await new Promise(r => setTimeout(r, 1000));
+                        }
+                    };
+
+                    // --- LÓGICA API VS HUMANA ---
+                    if (loadSettings().useApi) {
+                        for (let i = 0; i < users.length; i++) {
+                            if (isCancelled()) break;
+                            const username = users[i];
+                            toggleLoading(true, ((i + 1) / users.length) * 100, `Processando ${username}...`);
+                            update(i + 1, users.length, `Processando ${username}...`);
+                            const uid = await getUserId(username);
+                            let success = false;
+                            if (uid) {
+                                try {
+                                    if (cacheKey === 'hiddenStory') {
+                                        const isCurrentlyHidden = userListCache.hiddenStory && userListCache.hiddenStory.has(username);
+                                        const action = isCurrentlyHidden ? 'unhide' : 'hide';
+                                        const res = await executeWbloksHideStory(uid, username, action);
+                                        if (res.success) {
+                                            success = true;
+                                            if (isCurrentlyHidden) userListCache.hiddenStory.delete(username);
+                                            else userListCache.hiddenStory.add(username);
+                                            await dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
+                                            console.log(`[IG Tools] API Success: ${username} (${action})`);
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.error(`Erro API Toggle List ${username}`, e);
+                                }
+
+                            }
+
+                            if (!success) {
+                                console.log(`Fallback para humano: ${username}`);
+                                await executeHumanToggle(username);
+                            } else {
+                                await new Promise(r => setTimeout(r, loadSettings().requestDelay || 500));
+                            }
+                        }
+                        bar.remove();
+                        history.pushState(null, null, originalPath); window.dispatchEvent(new Event("popstate"));
+                        if (callback) callback();
+                        return; // Exit after API processing
+                    }
+
+                    // Navega para a página correta
+                    history.pushState(null, null, pageUrl);
+                    window.dispatchEvent(new Event("popstate"));
+                    await new Promise(r => setTimeout(r, 3000));
+
+                    for (let i = 0; i < users.length; i++) {
+                        if (isCancelled()) break;
+                        update(i + 1, users.length, "Processando:");
+                        await executeHumanToggle(users[i]);
+                    }
+
+                    bar.remove();
+
+                    // Retorna para a página original
+                    history.pushState(null, null, originalPath);
+                    window.dispatchEvent(new Event("popstate"));
+                    await new Promise(r => setTimeout(r, 1000));
+
+                    if (callback) callback(users); // Pass the list of users that were processed
+                }
+
+
+
+                async function getProfilePic(username) {
+                    const uid = getCachedUserId(username);
+                    if (uid) {
+                        try {
+                            const stats = await executeGraphqlUserHoverCard(uid);
+                            if (stats?.profilePicUrl) return stats.profilePicUrl;
+                        } catch (e) { }
+                    }
+                    return DEFAULT_AVATAR;
+                }
+
+                function preencherTabela(userList, showCheckbox = true, isHistory = false, selectedSet = null, onCountChange = null) {
+                    const tableId = isHistory ? "historicoTable" : "naoSegueDeVoltaTable";
+                    const table = document.getElementById(tableId);
+                    if (!table) return;
+
+                    table.innerHTML = `
+                            <thead>
+                                <tr>
+                                    <th style="border: 1px solid #ccc; padding: 10px;">ID</th>
+                                    <th style="border: 1px solid #ccc; padding: 10px;">Username</th>
+                                    <th style="border: 1px solid #ccc; padding: 10px;">Foto</th>
+                                    ${isHistory ? '<th style="border: 1px solid #ccc; padding: 10px;">Data do Unfollow</th>' : ''}
+                                    ${showCheckbox ? '<th style="border: 1px solid #ccc; padding: 10px;">Check</th>' : ''}
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        `;
+                    // Seleciona o tbody APÓS a tabela ser criada
+                    const tbody = table.querySelector("tbody");
+                    if (!tbody) return;
+
+                    const itemsPerPage = loadSettings().itemsPerPage; // Número de itens por página
+                    const maxPageButtons = 5; // Número máximo de botões de página exibidos
+                    let currentPage = 1; // Página atual
+
+                    function renderTable(page) {
+                        tbody.innerHTML = ""; // Limpa a tabela para a nova página
+                        const startIndex = (page - 1) * itemsPerPage;
+                        const endIndex = Math.min(startIndex + itemsPerPage, userList.length);
+
+                        userList.slice(startIndex, endIndex).forEach((userData, index) => {
+                            const isObject = typeof userData === 'object' && userData !== null;
+                            const username = isObject ? userData.username : userData;
+                            const photoUrl = isObject ? userData.photoUrl : null;
+                            if (isObject && userData.id) {
+                                setCachedUserId(username, String(userData.id));
+                            }
+                            let unfollowDate = null;
+                            if (isHistory) {
+                                try {
+                                    unfollowDate = userData.unfollowDate ? new Date(userData.unfollowDate).toLocaleString('pt-BR') : 'Data desconhecida';
+                                } catch (e) { unfollowDate = 'Data inválida'; }
+                            }
+
+                            const tr = document.createElement("tr");
+                            tr.setAttribute('data-username', username);
+                            tr.innerHTML = `
+                                    <td style="border: 1px solid #ccc; padding: 10px;">${startIndex + index + 1}</td>
+                                    <td style="border: 1px solid #ccc; padding: 10px;">
+                                        <a href="https://www.instagram.com/${username}" target="_blank">${username}</a>
+                                    </td>
+                                    <td style="border: 1px solid #ccc; padding: 10px;">
+                                        <img id="img_${username}_${isHistory ? 'hist' : 'main'}" src="${photoUrl || DEFAULT_AVATAR}" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
+                                    </td>` +
+                                (isHistory ? `<td style="border: 1px solid #ccc; padding: 10px;">${unfollowDate}</td>` : '') +
+                                (showCheckbox ? `<td style="border: 1px solid #ccc; padding: 10px;">
+                                        <input type="checkbox" class="unfollowCheckbox" data-username="${username}" ${selectedSet && selectedSet.has(username) ? 'checked' : ''} />
+                                    </td>` : '') + `
+                                `;
+
+                            if (showCheckbox && selectedSet) {
+                                tr.querySelector('.unfollowCheckbox').addEventListener('change', (e) => {
+                                    if (e.target.checked) selectedSet.add(username);
+                                    else selectedSet.delete(username);
+                                    if (onCountChange) onCountChange();
+                                });
+                            }
+
+                            // Tratamento de erro de imagem (link expirado): fallback silencioso para DEFAULT_AVATAR
+                            const img = tr.querySelector('img');
+                            if (img) {
+                                img.onerror = function () {
+                                    this.onerror = null;
+                                    this.src = DEFAULT_AVATAR;
+                                };
+                            }
+
+                            tbody.appendChild(tr);
+                        });
+
+                        updatePaginationControls();
+                    }
+
+                    function updatePaginationControls() {
+                        const paginationDiv = document.getElementById("paginationControls");
+                        if (!paginationDiv) return;
+
+                        paginationDiv.innerHTML = ""; // Limpa os controles de paginação
+
+                        const totalPages = Math.ceil(userList.length / itemsPerPage);
+                        const startPage = Math.max(1, currentPage - Math.floor(maxPageButtons / 2));
+                        const endPage = Math.min(totalPages, startPage + maxPageButtons - 1);
+
+                        // Indicador de página
+                        const pageIndicator = document.createElement("span");
+                        pageIndicator.textContent = `Página ${currentPage} de ${totalPages}`;
+                        pageIndicator.style.marginRight = "20px";
+                        pageIndicator.style.fontWeight = "bold";
+                        paginationDiv.appendChild(pageIndicator);
+
+                        // Botão "Anterior"
+                        const prevButton = document.createElement("button");
+                        prevButton.textContent = "Anterior";
+                        prevButton.disabled = currentPage === 1;
+                        prevButton.style.marginRight = "10px";
+                        prevButton.addEventListener("click", () => {
+                            if (currentPage > 1) {
+                                currentPage--;
+                                renderTable(currentPage);
+                            }
+                        });
+                        paginationDiv.appendChild(prevButton);
+
+                        // Botões de página (limitados ao conjunto atual)
+                        for (let i = startPage; i <= endPage; i++) {
+                            const pageButton = document.createElement("button");
+                            pageButton.textContent = i;
+                            pageButton.style.marginRight = "5px";
+                            pageButton.disabled = i === currentPage;
+                            pageButton.addEventListener("click", () => {
+                                currentPage = i;
+                                renderTable(currentPage);
+                            });
+                            paginationDiv.appendChild(pageButton);
+                        }
+
+                        // Botão "Próximo"
+                        const nextButton = document.createElement("button");
+                        nextButton.textContent = "Próximo";
+                        nextButton.disabled = currentPage === totalPages;
+                        nextButton.style.marginLeft = "10px";
+                        nextButton.addEventListener("click", () => {
+                            if (currentPage < totalPages) {
+                                currentPage++;
+                                renderTable(currentPage);
+                            }
+                        });
+                        paginationDiv.appendChild(nextButton);
+                    }
+
+                    // Adiciona os controles de paginação
+                    let paginationDiv = document.getElementById("paginationControls");
+                    if (!paginationDiv) {
+                        if (!document.getElementById("tabelaContainer")) return; // Garante que o container existe
+                        paginationDiv = document.createElement("div");
+                        paginationDiv.id = "paginationControls";
+                        paginationDiv.style.marginTop = "20px";
+                        document.getElementById("tabelaContainer").appendChild(paginationDiv);
+                    }
+
+                    renderTable(currentPage); // Renderiza a primeira página
+                }
+
+                function isMobileDevice() {
+                    // Detectar se o dispositivo é móvel
+                    return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+                }
+
+                function startScrollMobile() {
+                    let lastScrollTop = 0; // Para verificar se o scroll mudou
+                    let waitTime = 0; // Tempo de espera para detectar o fim do scroll
+
+                    scrollInterval = setInterval(() => {
+                        // Extrair usernames visíveis na página
+                        extractUsernames();
+                        updateProgressBar();
+
+                        // Rolar para baixo
+                        window.scrollTo(0, document.body.scrollHeight);
+
+                        // Verificar se o scroll parou
+                        const currentScrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+                        if (currentScrollTop === lastScrollTop) {
+                            waitTime += 1; // Incrementa o tempo de espera
+                            if (waitTime >= 10) { // Se não houver mudança no scroll por 10 ciclos (10 segundos)
+                                clearInterval(scrollInterval); // Parar o intervalo
+                                startDownload(); // Iniciar o download
+                            }
+                        } else {
+                            waitTime = 0; // Resetar o tempo de espera se o scroll mudou
+                        }
+
+                        lastScrollTop = currentScrollTop; // Atualizar a posição do scroll
+                    }, 1000); // Intervalo de 1 segundo
+                }
+                voiceControl.init();
+            }
+
+            async function downloadMedia(url, filename) {
+                alert(`Iniciando download de: ${filename}`);
+                try {
+                    // Se for uma data URL (do canvas), não precisa de fetch
+                    if (url.startsWith('data:')) {
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = filename;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        return;
+                    }
+
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error('A resposta da rede não foi ok.');
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = blobUrl;
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(blobUrl);
+                } catch (error) {
+                    console.error('Erro ao baixar mídia:', error);
+                    alert('Não foi possível baixar automaticamente. Abrindo em uma nova aba para download manual.');
+                    window.open(url, '_blank');
+                }
+            }
+
+            // --- FIM DA LÓGICA DE DOWNLOAD DE STORIES ---
+
+            dbHelper.openDB(); // Abre a conexão com o IndexedDB na inicialização
+            applyInitialSettings(); // Aplica as configurações salvas na inicialização
+            injectMenu();
+            // Protege contra o erro de hidratação do React (#418) aguardando o carregamento inicial completo
+            if (document.readyState === 'complete') {
+                setTimeout(addFeedDownloadButtons, 1500);
+            } else {
+                window.addEventListener('load', () => setTimeout(addFeedDownloadButtons, 1500));
+            }
+            initShortcutListener();
+
+            // Inicializa a verificação agendada de unfollow por e-mail
+            setTimeout(executarVerificacaoAgendadaUnfollow, 10000); // Executa 10s após inicialização
+            setInterval(executarVerificacaoAgendadaUnfollow, 600000); // Checa a cada 10 minutos (para ver se passou 1h)
+
+            // Re-inject menu on navigation
+            const push = history.pushState;
+            history.pushState = function () {
+                push.apply(history, arguments);
+                setTimeout(() => {
+                    if (window.location.href.includes("instagram.com")) injectMenu();
+                }, 500);
+            };
+
+            window.addEventListener("popstate", () => {
+                setTimeout(() => {
+                    if (window.location.href.includes("instagram.com")) injectMenu();
+                    // Aplica as configurações após a navegação também
+                    if (document.getElementById("assistiveTouchMenu")) applyInitialSettings();
+                }, 500);
+            });
+
+            // Garante que o menu seja injetado periodicamente caso o DOM mude (SPA)
+            setInterval(() => {
+                if (window.location.href.includes("instagram.com")) {
+                    injectMenu();
+                    document.querySelectorAll('article:not([data-privacy-processed="true"])').forEach(processArticlePrivacy);
+                }
+            }, 1000);
+
+            // --- VERIFICAÇÃO DE PRIVACIDADE DO PERFIL ---
+            const privacyCache = new Map();
+            const privacyPending = new Map();
+            const privacyErrorCooldown = new Map();
+            const privacyQueue = [];
+            let isProcessingQueue = false;
+            let globalRateLimitResetTime = 0;
+
+            async function processPrivacyQueue() {
+                if (isProcessingQueue) return;
+                isProcessingQueue = true;
+
+                while (privacyQueue.length > 0) {
+                    const task = privacyQueue.shift();
+                    try {
+                        const result = await task.fn();
+                        task.resolve(result);
+                    } catch (e) {
+                        task.reject(e);
+                    }
+                    // Cooldown de 1.5 segundos entre as requisições para evitar rate limit (429)
+                    await new Promise(r => setTimeout(r, 1500));
+                }
+
+                isProcessingQueue = false;
+            }
+
+            function checkProfilePrivacy(username) {
+                if (!loadSettings().validateProfileStatus) {
+                    return Promise.resolve(null);
+                }
+                if (privacyCache.has(username)) {
+                    return Promise.resolve(privacyCache.get(username));
+                }
+                if (Date.now() < globalRateLimitResetTime) {
+                    return Promise.resolve(null);
+                }
+                if (privacyErrorCooldown.has(username) && Date.now() - privacyErrorCooldown.get(username) < 60000) {
+                    return Promise.resolve(null);
+                }
+                if (privacyPending.has(username)) {
+                    return privacyPending.get(username);
+                }
+
+                const promise = new Promise((resolve, reject) => {
+                    privacyQueue.push({
+                        fn: async () => {
+                            if (Date.now() < globalRateLimitResetTime) {
+                                return null;
+                            }
+                            try {
+                                const appID = '936619743392459';
+                                const response = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, {
+                                    headers: { 'X-IG-App-ID': appID }
+                                });
+                                if (!response.ok) {
+                                    if (response.status === 429) {
+                                        console.warn("[IG Tools] Taxa de requisições excedida (429). Pausando consultas por 2 minutos.");
+                                        globalRateLimitResetTime = Date.now() + 120000; // Bloqueia por 2 minutos
+                                    }
+                                    throw new Error(`HTTP ${response.status}`);
+                                }
+                                const data = await response.json();
+                                const isPrivate = data.data?.user?.is_private;
+                                if (isPrivate !== undefined) {
+                                    privacyCache.set(username, isPrivate);
+                                    privacyErrorCooldown.delete(username);
+                                    return isPrivate;
+                                }
+                                throw new Error("Dados inválidos da API");
+                            } catch (e) {
+                                console.error(`[IG Tools] Erro ao obter privacidade para ${username}:`, e);
+                                privacyErrorCooldown.set(username, Date.now());
+                                return null;
+                            }
+                        },
+                        resolve,
+                        reject
+                    });
+                });
+
+                privacyPending.set(username, promise);
+                promise.finally(() => {
+                    privacyPending.delete(username);
+                });
+
+                processPrivacyQueue();
+                return promise;
+            }
+
+            function getPostAuthorElement(article) {
+                const header = article.querySelector('header');
+                if (header) {
+                    const links = header.querySelectorAll('a[href]');
+                    for (const link of links) {
+                        const href = link.getAttribute('href');
+                        if (!href) continue;
+                        const cleanPath = href.split('?')[0].split('#')[0];
+                        const parts = cleanPath.split('/').filter(Boolean);
+                        if (parts.length === 1) {
+                            const username = parts[0];
+                            if (/^[a-zA-Z0-9._]+$/.test(username)) {
+                                const text = link.textContent.trim();
+                                if (text === username) {
+                                    return { username, element: link };
+                                }
+                            }
+                        }
+                    }
+                }
+                const links = article.querySelectorAll('a[href]');
+                for (const link of links) {
+                    const href = link.getAttribute('href');
+                    if (!href) continue;
+                    const cleanPath = href.split('?')[0].split('#')[0];
+                    const parts = cleanPath.split('/').filter(Boolean);
+                    if (parts.length === 1) {
+                        const username = parts[0];
+                        if (/^[a-zA-Z0-9._]+$/.test(username)) {
+                            const text = link.textContent.trim();
+                            if (text === username) {
+                                return { username, element: link };
+                            }
+                        }
+                    }
+                }
+                return null;
+            }
+
+            async function processArticlePrivacy(article) {
+                // Verifica se a validação de perfil está ativada nas configurações
+                if (!loadSettings().validateProfileStatus) return;
+
+                if (article.getAttribute('data-privacy-processed') === 'true') return;
+
+                const authorInfo = getPostAuthorElement(article);
+                if (!authorInfo) return;
+
+                const { username, element } = authorInfo;
+                article.setAttribute('data-privacy-processed', 'true');
+
+                const isPrivate = await checkProfilePrivacy(username);
+                if (isPrivate === null) {
+                    article.removeAttribute('data-privacy-processed');
+                    return;
+                }
+
+                if (element.querySelector('.ig-privacy-badge')) return;
+
+                const badge = document.createElement('span');
+                badge.className = 'ig-privacy-badge';
+                badge.style.cssText = `
+                    margin-left: 6px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 2px 6px;
+                    font-size: 11px;
+                    font-weight: bold;
+                    border-radius: 4px;
+                    color: #ffffff;
+                    vertical-align: middle;
+                `;
+
+                if (isPrivate) {
+                    badge.innerText = 'P';
+                    badge.style.backgroundColor = '#e1306c';
+                    badge.title = 'Perfil Privado';
+                } else {
+                    badge.innerText = 'A';
+                    badge.style.backgroundColor = '#28a745';
+                    badge.title = 'Perfil Público';
+                }
+
+                element.appendChild(badge);
+            }
+
+            // --- DOWNLOAD DE MÍDIA DO FEED E REELS ---
+            function addFeedDownloadButtons() {
+                const observer = new MutationObserver(mutations => {
+                    mutations.forEach(mutation => {
+                        if (mutation.addedNodes.length) {
+                            // Busca por posts (articles) que ainda não foram processados
+                            const articles = document.querySelectorAll('article:not([data-download-processed])');
+                            articles.forEach(article => {
+                                article.setAttribute('data-download-processed', 'true');
+                                addDownloadButtonToMedia(article);
+                            });
+
+                            // Processa o status de privacidade para posts
+                            document.querySelectorAll('article:not([data-privacy-processed="true"])').forEach(processArticlePrivacy);
+                        }
+                    });
+                });
+
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true
+                });
+
+                // Varredura inicial de privacidade
+                document.querySelectorAll('article:not([data-privacy-processed="true"])').forEach(processArticlePrivacy);
+            }
+
+            function addDownloadButtonToMedia(article) {
+                // Função para processar e adicionar botão a um container de mídia
+                const processContainer = (container) => {
+                    const mediaElement = container.querySelector('img, video');
+                    // Pula se não houver mídia, se o botão já existir, ou se for imagem de perfil
+                    if (!mediaElement || container.querySelector('.feed-download-btn') || container.closest('header')) {
+                        return;
+                    }
+                    createAndAttachButton(container);
+                };
+
+                // Processa mídias já existentes no artigo
+                article.querySelectorAll('ul > li, div[role="presentation"], ._aagv').forEach(processContainer);
+
+                // Cria um observador específico para este artigo para lidar com o carregamento dinâmico do carrossel
+                const articleObserver = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.addedNodes.length) {
+                            mutation.addedNodes.forEach(node => {
+                                if (node.nodeType === 1) { // Se for um elemento
+                                    // Procura por containers de mídia dentro dos nós adicionados
+                                    node.querySelectorAll('ul > li, div[role="presentation"], ._aagv').forEach(processContainer);
+                                    // Verifica o próprio nó adicionado
+                                    if (node.matches('ul > li, div[role="presentation"], ._aagv')) {
+                                        processContainer(node);
+                                    }
+                                }
+                            });
+                        }
+                    });
+                });
+
+                articleObserver.observe(article, { childList: true, subtree: true });
+            }
+
+            function createAndAttachButton(container) {
+                if (!container) return;
+
+                // Evita adicionar botão em imagens de perfil nos comentários
+                const closestCommentSection = container.closest('ul[class*="x78zum5"]');
+                if (closestCommentSection) {
+                    const commentAuthorLink = closestCommentSection.querySelector('a[href*="/p/"]');
+                    if (!commentAuthorLink) { // Se não achar link de post, é provável que seja a lista de comentários principal
+                        return;
+                    }
+                }
+
+                // Evita adicionar botão em imagens de perfil no header do post
+                if (container.closest('header')) {
+                    return;
+                }
+
+                // Se o botão já existe, não faz nada
+                if (container.querySelector('.feed-download-btn')) return;
+
+                const btn = document.createElement('button');
+                btn.innerHTML = '⬇️';
+                btn.className = 'feed-download-btn';
+                btn.style.cssText = `
+                    position: absolute;
+                    top: 15px;
+                    left: 15px;
+                    z-index: 100;
+                    background-color: rgba(0, 0, 0, 0.6);
+                    color: white;
+                    border: none;
+                    border-radius: 50%;
+                    width: 32px;
+                    height: 32px;
+                    font-size: 16px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    line-height: 1;
+                `;
+
+                // Impede que o evento 'mousedown' se propague para os elementos pais.
+                // Isso é crucial para evitar que o Instagram abra o pop-up da postagem
+                // e cause o erro 'aria-hidden'.
+                btn.addEventListener('mousedown', (e) => {
+                    e.stopPropagation();
+                });
+
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+
+                    // Lógica para baixar a mídia contida no container do botão
+                    const activeMedia = container.querySelector('video, img');
+
+                    if (activeMedia) {
+                        const isVideo = activeMedia.tagName === 'VIDEO';
+                        let mediaUrl = activeMedia.src;
+
+                        // Para vídeos (especialmente Reels), a URL pode estar em um elemento <source>
+                        if (isVideo) {
+                            const sourceElement = activeMedia.querySelector('source');
+                            if (sourceElement && sourceElement.src) {
+                                mediaUrl = sourceElement.src;
+                            }
+                        }
+
+                        const filename = `instagram_${Date.now()}.${isVideo ? 'mp4' : 'jpg'}`;
+                        downloadMedia(mediaUrl, filename);
+                    } else {
+                        alert('Não foi possível encontrar a mídia para download.');
+                    }
+                };
+                container.style.position = 'relative';
+                container.appendChild(btn);
+            }
+        } // Esta chave fecha o if (window.location.href.includes("instagram.com"))
+    }
+
+    // Inicialização: Tenta rodar assim que o body estiver pronto
+    // Isso garante que o prompt de login apareça mesmo que o layout do IG demore a carregar
+    if (document.body) {
+        initScript();
+    } else {
+        const observer = new MutationObserver((mutations, obs) => {
+            if (document.body) {
+                console.log("[IG Tools] Body detectado, iniciando.");
+                initScript();
+                obs.disconnect();
+            }
+        });
+        observer.observe(document.documentElement, {
+            childList: true,
+            subtree: true
+        });
+    }
+})();

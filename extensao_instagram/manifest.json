@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "IG Tools Pro",
+  "version": "1.1.0",
+  "description": "Ferramentas avançadas para Instagram: Download de mídias, Histórias, Destaques, Gestão de Seguidores, Bloqueados e Modo Anônimo.",
+  "permissions": [
+    "storage",
+    "declarativeNetRequest"
+  ],
+  "host_permissions": [
+    "https://*.instagram.com/*",
+    "https://*.googleapis.com/*",
+    "https://accounts.google.com/*",
+    "*://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ruleset_1",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.instagram.com/*",
+        "https://instagram.com/*"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.instagram.com/*",
+        "https://instagram.com/*"
+      ],
+      "js": [
+        "src/core/config.js",
+        "src/core/i18n.js",
+        "src/network/http-client.js",
+        "src/network/gdrive-api.js",
+        "src/core/storage.js",
+        "instagram.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}

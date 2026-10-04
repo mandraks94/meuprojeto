@@ -7851,21 +7851,44 @@
                     // Carrega seguidores e seguindo para cruzar informações e permitir silenciar qualquer contato
                     let followersAccounts = [];
                     let followingAccounts = [];
+
+                    const unpackList = (cacheObj) => {
+                        if (!cacheObj) return [];
+                        if (Array.isArray(cacheObj)) return cacheObj;
+                        if (cacheObj.details instanceof Map) return Array.from(cacheObj.details.values());
+                        if (cacheObj.data && Array.isArray(cacheObj.data)) return cacheObj.data;
+                        if (cacheObj.users && Array.isArray(cacheObj.users)) return cacheObj.users;
+                        if (cacheObj.users instanceof Map) return Array.from(cacheObj.users.values());
+                        if (cacheObj instanceof Map) return Array.from(cacheObj.values());
+                        if (cacheObj instanceof Set) return Array.from(cacheObj).map(u => (typeof u === 'string' ? { username: u } : u));
+                        return [];
+                    };
+
+                    const extractUname = (f) => {
+                        if (!f) return '';
+                        if (typeof f === 'string') return f.replace(/^@/, '').toLowerCase().trim();
+                        if (typeof f === 'object') {
+                            const u = f.username || f.user?.username || f.name || f.value || '';
+                            return String(u).replace(/^@/, '').toLowerCase().trim();
+                        }
+                        return '';
+                    };
+
                     try {
-                        const [dbFollowers, dbFollowing, dbMuted] = await Promise.all([
+                        const [dbFollowers, dbFollowing, dbMuted, dbSeguidores, dbSeguindo] = await Promise.all([
                             dbHelper.loadCache('followers') || dbHelper.getCache?.('followers'),
                             dbHelper.loadCache('following') || dbHelper.getCache?.('following'),
-                            dbHelper.loadCache('muted') || dbHelper.getCache?.('muted')
+                            dbHelper.loadCache('muted') || dbHelper.getCache?.('muted'),
+                            dbHelper.loadCache('seguidores') || dbHelper.getCache?.('seguidores'),
+                            dbHelper.loadCache('seguindo') || dbHelper.getCache?.('seguindo')
                         ]);
-                        const unpackList = (cacheObj) => {
-                            if (!cacheObj) return [];
-                            if (Array.isArray(cacheObj)) return cacheObj;
-                            if (cacheObj.details instanceof Map) return Array.from(cacheObj.details.values());
-                            if (cacheObj instanceof Set) return Array.from(cacheObj).map(u => (typeof u === 'string' ? { username: u } : u));
-                            return [];
-                        };
+
                         followersAccounts = unpackList(dbFollowers);
+                        if (followersAccounts.length === 0) followersAccounts = unpackList(dbSeguidores);
+
                         followingAccounts = unpackList(dbFollowing);
+                        if (followingAccounts.length === 0) followingAccounts = unpackList(dbSeguindo);
+
                         if (Array.isArray(dbMuted) && dbMuted.length > 0) {
                             dbMuted.forEach(u => {
                                 const uname = (typeof u === 'string' ? u : u?.username || '').toLowerCase().trim();
@@ -7881,32 +7904,95 @@
                         }
                     } catch (_) { }
 
-                    if (followersAccounts.length === 0 && dbHelper?._cache?.followers && Array.isArray(dbHelper._cache.followers)) {
-                        followersAccounts = dbHelper._cache.followers;
+                    // Fallbacks de memória no dbHelper
+                    if (followersAccounts.length === 0 && dbHelper?._cache?.followers) {
+                        followersAccounts = unpackList(dbHelper._cache.followers);
                     }
-                    if (followingAccounts.length === 0 && dbHelper?._cache?.following && Array.isArray(dbHelper._cache.following)) {
-                        followingAccounts = dbHelper._cache.following;
+                    if (followersAccounts.length === 0 && dbHelper?._cache?.seguidores) {
+                        followersAccounts = unpackList(dbHelper._cache.seguidores);
                     }
-                    if (followingAccounts.length === 0 && typeof cachedData !== 'undefined' && cachedData?.seguindo) {
-                        followingAccounts = Array.from(cachedData.seguindo).map(u => ({
-                            username: u,
-                            photoUrl: resolveUserPhoto(u),
-                            fullName: cachedData.userDetails?.get(u)?.fullName || ''
-                        }));
+                    if (followingAccounts.length === 0 && dbHelper?._cache?.following) {
+                        followingAccounts = unpackList(dbHelper._cache.following);
                     }
-                    if (followersAccounts.length === 0 && typeof cachedData !== 'undefined' && cachedData?.seguidores) {
-                        followersAccounts = Array.from(cachedData.seguidores).map(u => ({
-                            username: u,
-                            photoUrl: resolveUserPhoto(u),
-                            fullName: cachedData.userDetails?.get(u)?.fullName || ''
-                        }));
+                    if (followingAccounts.length === 0 && dbHelper?._cache?.seguindo) {
+                        followingAccounts = unpackList(dbHelper._cache.seguindo);
                     }
 
+                    // Fallbacks de localStorage
+                    if (followersAccounts.length === 0) {
+                        const keys = ['ig_tools_cache_followers', 'ig_tools_cached_followers', 'ig_tools_followers', 'ig_followers_cache', 'ig_tools_seguidores', 'cached_followers'];
+                        for (const k of keys) {
+                            try {
+                                const raw = localStorage.getItem(k);
+                                if (raw) {
+                                    const parsed = JSON.parse(raw);
+                                    const list = unpackList(parsed);
+                                    if (list.length > 0) { followersAccounts = list; break; }
+                                }
+                            } catch (_) { }
+                        }
+                    }
+
+                    if (followingAccounts.length === 0) {
+                        const keys = ['ig_tools_cache_following', 'ig_tools_cached_following', 'ig_tools_following', 'ig_following_cache', 'ig_tools_seguindo', 'cached_following'];
+                        for (const k of keys) {
+                            try {
+                                const raw = localStorage.getItem(k);
+                                if (raw) {
+                                    const parsed = JSON.parse(raw);
+                                    const list = unpackList(parsed);
+                                    if (list.length > 0) { followingAccounts = list; break; }
+                                }
+                            } catch (_) { }
+                        }
+                    }
+
+                    // Fallbacks de variáveis globais
+                    if (followersAccounts.length === 0 && typeof seguidoresList !== 'undefined' && Array.isArray(seguidoresList) && seguidoresList.length > 0) {
+                        followersAccounts = seguidoresList;
+                    }
+                    if (followingAccounts.length === 0 && typeof seguindoList !== 'undefined' && Array.isArray(seguindoList) && seguindoList.length > 0) {
+                        followingAccounts = seguindoList;
+                    }
+
+                    // Fallbacks de cachedData
+                    if (followersAccounts.length === 0 && typeof cachedData !== 'undefined') {
+                        if (cachedData?.seguidores) followersAccounts = unpackList(cachedData.seguidores);
+                        else if (cachedData?.followers) followersAccounts = unpackList(cachedData.followers);
+                    }
+                    if (followingAccounts.length === 0 && typeof cachedData !== 'undefined') {
+                        if (cachedData?.seguindo) followingAccounts = unpackList(cachedData.seguindo);
+                        else if (cachedData?.following) followingAccounts = unpackList(cachedData.following);
+                    }
+
+                    // Fallbacks de userListCache
+                    if (followersAccounts.length === 0 && typeof userListCache !== 'undefined') {
+                        if (userListCache.followers) followersAccounts = unpackList(userListCache.followers);
+                        else if (userListCache.seguidores) followersAccounts = unpackList(userListCache.seguidores);
+                    }
+                    if (followingAccounts.length === 0 && typeof userListCache !== 'undefined') {
+                        if (userListCache.following) followingAccounts = unpackList(userListCache.following);
+                        else if (userListCache.seguindo) followingAccounts = unpackList(userListCache.seguindo);
+                    }
+
+                    followersAccounts.forEach(f => {
+                        if (typeof f === 'object' && f) {
+                            const uname = extractUname(f);
+                            f.photoUrl = resolveUserPhoto(uname, f.photoUrl);
+                        }
+                    });
+                    followingAccounts.forEach(f => {
+                        if (typeof f === 'object' && f) {
+                            const uname = extractUname(f);
+                            f.photoUrl = resolveUserPhoto(uname, f.photoUrl);
+                        }
+                    });
+
                     const followersSet = new Set(
-                        followersAccounts.map(f => (typeof f === 'string' ? f : f.username || '').toLowerCase().trim()).filter(Boolean)
+                        followersAccounts.map(extractUname).filter(Boolean)
                     );
                     const followingSet = new Set(
-                        followingAccounts.map(f => (typeof f === 'string' ? f : f.username || '').toLowerCase().trim()).filter(Boolean)
+                        followingAccounts.map(extractUname).filter(Boolean)
                     );
 
                     // Mapeamento de contas com status de silenciado
@@ -7915,11 +8001,11 @@
                     let baseList = [];
 
                     const addMutedAccount = (u, isMuted = true, statusStr = '') => {
-                        const uname = (typeof u === 'string' ? u : u.username || '').toLowerCase().trim();
+                        const uname = extractUname(u);
                         if (!uname || !isValidInstagramUsername(uname) || uname === myUname) return;
-                        const pk = (typeof u === 'object' && (u.pk || u.id)) ? String(u.pk || u.id) : (getCachedUserId(uname) || '');
+                        const pk = (typeof u === 'object' && (u.pk || u.id || u.user?.pk || u.user?.id)) ? String(u.pk || u.id || u.user?.pk || u.user?.id) : (getCachedUserId(uname) || '');
                         const photoUrl = resolveUserPhoto(uname, typeof u === 'object' ? u.photoUrl : null);
-                        const fullName = (typeof u === 'object' && u.fullName) ? u.fullName : '';
+                        const fullName = (typeof u === 'object' && (u.fullName || u.full_name || u.user?.full_name)) ? (u.fullName || u.full_name || u.user?.full_name) : '';
                         let status = statusStr || (typeof u === 'object' && u.status ? u.status : (isMuted ? 'Silenciado' : 'Não Silenciado'));
 
                         const userObj = {
@@ -8005,18 +8091,18 @@
 
                     // Prioridade 3: Meus Seguidores
                     followersAccounts.forEach(f => {
-                        const uname = typeof f === 'string' ? f : f.username;
-                        if (!uname || !isValidInstagramUsername(uname)) return;
+                        const uname = extractUname(f);
+                        if (!uname || !isValidInstagramUsername(uname) || uname === myUname) return;
                         const k = uname.toLowerCase().trim();
-                        if (k === myUname) return;
-                        const pk = (typeof f === 'object' && (f.pk || f.id)) ? String(f.pk || f.id) : (getCachedUserId(uname) || '');
+                        const pk = (typeof f === 'object' && (f.pk || f.id || f.user?.pk || f.user?.id)) ? String(f.pk || f.id || f.user?.pk || f.user?.id) : (getCachedUserId(uname) || '');
                         const p = resolveUserPhoto(uname, (typeof f === 'object' && f.photoUrl) ? f.photoUrl : null);
+                        const fn = (typeof f === 'object' && (f.fullName || f.full_name || f.user?.full_name)) ? (f.fullName || f.full_name || f.user?.full_name) : '';
                         if (!mergedMap.has(k)) {
                             mergedMap.set(k, {
                                 username: uname,
                                 pk: pk,
                                 id: pk,
-                                fullName: (typeof f === 'object' && f.fullName) ? f.fullName : '',
+                                fullName: fn,
                                 photoUrl: p,
                                 status: officialMutedSet.has(k) ? (userListCache.mutedDetails?.get(k) || 'Silenciado') : 'Não Silenciado',
                                 isMuted: officialMutedSet.has(k)
@@ -8024,6 +8110,7 @@
                         } else {
                             const existing = mergedMap.get(k);
                             if (!existing.pk && pk) existing.pk = pk;
+                            if (!existing.fullName && fn) existing.fullName = fn;
                             if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && p !== DEFAULT_AVATAR) {
                                 existing.photoUrl = p;
                             }
@@ -8032,18 +8119,18 @@
 
                     // Prioridade 4: Meus Seguindo
                     followingAccounts.forEach(f => {
-                        const uname = typeof f === 'string' ? f : f.username;
-                        if (!uname || !isValidInstagramUsername(uname)) return;
+                        const uname = extractUname(f);
+                        if (!uname || !isValidInstagramUsername(uname) || uname === myUname) return;
                         const k = uname.toLowerCase().trim();
-                        if (k === myUname) return;
-                        const pk = (typeof f === 'object' && (f.pk || f.id)) ? String(f.pk || f.id) : (getCachedUserId(uname) || '');
+                        const pk = (typeof f === 'object' && (f.pk || f.id || f.user?.pk || f.user?.id)) ? String(f.pk || f.id || f.user?.pk || f.user?.id) : (getCachedUserId(uname) || '');
                         const p = resolveUserPhoto(uname, (typeof f === 'object' && f.photoUrl) ? f.photoUrl : null);
+                        const fn = (typeof f === 'object' && (f.fullName || f.full_name || f.user?.full_name)) ? (f.fullName || f.full_name || f.user?.full_name) : '';
                         if (!mergedMap.has(k)) {
                             mergedMap.set(k, {
                                 username: uname,
                                 pk: pk,
                                 id: pk,
-                                fullName: (typeof f === 'object' && f.fullName) ? f.fullName : '',
+                                fullName: fn,
                                 photoUrl: p,
                                 status: officialMutedSet.has(k) ? (userListCache.mutedDetails?.get(k) || 'Silenciado') : 'Não Silenciado',
                                 isMuted: officialMutedSet.has(k)
@@ -8051,6 +8138,7 @@
                         } else {
                             const existing = mergedMap.get(k);
                             if (!existing.pk && pk) existing.pk = pk;
+                            if (!existing.fullName && fn) existing.fullName = fn;
                             if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && p !== DEFAULT_AVATAR) {
                                 existing.photoUrl = p;
                             }

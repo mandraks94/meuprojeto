@@ -6542,7 +6542,7 @@
                             div.style.minWidth = isHsMinimized ? '380px' : '';
                             div.style.maxWidth = isHsMinimized ? '440px' : '840px';
                             div.style.padding = isHsMinimized ? '12px 18px' : '20px';
-                            hsMinBtn.textContent = isHsMinimized ? '⬜' : '_';
+                            hsMinBtn.textContent = isHsMinimized ? '_' : '_';
                             hsMinBtn.title = isHsMinimized ? 'Maximizar' : 'Minimizar';
                         };
                     }

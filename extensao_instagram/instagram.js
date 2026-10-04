@@ -4627,47 +4627,49 @@
                     const cfCount = closeFriendsList.filter(u => u.isCloseFriend).length;
 
                     div.innerHTML = `
-                        <div class="modal-header">
-                            <span class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+                        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; cursor: move;">
+                            <span class="modal-title" style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                 <span>⭐ Gerenciador de Amigos Próximos</span>
                                 <span id="cfSelectedCount" style="font-size:12px; font-weight:normal; color:#0095f6;">(0 selecionados)</span>
                                 <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie seus Melhores Amigos (círculo verde). Adicione ou remova contatos individualmente ou em lote com 1 clique.</span></div>
                             </span>
-                            <div class="modal-controls">
-                                <button id="cfMinimizarBtn" title="Minimizar">_</button>
-                                <button id="cfFecharBtn" title="Fechar">X</button>
+                            <div class="modal-controls" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 10px;">
+                                <button id="cfMinimizarBtn" title="Minimizar" style="background: none; border: none; font-size: 16px; cursor: pointer; padding: 2px 6px; color: #8e8e8e; line-height: 1;">_</button>
+                                <button id="cfFecharBtn" title="Fechar" style="background: none; border: none; font-size: 16px; cursor: pointer; padding: 2px 6px; color: #8e8e8e; line-height: 1;">X</button>
                             </div>
                         </div>
-                        <div style="padding: 15px 0 10px 0;">
-                            <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                                <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
-                                    <button id="cfRefreshBtn" title="Ler e sincronizar Amigos Próximos via Instagram Web" style="background: #1abc9c; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">🔄 Sincronizar</button>
-                                    <button id="cfImportJsonBtn" title="Importar arquivo oficial close_friends.json do Instagram" style="background: #8e44ad; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">📥 Importar JSON</button>
-                                    <button id="cfAddSelectedBtn" title="Adicionar selecionados aos Amigos Próximos" style="background: #2ecc71; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600;">⭐ Adicionar Selecionados</button>
-                                    <button id="cfRemoveSelectedBtn" title="Remover selecionados dos Amigos Próximos" style="background: #e74c3c; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600;">❌ Remover Selecionados</button>
-                                    <button id="cfSelectPageBtn" style="background: #0095f6; color: white; border: none; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 13px;">Selecionar Página</button>
-                                    <button id="cfDeselectAllBtn" style="background: #6c757d; color: white; border: none; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 13px;">Desmarcar Todos</button>
-                                    <input type="file" id="cfJsonFileInput" accept=".json" style="display: none;">
-                                </div>
-                                <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; display: flex; align-items: center;">
-                                    <span style="font-size: 13px; font-weight: 500;">⚡ Usar API</span>
-                                    <label class="switch"><input type="checkbox" id="cfUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}><span class="slider"></span></label>
+                        <div id="cfModalBody" style="display: block;">
+                            <div style="padding: 15px 0 10px 0;">
+                                <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                                        <button id="cfRefreshBtn" title="Ler e sincronizar Amigos Próximos via Instagram Web" style="background: #1abc9c; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">🔄 Sincronizar</button>
+                                        <button id="cfImportJsonBtn" title="Importar arquivo oficial close_friends.json do Instagram" style="background: #8e44ad; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">📥 Importar JSON</button>
+                                        <button id="cfAddSelectedBtn" title="Adicionar selecionados aos Amigos Próximos" style="background: #2ecc71; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600;">⭐ Adicionar Selecionados</button>
+                                        <button id="cfRemoveSelectedBtn" title="Remover selecionados dos Amigos Próximos" style="background: #e74c3c; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600;">❌ Remover Selecionados</button>
+                                        <button id="cfSelectPageBtn" style="background: #0095f6; color: white; border: none; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 13px;">Selecionar Página</button>
+                                        <button id="cfDeselectAllBtn" style="background: #6c757d; color: white; border: none; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 13px;">Desmarcar Todos</button>
+                                        <input type="file" id="cfJsonFileInput" accept=".json" style="display: none;">
+                                    </div>
+                                    <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; display: flex; align-items: center;">
+                                        <span style="font-size: 13px; font-weight: 500;">⚡ Usar API</span>
+                                        <label class="switch"><input type="checkbox" id="cfUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}><span class="slider"></span></label>
+                                    </div>
                                 </div>
                             </div>
+                            <div style="margin-bottom: 12px; display: flex; gap: 10px;">
+                                <input type="text" id="cfSearchInput" placeholder="Pesquisar por @usuário, nome ou ID..." style="flex: 2; padding: 8px 12px; height: 38px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; outline: none; box-sizing: border-box;">
+                                <select id="cfFilterSelect" style="flex: 1; padding: 0 10px; height: 38px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; cursor: pointer; outline: none; box-sizing: border-box;">
+                                    <option value="besties">⭐ Melhores Amigos (${cfCount})</option>
+                                    <option value="following">👤 Quem Eu Sigo (Para Adicionar)</option>
+                                    <option value="all">Todos (${closeFriendsList.length})</option>
+                                </select>
+                            </div>
+                            <div id="statusCloseFriends" style="font-weight: 600; font-size: 13px; color: #555; display: flex; justify-content: space-between; align-items: center;">
+                                <span>Total: <strong style="color: #2ecc71;">${cfCount}</strong> melhores amigos cadastrados.</span>
+                                <span id="cfSyncInfo" style="font-size: 11px; color: #888;"></span>
+                            </div>
+                            <div id="tabelaCloseFriendsContainer" style="display: block; margin-top: 12px;"></div>
                         </div>
-                        <div style="margin-bottom: 12px; display: flex; gap: 10px;">
-                            <input type="text" id="cfSearchInput" placeholder="Pesquisar por @usuário, nome ou ID..." style="flex: 2; padding: 8px 12px; height: 38px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; outline: none; box-sizing: border-box;">
-                            <select id="cfFilterSelect" style="flex: 1; padding: 0 10px; height: 38px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; cursor: pointer; outline: none; box-sizing: border-box;">
-                                <option value="besties">⭐ Melhores Amigos (${cfCount})</option>
-                                <option value="following">👤 Quem Eu Sigo (Para Adicionar)</option>
-                                <option value="all">Todos (${closeFriendsList.length})</option>
-                            </select>
-                        </div>
-                        <div id="statusCloseFriends" style="font-weight: 600; font-size: 13px; color: #555; display: flex; justify-content: space-between; align-items: center;">
-                            <span>Total: <strong style="color: #2ecc71;">${cfCount}</strong> melhores amigos cadastrados.</span>
-                            <span id="cfSyncInfo" style="font-size: 11px; color: #888;"></span>
-                        </div>
-                        <div id="tabelaCloseFriendsContainer" style="display: block; margin-top: 12px;"></div>
                     `;
 
                     document.body.appendChild(div);
@@ -5131,20 +5133,20 @@
                     document.getElementById("cfMinimizarBtn").onclick = () => {
                         const modal = document.getElementById('closeFriendsModal');
                         if (!modal) return;
-                        const contentToToggle = [
-                            modal.querySelector('#cfSearchInput')?.parentElement,
-                            modal.querySelector('#statusCloseFriends'),
-                            modal.querySelector('#tabelaCloseFriendsContainer')
-                        ].filter(Boolean);
-
+                        const bodyEl = document.getElementById("cfModalBody");
                         const btn = document.getElementById('cfMinimizarBtn');
                         const isMinimized = modal.dataset.minimized === 'true';
 
-                        contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-                        modal.dataset.minimized = !isMinimized;
+                        if (bodyEl) bodyEl.style.display = isMinimized ? 'block' : 'none';
+                        modal.dataset.minimized = isMinimized ? 'false' : 'true';
+                        modal.style.height = isMinimized ? '' : 'auto';
+                        modal.style.maxHeight = isMinimized ? '90vh' : 'none';
+                        modal.style.width = isMinimized ? '90%' : 'auto';
+                        modal.style.minWidth = isMinimized ? '' : '380px';
+                        modal.style.maxWidth = isMinimized ? '820px' : '440px';
+                        modal.style.padding = isMinimized ? '20px' : '12px 18px';
                         btn.textContent = isMinimized ? '_' : '⬜';
                         btn.title = isMinimized ? 'Minimizar' : 'Maximizar';
-                        modal.style.maxHeight = isMinimized ? '90vh' : 'auto';
                     };
 
                     document.getElementById("cfRefreshBtn").onclick = () => {
@@ -6464,50 +6466,52 @@
                     const followingCount = hideStoryList.filter(u => followingSet.has((u.username || '').toLowerCase().trim())).length;
 
                     div.innerHTML = `
-                        <div class="modal-header">
-                            <span class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+                        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; cursor: move;">
+                            <span class="modal-title" style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                 <span>👁️‍🗨️ Gerenciador de Ocultar Stories</span>
                                 <span id="hsSelectedCount" style="font-size:12px; font-weight:normal; color:#0095f6;">(0 selecionados)</span>
                                 <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie quem não pode ver seus Stories e transmissões ao vivo. Oculte ou reexiba contatos individualmente ou em lote com 1 clique.</span></div>
                             </span>
-                            <div class="modal-controls">
-                                <button id="hsMinimizarBtn" title="Minimizar">_</button>
-                                <button id="hsFecharBtn" title="Fechar">X</button>
+                            <div class="modal-controls" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 10px;">
+                                <button id="hsMinimizarBtn" title="Minimizar" style="background: none; border: none; font-size: 16px; cursor: pointer; padding: 2px 6px; color: #8e8e8e; line-height: 1;">_</button>
+                                <button id="hsFecharBtn" title="Fechar" style="background: none; border: none; font-size: 16px; cursor: pointer; padding: 2px 6px; color: #8e8e8e; line-height: 1;">X</button>
                             </div>
                         </div>
-                        <div style="padding: 15px 0 10px 0;">
-                            <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                                <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
-                                    <button id="hsRefreshBtn" title="Ler e sincronizar dados oficiais via Instagram Web" style="background: #1abc9c; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">🔄 Sincronizar</button>
-                                    <button id="hsOpenOfficialPageBtn" title="Abre a tela nativa de Ocultar Stories do Instagram para sincronizar instantaneamente em 0ms" style="background: #34495e; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">🌐 Tela Oficial (0ms)</button>
-                                    <button id="hsImportJsonBtn" title="Importar arquivo JSON de usuários" style="background: #8e44ad; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">📥 Importar JSON</button>
-                                    <button id="hsHideSelectedBtn" title="Ocultar stories para os selecionados" style="background: #e67e22; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600;">👁️‍🗨️ Ocultar Selecionados</button>
-                                    <button id="hsUnhideSelectedBtn" title="Reexibir stories para os selecionados" style="background: #27ae60; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600;">👁️ Reexibir Selecionados</button>
-                                    <button id="hsSelectPageBtn" style="background: #0095f6; color: white; border: none; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 13px;">Selecionar Página</button>
-                                    <button id="hsDeselectAllBtn" style="background: #6c757d; color: white; border: none; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 13px;">Desmarcar Todos</button>
-                                    <input type="file" id="hsJsonFileInput" accept=".json" style="display: none;">
-                                </div>
-                                <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; display: flex; align-items: center;">
-                                    <span style="font-size: 13px; font-weight: 500;">⚡ Usar API</span>
-                                    <label class="switch"><input type="checkbox" id="hsUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}><span class="slider"></span></label>
+                        <div id="hsModalBody" style="display: block;">
+                            <div style="padding: 15px 0 10px 0;">
+                                <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                                        <button id="hsRefreshBtn" title="Ler e sincronizar dados oficiais via Instagram Web" style="background: #1abc9c; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">🔄 Sincronizar</button>
+                                        <button id="hsOpenOfficialPageBtn" title="Abre a tela nativa de Ocultar Stories do Instagram para sincronizar instantaneamente em 0ms" style="background: #34495e; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">🌐 Tela Oficial (0ms)</button>
+                                        <button id="hsImportJsonBtn" title="Importar arquivo JSON de usuários" style="background: #8e44ad; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">📥 Importar JSON</button>
+                                        <button id="hsHideSelectedBtn" title="Ocultar stories para os selecionados" style="background: #e67e22; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600;">👁️‍🗨️ Ocultar Selecionados</button>
+                                        <button id="hsUnhideSelectedBtn" title="Reexibir stories para os selecionados" style="background: #27ae60; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600;">👁️ Reexibir Selecionados</button>
+                                        <button id="hsSelectPageBtn" style="background: #0095f6; color: white; border: none; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 13px;">Selecionar Página</button>
+                                        <button id="hsDeselectAllBtn" style="background: #6c757d; color: white; border: none; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 13px;">Desmarcar Todos</button>
+                                        <input type="file" id="hsJsonFileInput" accept=".json" style="display: none;">
+                                    </div>
+                                    <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; display: flex; align-items: center;">
+                                        <span style="font-size: 13px; font-weight: 500;">⚡ Usar API</span>
+                                        <label class="switch"><input type="checkbox" id="hsUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}><span class="slider"></span></label>
+                                    </div>
                                 </div>
                             </div>
+                            <div style="margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap;">
+                                <input type="text" id="hsSearchInput" placeholder="Pesquisar por @usuário, nome ou ID..." style="flex: 2; min-width: 220px; padding: 8px 12px; height: 38px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; outline: none; box-sizing: border-box;">
+                                <select id="hsFilterSelect" style="flex: 1; min-width: 260px; padding: 0 10px; height: 38px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; cursor: pointer; outline: none; box-sizing: border-box; font-weight: 500;">
+                                    <option value="all" selected>🌐 Todos (${hideStoryList.length})</option>
+                                    <option value="hidden">👁️ Stories Ocultados (${hiddenCount})</option>
+                                    <option value="not_hidden">👁️ Stories Sem Ocultar (${notHiddenCount})</option>
+                                    <option value="followers">👥 Meus Seguidores (${followersCount})</option>
+                                    <option value="following">👤 Meus Seguindo (${followingCount})</option>
+                                </select>
+                            </div>
+                            <div id="statusHideStory" style="font-weight: 600; font-size: 13px; color: #555; display: flex; justify-content: space-between; align-items: center;">
+                                <span>Total: <strong style="color: #e67e22;">${hiddenCount}</strong> contas com story ocultado | <strong style="color: #27ae60;">${notHiddenCount}</strong> contas sem ocultar.</span>
+                                <span id="hsSyncInfo" style="font-size: 11px; color: #888;"></span>
+                            </div>
+                            <div id="tabelaHideStoryContainer" style="display: block; margin-top: 12px; overflow-x: auto; width: 100%;"></div>
                         </div>
-                        <div style="margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap;">
-                            <input type="text" id="hsSearchInput" placeholder="Pesquisar por @usuário, nome ou ID..." style="flex: 2; min-width: 220px; padding: 8px 12px; height: 38px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; outline: none; box-sizing: border-box;">
-                            <select id="hsFilterSelect" style="flex: 1; min-width: 260px; padding: 0 10px; height: 38px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; cursor: pointer; outline: none; box-sizing: border-box; font-weight: 500;">
-                                <option value="all" selected>🌐 Todos (${hideStoryList.length})</option>
-                                <option value="hidden">👁️ Stories Ocultados (${hiddenCount})</option>
-                                <option value="not_hidden">👁️ Stories Sem Ocultar (${notHiddenCount})</option>
-                                <option value="followers">👥 Meus Seguidores (${followersCount})</option>
-                                <option value="following">👤 Meus Seguindo (${followingCount})</option>
-                            </select>
-                        </div>
-                        <div id="statusHideStory" style="font-weight: 600; font-size: 13px; color: #555; display: flex; justify-content: space-between; align-items: center;">
-                            <span>Total: <strong style="color: #e67e22;">${hiddenCount}</strong> contas com story ocultado | <strong style="color: #27ae60;">${notHiddenCount}</strong> contas sem ocultar.</span>
-                            <span id="hsSyncInfo" style="font-size: 11px; color: #888;"></span>
-                        </div>
-                        <div id="tabelaHideStoryContainer" style="display: block; margin-top: 12px; overflow-x: auto; width: 100%;"></div>
                     `;
 
                     document.body.appendChild(div);
@@ -6529,12 +6533,17 @@
                     const hsMinBtn = document.getElementById("hsMinimizarBtn");
                     if (hsMinBtn) {
                         hsMinBtn.onclick = () => {
-                            const contentElements = div.querySelectorAll('div:not(.modal-header)');
+                            const bodyEl = document.getElementById("hsModalBody");
                             isHsMinimized = !isHsMinimized;
-                            contentElements.forEach(el => el.style.display = isHsMinimized ? 'none' : '');
+                            if (bodyEl) bodyEl.style.display = isHsMinimized ? 'none' : 'block';
                             div.style.height = isHsMinimized ? 'auto' : '';
-                            div.style.width = isHsMinimized ? '320px' : '90%';
-                            hsMinBtn.textContent = isHsMinimized ? '+' : '_';
+                            div.style.maxHeight = isHsMinimized ? 'none' : '90vh';
+                            div.style.width = isHsMinimized ? 'auto' : '90%';
+                            div.style.minWidth = isHsMinimized ? '380px' : '';
+                            div.style.maxWidth = isHsMinimized ? '440px' : '840px';
+                            div.style.padding = isHsMinimized ? '12px 18px' : '20px';
+                            hsMinBtn.textContent = isHsMinimized ? '⬜' : '_';
+                            hsMinBtn.title = isHsMinimized ? 'Maximizar' : 'Minimizar';
                         };
                     }
 

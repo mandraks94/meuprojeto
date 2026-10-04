@@ -278,13 +278,15 @@
             }
 
             function getActorId() {
+                const dsUser = getCookie('ds_user_id');
+                if (dsUser && dsUser !== '936619743392459') return dsUser;
                 try {
                     const rur = getCookie('rur') || '';
                     const decoded = decodeURIComponent(rur).replace(/\\054/g, ',');
                     const match = decoded.match(/,\s*(\d{5,15})\s*,/);
-                    if (match && match[1]) return match[1];
+                    if (match && match[1] && match[1] !== '936619743392459') return match[1];
                 } catch (_) { }
-                return getCookie('ds_user_id') || '';
+                return '';
             }
 
             function getLoggedInUsername() {
@@ -298,10 +300,14 @@
                         const h2 = document.querySelector('header h2, header h1, section main header h2');
                         if (h2 && h2.textContent) {
                             const u = h2.textContent.trim().toLowerCase();
-                            if (u && !u.includes(' ') && u.length >= 2) return u;
+                            if (u && !u.includes(' ') && u.length >= 2) {
+                                try { localStorage.setItem('ig_tools_logged_user', u); } catch (_) { }
+                                return u;
+                            }
                         }
                         const firstSeg = window.location.pathname.split('/').filter(Boolean)[0];
                         if (firstSeg && !['accounts', 'direct', 'explore', 'reels', 'stories'].includes(firstSeg.toLowerCase())) {
+                            try { localStorage.setItem('ig_tools_logged_user', firstSeg.toLowerCase()); } catch (_) { }
                             return firstSeg.toLowerCase();
                         }
                     }
@@ -311,17 +317,81 @@
                     if (navProfileLink) {
                         const href = navProfileLink.closest('a')?.getAttribute('href') || '';
                         const clean = href.replace(/\//g, '').trim().toLowerCase();
-                        if (clean && !['accounts', 'direct', 'explore', 'reels', 'stories'].includes(clean)) return clean;
+                        if (clean && !['accounts', 'direct', 'explore', 'reels', 'stories'].includes(clean)) {
+                            try { localStorage.setItem('ig_tools_logged_user', clean); } catch (_) { }
+                            return clean;
+                        }
                     }
 
                     // Links de perfil com avatar próprio
-                    const selfLink = document.querySelector('a[href^="/"][role="link"]:has(img[data-testid="user-avatar"])');
+                    const selfLink = document.querySelector('a[href^="/"][role="link"]:has(img[data-testid="user-avatar"]), a[href^="/"]:has(img[alt*="foto do perfil"]), a[href^="/"]:has(img[alt*="profile photo"])');
                     if (selfLink) {
                         const href = selfLink.getAttribute('href') || '';
                         const clean = href.replace(/\//g, '').trim().toLowerCase();
-                        if (clean && !['accounts', 'direct', 'explore', 'reels', 'stories'].includes(clean)) return clean;
+                        if (clean && !['accounts', 'direct', 'explore', 'reels', 'stories'].includes(clean)) {
+                            try { localStorage.setItem('ig_tools_logged_user', clean); } catch (_) { }
+                            return clean;
+                        }
                     }
+
+                    // Busca em links do menu lateral por texto "Perfil" ou "Profile"
+                    const navLinks = document.querySelectorAll('div[role="navigation"] a[href^="/"], nav a[href^="/"]');
+                    const systemWords = ['accounts', 'direct', 'explore', 'reels', 'stories', 'p', 'reel'];
+                    for (const a of navLinks) {
+                        const txt = (a.textContent || '').toLowerCase();
+                        const aria = (a.getAttribute('aria-label') || '').toLowerCase();
+                        if (txt.includes('perfil') || txt.includes('profile') || aria.includes('perfil') || aria.includes('profile')) {
+                            const href = a.getAttribute('href') || '';
+                            const clean = href.replace(/\//g, '').trim().toLowerCase();
+                            if (clean && !systemWords.includes(clean)) {
+                                try { localStorage.setItem('ig_tools_logged_user', clean); } catch (_) { }
+                                return clean;
+                            }
+                        }
+                    }
+
+                    const cached = localStorage.getItem('ig_tools_logged_user');
+                    if (cached && /^[a-zA-Z0-9._]+$/.test(cached)) return cached.toLowerCase();
                 } catch (_) { }
+                return '';
+            }
+
+            async function resolveTargetOrLoggedUsername() {
+                // 1. Se estiver no perfil de alguém (ou no próprio perfil), usa esse perfil
+                const profUser = (typeof getProfilePageUsername === 'function') ? getProfilePageUsername() : null;
+                if (profUser) {
+                    return profUser;
+                }
+
+                // 2. Tenta obter o usuário logado via DOM, session ou cache local
+                let logged = getLoggedInUsername();
+                if (logged) {
+                    try { localStorage.setItem('ig_tools_logged_user', logged); } catch (_) { }
+                    return logged;
+                }
+
+                // 3. Fallback pelo ID do usuário logado (ds_user_id) via GraphQL HoverCard
+                const actorId = getActorId();
+                if (actorId && typeof executeGraphqlUserHoverCard === 'function') {
+                    try {
+                        const stats = await executeGraphqlUserHoverCard(actorId);
+                        if (stats?.username) {
+                            try { localStorage.setItem('ig_tools_logged_user', stats.username); } catch (_) { }
+                            return stats.username;
+                        }
+                    } catch (_) { }
+                }
+
+                // 4. Se ainda assim não encontrar, solicita uma única vez ao usuário
+                const promptUser = prompt("Não foi possível identificar seu @username nesta tela. Por favor, digite seu @username (salvaremos para as próximas vezes):");
+                if (promptUser) {
+                    const clean = promptUser.trim().toLowerCase().replace(/^@/, '');
+                    if (clean && /^[a-zA-Z0-9._]+$/.test(clean)) {
+                        try { localStorage.setItem('ig_tools_logged_user', clean); } catch (_) { }
+                        return clean;
+                    }
+                }
+
                 return '';
             }
 
@@ -1010,7 +1080,8 @@
                                 mediaCount: user.media_count !== undefined ? user.media_count : null,
                                 profilePicUrl: user.profile_pic_url || user.hd_profile_pic_url_info?.url || null,
                                 biography: user.biography || user.bio || '',
-                                fullName: user.full_name || ''
+                                fullName: user.full_name || '',
+                                username: user.username || ''
                             };
                         }
                     }
@@ -1674,16 +1745,25 @@
                 if (!username) return null;
                 try {
                     const cache = JSON.parse(localStorage.getItem('ig_tools_id_cache') || '{}');
-                    return cache[username] || cache[username.toLowerCase()] || null;
+                    const id = cache[username] || cache[username.toLowerCase()] || null;
+                    if (id && String(id) === '936619743392459') {
+                        delete cache[username];
+                        delete cache[username.toLowerCase()];
+                        localStorage.setItem('ig_tools_id_cache', JSON.stringify(cache));
+                        return null;
+                    }
+                    return id ? String(id) : null;
                 } catch (e) { return null; }
             }
 
             function setCachedUserId(username, id) {
                 if (!username || !id) return;
+                const strId = String(id).trim();
+                if (strId === '936619743392459' || strId === '0' || strId === 'current' || !/^\d+$/.test(strId)) return;
                 try {
                     const cache = JSON.parse(localStorage.getItem('ig_tools_id_cache') || '{}');
-                    cache[username] = String(id);
-                    cache[username.toLowerCase()] = String(id);
+                    cache[username] = strId;
+                    cache[username.toLowerCase()] = strId;
                     localStorage.setItem('ig_tools_id_cache', JSON.stringify(cache));
                 } catch (e) { }
             }
@@ -1692,24 +1772,34 @@
             async function getUserId(username) {
                 if (!username) return null;
                 const cleanUsername = username.trim().toLowerCase();
+                const loggedUser = ((typeof getLoggedInUsername === 'function' ? getLoggedInUsername() : '') || localStorage.getItem('ig_tools_logged_user') || '').toLowerCase();
 
-                // 1. Procura na lista de seguindo em memória
+                // 1. Se for o próprio usuário logado, obtém instantaneamente via cookie de sessão canônico ds_user_id ou getActorId
+                if (cleanUsername === loggedUser || (!loggedUser && typeof getActorId === 'function' && getActorId())) {
+                    const actorId = getCookie('ds_user_id') || (typeof getActorId === 'function' ? getActorId() : null);
+                    if (actorId && String(actorId) !== '936619743392459') {
+                        setCachedUserId(cleanUsername, String(actorId));
+                        return String(actorId);
+                    }
+                }
+
+                // 2. Procura na lista de seguindo em memória
                 try {
                     if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
                         const item = seguindoList.find(x => (typeof x === 'object' ? x?.username : x)?.toLowerCase() === cleanUsername);
                         const foundId = item && typeof item === 'object' ? (item.id || item.pk || item.pk_id) : null;
-                        if (foundId) {
+                        if (foundId && String(foundId) !== '936619743392459') {
                             setCachedUserId(cleanUsername, String(foundId));
                             return String(foundId);
                         }
                     }
                 } catch (e) { }
 
-                // 2. Procura em cachedData.userDetails
+                // 3. Procura em cachedData.userDetails
                 try {
                     if (typeof cachedData !== 'undefined' && cachedData?.userDetails && cachedData.userDetails.has(cleanUsername)) {
                         const details = cachedData.userDetails.get(cleanUsername);
-                        if (details && details.id) {
+                        if (details && details.id && String(details.id) !== '936619743392459') {
                             const id = String(details.id);
                             setCachedUserId(cleanUsername, id);
                             return id;
@@ -1717,23 +1807,23 @@
                     }
                 } catch (e) { }
 
-                // 3. Cache persistente (localStorage)
+                // 4. Cache persistente (localStorage)
                 const cachedId = getCachedUserId(cleanUsername);
-                if (cachedId) return String(cachedId);
+                if (cachedId && String(cachedId) !== '936619743392459') return String(cachedId);
 
-                // 4. Se for o perfil atualmente aberto na página, tenta obter do DOM / React
+                // 5. Se for o perfil atualmente aberto na página, tenta obter do DOM / React
                 try {
                     const currentProf = (typeof getProfilePageUsername === 'function') ? getProfilePageUsername() : null;
                     if (currentProf === cleanUsername) {
-                        const actorId = getActorId();
-                        if (actorId && document.querySelector('header a[href*="/' + cleanUsername + '/"]')) {
+                        const actorId = getCookie('ds_user_id') || getActorId();
+                        if (actorId && actorId !== '936619743392459' && document.querySelector('header a[href*="/' + cleanUsername + '/"]')) {
                             setCachedUserId(cleanUsername, String(actorId));
                             return String(actorId);
                         }
                     }
                 } catch (_) { }
 
-                // 5. Fallback HTML do perfil (extrai ID sem acionar limite 429 de endpoints REST)
+                // 6. Fallback HTML do perfil (extrai ID sem acionar limite 429 de endpoints REST)
                 try {
                     const profileResponse = await fetch(`https://www.instagram.com/${encodeURIComponent(cleanUsername)}/`, {
                         credentials: 'include',
@@ -1741,26 +1831,32 @@
                     });
                     if (profileResponse.ok) {
                         const html = await profileResponse.text();
-                        const idMatch = html.match(/"(?:props_id|user_id|target_id|profile_id)"\s*:\s*"?(\d{6,})"?/i) ||
-                                        html.match(/"id"\s*:\s*"(\d{6,})"/i) ||
-                                        html.match(/"pk"\s*:\s*"(\d{6,})"/i);
-                        if (idMatch?.[1]) {
-                            const id = String(idMatch[1]);
-                            setCachedUserId(cleanUsername, id);
-                            console.log(`[IG Tools] ID obtido pelo HTML do perfil de ${cleanUsername}: ${id}`);
-                            return id;
+                        const isNotAppId = (val) => val && String(val) !== '936619743392459' && /^\d{5,}$/.test(String(val));
+
+                        const mProps = html.match(/"(?:props_id|user_id|target_id|profile_id)"\s*:\s*"?(\d{5,})"?/i);
+                        if (mProps && isNotAppId(mProps[1])) {
+                            setCachedUserId(cleanUsername, String(mProps[1]));
+                            return String(mProps[1]);
                         }
+
+                        const mOwner = html.match(/"owner"\s*:\s*\{\s*"id"\s*:\s*"(\d{5,})"/i);
+                        if (mOwner && isNotAppId(mOwner[1])) {
+                            setCachedUserId(cleanUsername, String(mOwner[1]));
+                            return String(mOwner[1]);
+                        }
+
                         const usernamePattern = new RegExp(`"username"\\s*:\\s*"${cleanUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'i');
                         const usernameMatch = usernamePattern.exec(html);
                         if (usernameMatch) {
                             const nearby = html.slice(Math.max(0, usernameMatch.index - 3000), usernameMatch.index + 3000);
                             const idMatches = [...nearby.matchAll(/"(?:pk|id|user_id|pk_id)"\s*:\s*"?(\d+)"?/g)];
-                            const match = idMatches[idMatches.length - 1];
-                            if (match?.[1]) {
-                                const id = String(match[1]);
-                                setCachedUserId(cleanUsername, id);
-                                console.log(`[IG Tools] ID obtido pelo HTML contextual de ${cleanUsername}: ${id}`);
-                                return id;
+                            for (let i = idMatches.length - 1; i >= 0; i--) {
+                                const cand = idMatches[i]?.[1];
+                                if (isNotAppId(cand)) {
+                                    setCachedUserId(cleanUsername, String(cand));
+                                    console.log(`[IG Tools] ID obtido pelo HTML contextual de ${cleanUsername}: ${cand}`);
+                                    return String(cand);
+                                }
                             }
                         }
                     }
@@ -1768,7 +1864,7 @@
                     console.warn(`[IG Tools] Falha ao obter o HTML do perfil de ${cleanUsername}:`, e);
                 }
 
-                // 6. Fallback final topsearch apenas se os métodos anteriores falharem
+                // 7. Fallback final topsearch apenas se os métodos anteriores falharem
                 try {
                     const searchRes = await fetch(`https://www.instagram.com/api/v1/web/search/topsearch/?context=blended&query=${encodeURIComponent(cleanUsername)}`, {
                         headers: getApiHeaders(),
@@ -1779,10 +1875,12 @@
                         const searchData = await searchRes.json();
                         if (searchData.users && Array.isArray(searchData.users)) {
                             const exact = searchData.users.find(u => u?.user?.username && u.user.username.toLowerCase() === cleanUsername);
-                            if (exact?.user && (exact.user.pk || exact.user.id || exact.user.pk_id)) {
-                                const id = String(exact.user.pk || exact.user.id || exact.user.pk_id);
-                                setCachedUserId(cleanUsername, id);
-                                return id;
+                            if (exact?.user) {
+                                const id = String(exact.user.pk || exact.user.id || exact.user.pk_id || '');
+                                if (id && id !== '936619743392459') {
+                                    setCachedUserId(cleanUsername, id);
+                                    return id;
+                                }
                             }
                         }
                     }
@@ -1799,6 +1897,8 @@
             async function safeFetchProfileInfo(username) {
                 if (!username) return null;
                 const cleanUsername = username.trim().toLowerCase();
+                const loggedUser = ((typeof getLoggedInUsername === 'function' ? getLoggedInUsername() : '') || localStorage.getItem('ig_tools_logged_user') || '').toLowerCase();
+                const isLogged = cleanUsername === loggedUser || !loggedUser;
 
                 // 1. Se estiver na página do perfil, extrai do DOM / React instantaneamente
                 try {
@@ -1819,17 +1919,17 @@
                             }
                             const avatarImg = header.querySelector('img[alt*="perfil"], img[alt*="profile"], img');
                             const photoUrl = avatarImg ? avatarImg.src : null;
-                            const uid = getCachedUserId(cleanUsername) || getActorId() || '';
-                            if (followers > 0 || following > 0 || uid) {
+                            const uid = (isLogged ? (getCookie('ds_user_id') || getActorId()) : getCachedUserId(cleanUsername)) || '';
+                            if ((followers > 0 || following > 0 || uid) && uid !== '936619743392459') {
                                 return {
                                     data: {
                                         user: {
-                                            id: uid || 'current',
-                                            pk: uid || 'current',
+                                            id: String(uid || 'current'),
+                                            pk: String(uid || 'current'),
                                             username: cleanUsername,
                                             profile_pic_url: photoUrl,
-                                            edge_followed_by: { count: followers },
-                                            edge_follow: { count: following },
+                                            edge_followed_by: { count: followers || 1000 },
+                                            edge_follow: { count: following || 1000 },
                                             edge_owner_to_timeline_media: { count: 0 }
                                         }
                                     }
@@ -1839,11 +1939,19 @@
                     }
                 } catch (_) { }
 
-                // 2. Obtém o ID do usuário (cache / lista / DOM / HTML)
-                let uid = getCachedUserId(cleanUsername);
+                // 2. Obtém o ID do usuário (sem aceitar o appID 936619743392459)
+                let uid = null;
+                if (isLogged) {
+                    uid = getCookie('ds_user_id') || (typeof getActorId === 'function' ? getActorId() : null);
+                    if (uid === '936619743392459') uid = null;
+                }
+                if (!uid) {
+                    uid = getCachedUserId(cleanUsername);
+                }
                 if (!uid && typeof getUserId === 'function') {
                     uid = await getUserId(cleanUsername);
                 }
+                if (uid === '936619743392459') uid = null;
 
                 // 3. Com o ID, busca via GraphQL Oficial (PolarisUserHoverCardContentV2Query)
                 if (uid && typeof executeGraphqlUserHoverCard === 'function') {
@@ -1860,8 +1968,8 @@
                                         biography: stats.biography || '',
                                         is_private: Boolean(stats.isPrivate),
                                         profile_pic_url: stats.profilePicUrl || null,
-                                        edge_followed_by: { count: Number(stats.followers) || 0 },
-                                        edge_follow: { count: Number(stats.following) || 0 },
+                                        edge_followed_by: { count: Number(stats.followers) || 1000 },
+                                        edge_follow: { count: Number(stats.following) || 1000 },
                                         edge_owner_to_timeline_media: { count: Number(stats.mediaCount) || 0 }
                                     }
                                 }
@@ -1881,12 +1989,11 @@
                     if (profileRes.ok) {
                         const html = await profileRes.text();
                         let foundId = uid;
-                        if (!foundId) {
-                            const idMatch = html.match(/"(?:props_id|user_id|target_id|profile_id)"\s*:\s*"?(\d{6,})"?/i) ||
-                                            html.match(/"id"\s*:\s*"(\d{6,})"/i) ||
-                                            html.match(/"pk"\s*:\s*"(\d{6,})"/i);
-                            if (idMatch?.[1]) {
-                                foundId = idMatch[1];
+                        if (!foundId || foundId === '936619743392459') {
+                            const isNotAppId = (val) => val && String(val) !== '936619743392459' && /^\d{5,}$/.test(String(val));
+                            const mProps = html.match(/"(?:props_id|user_id|target_id|profile_id)"\s*:\s*"?(\d{5,})"?/i);
+                            if (mProps && isNotAppId(mProps[1])) {
+                                foundId = mProps[1];
                                 setCachedUserId(cleanUsername, foundId);
                             }
                         }
@@ -1901,17 +2008,19 @@
                         const pic = picMatch ? picMatch[1].replace(/\\u0026/g, '&') : null;
                         const isPriv = privMatch ? (privMatch[1].toLowerCase() === 'true') : false;
 
-                        if (foundId || followers > 0 || following > 0) {
+                        const validId = (foundId && foundId !== '936619743392459') ? foundId : (isLogged ? getCookie('ds_user_id') : null);
+
+                        if (validId || followers > 0 || following > 0) {
                             return {
                                 data: {
                                     user: {
-                                        id: String(foundId || getActorId() || ''),
-                                        pk: String(foundId || getActorId() || ''),
+                                        id: String(validId || ''),
+                                        pk: String(validId || ''),
                                         username: cleanUsername,
                                         is_private: isPriv,
                                         profile_pic_url: pic,
-                                        edge_followed_by: { count: followers },
-                                        edge_follow: { count: following },
+                                        edge_followed_by: { count: followers || 1000 },
+                                        edge_follow: { count: following || 1000 },
                                         edge_owner_to_timeline_media: { count: 0 }
                                     }
                                 }
@@ -1923,15 +2032,15 @@
                 }
 
                 // 5. Fallback com ID resolvido
-                if (uid) {
+                if (uid && uid !== '936619743392459') {
                     return {
                         data: {
                             user: {
                                 id: String(uid),
                                 pk: String(uid),
                                 username: cleanUsername,
-                                edge_follow: { count: 0 },
-                                edge_followed_by: { count: 0 }
+                                edge_follow: { count: 1000 },
+                                edge_followed_by: { count: 1000 }
                             }
                         }
                     };
@@ -10386,14 +10495,17 @@
 
                 // --- LÓGICA UNIFICADA PARA "NÃO SEGUE DE VOLTA" ---
                 async function iniciarProcessoNaoSegueDeVolta(initialTab = 'tabNaoSegueDeVolta') {
-                    const pathParts = window.location.pathname.split('/').filter(Boolean);
                     if (document.getElementById("naoSegueDeVoltaDiv")) return; // Evita abrir múltiplos modais
-                    const username = pathParts[0];
-                    const appID = '936619743392459'; // ID público do app web do Instagram
-                    if (!username || pathParts.length > 1 && !['followers', 'following'].includes(pathParts[1])) {
-                        alert("Por favor, vá para a página de perfil de um usuário para usar esta função.");
+
+                    toggleLoading(true, null, "Identificando usuário...");
+                    const username = await resolveTargetOrLoggedUsername();
+                    toggleLoading(false);
+
+                    if (!username) {
+                        alert("Por favor, acesse a página de um perfil ou efetue login para usar esta função.");
                         return;
                     }
+                    const appID = '936619743392459'; // ID público do app web do Instagram
                     // 1. Criar o modal de progresso
                     const div = document.createElement("div");
                     div.id = "naoSegueDeVoltaDiv";
@@ -10526,7 +10638,7 @@
                                 const batchSize = loadSettings().requestBatchSize || 50;
                                 const delay = loadSettings().requestDelay || 250;
                                 const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=${batchSize}&max_id=${nextMaxId}`, {
-                                    headers: { 'X-IG-App-ID': appID }
+                                    headers: getApiHeaders()
                                 });
                                 if (!response.ok) throw new Error(`Erro na API: ${response.status} - ${response.statusText}`);
                                 const data = await response.json();
@@ -10597,6 +10709,9 @@
 
                         // Tenta buscar info básica do perfil (leve) apenas para ter o ID caso o usuário queira atualizar
                         cachedData.profileInfo = await safeFetchProfileInfo(username);
+                        if (cachedData.profileInfo?.data?.user?.id === '936619743392459') {
+                            cachedData.profileInfo.data.user.id = getCookie('ds_user_id') || getActorId() || '';
+                        }
 
                         // Calcula listas
                         const toObjects = (names) => names.map(name => cachedData.userDetails.get(name) || { username: name, photoUrl: null });
@@ -10609,8 +10724,8 @@
                         let listNaoSigoDeVolta = toObjects([...dbFollowers].filter(u => !dbFollowing.has(u)));
                         let listHistorico = await dbHelper.loadUnfollowHistory();
 
-                        const totalFollowers = cachedData.profileInfo ? cachedData.profileInfo.data.user.edge_followed_by.count : 'N/A';
-                        const totalFollowing = cachedData.profileInfo ? cachedData.profileInfo.data.user.edge_follow.count : 'N/A';
+                        const totalFollowers = cachedData.profileInfo?.data?.user?.edge_followed_by?.count ?? 'N/A';
+                        const totalFollowing = cachedData.profileInfo?.data?.user?.edge_follow?.count ?? 'N/A';
 
                         statusDiv.innerText = `Dados carregados do cache. Seguidores: ${dbFollowers.size} (Oficial: ${totalFollowers}) | Seguindo: ${dbFollowing.size} (Oficial: ${totalFollowing})`;
 
@@ -10912,36 +11027,41 @@
 
                         async function executarAtualizacao(updateFollowers, updateFollowing) {
                             try {
-                                if (!cachedData.profileInfo || !cachedData.profileInfo.data?.user?.id) {
+                                let profileId = cachedData.profileInfo?.data?.user?.id ? String(cachedData.profileInfo.data.user.id) : '';
+                                if (!profileId || profileId === '936619743392459') {
                                     statusDiv.innerText = "Buscando ID do usuário...";
                                     const info = await safeFetchProfileInfo(username);
-                                    if (info && info.data?.user?.id) {
+                                    if (info && info.data?.user?.id && String(info.data.user.id) !== '936619743392459') {
                                         cachedData.profileInfo = info;
+                                        profileId = String(info.data.user.id);
                                     } else {
-                                        // Fallback com ID obtido de cookies ou cache local para não travar no erro 429
-                                        const fallbackId = getActorId() || getCachedUserId(username);
-                                        if (fallbackId) {
-                                            console.log("[IG Tools] Usando fallback de ID local após 429:", fallbackId);
+                                        // Fallback com ID obtido de cookies ou cache local
+                                        let fallbackId = getCookie('ds_user_id') || getActorId() || getCachedUserId(username);
+                                        if (fallbackId === '936619743392459') fallbackId = null;
+                                        if (!fallbackId) fallbackId = await getUserId(username);
+                                        if (fallbackId && fallbackId !== '936619743392459') {
+                                            console.log("[IG Tools] Usando fallback de ID local:", fallbackId);
+                                            profileId = String(fallbackId);
                                             cachedData.profileInfo = {
                                                 data: {
                                                     user: {
-                                                        id: fallbackId,
+                                                        id: profileId,
                                                         edge_follow: { count: 1000 },
                                                         edge_followed_by: { count: 1000 }
                                                     }
                                                 }
                                             };
                                         } else {
-                                            alert("Instagram limitou consultas de perfil (HTTP 429). Aguarde 1 minuto e tente novamente.");
+                                            alert("Não foi possível identificar o ID do usuário no Instagram. Verifique se está logado e tente novamente.");
                                             return;
                                         }
                                     }
                                 }
                                 toggleLoading(true, null, "Atualizando dados...");
 
-                                const userId = cachedData.profileInfo.data.user.id;
-                                const totalFollowing = cachedData.profileInfo.data.user.edge_follow.count;
-                                const totalFollowers = cachedData.profileInfo.data.user.edge_followed_by.count;
+                                const userId = profileId;
+                                const totalFollowing = Number(cachedData.profileInfo?.data?.user?.edge_follow?.count) || 1000;
+                                const totalFollowers = Number(cachedData.profileInfo?.data?.user?.edge_followed_by?.count) || 1000;
 
                                 let apiFollowing = null;
                                 let apiFollowers = null;
@@ -11469,14 +11589,16 @@
 
                     const originalPath = window.location.pathname;
 
-                    const pathParts = window.location.pathname.split('/').filter(Boolean);
-                    const username = pathParts[0];
-                    const appID = '936619743392459';
-                    if (!username || (pathParts.length > 1 && !['followers', 'following'].includes(pathParts[1]))) {
-                        alert("Por favor, vá para a página de perfil de um usuário para usar esta função.");
+                    toggleLoading(true, null, "Identificando usuário...");
+                    const username = await resolveTargetOrLoggedUsername();
+                    toggleLoading(false);
+
+                    if (!username) {
+                        alert("Por favor, acesse a página de um perfil ou efetue login para usar esta função.");
                         toggleLoading(false);
                         return;
                     }
+                    const appID = '936619743392459';
 
                     // Helper para verificar o que atualizar
                     const shouldUpdate = (key) => {
@@ -11864,7 +11986,9 @@
                         };
 
                         while (hasNextPage && !processoCancelado) {
-                            const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=50&max_id=${nextMaxId}`, { headers: { 'X-IG-App-ID': appID } });
+                            const response = await fetch(`https://www.instagram.com/api/v1/friendships/${userId}/${type}/?count=50&max_id=${nextMaxId}`, {
+                                headers: getApiHeaders()
+                            });
                             const data = await response.json();
                             data.users.forEach(user => {
                                 const pk = String(user.pk || user.id || '');
@@ -11907,14 +12031,17 @@
                         statusDiv.innerText = 'Buscando informações do perfil...';
                         const profileInfo = await safeFetchProfileInfo(username);
                         if (processoCancelado) return;
-                        const userId = profileInfo?.data?.user?.id;
-                        if (!userId) {
-                            alert('Não foi possível obter as informações do perfil devido ao limite de requisições do Instagram (HTTP 429). Por favor, aguarde alguns minutos e tente novamente.');
+                        let userId = profileInfo?.data?.user?.id;
+                        if (!userId || userId === '936619743392459') {
+                            userId = getCookie('ds_user_id') || getActorId() || (await getUserId(username));
+                        }
+                        if (!userId || userId === '936619743392459') {
+                            alert('Não foi possível obter as informações do perfil. Por favor, aguarde alguns minutos e tente novamente.');
                             div.remove();
                             return;
                         }
 
-                        const totalFollowing = profileInfo.data?.user?.edge_follow?.count || 0;
+                        const totalFollowing = profileInfo?.data?.user?.edge_follow?.count || 1000;
 
                         // Carrega caches do DB
                         await Promise.all([
@@ -14086,11 +14213,10 @@
                 }
 
                 async function iniciarAnaliseReels() {
-                    const pathParts = window.location.pathname.split('/').filter(Boolean);
-                    const username = pathParts[0];
+                    const username = await resolveTargetOrLoggedUsername();
                     const appID = '936619743392459';
-                    if (!username || (pathParts.length > 1 && !['followers', 'following'].includes(pathParts[1]))) {
-                        alert("Por favor, vá para a sua página de perfil para usar esta função.");
+                    if (!username) {
+                        alert("Por favor, acesse a página de um perfil ou efetue login para usar esta função.");
                         return;
                     }
 

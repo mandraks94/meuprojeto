@@ -1342,110 +1342,75 @@
             async function executeWbloksHideStory(uid, username, action = 'hide') {
                 if (!uid) return { success: false, error: 'no_uid' };
 
+                const viewerId = getCookie('ds_user_id') || getInstagramFormToken('av') || '';
+                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                const jazoest = computeJazoest(fbDtsg) || '26321';
+                const spin = getSpinParams();
                 const shouldUnhide = action === 'unhide';
-                console.log(`[IG Tools HideStory] Executando ${action} para @${username} (UID: ${uid})...`);
 
-                // 1. TENTATIVA REST API (Oficial e Direto: block_friend_reel / unblock_friend_reel)
+                const params = {
+                    user_id: Number(uid) || uid,
+                    username: username,
+                    should_unhide: shouldUnhide
+                };
+
+                const url = 'https://www.instagram.com/async/wbloks/fetch/?appid=com.instagram.portable_settings.privacy.hide_story_from_screen.hide_story_from&type=action&__bkv=62077fc559de123afe03ebeb18194a88ba5d4e6874d9a07873752f3792adb8a0';
+
+                const dyn = getInstagramFormToken('__dyn') || '7xeUjG1mxu1syaxG4Vp41twpUnwgU7SbzEdF8vyUco2qwJyEiw50x609vCwjE1EEc87m0yE462mcw5Mx62G5UswoEcE7O2l0Fwqo5W1yw9O1lwxwQzXwae4UaEW2G0AEco5G0zK5o4q0HU1wEbUGdwtUeo9UaQ0Lo6-bwHwKG6Ufk0zU8oC1IwjUpwlAcwBwUQp1yU426V8aUuwm8jxK1mwa6bBK4o16UeUGq2Kq11whE984O0XEdoCQ1jw';
+                const csr = getInstagramFormToken('__csr') || 'iMB0FNX5N22j9eUHPWl8iGkV-eGXT8G5OPdP8VIzehP8KBh9pV9cNGWnip9Wh4BGfld8Dif4W4au9Irs8F4l9JbhAF4gJ7l95AFagBBBAkDiq9uVdppZDJykAch9QvAKiXjAV4HgzDBoLaaGh3Q68K9zGzay9pUC8yEj-dyWxe9zEGK9zXBzWzWyuQmbyWxaZ3KFEgxjhj1ycBzk5uVoGdgK8Ax3AAHV8K5GgG22maG1UUK1sweq7okw5ww08Ha00Y8EcU0vn2UKkMoQ18xgE0h1opw6yCtw2TU0hyS0Koqguw8Z0BwiUdK0qW5Eo6jw4dU3HwbWq3G8wTg1iV2By84iUy8guGywqodE2YrRrw1s2i1lG5o06KC02qu2K9g6rw0E5weS0fcw';
+                const hsdp = getInstagramFormToken('__hsdp') || 'gjMb_j1GkkCPcx4Pn9lEHV2NOEO99KXjQ3pyigsojx5AqI9xeGG48qx222boGwm9cwnoAV4A-FUK19gZ91G8woHuSHG4u7dChF4mmQ4B8fCK68G2GUC9wzz84e11wywkqwHxS3u6Ed98S19wDxedwm8qwk8szofoKU28wJwok32361dyUO0j-0pC2O0cPwpE0B20YEnwtE0mCw5Ywa20zi08-5o0Guew5fxvw2GA0gW09Iwww5GwmU887K0kO0BVk7nu';
+                const hblp = getInstagramFormToken('__hblp') || '0CG7E5u10wxzEb9bK9wAxedy69G1lwFBGm5ECiCiqim8K8yEyi2W5GAHyXEyjRwrAAq4Vk1ACg-eHxa9VbhFbGmUW4oyqWxny8hxeiCmECqUObz9ohwEGbxPx7Gmqmm9wkqz8hz8twTy-cgO4UiAzoiwSwDxedxam3-UmwYxe59US2u5kaK2K1czQ2O1tig8ES363CubCAz81fU7uiaw4hwIw8a1Lwt82zwGxS2W1Lw_wpE4e0N89U17U3Oxu1Sw2Yo0Hi5o2bwOwau1ewJwzwm8O2swuJ4wkU7u0HE1GoW0NE28xvwRxvw24o4x04ew5twah0q88awvU3xBwDwPwwyU6-0w85K1sxa8x_wr9k7nu';
+                const sjsp = getInstagramFormToken('__sjsp') || getInstagramFormToken('_sjsp') || 'gjMbXj2k4hhiragx4PmpmyLAb7az8ACXKjgdES8UA4M9S9wFwQx2226a1oswnoB4AijWwrAA6E2QS4Qfg5u2GUjwzw6cwl8';
+                const sParam = getInstagramFormToken('__s') || 'z3nm3y:imx696:n7ke1q';
+                const hsi = getInstagramFormToken('__hsi') || '7689958851794881797';
+                const hs = getInstagramFormToken('__hs') || '20722.HYP:instagram_web_pkg.2.1...0';
+
+                const body = new URLSearchParams({
+                    __d: 'www',
+                    __user: '0',
+                    __a: '1',
+                    __req: '24',
+                    __hs: hs,
+                    dpr: '2',
+                    __ccg: 'EXCELLENT',
+                    __rev: spin.spin_r || '1048569652',
+                    __s: sParam,
+                    __hsi: hsi,
+                    __dyn: dyn,
+                    __csr: csr,
+                    __hsdp: hsdp,
+                    __hblp: hblp,
+                    __sjsp: sjsp,
+                    _sjsp: sjsp,
+                    __comet_req: '7',
+                    server_timestamps: 'true',
+                    __spin_r: spin.spin_r || '1048569652',
+                    __spin_b: spin.spin_b || 'trunk',
+                    __spin_t: spin.spin_t || String(Math.floor(Date.now() / 1000)),
+                    __crn: 'comet.igweb.PolarisSettingsHideStoryAndLiveFromRoute',
+                    params: JSON.stringify(params)
+                });
+
+                if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                if (jazoest) body.append('jazoest', jazoest);
+                if (lsd) body.append('lsd', lsd);
+
+                const headers = {
+                    ...getApiHeaders(true),
+                    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                    'X-FB-LSD': lsd
+                };
+
+                console.log(`[IG Tools HideStory] Enviando Wbloks (${action}):`, params);
+
                 try {
-                    const endpoint = shouldUnhide
-                        ? `https://www.instagram.com/api/v1/friendships/unblock_friend_reel/${uid}/`
-                        : `https://www.instagram.com/api/v1/friendships/block_friend_reel/${uid}/`;
-
-                    const res = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: {
-                            ...getApiHeaders(true),
-                            'X-CSRFToken': getCookie('csrftoken') || '',
-                            'X-IG-App-ID': '936619743392459',
-                            'X-Instagram-AJAX': '1',
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'Content-Type': 'application/x-www-form-urlencoded'
-                        },
-                        body: 'source=story_settings',
-                        credentials: 'include'
-                    });
-
-                    const json = await res.json().catch(() => null);
-                    console.log(`[IG Tools HideStory] Resposta REST ${endpoint}:`, res.status, json);
-                    if (res.ok && (json?.status === 'ok' || !json?.error)) {
-                        return { success: true, method: 'rest_friendship', data: json };
-                    }
-                } catch (e1) {
-                    console.warn('[IG Tools HideStory] Erro na tentativa REST friendship:', e1);
-                }
-
-                // 2. TENTATIVA REST set_reel_settings (Alternativa direta para batch/single)
-                try {
-                    const paramKey = shouldUnhide ? 'user_ids_to_unblock' : 'user_ids_to_block';
-                    const res = await fetch('https://www.instagram.com/api/v1/friendships/set_reel_settings/', {
-                        method: 'POST',
-                        headers: {
-                            ...getApiHeaders(true),
-                            'X-CSRFToken': getCookie('csrftoken') || '',
-                            'X-IG-App-ID': '936619743392459',
-                            'X-Instagram-AJAX': '1',
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'Content-Type': 'application/x-www-form-urlencoded'
-                        },
-                        body: `${paramKey}=${uid}`,
-                        credentials: 'include'
-                    });
-
-                    const json = await res.json().catch(() => null);
-                    console.log(`[IG Tools HideStory] Resposta set_reel_settings:`, res.status, json);
-                    if (res.ok && (json?.status === 'ok' || !json?.error)) {
-                        return { success: true, method: 'set_reel_settings', data: json };
-                    }
-                } catch (e2) {
-                    console.warn('[IG Tools HideStory] Erro no set_reel_settings:', e2);
-                }
-
-                // 3. TENTATIVA WBLOKS com tokens reais
-                try {
-                    const viewerId = getCookie('ds_user_id') || getInstagramFormToken('av') || '';
-                    const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
-                    const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
-                    const jazoest = computeJazoest(fbDtsg);
-                    const spin = getSpinParams();
-
-                    const params = {
-                        user_id: Number(uid) || uid,
-                        username: username,
-                        should_unhide: shouldUnhide
-                    };
-
-                    const url = 'https://www.instagram.com/async/wbloks/fetch/?appid=com.instagram.portable_settings.privacy.hide_story_from_screen.hide_story_from&type=action&__bkv=bebad2b121ef373e1847b0445ffd0ce996417496c088e54f6b5d2f5c6501842d';
-
-                    const body = new URLSearchParams({
-                        __d: 'www',
-                        __user: viewerId || '0',
-                        __a: '1',
-                        __req: '24',
-                        _comet_req: '7',
-                        __comet_req: '7',
-                        params: JSON.stringify(params)
-                    });
-
-                    if (viewerId) body.set('av', viewerId);
-                    if (fbDtsg) body.set('fb_dtsg', fbDtsg);
-                    if (jazoest) body.set('jazoest', jazoest);
-                    if (lsd) body.set('lsd', lsd);
-                    if (spin.spin_r) body.set('_spin_r', spin.spin_r);
-                    if (spin.spin_t) body.set('_spin_t', spin.spin_t);
-
-                    const headers = {
-                        ...getApiHeaders(true),
-                        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-                        'X-FB-LSD': lsd
-                    };
-
                     const response = await fetch(url, {
                         method: 'POST',
                         headers,
                         body: body.toString(),
                         credentials: 'include',
-                        cache: 'no-store',
-                        signal: AbortSignal.timeout(6000)
+                        cache: 'no-store'
                     });
 
                     const rawText = await response.text();
@@ -1477,9 +1442,8 @@
                         rawPreview: rawText.slice(0, 200)
                     });
 
-                    const hasErrors = data?.error || (Array.isArray(data?.errors) && data.errors.length > 0);
-                    const success = response.ok && !hasErrors;
-                    return { response, success, data, rawText };
+                    const hasErrors = Array.isArray(data?.errors) && data.errors.length > 0;
+                    return { response, success: response.ok && !hasErrors, data, rawText };
                 } catch (err) {
                     console.error(`[IG Tools HideStory] Erro Wbloks:`, err);
                     return { success: false, error: err };
@@ -6806,57 +6770,49 @@
                         const nextBtn = document.getElementById('nextHsPageBtn');
                         if (nextBtn) nextBtn.onclick = () => renderList(currentPage + 1);
 
-                        // Botão individual Ocultar / Reexibir (1 clique via WBloks)
+                        // Botão individual Ocultar / Reexibir (Execução direta WBloks sem redirecionamentos)
                         container.querySelectorAll('.btn-action-hs').forEach(btn => {
                             btn.addEventListener('click', async (e) => {
                                 const targetBtn = e.currentTarget;
                                 const uname = targetBtn.dataset.username;
                                 const action = targetBtn.dataset.action; // 'hide' ou 'unhide'
-                                let uid = targetBtn.dataset.uid || getCachedUserId(uname);
+                                const userObj = hideStoryList.find(u => u.username.toLowerCase() === uname.toLowerCase());
+                                const uid = userObj?.pk || userObj?.id || getCachedUserId(uname) || '';
 
                                 targetBtn.disabled = true;
-                                targetBtn.textContent = 'Salvando...';
-
-                                if (!uid) {
-                                    uid = await getUserId(uname);
-                                }
-                                if (!uid) {
-                                    showToast(`Não foi possível obter o ID de @${uname}.`);
-                                    targetBtn.disabled = false;
-                                    targetBtn.textContent = action === 'hide' ? '👁️‍🗨️ Ocultar' : '👁️ Reexibir';
-                                    return;
-                                }
+                                targetBtn.textContent = 'Processando...';
 
                                 try {
                                     const res = await executeWbloksHideStory(uid, uname, action);
                                     if (res && res.success) {
-                                        const userObj = hideStoryList.find(u => u.username.toLowerCase() === uname.toLowerCase());
                                         if (userObj) {
                                             userObj.isHidden = (action === 'hide');
                                         }
 
+                                        if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
                                         if (action === 'hide') {
+                                            userListCache.hiddenStory.add(uname.toLowerCase());
                                             showToast(`👁️‍🗨️ Stories ocultados para @${uname}!`);
                                         } else {
+                                            userListCache.hiddenStory.delete(uname.toLowerCase());
                                             showToast(`👁️ Stories agora visíveis para @${uname}.`);
                                         }
 
                                         cachedHideStory = hideStoryList;
                                         try {
                                             localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(hideStoryList));
-                                            await dbHelper.saveCache('hideStory', hideStoryList.filter(u => u.isHidden));
+                                            dbHelper.saveCache('hideStory', hideStoryList.filter(u => u.isHidden));
+                                            dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
                                         } catch (_) { }
 
                                         renderList(currentPage);
                                         updateCounts();
                                     } else {
-                                        showToast(`Erro ao atualizar @${uname}`);
-                                        targetBtn.disabled = false;
-                                        targetBtn.textContent = action === 'hide' ? '👁️‍🗨️ Ocultar' : '👁️ Reexibir';
+                                        throw new Error(res?.error || 'Falha na requisição');
                                     }
                                 } catch (err) {
                                     console.error('[IG Tools HideStory] Erro:', err);
-                                    showToast(`Erro ao comunicar com o Instagram.`);
+                                    showToast(`Erro ao processar @${uname}.`);
                                     targetBtn.disabled = false;
                                     targetBtn.textContent = action === 'hide' ? '👁️‍🗨️ Ocultar' : '👁️ Reexibir';
                                 }
@@ -7390,49 +7346,56 @@
                         if (!confirm(`Deseja ocultar seus stories para ${usersToHide.length} usuário(s)?`)) return;
 
                         const hideBtn = document.getElementById("hsHideSelectedBtn");
-                        hideBtn.disabled = true;
-                        hideBtn.textContent = "Ocultando...";
-                        toggleLoading(true, 0, "Obtendo IDs e ocultando stories...");
-
-                        let successCount = 0;
-                        for (let i = 0; i < usersToHide.length; i++) {
-                            const uname = usersToHide[i];
-                            toggleLoading(true, i + 1, usersToHide.length, `Ocultando @${uname} (${i + 1}/${usersToHide.length})...`);
-
-                            let uid = getCachedUserId(uname);
-                            if (!uid) {
-                                const u = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
-                                if (u && u.pk) uid = u.pk;
-                            }
-                            if (!uid) uid = await getUserId(uname);
-
-                            if (uid) {
-                                try {
-                                    const res = await executeWbloksHideStory(uid, uname, 'hide');
-                                    if (res && res.success) {
-                                        successCount++;
-                                        const u = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
-                                        if (u) u.isHidden = true;
-                                    }
-                                } catch (_) { }
-                            }
-                            await new Promise(r => setTimeout(r, 250));
+                        if (hideBtn) {
+                            hideBtn.disabled = true;
+                            hideBtn.textContent = "Processando...";
                         }
 
-                        toggleLoading(false);
-                        hideBtn.disabled = false;
-                        hideBtn.textContent = "👁️‍🗨️ Ocultar Selecionados";
+                        let successCount = 0;
+                        const delayMs = loadSettings().requestDelay || 350;
+
+                        for (let i = 0; i < usersToHide.length; i++) {
+                            const uname = usersToHide[i];
+                            const uObj = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                            const uid = uObj?.pk || uObj?.id || getCachedUserId(uname) || '';
+                            if (hideBtn) hideBtn.textContent = `Processando (${i + 1}/${usersToHide.length})...`;
+
+                            try {
+                                const res = await executeWbloksHideStory(uid, uname, 'hide');
+                                if (res && res.success) {
+                                    if (uObj) uObj.isHidden = true;
+                                    if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
+                                    userListCache.hiddenStory.add(uname.toLowerCase());
+                                    successCount++;
+                                }
+                            } catch (e) {
+                                console.warn(`[IG Tools HideStory] Falha ao ocultar @${uname}:`, e);
+                            }
+
+                            if (i < usersToHide.length - 1) {
+                                await new Promise(r => setTimeout(r, delayMs));
+                            }
+                        }
 
                         cachedHideStory = hideStoryList;
                         try {
                             localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(hideStoryList));
-                            await dbHelper.saveCache('hideStory', hideStoryList.filter(u => u.isHidden));
+                            dbHelper.saveCache('hideStory', hideStoryList.filter(u => u.isHidden));
+                            if (userListCache.hiddenStory) {
+                                dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
+                            }
                         } catch (_) { }
 
                         selectedUsers.clear();
                         renderList(currentPage);
                         updateCounts();
-                        alert(`Sucesso! ${successCount} de ${usersToHide.length} usuário(s) foram atualizados com story ocultado.`);
+
+                        if (hideBtn) {
+                            hideBtn.disabled = false;
+                            hideBtn.textContent = "👁️‍🗨️ Ocultar Selecionados";
+                        }
+
+                        showToast(`Sucesso! Stories ocultados para ${successCount} usuário(s).`);
                     };
 
                     // AÇÃO EM LOTE: Reexibir Selecionados
@@ -7455,49 +7418,56 @@
                         if (!confirm(`Deseja reexibir seus stories para ${usersToUnhide.length} usuário(s)?`)) return;
 
                         const unhideBtn = document.getElementById("hsUnhideSelectedBtn");
-                        unhideBtn.disabled = true;
-                        unhideBtn.textContent = "Reexibindo...";
-                        toggleLoading(true, 0, "Obtendo IDs e reexibindo stories...");
-
-                        let successCount = 0;
-                        for (let i = 0; i < usersToUnhide.length; i++) {
-                            const uname = usersToUnhide[i];
-                            toggleLoading(true, i + 1, usersToUnhide.length, `Reexibindo @${uname} (${i + 1}/${usersToUnhide.length})...`);
-
-                            let uid = getCachedUserId(uname);
-                            if (!uid) {
-                                const u = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
-                                if (u && u.pk) uid = u.pk;
-                            }
-                            if (!uid) uid = await getUserId(uname);
-
-                            if (uid) {
-                                try {
-                                    const res = await executeWbloksHideStory(uid, uname, 'unhide');
-                                    if (res && res.success) {
-                                        successCount++;
-                                        const u = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
-                                        if (u) u.isHidden = false;
-                                    }
-                                } catch (_) { }
-                            }
-                            await new Promise(r => setTimeout(r, 250));
+                        if (unhideBtn) {
+                            unhideBtn.disabled = true;
+                            unhideBtn.textContent = "Processando...";
                         }
 
-                        toggleLoading(false);
-                        unhideBtn.disabled = false;
-                        unhideBtn.textContent = "👁️ Reexibir Selecionados";
+                        let successCount = 0;
+                        const delayMs = loadSettings().requestDelay || 350;
+
+                        for (let i = 0; i < usersToUnhide.length; i++) {
+                            const uname = usersToUnhide[i];
+                            const uObj = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                            const uid = uObj?.pk || uObj?.id || getCachedUserId(uname) || '';
+                            if (unhideBtn) unhideBtn.textContent = `Processando (${i + 1}/${usersToUnhide.length})...`;
+
+                            try {
+                                const res = await executeWbloksHideStory(uid, uname, 'unhide');
+                                if (res && res.success) {
+                                    if (uObj) uObj.isHidden = false;
+                                    if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
+                                    userListCache.hiddenStory.delete(uname.toLowerCase());
+                                    successCount++;
+                                }
+                            } catch (e) {
+                                console.warn(`[IG Tools HideStory] Falha ao reexibir @${uname}:`, e);
+                            }
+
+                            if (i < usersToUnhide.length - 1) {
+                                await new Promise(r => setTimeout(r, delayMs));
+                            }
+                        }
 
                         cachedHideStory = hideStoryList;
                         try {
                             localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(hideStoryList));
-                            await dbHelper.saveCache('hideStory', hideStoryList.filter(u => u.isHidden));
+                            dbHelper.saveCache('hideStory', hideStoryList.filter(u => u.isHidden));
+                            if (userListCache.hiddenStory) {
+                                dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
+                            }
                         } catch (_) { }
 
                         selectedUsers.clear();
                         renderList(currentPage);
                         updateCounts();
-                        alert(`Sucesso! ${successCount} de ${usersToUnhide.length} usuário(s) agora podem ver seus stories novamente.`);
+
+                        if (unhideBtn) {
+                            unhideBtn.disabled = false;
+                            unhideBtn.textContent = "👁️ Reexibir Selecionados";
+                        }
+
+                        showToast(`Sucesso! Stories reexibidos para ${successCount} usuário(s).`);
                     };
 
                     // Real-time listener para novos usuários capturados via rolagem na página nativa
@@ -14538,7 +14508,8 @@
                             if (uid) {
                                 try {
                                     if (cacheKey === 'hiddenStory') {
-                                        const isCurrentlyHidden = userListCache.hiddenStory && userListCache.hiddenStory.has(username);
+                                        if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
+                                        const isCurrentlyHidden = userListCache.hiddenStory.has(username);
                                         const action = isCurrentlyHidden ? 'unhide' : 'hide';
                                         const res = await executeWbloksHideStory(uid, username, action);
                                         if (res.success) {

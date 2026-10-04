@@ -1740,6 +1740,8 @@
             }
 
             const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23aaa'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 4c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm0 14c-2.03 0-3.8-.85-5.05-2.2.03-1.66 3.37-2.57 5.05-2.57s5.02.91 5.05 2.57C15.8 19.15 14.03 20 12 20z'/%3E%3C/svg%3E";
+            try { window.DEFAULT_AVATAR = DEFAULT_AVATAR; } catch (_) { }
+            try { if (typeof unsafeWindow !== 'undefined') unsafeWindow.DEFAULT_AVATAR = DEFAULT_AVATAR; } catch (_) { }
 
             // Helper seguro para buscar informações do perfil sem lançar erro de sintaxe JSON quando ocorre 429 ou 400
             async function safeFetchProfileInfo(username) {
@@ -4492,30 +4494,36 @@
 
                     // Helper inteligente para resolver fotos de perfil através de múltiplos caches e sessões
                     function resolveUserPhoto(username, currentPhoto = null) {
-                        if (currentPhoto && currentPhoto !== DEFAULT_AVATAR && !currentPhoto.includes('rsrc.php')) {
+                        if (currentPhoto && currentPhoto !== DEFAULT_AVATAR && typeof currentPhoto === 'string' && !currentPhoto.includes('rsrc.php')) {
                             return currentPhoto;
                         }
-                        const clean = (username || '').toLowerCase();
-                        if (typeof cachedData !== 'undefined' && cachedData?.userDetails) {
-                            const p = cachedData.userDetails.get(clean)?.photoUrl;
-                            if (p && p !== DEFAULT_AVATAR && !p.includes('rsrc.php')) return p;
-                        }
-                        if (dbHelper?._cache?.following && Array.isArray(dbHelper._cache.following)) {
-                            const item = dbHelper._cache.following.find(x => (x?.username || x)?.toLowerCase() === clean);
-                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR) return item.photoUrl;
-                        }
-                        if (dbHelper?._cache?.followers && Array.isArray(dbHelper._cache.followers)) {
-                            const item = dbHelper._cache.followers.find(x => (x?.username || x)?.toLowerCase() === clean);
-                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR) return item.photoUrl;
-                        }
-                        if (dbHelper?._cache?.closeFriends && Array.isArray(dbHelper._cache.closeFriends)) {
-                            const item = dbHelper._cache.closeFriends.find(x => (x?.username || x)?.toLowerCase() === clean);
-                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR) return item.photoUrl;
-                        }
-                        if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
-                            const item = seguindoList.find(x => (typeof x === 'object' ? x?.username : x)?.toLowerCase() === clean);
-                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR) return item.photoUrl;
-                        }
+                        const clean = (typeof username === 'string' ? username : (username?.username || '')).toLowerCase().trim();
+                        if (!clean) return DEFAULT_AVATAR;
+
+                        try {
+                            if (typeof cachedData !== 'undefined' && cachedData?.userDetails) {
+                                const p = cachedData.userDetails.get(clean)?.photoUrl;
+                                if (p && p !== DEFAULT_AVATAR && typeof p === 'string' && !p.includes('rsrc.php')) return p;
+                            }
+                            const getUname = (x) => (typeof x === 'string' ? x : (x?.username || '')).toLowerCase().trim();
+
+                            if (dbHelper?._cache?.following && Array.isArray(dbHelper._cache.following)) {
+                                const item = dbHelper._cache.following.find(x => getUname(x) === clean);
+                                if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && typeof item.photoUrl === 'string' && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
+                            }
+                            if (dbHelper?._cache?.followers && Array.isArray(dbHelper._cache.followers)) {
+                                const item = dbHelper._cache.followers.find(x => getUname(x) === clean);
+                                if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && typeof item.photoUrl === 'string' && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
+                            }
+                            if (dbHelper?._cache?.closeFriends && Array.isArray(dbHelper._cache.closeFriends)) {
+                                const item = dbHelper._cache.closeFriends.find(x => getUname(x) === clean);
+                                if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && typeof item.photoUrl === 'string' && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
+                            }
+                            if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                const item = seguindoList.find(x => getUname(x) === clean);
+                                if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && typeof item.photoUrl === 'string' && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
+                            }
+                        } catch (_) { }
                         return DEFAULT_AVATAR;
                     }
 
@@ -4776,7 +4784,7 @@
                                     <tr style="border-bottom: 1px solid #dbdbdb;" data-username="${username}">
                                         <td style="padding: 8px;"><input type="checkbox" class="cf-user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
                                         <td style="padding: 8px; display: flex; align-items: center; gap: 10px;">
-                                            <img src="${photoUrl || DEFAULT_AVATAR}" crossorigin="anonymous" loading="lazy" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${username}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid #eee; flex-shrink: 0;">
+                                            <img src="${photoUrl || DEFAULT_AVATAR}" crossorigin="anonymous" loading="lazy" onerror="this.onerror=null; this.src='${DEFAULT_AVATAR}';" alt="${username}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid #eee; flex-shrink: 0;">
                                             <div style="display: flex; flex-direction: column;">
                                                 <div style="display: flex; align-items: center; gap: 6px;">
                                                     <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration: none; color: inherit; font-weight: 600;">${username}</a>
@@ -6094,40 +6102,44 @@
 
                     // Helper inteligente para resolver fotos de perfil através de múltiplos caches e sessões
                     function resolveUserPhoto(username, currentPhoto = null) {
-                        if (currentPhoto && currentPhoto !== DEFAULT_AVATAR && !currentPhoto.includes('rsrc.php') && !currentPhoto.includes('static.xx')) {
+                        if (currentPhoto && currentPhoto !== DEFAULT_AVATAR && typeof currentPhoto === 'string' && !currentPhoto.includes('rsrc.php') && !currentPhoto.includes('static.xx')) {
                             return currentPhoto;
                         }
-                        const clean = (username || '').toLowerCase().trim();
+                        const clean = (typeof username === 'string' ? username : (username?.username || '')).toLowerCase().trim();
                         if (!clean) return DEFAULT_AVATAR;
 
-                        if (typeof cachedData !== 'undefined' && cachedData?.userDetails) {
-                            const p = cachedData.userDetails.get(clean)?.photoUrl;
-                            if (p && p !== DEFAULT_AVATAR && !p.includes('rsrc.php') && !p.includes('static.xx')) return p;
-                        }
-                        if (dbHelper?._cache?.following && Array.isArray(dbHelper._cache.following)) {
-                            const item = dbHelper._cache.following.find(x => (x?.username || x)?.toLowerCase() === clean);
-                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
-                        }
-                        if (dbHelper?._cache?.followers && Array.isArray(dbHelper._cache.followers)) {
-                            const item = dbHelper._cache.followers.find(x => (x?.username || x)?.toLowerCase() === clean);
-                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
-                        }
-                        if (dbHelper?._cache?.hiddenStory && Array.isArray(dbHelper._cache.hiddenStory)) {
-                            const item = dbHelper._cache.hiddenStory.find(x => (x?.username || x)?.toLowerCase() === clean);
-                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
-                        }
-                        if (dbHelper?._cache?.hideStory && Array.isArray(dbHelper._cache.hideStory)) {
-                            const item = dbHelper._cache.hideStory.find(x => (x?.username || x)?.toLowerCase() === clean);
-                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
-                        }
-                        if (dbHelper?._cache?.closeFriends && Array.isArray(dbHelper._cache.closeFriends)) {
-                            const item = dbHelper._cache.closeFriends.find(x => (x?.username || x)?.toLowerCase() === clean);
-                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
-                        }
-                        if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
-                            const item = seguindoList.find(x => (typeof x === 'object' ? x?.username : x)?.toLowerCase() === clean);
-                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
-                        }
+                        try {
+                            if (typeof cachedData !== 'undefined' && cachedData?.userDetails) {
+                                const p = cachedData.userDetails.get(clean)?.photoUrl;
+                                if (p && p !== DEFAULT_AVATAR && typeof p === 'string' && !p.includes('rsrc.php') && !p.includes('static.xx')) return p;
+                            }
+                            const getUname = (x) => (typeof x === 'string' ? x : (x?.username || '')).toLowerCase().trim();
+
+                            if (dbHelper?._cache?.following && Array.isArray(dbHelper._cache.following)) {
+                                const item = dbHelper._cache.following.find(x => getUname(x) === clean);
+                                if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && typeof item.photoUrl === 'string' && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
+                            }
+                            if (dbHelper?._cache?.followers && Array.isArray(dbHelper._cache.followers)) {
+                                const item = dbHelper._cache.followers.find(x => getUname(x) === clean);
+                                if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && typeof item.photoUrl === 'string' && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
+                            }
+                            if (dbHelper?._cache?.hiddenStory && Array.isArray(dbHelper._cache.hiddenStory)) {
+                                const item = dbHelper._cache.hiddenStory.find(x => getUname(x) === clean);
+                                if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && typeof item.photoUrl === 'string' && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
+                            }
+                            if (dbHelper?._cache?.hideStory && Array.isArray(dbHelper._cache.hideStory)) {
+                                const item = dbHelper._cache.hideStory.find(x => getUname(x) === clean);
+                                if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && typeof item.photoUrl === 'string' && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
+                            }
+                            if (dbHelper?._cache?.closeFriends && Array.isArray(dbHelper._cache.closeFriends)) {
+                                const item = dbHelper._cache.closeFriends.find(x => getUname(x) === clean);
+                                if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && typeof item.photoUrl === 'string' && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
+                            }
+                            if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                                const item = seguindoList.find(x => getUname(x) === clean);
+                                if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && typeof item.photoUrl === 'string' && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
+                            }
+                        } catch (_) { }
                         return DEFAULT_AVATAR;
                     }
 
@@ -6340,9 +6352,6 @@
                         cachedHideStory.forEach(u => addHiddenAccount(u, u.isHidden));
                     }
 
-                    const cachedHiddenCount = baseList.filter(u => u.isHidden).length;
-                    const isCacheCorrupted = cachedHiddenCount > 80 && (officialHiddenSet.size > 0 || (window._igHideStoryTotalCount && window._igHideStoryTotalCount < 80) || baseList.length > 80);
-
                     const mergedMap = new Map();
 
                     // 1. Contas oficialmente com story ocultado
@@ -6357,10 +6366,7 @@
                     baseList.forEach(u => {
                         const uname = (u.username || '').toLowerCase().trim();
                         if (!uname || !isValidInstagramUsername(uname) || uname === myUname) return;
-                        let isHid = u.isHidden;
-                        if (isCacheCorrupted) {
-                            isHid = officialHiddenSet.has(uname);
-                        }
+                        const isHid = !!u.isHidden;
                         const p = resolveUserPhoto(uname, u.photoUrl);
                         if (!mergedMap.has(uname)) {
                             mergedMap.set(uname, {
@@ -6490,11 +6496,11 @@
                         <div style="margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap;">
                             <input type="text" id="hsSearchInput" placeholder="Pesquisar por @usuário, nome ou ID..." style="flex: 2; min-width: 220px; padding: 8px 12px; height: 38px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; outline: none; box-sizing: border-box;">
                             <select id="hsFilterSelect" style="flex: 1; min-width: 260px; padding: 0 10px; height: 38px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; cursor: pointer; outline: none; box-sizing: border-box; font-weight: 500;">
-                                <option value="hidden" ${hiddenCount > 0 ? 'selected' : ''}>👁️ Stories Ocultados (${hiddenCount})</option>
-                                <option value="not_hidden" ${hiddenCount === 0 && notHiddenCount > 0 ? 'selected' : ''}>👁️ Stories Sem Ocultar (${notHiddenCount})</option>
+                                <option value="all" selected>🌐 Todos (${hideStoryList.length})</option>
+                                <option value="hidden">👁️ Stories Ocultados (${hiddenCount})</option>
+                                <option value="not_hidden">👁️ Stories Sem Ocultar (${notHiddenCount})</option>
                                 <option value="followers">👥 Meus Seguidores (${followersCount})</option>
                                 <option value="following">👤 Meus Seguindo (${followingCount})</option>
-                                <option value="all">🌐 Todos (${hideStoryList.length})</option>
                             </select>
                         </div>
                         <div id="statusHideStory" style="font-weight: 600; font-size: 13px; color: #555; display: flex; justify-content: space-between; align-items: center;">
@@ -6506,318 +6512,320 @@
 
                     document.body.appendChild(div);
 
+                    // Controles da janela vinculados imediatamente (garante que fechar e minimizar funcionem sempre)
+                    const hsCloseBtn = document.getElementById("hsFecharBtn");
+                    if (hsCloseBtn) {
+                        hsCloseBtn.onclick = () => {
+                            if (window._igHideStoryUsersCapture && typeof captureCallback !== 'undefined') {
+                                const idx = window._igHideStoryUsersCapture.callbacks.indexOf(captureCallback);
+                                if (idx !== -1) window._igHideStoryUsersCapture.callbacks.splice(idx, 1);
+                            }
+                            div.remove();
+                            modalAbertoStory = false;
+                        };
+                    }
+
+                    let isHsMinimized = false;
+                    const hsMinBtn = document.getElementById("hsMinimizarBtn");
+                    if (hsMinBtn) {
+                        hsMinBtn.onclick = () => {
+                            const contentElements = div.querySelectorAll('div:not(.modal-header)');
+                            isHsMinimized = !isHsMinimized;
+                            contentElements.forEach(el => el.style.display = isHsMinimized ? 'none' : '');
+                            div.style.height = isHsMinimized ? 'auto' : '';
+                            div.style.width = isHsMinimized ? '320px' : '90%';
+                            hsMinBtn.textContent = isHsMinimized ? '+' : '_';
+                        };
+                    }
+
+                    try {
+                        makeDraggable(div);
+                    } catch (_) { }
+
                     const container = document.getElementById("tabelaHideStoryContainer");
 
                     const updateCounts = (paginatedUsers = []) => {
-                        const countEl = document.getElementById('hsSelectedCount');
-                        if (countEl) countEl.innerText = `(${selectedUsers.size} selecionados)`;
+                        try {
+                            const countEl = document.getElementById('hsSelectedCount');
+                            if (countEl) countEl.innerText = `(${selectedUsers.size} selecionados)`;
 
-                        const selectAllCb = document.getElementById('selectAllHsCheckbox');
-                        if (selectAllCb && paginatedUsers.length > 0) {
-                            selectAllCb.checked = paginatedUsers.every(u => selectedUsers.has(u.username));
-                        }
-
-                        const curHiddenCount = hideStoryList.filter(u => u.isHidden).length;
-                        const curNotHiddenCount = hideStoryList.filter(u => !u.isHidden).length;
-                        const curFollowersCount = hideStoryList.filter(u => followersSet.has((u.username || '').toLowerCase().trim())).length;
-                        const curFollowingCount = hideStoryList.filter(u => followingSet.has((u.username || '').toLowerCase().trim())).length;
-                        const curTotalCount = hideStoryList.length;
-
-                        const filterSelect = document.getElementById('hsFilterSelect');
-                        if (filterSelect && filterSelect.options.length >= 5) {
-                            filterSelect.options[0].text = `👁️ Stories Ocultados (${curHiddenCount})`;
-                            filterSelect.options[1].text = `👁️ Stories Sem Ocultar (${curNotHiddenCount})`;
-                            filterSelect.options[2].text = `👥 Meus Seguidores (${curFollowersCount})`;
-                            filterSelect.options[3].text = `👤 Meus Seguindo (${curFollowingCount})`;
-                            filterSelect.options[4].text = `🌐 Todos (${curTotalCount})`;
-                        }
-
-                        const statusEl = document.getElementById('statusHideStory');
-                        if (statusEl) {
-                            const totalSpan = statusEl.querySelector('span');
-                            if (totalSpan) {
-                                totalSpan.innerHTML = `Total: <strong style="color: #e67e22;">${curHiddenCount}</strong> stories ocultados | <strong style="color: #27ae60;">${curNotHiddenCount}</strong> sem ocultar.`;
+                            const selectAllCb = document.getElementById('selectAllHsCheckbox');
+                            if (selectAllCb && paginatedUsers.length > 0) {
+                                selectAllCb.checked = paginatedUsers.every(u => selectedUsers.has(typeof u === 'string' ? u : u.username));
                             }
+
+                            const curHiddenCount = hideStoryList.filter(u => u && u.isHidden).length;
+                            const curNotHiddenCount = hideStoryList.filter(u => u && !u.isHidden).length;
+                            const curFollowersCount = hideStoryList.filter(u => u && followersSet.has((u.username || '').toLowerCase().trim())).length;
+                            const curFollowingCount = hideStoryList.filter(u => u && followingSet.has((u.username || '').toLowerCase().trim())).length;
+                            const curTotalCount = hideStoryList.length;
+
+                            const filterSelect = document.getElementById('hsFilterSelect');
+                            if (filterSelect && filterSelect.options && filterSelect.options.length >= 5) {
+                                filterSelect.options[0].text = `🌐 Todos (${curTotalCount})`;
+                                filterSelect.options[1].text = `👁️ Stories Ocultados (${curHiddenCount})`;
+                                filterSelect.options[2].text = `👁️ Stories Sem Ocultar (${curNotHiddenCount})`;
+                                filterSelect.options[3].text = `👥 Meus Seguidores (${curFollowersCount})`;
+                                filterSelect.options[4].text = `👤 Meus Seguindo (${curFollowingCount})`;
+                            }
+
+                            const statusEl = document.getElementById('statusHideStory');
+                            if (statusEl) {
+                                const totalSpan = statusEl.querySelector('span');
+                                if (totalSpan) {
+                                    totalSpan.innerHTML = `Total: <strong style="color: #e67e22;">${curHiddenCount}</strong> stories ocultados | <strong style="color: #27ae60;">${curNotHiddenCount}</strong> sem ocultar.`;
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('[IG Tools HideStory] Erro em updateCounts:', e);
                         }
                     };
 
-                    const renderList = (page) => {
-                        const itemsPerPage = loadSettings().itemsPerPage || 10;
-                        const startIndex = (page - 1) * itemsPerPage;
-                        const endIndex = startIndex + itemsPerPage;
+                    const renderList = (page = 1) => {
+                        try {
+                            const itemsPerPage = loadSettings().itemsPerPage || 10;
+                            const startIndex = (page - 1) * itemsPerPage;
+                            const endIndex = startIndex + itemsPerPage;
 
-                        const searchTerm = (document.getElementById('hsSearchInput')?.value || '').toLowerCase().trim();
-                        const filterValue = document.getElementById('hsFilterSelect')?.value || 'hidden';
+                            const searchTerm = (document.getElementById('hsSearchInput')?.value || '').toLowerCase().trim();
+                            const filterValue = document.getElementById('hsFilterSelect')?.value || 'all';
 
-                        let filtered = hideStoryList.filter(u => {
-                            const uLower = (u.username || '').toLowerCase().trim();
-                            const fLower = (u.fullName || '').toLowerCase().trim();
-                            const pkStr = String(u.pk || u.id || '');
+                            let filtered = hideStoryList.filter(u => {
+                                if (!u) return false;
+                                const uname = typeof u === 'string' ? u : (u.username || '');
+                                const uLower = uname.toLowerCase().trim();
+                                const fLower = (typeof u === 'object' && u.fullName ? u.fullName : '').toLowerCase().trim();
+                                const pkStr = String(typeof u === 'object' ? (u.pk || u.id || '') : '');
 
-                            const matchSearch = !searchTerm || uLower.includes(searchTerm) || fLower.includes(searchTerm) || pkStr.includes(searchTerm);
-                            if (!matchSearch) return false;
+                                const matchSearch = !searchTerm || uLower.includes(searchTerm) || fLower.includes(searchTerm) || pkStr.includes(searchTerm);
+                                if (!matchSearch) return false;
 
-                            if (filterValue === 'hidden') return u.isHidden;
-                            if (filterValue === 'not_hidden') return !u.isHidden;
-                            if (filterValue === 'followers') return followersSet.has(uLower);
-                            if (filterValue === 'following') return followingSet.has(uLower);
-                            return true; // 'all'
-                        });
+                                if (filterValue === 'hidden') return !!u.isHidden;
+                                if (filterValue === 'not_hidden') return !u.isHidden;
+                                if (filterValue === 'followers') return followersSet.has(uLower);
+                                if (filterValue === 'following') return followingSet.has(uLower);
+                                return true; // 'all'
+                            });
 
-                        // Ordenação idêntica ao padrão Amigos Próximos
-                        filtered.sort((a, b) => {
-                            let valA = '';
-                            let valB = '';
-                            if (sortConfig.key === 'username') {
-                                valA = (a.username || '').toLowerCase();
-                                valB = (b.username || '').toLowerCase();
-                            } else if (sortConfig.key === 'pk') {
-                                valA = Number(a.pk) || 0;
-                                valB = Number(b.pk) || 0;
-                            } else if (sortConfig.key === 'isHidden') {
-                                valA = a.isHidden ? 1 : 0;
-                                valB = b.isHidden ? 1 : 0;
-                            }
+                            // Ordenação
+                            filtered.sort((a, b) => {
+                                let valA = '';
+                                let valB = '';
+                                const aUname = (typeof a === 'string' ? a : a?.username || '').toLowerCase();
+                                const bUname = (typeof b === 'string' ? b : b?.username || '').toLowerCase();
+                                if (sortConfig.key === 'username') {
+                                    valA = aUname;
+                                    valB = bUname;
+                                } else if (sortConfig.key === 'pk') {
+                                    valA = Number(a?.pk || a?.id) || 0;
+                                    valB = Number(b?.pk || b?.id) || 0;
+                                } else if (sortConfig.key === 'isHidden') {
+                                    valA = a?.isHidden ? 1 : 0;
+                                    valB = b?.isHidden ? 1 : 0;
+                                }
 
-                            if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
-                            if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
-                            return 0;
-                        });
+                                if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+                                if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
+                                return 0;
+                            });
 
-                        const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
-                        if (page > totalPages) page = totalPages;
-                        currentPage = page;
-                        const paginatedUsers = filtered.slice(startIndex, endIndex);
+                            const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
+                            if (page > totalPages) page = totalPages;
+                            if (page < 1) page = 1;
+                            currentPage = page;
+                            const paginatedUsers = filtered.slice(startIndex, endIndex);
 
-                        let tableHtml = `
-                            <table style="width: 100%; min-width: 620px; border-collapse: collapse; margin-top: 5px;">
-                                <thead style="cursor: pointer;">
-                                    <tr style="text-align: left; border-bottom: 2px solid #dbdbdb;">
-                                        <th style="padding: 8px; width: 36px; text-align: center;"><input type="checkbox" id="selectAllHsCheckbox" title="Selecionar Todos da Página"></th>
-                                        <th style="padding: 8px;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                        <th style="padding: 8px; text-align: center; width: 110px;" data-sort-key="pk">ID (PK) ${sortConfig.key === 'pk' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                        <th style="padding: 8px; text-align: center; width: 140px;" data-sort-key="isHidden">Status ${sortConfig.key === 'isHidden' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                        <th style="padding: 8px; text-align: center; width: 120px;">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                        `;
-
-                        if (paginatedUsers.length === 0) {
-                            tableHtml += `
-                                <tr>
-                                    <td colspan="5" style="text-align: center; padding: 30px 15px; color: #666;">
-                                        <div style="font-size: 15px; font-weight: 600; margin-bottom: 8px;">Nenhum usuário encontrado</div>
-                                        <div style="font-size: 13px; color: #888; max-width: 480px; margin: 0 auto; line-height: 1.5;">
-                                            Você pode clicar em <strong>🔄 Sincronizar</strong> para carregar sua lista de Stories Ocultados diretamente do Instagram Web ou clicar em <strong>📥 Importar JSON</strong>.
-                                        </div>
-                                    </td>
-                                </tr>
+                            let tableHtml = `
+                                <table style="width: 100%; min-width: 620px; border-collapse: collapse; margin-top: 5px;">
+                                    <thead style="cursor: pointer;">
+                                        <tr style="text-align: left; border-bottom: 2px solid #dbdbdb;">
+                                            <th style="padding: 8px; width: 36px; text-align: center;"><input type="checkbox" id="selectAllHsCheckbox" title="Selecionar Todos da Página"></th>
+                                            <th style="padding: 8px;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                            <th style="padding: 8px; text-align: center; width: 110px;" data-sort-key="pk">ID (PK) ${sortConfig.key === 'pk' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                            <th style="padding: 8px; text-align: center; width: 140px;" data-sort-key="isHidden">Status ${sortConfig.key === 'isHidden' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                            <th style="padding: 8px; text-align: center; width: 120px;">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
                             `;
-                        } else {
-                            paginatedUsers.forEach(userObj => {
-                                const { username, photoUrl: currentPhotoUrl, pk, fullName, isHidden } = userObj;
-                                const isChecked = selectedUsers.has(username);
-                                const photoUrl = resolveUserPhoto(username, currentPhotoUrl);
-                                if (photoUrl !== currentPhotoUrl && photoUrl !== DEFAULT_AVATAR) {
-                                    userObj.photoUrl = photoUrl;
-                                }
-                                const uLower = (username || '').toLowerCase().trim();
-                                const isFollower = followersSet.has(uLower);
-                                const isFollowing = followingSet.has(uLower);
 
-                                let relBadge = '';
-                                if (isFollower && isFollowing) {
-                                    relBadge = `<span style="font-size: 10px; background: rgba(52, 152, 219, 0.15); color: #3498db; border: 1px solid rgba(52, 152, 219, 0.35); padding: 1px 6px; border-radius: 8px; font-weight: 600; white-space: nowrap;">Amigos Mútuos</span>`;
-                                } else if (isFollowing) {
-                                    relBadge = `<span style="font-size: 10px; background: rgba(155, 89, 182, 0.15); color: #9b59b6; border: 1px solid rgba(155, 89, 182, 0.35); padding: 1px 6px; border-radius: 8px; font-weight: 600; white-space: nowrap;">Seguindo</span>`;
-                                } else if (isFollower) {
-                                    relBadge = `<span style="font-size: 10px; background: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.35); padding: 1px 6px; border-radius: 8px; font-weight: 600; white-space: nowrap;">Seguidor</span>`;
-                                }
-
+                            if (paginatedUsers.length === 0) {
                                 tableHtml += `
-                                    <tr style="border-bottom: 1px solid #dbdbdb;" data-username="${username}">
-                                        <td style="padding: 8px; text-align: center;"><input type="checkbox" class="hs-user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
-                                        <td style="padding: 8px; display: flex; align-items: center; gap: 10px;">
-                                            <img src="${photoUrl || DEFAULT_AVATAR}" crossorigin="anonymous" loading="lazy" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${username}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid #eee; flex-shrink: 0;">
-                                            <div style="display: flex; flex-direction: column; min-width: 0;">
-                                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                                    <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration: none; color: inherit; font-weight: 600;">${username}</a>
-                                                    ${relBadge}
-                                                </div>
-                                                ${fullName ? `<span style="font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${fullName}</span>` : ''}
+                                    <tr>
+                                        <td colspan="5" style="text-align: center; padding: 30px 15px; color: #666;">
+                                            <div style="font-size: 15px; font-weight: 600; margin-bottom: 8px;">Nenhum usuário encontrado</div>
+                                            <div style="font-size: 13px; color: #888; max-width: 480px; margin: 0 auto; line-height: 1.5;">
+                                                Você pode clicar em <strong>🔄 Sincronizar</strong> para carregar sua lista de Stories Ocultados diretamente do Instagram Web ou clicar em <strong>📥 Importar JSON</strong>.
                                             </div>
-                                        </td>
-                                        <td style="text-align: center; padding: 8px; font-family: monospace; font-size: 12px; color: #888;">${pk || '-'}</td>
-                                        <td style="text-align: center; padding: 8px;">
-                                            ${isHidden
-                                        ? `<span class="badge-hs-hidden" style="background: rgba(230, 126, 34, 0.16); color: #f39c12 !important; border: 1px solid rgba(243, 156, 18, 0.45); padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">👁️‍🗨️ Story Ocultado</span>`
-                                        : `<span class="badge-hs-visible" style="background: rgba(39, 174, 96, 0.15); color: #27ae60 !important; border: 1px solid rgba(39, 174, 96, 0.4); padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">👁️ Sem Ocultar</span>`
-                                    }
-                                        </td>
-                                        <td style="text-align: center; padding: 8px;">
-                                            ${isHidden
-                                        ? `<button class="btn-action-hs" data-username="${username}" data-uid="${pk}" data-action="unhide" style="background: #27ae60; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;">👁️ Reexibir</button>`
-                                        : `<button class="btn-action-hs" data-username="${username}" data-uid="${pk}" data-action="hide" style="background: #e67e22; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;">👁️‍🗨️ Ocultar</button>`
-                                    }
                                         </td>
                                     </tr>
                                 `;
-                            });
-                        }
-
-                        tableHtml += `</tbody></table>`;
-
-                        let paginationHtml = `<div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">`;
-                        if (page > 1) paginationHtml += `<button id="prevHsPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Anterior</button>`;
-                        paginationHtml += `<span style="font-size: 13px; font-weight: 600;">Página ${page} de ${totalPages}</span>`;
-                        if (page < totalPages) paginationHtml += `<button id="nextHsPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Próximo</button>`;
-                        paginationHtml += `</div>`;
-
-                        container.innerHTML = tableHtml + paginationHtml;
-
-                        // Busca assíncrona on-demand para preencher fotos que faltarem na página exibida
-                        const missingOnPage = paginatedUsers.filter(u => !u.photoUrl || u.photoUrl === DEFAULT_AVATAR || u.photoUrl.includes('rsrc.php'));
-                        if (missingOnPage.length > 0) {
-                            (async () => {
-                                for (const mUser of missingOnPage) {
-                                    try {
-                                        const clean = mUser.username.toLowerCase();
-                                        const res = await fetch(`https://www.instagram.com/api/v1/web/search/topsearch/?context=blended&query=${encodeURIComponent(mUser.username)}`, {
-                                            headers: getApiHeaders(),
-                                            credentials: 'include'
-                                        });
-                                        if (res.ok) {
-                                            const sData = await res.json();
-                                            const exact = sData.users?.find(item => item?.user?.username?.toLowerCase() === clean);
-                                            if (exact?.user) {
-                                                const pic = exact.user.profile_pic_url || exact.user.profile_pic_url_hd;
-                                                if (pic) {
-                                                    mUser.photoUrl = pic;
-                                                    if (exact.user.pk) mUser.pk = String(exact.user.pk);
-                                                    if (exact.user.full_name && !mUser.fullName) mUser.fullName = exact.user.full_name;
-
-                                                    // Atualiza diretamente no elemento visual da tabela
-                                                    const rowEl = container.querySelector(`tr[data-username="${mUser.username}"]`);
-                                                    if (rowEl) {
-                                                        const imgEl = rowEl.querySelector('img');
-                                                        if (imgEl) imgEl.src = pic;
-                                                        if (exact.user.full_name) {
-                                                            const nameEl = rowEl.querySelector('span[style*="font-size: 12px"]');
-                                                            if (nameEl) nameEl.innerText = exact.user.full_name;
-                                                        }
-                                                        const pkEl = rowEl.querySelectorAll('td')[2];
-                                                        if (pkEl && (pkEl.innerText === '-' || !pkEl.innerText) && exact.user.pk) {
-                                                            pkEl.innerText = String(exact.user.pk);
-                                                        }
-                                                    }
-
-                                                    // Salva no cache em memória
-                                                    if (typeof cachedData !== 'undefined' && cachedData?.userDetails) {
-                                                        cachedData.userDetails.set(clean, { username: mUser.username, photoUrl: pic, id: mUser.pk, fullName: mUser.fullName });
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    } catch (_) { }
-                                    await new Promise(r => setTimeout(r, 120));
-                                }
-                            })();
-                        }
-
-                        // Checkbox individual listeners
-                        container.querySelectorAll('.hs-user-checkbox').forEach(cb => {
-                            cb.addEventListener('change', (e) => {
-                                const uname = e.target.dataset.username;
-                                if (e.target.checked) selectedUsers.add(uname);
-                                else selectedUsers.delete(uname);
-                                updateCounts(paginatedUsers);
-                            });
-                        });
-
-                        // Select all checkbox listener
-                        const selectAllCb = document.getElementById('selectAllHsCheckbox');
-                        if (selectAllCb) {
-                            selectAllCb.checked = paginatedUsers.length > 0 && paginatedUsers.every(u => selectedUsers.has(u.username));
-                            selectAllCb.onchange = (e) => {
-                                const isChecked = e.target.checked;
-                                paginatedUsers.forEach(u => {
-                                    if (isChecked) selectedUsers.add(u.username);
-                                    else selectedUsers.delete(u.username);
-                                });
-                                container.querySelectorAll('.hs-user-checkbox').forEach(cb => cb.checked = isChecked);
-                                updateCounts(paginatedUsers);
-                            };
-                        }
-
-                        // Sorting listeners
-                        container.querySelectorAll('th[data-sort-key]').forEach(th => {
-                            th.addEventListener('click', () => {
-                                const key = th.dataset.sortKey;
-                                if (sortConfig.key === key) {
-                                    sortConfig.direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
-                                } else {
-                                    sortConfig.key = key;
-                                    sortConfig.direction = 'ascending';
-                                }
-                                renderList(currentPage);
-                            });
-                        });
-
-                        // Pagination button listeners
-                        const prevBtn = document.getElementById('prevHsPageBtn');
-                        if (prevBtn) prevBtn.onclick = () => renderList(currentPage - 1);
-                        const nextBtn = document.getElementById('nextHsPageBtn');
-                        if (nextBtn) nextBtn.onclick = () => renderList(currentPage + 1);
-
-                        // Botão individual Ocultar / Reexibir (Execução direta WBloks sem redirecionamentos)
-                        container.querySelectorAll('.btn-action-hs').forEach(btn => {
-                            btn.addEventListener('click', async (e) => {
-                                const targetBtn = e.currentTarget;
-                                const uname = targetBtn.dataset.username;
-                                const action = targetBtn.dataset.action; // 'hide' ou 'unhide'
-                                const userObj = hideStoryList.find(u => u.username.toLowerCase() === uname.toLowerCase());
-                                const uid = userObj?.pk || userObj?.id || getCachedUserId(uname) || '';
-
-                                targetBtn.disabled = true;
-                                targetBtn.textContent = 'Processando...';
-
-                                try {
-                                    const res = await executeWbloksHideStory(uid, uname, action);
-                                    if (res && res.success) {
-                                        if (userObj) {
-                                            userObj.isHidden = (action === 'hide');
-                                        }
-
-                                        if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
-                                        if (action === 'hide') {
-                                            userListCache.hiddenStory.add(uname.toLowerCase());
-                                            showToast(`👁️‍🗨️ Stories ocultados para @${uname}!`);
-                                        } else {
-                                            userListCache.hiddenStory.delete(uname.toLowerCase());
-                                            showToast(`👁️ Stories agora visíveis para @${uname}.`);
-                                        }
-
-                                        cachedHideStory = hideStoryList;
-                                        try {
-                                            localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(hideStoryList));
-                                            dbHelper.saveCache('hideStory', hideStoryList.filter(u => u.isHidden));
-                                            dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
-                                        } catch (_) { }
-
-                                        renderList(currentPage);
-                                        updateCounts();
-                                    } else {
-                                        throw new Error(res?.error || 'Falha na requisição');
+                            } else {
+                                paginatedUsers.forEach(userObj => {
+                                    const username = typeof userObj === 'string' ? userObj : (userObj?.username || '');
+                                    const currentPhotoUrl = typeof userObj === 'object' ? userObj?.photoUrl : null;
+                                    const pk = typeof userObj === 'object' ? (userObj?.pk || userObj?.id || '') : '';
+                                    const fullName = typeof userObj === 'object' ? (userObj?.fullName || '') : '';
+                                    const isHidden = typeof userObj === 'object' ? !!userObj?.isHidden : false;
+                                    const isChecked = selectedUsers.has(username);
+                                    const photoUrl = resolveUserPhoto(username, currentPhotoUrl);
+                                    if (typeof userObj === 'object' && userObj && photoUrl !== currentPhotoUrl && photoUrl !== DEFAULT_AVATAR) {
+                                        userObj.photoUrl = photoUrl;
                                     }
-                                } catch (err) {
-                                    console.error('[IG Tools HideStory] Erro:', err);
-                                    showToast(`Erro ao processar @${uname}.`);
-                                    targetBtn.disabled = false;
-                                    targetBtn.textContent = action === 'hide' ? '👁️‍🗨️ Ocultar' : '👁️ Reexibir';
-                                }
+                                    const uLower = username.toLowerCase().trim();
+                                    const isFollower = followersSet.has(uLower);
+                                    const isFollowing = followingSet.has(uLower);
+
+                                    let relBadge = '';
+                                    if (isFollower && isFollowing) {
+                                        relBadge = `<span style="font-size: 10px; background: rgba(52, 152, 219, 0.15); color: #3498db; border: 1px solid rgba(52, 152, 219, 0.35); padding: 1px 6px; border-radius: 8px; font-weight: 600; white-space: nowrap;">Amigos Mútuos</span>`;
+                                    } else if (isFollowing) {
+                                        relBadge = `<span style="font-size: 10px; background: rgba(155, 89, 182, 0.15); color: #9b59b6; border: 1px solid rgba(155, 89, 182, 0.35); padding: 1px 6px; border-radius: 8px; font-weight: 600; white-space: nowrap;">Seguindo</span>`;
+                                    } else if (isFollower) {
+                                        relBadge = `<span style="font-size: 10px; background: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.35); padding: 1px 6px; border-radius: 8px; font-weight: 600; white-space: nowrap;">Seguidor</span>`;
+                                    }
+
+                                    tableHtml += `
+                                        <tr style="border-bottom: 1px solid #dbdbdb;" data-username="${username}">
+                                            <td style="padding: 8px; text-align: center;"><input type="checkbox" class="hs-user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
+                                            <td style="padding: 8px; display: flex; align-items: center; gap: 10px;">
+                                                <img src="${photoUrl || DEFAULT_AVATAR}" crossorigin="anonymous" loading="lazy" onerror="this.onerror=null; this.src='${DEFAULT_AVATAR}';" alt="${username}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid #eee; flex-shrink: 0;">
+                                                <div style="display: flex; flex-direction: column; min-width: 0;">
+                                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                                        <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration: none; color: inherit; font-weight: 600;">${username}</a>
+                                                        ${relBadge}
+                                                    </div>
+                                                    ${fullName ? `<span style="font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${fullName}</span>` : ''}
+                                                </div>
+                                            </td>
+                                            <td style="text-align: center; padding: 8px; font-family: monospace; font-size: 12px; color: #888;">${pk || '-'}</td>
+                                            <td style="text-align: center; padding: 8px;">
+                                                ${isHidden
+                                            ? `<span class="badge-hs-hidden" style="background: rgba(230, 126, 34, 0.16); color: #f39c12 !important; border: 1px solid rgba(243, 156, 18, 0.45); padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">👁️‍🗨️ Story Ocultado</span>`
+                                            : `<span class="badge-hs-visible" style="background: rgba(39, 174, 96, 0.15); color: #27ae60 !important; border: 1px solid rgba(39, 174, 96, 0.4); padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">👁️ Sem Ocultar</span>`
+                                        }
+                                            </td>
+                                            <td style="text-align: center; padding: 8px;">
+                                                ${isHidden
+                                            ? `<button class="btn-action-hs" data-username="${username}" data-uid="${pk}" data-action="unhide" style="background: #27ae60; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;">👁️ Reexibir</button>`
+                                            : `<button class="btn-action-hs" data-username="${username}" data-uid="${pk}" data-action="hide" style="background: #e67e22; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;">👁️‍🗨️ Ocultar</button>`
+                                        }
+                                            </td>
+                                        </tr>
+                                    `;
+                                });
+                            }
+
+                            tableHtml += `</tbody></table>`;
+
+                            let paginationHtml = `<div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">`;
+                            if (page > 1) paginationHtml += `<button id="prevHsPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Anterior</button>`;
+                            paginationHtml += `<span style="font-size: 13px; font-weight: 600;">Página ${page} de ${totalPages}</span>`;
+                            if (page < totalPages) paginationHtml += `<button id="nextHsPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Próximo</button>`;
+                            paginationHtml += `</div>`;
+
+                            container.innerHTML = tableHtml + paginationHtml;
+
+                            // Checkbox individual listeners
+                            container.querySelectorAll('.hs-user-checkbox').forEach(cb => {
+                                cb.addEventListener('change', (e) => {
+                                    const uname = e.target.dataset.username;
+                                    if (e.target.checked) selectedUsers.add(uname);
+                                    else selectedUsers.delete(uname);
+                                    updateCounts(paginatedUsers);
+                                });
                             });
-                        });
+
+                            // Select all checkbox listener
+                            const selectAllCb = document.getElementById('selectAllHsCheckbox');
+                            if (selectAllCb) {
+                                selectAllCb.checked = paginatedUsers.length > 0 && paginatedUsers.every(u => selectedUsers.has(typeof u === 'string' ? u : u.username));
+                                selectAllCb.onchange = (e) => {
+                                    const isChecked = e.target.checked;
+                                    paginatedUsers.forEach(u => {
+                                        const uname = typeof u === 'string' ? u : u.username;
+                                        if (isChecked) selectedUsers.add(uname);
+                                        else selectedUsers.delete(uname);
+                                    });
+                                    container.querySelectorAll('.hs-user-checkbox').forEach(cb => cb.checked = isChecked);
+                                    updateCounts(paginatedUsers);
+                                };
+                            }
+
+                            // Sorting listeners
+                            container.querySelectorAll('th[data-sort-key]').forEach(th => {
+                                th.addEventListener('click', () => {
+                                    const key = th.dataset.sortKey;
+                                    if (sortConfig.key === key) {
+                                        sortConfig.direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+                                    } else {
+                                        sortConfig.key = key;
+                                        sortConfig.direction = 'ascending';
+                                    }
+                                    renderList(currentPage);
+                                });
+                            });
+
+                            // Pagination button listeners
+                            const prevBtn = document.getElementById('prevHsPageBtn');
+                            if (prevBtn) prevBtn.onclick = () => renderList(currentPage - 1);
+                            const nextBtn = document.getElementById('nextHsPageBtn');
+                            if (nextBtn) nextBtn.onclick = () => renderList(currentPage + 1);
+
+                            // Individual action buttons
+                            container.querySelectorAll('.btn-action-hs').forEach(btn => {
+                                btn.addEventListener('click', async (e) => {
+                                    const targetBtn = e.currentTarget;
+                                    const uname = targetBtn.dataset.username;
+                                    const action = targetBtn.dataset.action;
+                                    const userObj = hideStoryList.find(u => (typeof u === 'string' ? u : u.username || '').toLowerCase() === uname.toLowerCase());
+                                    const uid = userObj?.pk || userObj?.id || getCachedUserId(uname) || '';
+
+                                    targetBtn.disabled = true;
+                                    targetBtn.textContent = 'Processando...';
+
+                                    try {
+                                        const res = await executeWbloksHideStory(uid, uname, action);
+                                        if (res && res.success) {
+                                            if (userObj && typeof userObj === 'object') {
+                                                userObj.isHidden = (action === 'hide');
+                                            }
+
+                                            if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
+                                            if (action === 'hide') {
+                                                userListCache.hiddenStory.add(uname.toLowerCase());
+                                                showToast(`👁️‍🗨️ Stories ocultados para @${uname}!`);
+                                            } else {
+                                                userListCache.hiddenStory.delete(uname.toLowerCase());
+                                                showToast(`👁️ Stories agora visíveis para @${uname}.`);
+                                            }
+
+                                            cachedHideStory = hideStoryList;
+                                            try {
+                                                localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(hideStoryList));
+                                                dbHelper.saveCache('hideStory', hideStoryList.filter(u => u && u.isHidden));
+                                                dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
+                                            } catch (_) { }
+
+                                            renderList(currentPage);
+                                            updateCounts();
+                                        } else {
+                                            throw new Error(res?.error || 'Falha na requisição');
+                                        }
+                                    } catch (err) {
+                                        console.error('[IG Tools HideStory] Erro:', err);
+                                        showToast(`Erro ao processar @${uname}.`);
+                                        targetBtn.disabled = false;
+                                        targetBtn.textContent = action === 'hide' ? '👁️‍🗨️ Ocultar' : '👁️ Reexibir';
+                                    }
+                                });
+                            });
+                        } catch (renderErr) {
+                            console.error('[IG Tools HideStory] Erro em renderList:', renderErr);
+                            if (container) {
+                                container.innerHTML = `<div style="padding: 20px; color: red; text-align: center;">Erro ao exibir lista de usuários: ${renderErr.message}</div>`;
+                            }
+                        }
                     };
 
                     // Sincronização avançada: busca direta oficial via DOM, paginação WBloks e cache de seguidores/seguindo
@@ -6917,7 +6925,7 @@
                                 let containerId = window._igHideStoryContainerId || "1178138719";
                                 let loadingId = window._igHideStoryLoadingId || "1178138721";
                                 let pagesLoaded = 0;
-                                const maxPages = 15;
+                                const maxPages = 60;
 
                                 while (curCursor && pagesLoaded < maxPages) {
                                     pagesLoaded++;
@@ -7090,13 +7098,8 @@
                                 syncInfo.innerText = `Sincronizado às ${new Date().toLocaleTimeString()}`;
                             }
 
-                            // Se houver contas ocultadas e o filtro estava em "não ocultar", muda para "ocultados"
                             const hiddenTotal = hideStoryList.filter(u => u.isHidden).length;
                             const notHiddenTotal = hideStoryList.filter(u => !u.isHidden).length;
-                            const filterSelect = document.getElementById('hsFilterSelect');
-                            if (filterSelect && hiddenTotal > 0 && filterSelect.value === 'not_hidden') {
-                                filterSelect.value = 'hidden';
-                            }
 
                             renderList(1);
                             updateCounts();
@@ -7274,7 +7277,7 @@
                         const itemsPerPage = loadSettings().itemsPerPage || 10;
                         const startIndex = (currentPage - 1) * itemsPerPage;
                         const searchTerm = (document.getElementById('hsSearchInput')?.value || '').toLowerCase().trim();
-                        const filterValue = document.getElementById('hsFilterSelect')?.value || 'hidden';
+                        const filterValue = document.getElementById('hsFilterSelect')?.value || 'all';
 
                         let listToSelect = hideStoryList.filter(u => {
                             const uLower = (u.username || '').toLowerCase().trim();
@@ -7508,28 +7511,6 @@
                     if (window._igHideStoryUsersCapture) {
                         window._igHideStoryUsersCapture.callbacks.push(captureCallback);
                     }
-
-                    // Controles da janela
-                    document.getElementById("hsFecharBtn").onclick = () => {
-                        if (window._igHideStoryUsersCapture) {
-                            const idx = window._igHideStoryUsersCapture.callbacks.indexOf(captureCallback);
-                            if (idx !== -1) window._igHideStoryUsersCapture.callbacks.splice(idx, 1);
-                        }
-                        div.remove();
-                        modalAbertoStory = false;
-                    };
-
-                    let isHsMinimized = false;
-                    document.getElementById("hsMinimizarBtn").onclick = () => {
-                        const contentElements = div.querySelectorAll('div:not(.modal-header)');
-                        isHsMinimized = !isHsMinimized;
-                        contentElements.forEach(el => el.style.display = isHsMinimized ? 'none' : '');
-                        div.style.height = isHsMinimized ? 'auto' : '';
-                        div.style.width = isHsMinimized ? '320px' : '90%';
-                        document.getElementById("hsMinimizarBtn").textContent = isHsMinimized ? '+' : '_';
-                    };
-
-                    makeDraggable(div);
 
                     // Inicialização imediata da lista
                     renderList(1);

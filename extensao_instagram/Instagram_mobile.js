@@ -3917,26 +3917,50 @@
                             /* ======================================================== */
                             @media (max-width: 768px), (pointer: coarse) {
                                 .submenu-modal {
-                                    width: 95vw !important;
-                                    max-width: 95vw !important;
-                                    max-height: 88vh !important;
+                                    width: 96vw !important;
+                                    max-width: 96vw !important;
+                                    max-height: 92vh !important;
                                     top: 50% !important;
                                     left: 50% !important;
                                     transform: translate(-50%, -50%) !important;
                                     margin: 0 !important;
-                                    padding: 14px 10px !important;
+                                    padding: 12px 8px !important;
                                     box-sizing: border-box !important;
                                     border-radius: 16px !important;
                                     overflow-y: auto !important;
+                                    overflow-x: hidden !important;
                                     -webkit-overflow-scrolling: touch !important;
                                     font-size: 14px !important;
                                 }
-                                .submenu-modal table {
+                                .mobile-scroll-controls,
+                                .seguindo-mobile-scroll-controls {
+                                    display: flex !important;
+                                }
+                                #tabelaContainer {
+                                    display: block !important;
+                                    width: 100% !important;
+                                    box-sizing: border-box !important;
+                                }
+                                #tabelaBloqueadosContainer, 
+                                #tabelaCloseFriendsContainer,
+                                #tabelaCfContainer, 
+                                #tabelaHideStoryContainer, 
+                                #tabelaMutedContainer {
                                     display: block !important;
                                     width: 100% !important;
                                     overflow-x: auto !important;
                                     -webkit-overflow-scrolling: touch !important;
-                                    border-collapse: collapse !important;
+                                    box-sizing: border-box !important;
+                                    margin-top: 10px !important;
+                                    border: 1px solid rgba(150, 150, 150, 0.2) !important;
+                                    border-radius: 8px !important;
+                                }
+                                #tabelaBloqueadosContainer table, 
+                                #tabelaCloseFriendsContainer table,
+                                #tabelaCfContainer table, 
+                                #tabelaHideStoryContainer table, 
+                                #tabelaMutedContainer table {
+                                    min-width: 620px !important;
                                 }
                                 .submenu-modal .cards-container {
                                     grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)) !important;
@@ -3953,9 +3977,9 @@
                                     font-size: 16px !important;
                                 }
                                 .submenu-modal button {
-                                    min-height: 38px !important;
-                                    padding: 8px 12px !important;
-                                    font-size: 13px !important;
+                                    min-height: 36px !important;
+                                    padding: 7px 10px !important;
+                                    font-size: 12px !important;
                                     touch-action: manipulation !important;
                                 }
                                 .submenu-modal input[type="text"], .submenu-modal select {
@@ -5093,13 +5117,33 @@
                                 <span>Total: <strong style="color: #2ecc71;">${cfCount}</strong> melhores amigos cadastrados.</span>
                                 <span id="cfSyncInfo" style="font-size: 11px; color: #888;"></span>
                             </div>
-                            <div id="tabelaCloseFriendsContainer" style="display: block; margin-top: 12px;"></div>
+                            <div class="cf-mobile-scroll-controls mobile-scroll-controls" style="display: none; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 6px 0; padding: 6px 10px; background: rgba(52, 152, 219, 0.12); border-radius: 8px; border: 1px solid rgba(52, 152, 219, 0.25);">
+                                <button id="cfScrollStartBtn" type="button" style="background: #3498db; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 3px;">◀ Usuário</button>
+                                <span style="color: #2980b9; font-size: 11px; font-weight: 600; text-align: center; flex: 1;">↔️ Deslize para ver todas as 5 colunas</span>
+                                <button id="cfScrollEndBtn" type="button" style="background: #3498db; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 3px;">Ações ▶</button>
+                            </div>
+                            <div id="tabelaCloseFriendsContainer" style="display: block; margin-top: 10px; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;"></div>
                         </div>
                     `;
 
                     document.body.appendChild(div);
 
                     const container = document.getElementById("tabelaCloseFriendsContainer");
+
+                    const cfScrollStartBtn = document.getElementById("cfScrollStartBtn");
+                    if (cfScrollStartBtn) {
+                        cfScrollStartBtn.onclick = () => {
+                            const c = document.getElementById("tabelaCloseFriendsContainer");
+                            if (c) c.scrollTo({ left: 0, behavior: 'smooth' });
+                        };
+                    }
+                    const cfScrollEndBtn = document.getElementById("cfScrollEndBtn");
+                    if (cfScrollEndBtn) {
+                        cfScrollEndBtn.onclick = () => {
+                            const c = document.getElementById("tabelaCloseFriendsContainer");
+                            if (c) c.scrollTo({ left: c.scrollWidth, behavior: 'smooth' });
+                        };
+                    }
 
                     const updateCounts = (paginatedUsers = []) => {
                         const countEl = document.getElementById('cfSelectedCount');
@@ -5174,14 +5218,14 @@
                         const paginatedUsers = sortedUsers.slice(startIndex, endIndex);
 
                         let tableHtml = `
-                            <table style="width: 100%; border-collapse: collapse; margin-top: 5px;">
+                            <table style="width: 100%; min-width: 620px; border-collapse: collapse; margin-top: 5px;">
                                 <thead style="cursor: pointer;">
                                     <tr style="text-align: left; border-bottom: 2px solid #dbdbdb;">
-                                        <th style="padding: 8px; width: 30px;"><input type="checkbox" id="selectAllCfCheckbox" title="Selecionar Todos da Página"></th>
+                                        <th style="padding: 8px 4px; width: 32px; text-align: center;"><input type="checkbox" id="selectAllCfCheckbox" title="Selecionar Todos da Página" style="width: 18px; height: 18px; cursor: pointer;"></th>
                                         <th style="padding: 8px;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
                                         <th style="padding: 8px; text-align: center;" data-sort-key="pk">ID (PK) ${sortConfig.key === 'pk' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
                                         <th style="padding: 8px; text-align: center;" data-sort-key="isCloseFriend">Status ${sortConfig.key === 'isCloseFriend' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                        <th style="padding: 8px; text-align: center;">Ações</th>
+                                        <th style="padding: 8px; text-align: center; width: 130px;">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -5209,28 +5253,30 @@
 
                                 tableHtml += `
                                     <tr style="border-bottom: 1px solid #dbdbdb;" data-username="${username}">
-                                        <td style="padding: 8px;"><input type="checkbox" class="cf-user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
-                                        <td style="padding: 8px; display: flex; align-items: center; gap: 10px;">
-                                            <img src="${photoUrl || DEFAULT_AVATAR}" crossorigin="anonymous" loading="lazy" onerror="this.onerror=null; this.src='${DEFAULT_AVATAR}';" alt="${username}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid #eee; flex-shrink: 0;">
-                                            <div style="display: flex; flex-direction: column;">
-                                                <div style="display: flex; align-items: center; gap: 6px;">
-                                                    <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration: none; color: inherit; font-weight: 600;">${username}</a>
+                                        <td style="padding: 8px 4px; text-align: center;"><input type="checkbox" class="cf-user-checkbox" data-username="${username}" style="cursor: pointer; width: 18px; height: 18px;" ${isChecked ? 'checked' : ''}></td>
+                                        <td style="padding: 8px 6px;">
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <img src="${photoUrl || DEFAULT_AVATAR}" crossorigin="anonymous" loading="lazy" onerror="this.onerror=null; this.src='${DEFAULT_AVATAR}';" alt="${username}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid #eee; flex-shrink: 0;">
+                                                <div style="display: flex; flex-direction: column; min-width: 0;">
+                                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                                        <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration: none; color: inherit; font-weight: 600; font-size: 14px; word-break: break-all;">${username}</a>
+                                                    </div>
+                                                    ${fullName ? `<span style="font-size: 12px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${fullName}</span>` : ''}
                                                 </div>
-                                                ${fullName ? `<span style="font-size: 12px; color: #666;">${fullName}</span>` : ''}
                                             </div>
                                         </td>
                                         <td style="text-align: center; padding: 8px; font-family: monospace; font-size: 12px; color: #555;">${pk || '-'}</td>
                                         <td style="text-align: center; padding: 8px;">
                                             ${isCloseFriend
-                                        ? `<span style="background: #e8f8f0; color: #0f7b4b !important; border: 1px solid #a3e6cd; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">⭐ Amigo Próximo</span>`
-                                        : `<span style="background: #f1f3f5; color: #495057 !important; border: 1px solid #dee2e6; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">👤 Seguindo</span>`
-                                    }
+                                                ? `<span style="background: #e8f8f0; color: #0f7b4b !important; border: 1px solid #a3e6cd; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">⭐ Amigo Próximo</span>`
+                                                : `<span style="background: #f1f3f5; color: #495057 !important; border: 1px solid #dee2e6; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">👤 Seguindo</span>`
+                                            }
                                         </td>
-                                        <td style="text-align: center; padding: 8px;">
+                                        <td style="text-align: center; padding: 8px; white-space: nowrap;">
                                             ${isCloseFriend
-                                        ? `<button class="btn-action-cf" data-username="${username}" data-uid="${pk}" data-action="remove" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">❌ Remover</button>`
-                                        : `<button class="btn-action-cf" data-username="${username}" data-uid="${pk}" data-action="add" style="background: #2ecc71; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">⭐ Adicionar</button>`
-                                    }
+                                                ? `<button class="btn-action-cf" data-username="${username}" data-uid="${pk}" data-action="remove" style="background: #e74c3c; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 11px; font-weight: 700; cursor: pointer; touch-action: manipulation;">❌ Remover</button>`
+                                                : `<button class="btn-action-cf" data-username="${username}" data-uid="${pk}" data-action="add" style="background: #2ecc71; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 11px; font-weight: 700; cursor: pointer; touch-action: manipulation;">⭐ Adicionar</button>`
+                                            }
                                         </td>
                                     </tr>
                                 `;
@@ -6955,7 +7001,12 @@
                                 <span>Total: <strong style="color: #e67e22;">${hiddenCount}</strong> contas com story ocultado | <strong style="color: #27ae60;">${notHiddenCount}</strong> contas sem ocultar.</span>
                                 <span id="hsSyncInfo" style="font-size: 11px; color: #888;"></span>
                             </div>
-                            <div id="tabelaHideStoryContainer" style="display: block; margin-top: 12px; overflow-x: auto; width: 100%;"></div>
+                            <div class="hs-mobile-scroll-controls mobile-scroll-controls" style="display: none; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 6px 0; padding: 6px 10px; background: rgba(52, 152, 219, 0.12); border-radius: 8px; border: 1px solid rgba(52, 152, 219, 0.25);">
+                                <button id="hsScrollStartBtn" type="button" style="background: #3498db; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 3px;">◀ Usuário</button>
+                                <span style="color: #2980b9; font-size: 11px; font-weight: 600; text-align: center; flex: 1;">↔️ Deslize para ver todas as 5 colunas</span>
+                                <button id="hsScrollEndBtn" type="button" style="background: #3498db; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 3px;">Ações ▶</button>
+                            </div>
+                            <div id="tabelaHideStoryContainer" style="display: block; margin-top: 10px; overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch;"></div>
                         </div>
                     `;
 
@@ -6997,6 +7048,21 @@
                     } catch (_) { }
 
                     const container = document.getElementById("tabelaHideStoryContainer");
+
+                    const hsScrollStartBtn = document.getElementById("hsScrollStartBtn");
+                    if (hsScrollStartBtn) {
+                        hsScrollStartBtn.onclick = () => {
+                            const c = document.getElementById("tabelaHideStoryContainer");
+                            if (c) c.scrollTo({ left: 0, behavior: 'smooth' });
+                        };
+                    }
+                    const hsScrollEndBtn = document.getElementById("hsScrollEndBtn");
+                    if (hsScrollEndBtn) {
+                        hsScrollEndBtn.onclick = () => {
+                            const c = document.getElementById("tabelaHideStoryContainer");
+                            if (c) c.scrollTo({ left: c.scrollWidth, behavior: 'smooth' });
+                        };
+                    }
 
                     const updateCounts = (paginatedUsers = []) => {
                         try {
@@ -7093,11 +7159,11 @@
                                 <table style="width: 100%; min-width: 620px; border-collapse: collapse; margin-top: 5px;">
                                     <thead style="cursor: pointer;">
                                         <tr style="text-align: left; border-bottom: 2px solid #dbdbdb;">
-                                            <th style="padding: 8px; width: 36px; text-align: center;"><input type="checkbox" id="selectAllHsCheckbox" title="Selecionar Todos da Página"></th>
+                                            <th style="padding: 8px 4px; width: 32px; text-align: center;"><input type="checkbox" id="selectAllHsCheckbox" title="Selecionar Todos da Página" style="width: 18px; height: 18px; cursor: pointer;"></th>
                                             <th style="padding: 8px;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                            <th style="padding: 8px; text-align: center; width: 110px;" data-sort-key="pk">ID (PK) ${sortConfig.key === 'pk' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                            <th style="padding: 8px; text-align: center; width: 140px;" data-sort-key="isHidden">Status ${sortConfig.key === 'isHidden' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                            <th style="padding: 8px; text-align: center; width: 120px;">Ações</th>
+                                            <th style="padding: 8px; text-align: center;" data-sort-key="pk">ID (PK) ${sortConfig.key === 'pk' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                            <th style="padding: 8px; text-align: center;" data-sort-key="isHidden">Status ${sortConfig.key === 'isHidden' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                            <th style="padding: 8px; text-align: center; width: 130px;">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -7141,29 +7207,31 @@
 
                                     tableHtml += `
                                         <tr style="border-bottom: 1px solid #dbdbdb;" data-username="${username}">
-                                            <td style="padding: 8px; text-align: center;"><input type="checkbox" class="hs-user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
-                                            <td style="padding: 8px; display: flex; align-items: center; gap: 10px;">
-                                                <img src="${photoUrl || DEFAULT_AVATAR}" crossorigin="anonymous" loading="lazy" onerror="this.onerror=null; this.src='${DEFAULT_AVATAR}';" alt="${username}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid #eee; flex-shrink: 0;">
-                                                <div style="display: flex; flex-direction: column; min-width: 0;">
-                                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                                        <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration: none; color: inherit; font-weight: 600;">${username}</a>
-                                                        ${relBadge}
+                                            <td style="padding: 8px 4px; text-align: center;"><input type="checkbox" class="hs-user-checkbox" data-username="${username}" style="cursor: pointer; width: 18px; height: 18px;" ${isChecked ? 'checked' : ''}></td>
+                                            <td style="padding: 8px 6px;">
+                                                <div style="display: flex; align-items: center; gap: 8px;">
+                                                    <img src="${photoUrl || DEFAULT_AVATAR}" crossorigin="anonymous" loading="lazy" onerror="this.onerror=null; this.src='${DEFAULT_AVATAR}';" alt="${username}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid #eee; flex-shrink: 0;">
+                                                    <div style="display: flex; flex-direction: column; min-width: 0;">
+                                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                                            <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration: none; color: inherit; font-weight: 600; font-size: 14px; word-break: break-all;">${username}</a>
+                                                            ${relBadge}
+                                                        </div>
+                                                        ${fullName ? `<span style="font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${fullName}</span>` : ''}
                                                     </div>
-                                                    ${fullName ? `<span style="font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${fullName}</span>` : ''}
                                                 </div>
                                             </td>
                                             <td style="text-align: center; padding: 8px; font-family: monospace; font-size: 12px; color: #888;">${pk || '-'}</td>
                                             <td style="text-align: center; padding: 8px;">
                                                 ${isHidden
-                                            ? `<span class="badge-hs-hidden" style="background: rgba(230, 126, 34, 0.16); color: #f39c12 !important; border: 1px solid rgba(243, 156, 18, 0.45); padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">👁️‍🗨️ Story Ocultado</span>`
-                                            : `<span class="badge-hs-visible" style="background: rgba(39, 174, 96, 0.15); color: #27ae60 !important; border: 1px solid rgba(39, 174, 96, 0.4); padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">👁️ Sem Ocultar</span>`
-                                        }
+                                                    ? `<span class="badge-hs-hidden" style="background: rgba(230, 126, 34, 0.16); color: #f39c12 !important; border: 1px solid rgba(243, 156, 18, 0.45); padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">👁️‍🗨️ Story Ocultado</span>`
+                                                    : `<span class="badge-hs-visible" style="background: rgba(39, 174, 96, 0.15); color: #27ae60 !important; border: 1px solid rgba(39, 174, 96, 0.4); padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">👁️ Sem Ocultar</span>`
+                                                }
                                             </td>
-                                            <td style="text-align: center; padding: 8px;">
+                                            <td style="text-align: center; padding: 8px; white-space: nowrap;">
                                                 ${isHidden
-                                            ? `<button class="btn-action-hs" data-username="${username}" data-uid="${pk}" data-action="unhide" style="background: #27ae60; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;">👁️ Reexibir</button>`
-                                            : `<button class="btn-action-hs" data-username="${username}" data-uid="${pk}" data-action="hide" style="background: #e67e22; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;">👁️‍🗨️ Ocultar</button>`
-                                        }
+                                                    ? `<button class="btn-action-hs" data-username="${username}" data-uid="${pk}" data-action="unhide" style="background: #27ae60; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; touch-action: manipulation;">👁️ Reexibir</button>`
+                                                    : `<button class="btn-action-hs" data-username="${username}" data-uid="${pk}" data-action="hide" style="background: #e67e22; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; touch-action: manipulation;">👁️‍🗨️ Ocultar</button>`
+                                                }
                                             </td>
                                         </tr>
                                     `;
@@ -8656,7 +8724,12 @@
                                 <span>Total: <strong style="color: #e67e22;">${mutedCount}</strong> contas silenciadas | <strong style="color: #27ae60;">${notMutedCount}</strong> com som ativo.</span>
                                 <span id="mutedSyncInfo" style="font-size: 11px; color: #888;"></span>
                             </div>
-                            <div id="tabelaMutedContainer" style="display: block; margin-top: 12px; overflow-x: auto; width: 100%;"></div>
+                            <div class="muted-mobile-scroll-controls mobile-scroll-controls" style="display: none; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 6px 0; padding: 6px 10px; background: rgba(52, 152, 219, 0.12); border-radius: 8px; border: 1px solid rgba(52, 152, 219, 0.25);">
+                                <button id="mutedScrollStartBtn" type="button" style="background: #3498db; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 3px;">◀ Usuário</button>
+                                <span style="color: #2980b9; font-size: 11px; font-weight: 600; text-align: center; flex: 1;">↔️ Deslize para ver todas as 5 colunas</span>
+                                <button id="mutedScrollEndBtn" type="button" style="background: #3498db; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 3px;">Ações ▶</button>
+                            </div>
+                            <div id="tabelaMutedContainer" style="display: block; margin-top: 10px; overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch;"></div>
                         </div>
                     `;
 
@@ -8694,6 +8767,21 @@
                     } catch (_) { }
 
                     const container = document.getElementById("tabelaMutedContainer");
+
+                    const mutedScrollStartBtn = document.getElementById("mutedScrollStartBtn");
+                    if (mutedScrollStartBtn) {
+                        mutedScrollStartBtn.onclick = () => {
+                            const c = document.getElementById("tabelaMutedContainer");
+                            if (c) c.scrollTo({ left: 0, behavior: 'smooth' });
+                        };
+                    }
+                    const mutedScrollEndBtn = document.getElementById("mutedScrollEndBtn");
+                    if (mutedScrollEndBtn) {
+                        mutedScrollEndBtn.onclick = () => {
+                            const c = document.getElementById("tabelaMutedContainer");
+                            if (c) c.scrollTo({ left: c.scrollWidth, behavior: 'smooth' });
+                        };
+                    }
 
                     const updateCounts = (paginatedUsers = []) => {
                         try {
@@ -9951,12 +10039,32 @@
                             </select>
                         </div>
                         <div id="statusBloqueados" style="margin-top: 5px; font-weight: bold; font-size: 13px; color: #555;">Total: ${blockedList.length} contas bloqueadas.</div>
-                        <div id="tabelaBloqueadosContainer" style="display: block; margin-top: 15px;"></div>
+                        <div class="blocked-mobile-scroll-controls mobile-scroll-controls" style="display: none; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 6px 0; padding: 6px 10px; background: rgba(52, 152, 219, 0.12); border-radius: 8px; border: 1px solid rgba(52, 152, 219, 0.25);">
+                            <button id="blockedScrollStartBtn" type="button" style="background: #3498db; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 3px;">◀ Usuário</button>
+                            <span style="color: #2980b9; font-size: 11px; font-weight: 600; text-align: center; flex: 1;">↔️ Deslize para ver todas as 5 colunas</span>
+                            <button id="blockedScrollEndBtn" type="button" style="background: #3498db; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 3px;">Ações ▶</button>
+                        </div>
+                        <div id="tabelaBloqueadosContainer" style="display: block; margin-top: 10px; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;"></div>
                     `;
 
                     document.body.appendChild(div);
 
                     const container = document.getElementById("tabelaBloqueadosContainer");
+
+                    const blockedScrollStartBtn = document.getElementById("blockedScrollStartBtn");
+                    if (blockedScrollStartBtn) {
+                        blockedScrollStartBtn.onclick = () => {
+                            const c = document.getElementById("tabelaBloqueadosContainer");
+                            if (c) c.scrollTo({ left: 0, behavior: 'smooth' });
+                        };
+                    }
+                    const blockedScrollEndBtn = document.getElementById("blockedScrollEndBtn");
+                    if (blockedScrollEndBtn) {
+                        blockedScrollEndBtn.onclick = () => {
+                            const c = document.getElementById("tabelaBloqueadosContainer");
+                            if (c) c.scrollTo({ left: c.scrollWidth, behavior: 'smooth' });
+                        };
+                    }
 
                     const updateCounts = (paginatedUsers = []) => {
                         const countEl = document.getElementById('blockedSelectedCount');
@@ -10029,14 +10137,14 @@
                         }
 
                         let tableHtml = `
-                            <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                            <table style="width: 100%; min-width: 620px; border-collapse: collapse; margin-top: 10px;">
                                 <thead style="cursor: pointer;">
                                     <tr style="text-align: left; border-bottom: 2px solid #dbdbdb;">
-                                        <th style="padding: 8px; width: 30px;"><input type="checkbox" id="selectAllBlockedCheckbox" title="Selecionar Todos da Página"></th>
+                                        <th style="padding: 8px 4px; width: 32px; text-align: center;"><input type="checkbox" id="selectAllBlockedCheckbox" title="Selecionar Todos da Página" style="width: 18px; height: 18px; cursor: pointer;"></th>
                                         <th style="padding: 8px;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
                                         <th style="padding: 8px; text-align: center;" data-sort-key="pk">ID (PK) ${sortConfig.key === 'pk' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
                                         <th style="padding: 8px; text-align: center;" data-sort-key="isAutoBlocked">Tipo de Bloqueio ${sortConfig.key === 'isAutoBlocked' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                        <th style="padding: 8px; text-align: center;">Ações</th>
+                                        <th style="padding: 8px; text-align: center; width: 130px;">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -10051,26 +10159,28 @@
 
                                 tableHtml += `
                                     <tr style="border-bottom: 1px solid #dbdbdb;" data-username="${username}">
-                                        <td style="padding: 8px;"><input type="checkbox" class="user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
-                                        <td style="padding: 8px; display: flex; align-items: center; gap: 10px;">
-                                            <img src="${photoUrl || DEFAULT_AVATAR}" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${username}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
-                                            <div style="display: flex; flex-direction: column;">
-                                                <div style="display: flex; align-items: center; gap: 6px;">
-                                                    <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration: none; color: inherit; font-weight: 600;">${username}</a>
+                                        <td style="padding: 8px 4px; text-align: center;"><input type="checkbox" class="user-checkbox" data-username="${username}" style="cursor: pointer; width: 18px; height: 18px;" ${isChecked ? 'checked' : ''}></td>
+                                        <td style="padding: 8px 6px;">
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <img src="${photoUrl || DEFAULT_AVATAR}" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${username}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid #eee;">
+                                                <div style="display: flex; flex-direction: column; min-width: 0;">
+                                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                                        <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration: none; color: inherit; font-weight: 600; font-size: 14px; word-break: break-all;">${username}</a>
+                                                    </div>
+                                                    ${fullName ? `<span style="font-size: 12px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${fullName}</span>` : ''}
+                                                    ${secondaryText ? `<span style="font-size: 11px; color: ${isAutoBlocked ? '#e74c3c' : '#777'};">${secondaryText}</span>` : ''}
                                                 </div>
-                                                ${fullName ? `<span style="font-size: 12px; color: #666;">${fullName}</span>` : ''}
-                                                ${secondaryText ? `<span style="font-size: 11px; color: ${isAutoBlocked ? '#e74c3c' : '#777'};">${secondaryText}</span>` : ''}
                                             </div>
                                         </td>
                                         <td style="text-align: center; padding: 8px; font-family: monospace; font-size: 12px; color: #555;">${pk || '-'}</td>
                                         <td style="text-align: center; padding: 8px;">
                                             ${isAutoBlocked
-                                        ? `<span class="badge-tipo-bloqueio badge-auto-blocked" style="background: #fde8e8; color: #b71c1c !important; border: 1px solid #f8b4b4; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">🔒 + Novas contas</span>`
-                                        : `<span class="badge-tipo-bloqueio badge-standard" style="background: #e8f4fd; color: #0d47a1 !important; border: 1px solid #90caf9; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">👤 Padrão</span>`
-                                    }
+                                                ? `<span class="badge-tipo-bloqueio badge-auto-blocked" style="background: #fde8e8; color: #b71c1c !important; border: 1px solid #f8b4b4; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">🔒 + Novas contas</span>`
+                                                : `<span class="badge-tipo-bloqueio badge-standard" style="background: #e8f4fd; color: #0d47a1 !important; border: 1px solid #90caf9; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">👤 Padrão</span>`
+                                            }
                                         </td>
-                                        <td style="text-align: center; padding: 8px;">
-                                            <button class="btn-unblock-row" data-username="${username}" data-uid="${pk}" style="background: #2ecc71; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">Desbloquear</button>
+                                        <td style="text-align: center; padding: 8px; white-space: nowrap;">
+                                            <button class="btn-unblock-row" data-username="${username}" data-uid="${pk}" style="background: #2ecc71; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; touch-action: manipulation;">Desbloquear</button>
                                         </td>
                                     </tr>
                                 `;
@@ -10258,6 +10368,7 @@
                         const contentToToggle = [
                             modal.querySelector('#blockedSearchInput')?.parentElement,
                             modal.querySelector('#statusBloqueados'),
+                            modal.querySelector('.blocked-mobile-scroll-controls'),
                             modal.querySelector('#tabelaBloqueadosContainer')
                         ].filter(Boolean);
 
@@ -16081,14 +16192,14 @@
                     const table = document.getElementById(tableId);
                     if (!table) return;
 
+                    table.style.cssText = "width: 100% !important; border-collapse: collapse; margin-top: 10px;";
                     table.innerHTML = `
                             <thead>
-                                <tr>
-                                    <th style="border: 1px solid #ccc; padding: 10px;">ID</th>
-                                    <th style="border: 1px solid #ccc; padding: 10px;">Username</th>
-                                    <th style="border: 1px solid #ccc; padding: 10px;">Foto</th>
-                                    ${isHistory ? '<th style="border: 1px solid #ccc; padding: 10px;">Data do Unfollow</th>' : ''}
-                                    ${showCheckbox ? '<th style="border: 1px solid #ccc; padding: 10px;">Check</th>' : ''}
+                                <tr style="border-bottom: 2px solid #dbdbdb; text-align: left; background: rgba(0,0,0,0.02);">
+                                    <th style="padding: 10px 4px; width: 34px; text-align: center; font-size: 12px; color: #777;">#</th>
+                                    <th style="padding: 10px 8px; font-size: 13px; font-weight: 600;">Usuário</th>
+                                    ${isHistory ? '<th style="padding: 10px 8px; font-size: 13px; font-weight: 600;">Data Unfollow</th>' : ''}
+                                    ${showCheckbox ? '<th style="padding: 10px 4px; width: 44px; text-align: center; font-size: 13px; font-weight: 600;">Sel</th>' : ''}
                                 </tr>
                             </thead>
                             <tbody></tbody>
@@ -16122,17 +16233,21 @@
 
                             const tr = document.createElement("tr");
                             tr.setAttribute('data-username', username);
+                            tr.style.cssText = "border-bottom: 1px solid #dbdbdb;";
                             tr.innerHTML = `
-                                    <td style="border: 1px solid #ccc; padding: 10px;">${startIndex + index + 1}</td>
-                                    <td style="border: 1px solid #ccc; padding: 10px;">
-                                        <a href="https://www.instagram.com/${username}" target="_blank">${username}</a>
-                                    </td>
-                                    <td style="border: 1px solid #ccc; padding: 10px;">
-                                        <img id="img_${username}_${isHistory ? 'hist' : 'main'}" src="${photoUrl || DEFAULT_AVATAR}" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
+                                    <td style="padding: 10px 4px; text-align: center; font-size: 12px; color: #888;">${startIndex + index + 1}</td>
+                                    <td style="padding: 10px 8px;">
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <img id="img_${username}_${isHistory ? 'hist' : 'main'}" src="${photoUrl || DEFAULT_AVATAR}" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${username}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid #eee;">
+                                            <div style="display: flex; flex-direction: column; min-width: 0;">
+                                                <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration: none; color: inherit; font-weight: 600; font-size: 14px; word-break: break-all;">${username}</a>
+                                                ${isObject && userData.fullName ? `<span style="font-size: 12px; color: #777; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${userData.fullName}</span>` : ''}
+                                            </div>
+                                        </div>
                                     </td>` +
-                                (isHistory ? `<td style="border: 1px solid #ccc; padding: 10px;">${unfollowDate}</td>` : '') +
-                                (showCheckbox ? `<td style="border: 1px solid #ccc; padding: 10px;">
-                                        <input type="checkbox" class="unfollowCheckbox" data-username="${username}" ${selectedSet && selectedSet.has(username) ? 'checked' : ''} />
+                                (isHistory ? `<td style="padding: 10px 8px; font-size: 12px; color: #666;">${unfollowDate}</td>` : '') +
+                                (showCheckbox ? `<td style="padding: 10px 4px; text-align: center;">
+                                        <input type="checkbox" class="unfollowCheckbox" data-username="${username}" ${selectedSet && selectedSet.has(username) ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer; accent-color: #0095f6;" />
                                     </td>` : '') + `
                                 `;
 

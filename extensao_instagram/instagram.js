@@ -10575,6 +10575,8 @@
                         seguidores: null,
                         naoSegueDeVolta: null,
                         novosSeguidores: null,
+                        novosSeguindo: null,
+                        seguidoresMutuos: null,
                         unfollows: null,
                         seguidoresPerdidos: null,
                         exceptions: null,
@@ -10677,10 +10679,12 @@
                     async function carregarDadosIniciais() {
                         statusDiv.innerText = 'Carregando dados do Banco de Dados...';
 
-                        // 1. Carrega dados do DB (Sem requisições API)
+                        // 1. Carrega dados do DB (Google Drive / Cache)
                         let dbFollowers = await dbHelper.loadCache('followers');
                         let dbFollowing = await dbHelper.loadCache('following');
                         let dbExceptions = await dbHelper.loadExceptions();
+                        let dbLostFollowers = await dbHelper.loadCache('seguidoresPerdidos');
+                        let dbMutuals = await dbHelper.loadCache('seguidoresMutuos');
 
                         // Função para normalizar Sets e popular detalhes
                         const normalizeAndCache = (set) => {
@@ -10698,6 +10702,8 @@
 
                         dbFollowers = normalizeAndCache(dbFollowers);
                         dbFollowing = normalizeAndCache(dbFollowing);
+                        dbLostFollowers = normalizeAndCache(dbLostFollowers);
+                        dbMutuals = normalizeAndCache(dbMutuals);
                         cachedData.exceptions = dbExceptions || new Set();
 
                         cachedData.seguidores = dbFollowers;
@@ -10706,6 +10712,16 @@
                         // 2. Calcula listas baseadas no DB
                         // Filtra quem não segue de volta E quem não está na lista de exceções (corrigidos)
                         cachedData.naoSegueDeVolta = [...dbFollowing].filter(user => !dbFollowers.has(user) && !cachedData.exceptions.has(user));
+
+                        // Seguidores Mútuos (estão em seguindo e em seguidores)
+                        let mutuosCalculados = [...dbFollowing].filter(user => dbFollowers.has(user));
+                        if (mutuosCalculados.length === 0 && dbMutuals && dbMutuals.size > 0) {
+                            mutuosCalculados = [...dbMutuals];
+                        }
+                        cachedData.seguidoresMutuos = mutuosCalculados;
+
+                        // Seguidores Perdidos (carregados do Google Drive)
+                        cachedData.seguidoresPerdidos = dbLostFollowers ? [...dbLostFollowers] : [];
 
                         // Tenta buscar info básica do perfil (leve) apenas para ter o ID caso o usuário queira atualizar
                         cachedData.profileInfo = await safeFetchProfileInfo(username);
@@ -10716,13 +10732,19 @@
                         // Calcula listas
                         const toObjects = (names) => names.map(name => cachedData.userDetails.get(name) || { username: name, photoUrl: null });
 
-                        // Listas iniciais (Novos estarão vazios até atualizar)
+                        // Listas iniciais
                         let listNaoSegueDeVolta = toObjects(cachedData.naoSegueDeVolta);
                         let listNovosSeguidores = [];
                         let listNovosSeguindo = [];
-                        let listSeguidoresPerdidos = [];
+                        let listSeguidoresMutuos = toObjects(cachedData.seguidoresMutuos);
+                        let listSeguidoresPerdidos = toObjects(cachedData.seguidoresPerdidos);
                         let listNaoSigoDeVolta = toObjects([...dbFollowers].filter(u => !dbFollowing.has(u)));
                         let listHistorico = await dbHelper.loadUnfollowHistory();
+
+                        // Se seguidores mútuos foram calculados mas ainda não estavam salvos no Google Drive, sincroniza
+                        if ((!dbMutuals || dbMutuals.size === 0) && listSeguidoresMutuos.length > 0) {
+                            dbHelper.saveCache('seguidoresMutuos', listSeguidoresMutuos).catch(e => console.warn(e));
+                        }
 
                         const totalFollowers = cachedData.profileInfo?.data?.user?.edge_followed_by?.count ?? 'N/A';
                         const totalFollowing = cachedData.profileInfo?.data?.user?.edge_follow?.count ?? 'N/A';
@@ -10746,7 +10768,7 @@
                                 <div style="margin-bottom: 15px; padding: 0 5px;">
                                     <input type="text" id="naoSegueSearchInput" placeholder="Pesquisar usuários nesta lista..." style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; box-sizing: border-box; outline: none;">
                                 </div>
-                                <div class="cards-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px;">
+                                <div class="cards-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 20px;">
                                     <div id="tabNaoSegueDeVolta" class="card-tab active" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
                                         <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Não Segue de Volta</div>
                                         <div id="countNaoSegue" style="font-size: 20px; font-weight: bold; color: #e74c3c;">${listNaoSegueDeVolta.length}</div>
@@ -10758,6 +10780,10 @@
                                     <div id="tabNovosSeguindo" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
                                         <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Novos Seguindo</div>
                                         <div id="countNovosSeguindo" style="font-size: 20px; font-weight: bold; color: #0095f6;">${listNovosSeguindo.length}</div>
+                                    </div>
+                                    <div id="tabSeguidoresMutuos" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Seguidores Mútuos</div>
+                                        <div id="countSeguidoresMutuos" style="font-size: 20px; font-weight: bold; color: #9b59b6;">${listSeguidoresMutuos.length}</div>
                                     </div>
                                     <div id="tabSeguidoresPerdidos" class="card-tab" style="background: #f8f9fa; border: 1px solid #dbdbdb; border-radius: 8px; padding: 15px; cursor: pointer; text-align: center; transition: all 0.2s;">
                                         <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Seguidores Perdidos</div>
@@ -10782,6 +10808,7 @@
                             'tabNaoSegueDeVolta': listNaoSegueDeVolta,
                             'tabNovosSeguidores': listNovosSeguidores,
                             'tabNovosSeguindo': listNovosSeguindo,
+                            'tabSeguidoresMutuos': listSeguidoresMutuos,
                             'tabSeguidoresPerdidos': listSeguidoresPerdidos,
                             'tabNaoSigoDeVolta': listNaoSigoDeVolta,
                             'tabHistorico': listHistorico
@@ -10835,7 +10862,7 @@
                                     <div style="margin-top: 20px;">
                                         <button id="selecionarTodosBtn">Selecionar Todos</button>
                                         <button id="desmarcarTodosBtn">Desmarcar Todos</button>
-                                        ${(currentTabId === 'tabNaoSegueDeVolta' || currentTabId === 'tabSeguidoresPerdidos') ? `
+                                        ${(currentTabId === 'tabNaoSegueDeVolta' || currentTabId === 'tabSeguidoresPerdidos' || currentTabId === 'tabSeguidoresMutuos') ? `
                                             <button id="unfollowBtn">Unfollow</button>
                                             <button id="bloquearBtn" style="margin-left: 10px; background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Bloquear</button>
                                             ${currentTabId === 'tabNaoSegueDeVolta' ? `<button id="corrigirBtn" style="margin-left: 10px; background-color: #f39c12; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;" title="Remove usuários selecionados desta lista permanentemente">Corrigir (Já Sigo)</button>` : ''}
@@ -10976,7 +11003,7 @@
                         }
 
                         // Event listeners para as abas
-                        const tabs = ['tabNaoSegueDeVolta', 'tabNovosSeguidores', 'tabNovosSeguindo', 'tabSeguidoresPerdidos', 'tabNaoSigoDeVolta', 'tabHistorico'];
+                        const tabs = ['tabNaoSegueDeVolta', 'tabNovosSeguidores', 'tabNovosSeguindo', 'tabSeguidoresMutuos', 'tabSeguidoresPerdidos', 'tabNaoSigoDeVolta', 'tabHistorico'];
 
                         tabs.forEach(tabId => {
                             document.getElementById(tabId).addEventListener('click', () => {
@@ -11097,10 +11124,25 @@
 
                                 let seguidoresPerdidosSet = [];
                                 if (updateFollowers && apiFollowers) {
-                                    seguidoresPerdidosSet = [...cachedData.seguidores].filter(u => !apiFollowers.has(u));
+                                    const recemPerdidos = [...cachedData.seguidores].filter(u => !apiFollowers.has(u));
+                                    const historicoPerdidos = cachedData.seguidoresPerdidos || [];
+                                    const setPerdidos = new Set([...historicoPerdidos, ...recemPerdidos]);
+                                    seguidoresPerdidosSet = Array.from(setPerdidos);
+                                } else {
+                                    seguidoresPerdidosSet = cachedData.seguidoresPerdidos || [];
                                 }
 
-                                // 4. Salvar no DB (com proteção contra erros de rede/nuvem)
+                                // Seguidores Mútuos (estão em seguindo e seguidores)
+                                const finalSeguindo = apiFollowing || cachedData.seguindo || new Set();
+                                const finalSeguidores = apiFollowers || cachedData.seguidores || new Set();
+                                let seguidoresMutuosSet = [];
+                                if (finalSeguindo.size > 0 && finalSeguidores.size > 0) {
+                                    seguidoresMutuosSet = [...finalSeguindo].filter(u => finalSeguidores.has(u));
+                                } else {
+                                    seguidoresMutuosSet = cachedData.seguidoresMutuos || [];
+                                }
+
+                                // 4. Salvar no DB / Google Drive (com proteção contra erros de rede/nuvem)
                                 try {
                                     if (updateFollowers && apiFollowers) {
                                         const followersToSave = [...apiFollowers].map(u => cachedData.userDetails.get(u) || { username: u, photoUrl: null });
@@ -11113,6 +11155,22 @@
                                         await dbHelper.saveCache('following', followingToSave);
                                         cachedData.seguindo = apiFollowing;
                                     }
+
+                                    // Salvar Seguidores Mútuos no Google Drive
+                                    if (seguidoresMutuosSet.length > 0 || (apiFollowing && apiFollowers)) {
+                                        const mutuosToSave = seguidoresMutuosSet.map(u => cachedData.userDetails.get(u) || { username: u, photoUrl: null });
+                                        await dbHelper.saveCache('seguidoresMutuos', mutuosToSave);
+                                        cachedData.seguidoresMutuos = seguidoresMutuosSet;
+                                        console.log(`[IG Tools] Seguidores mútuos salvos no Google Drive: ${mutuosToSave.length}`);
+                                    }
+
+                                    // Salvar Seguidores Perdidos no Google Drive
+                                    if (updateFollowers && apiFollowers) {
+                                        const perdidosToSave = seguidoresPerdidosSet.map(u => cachedData.userDetails.get(u) || { username: u, photoUrl: null });
+                                        await dbHelper.saveCache('seguidoresPerdidos', perdidosToSave);
+                                        cachedData.seguidoresPerdidos = seguidoresPerdidosSet;
+                                        console.log(`[IG Tools] Seguidores perdidos salvos no Google Drive: ${perdidosToSave.length}`);
+                                    }
                                 } catch (saveErr) {
                                     console.warn("[IG Tools] Erro ao sincronizar nuvem, dados preservados localmente:", saveErr);
                                 }
@@ -11122,6 +11180,8 @@
                                     cachedData.naoSegueDeVolta = [...apiFollowing].filter(user => !apiFollowers.has(user) && !cachedData.exceptions.has(user));
                                     lists['tabNaoSegueDeVolta'] = toObjects(cachedData.naoSegueDeVolta);
                                 }
+
+                                lists['tabSeguidoresMutuos'] = toObjects(seguidoresMutuosSet);
 
                                 if (updateFollowers && apiFollowers) {
                                     lists['tabNovosSeguidores'] = toObjects(novosSeguidoresSet);
@@ -11140,6 +11200,7 @@
                                 if (document.getElementById('countNaoSegue')) document.getElementById('countNaoSegue').innerText = lists['tabNaoSegueDeVolta']?.length || 0;
                                 if (document.getElementById('countNovosSeguidores')) document.getElementById('countNovosSeguidores').innerText = lists['tabNovosSeguidores']?.length || 0;
                                 if (document.getElementById('countNovosSeguindo')) document.getElementById('countNovosSeguindo').innerText = lists['tabNovosSeguindo']?.length || 0;
+                                if (document.getElementById('countSeguidoresMutuos')) document.getElementById('countSeguidoresMutuos').innerText = lists['tabSeguidoresMutuos']?.length || 0;
                                 if (document.getElementById('countSeguidoresPerdidos')) document.getElementById('countSeguidoresPerdidos').innerText = lists['tabSeguidoresPerdidos']?.length || 0;
                                 if (document.getElementById('countNaoSigo')) document.getElementById('countNaoSigo').innerText = lists['tabNaoSigoDeVolta']?.length || 0;
 
@@ -11225,8 +11286,20 @@
                                     if (naoSegueList) {
                                         const userIndex = naoSegueList.findIndex(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() === username.toLowerCase());
                                         if (userIndex > -1) naoSegueList.splice(userIndex, 1);
-                                        const countEl = document.getElementById(activeTab === 'tabNaoSegueDeVolta' ? 'countNaoSegue' : (activeTab === 'tabSeguidoresPerdidos' ? 'countSeguidoresPerdidos' : ''));
+                                        const countEl = document.getElementById(activeTab === 'tabNaoSegueDeVolta' ? 'countNaoSegue' : (activeTab === 'tabSeguidoresPerdidos' ? 'countSeguidoresPerdidos' : (activeTab === 'tabSeguidoresMutuos' ? 'countSeguidoresMutuos' : '')));
                                         if (countEl) countEl.innerText = naoSegueList.length;
+                                    }
+
+                                    // Se estiver na aba de mútuos ou o usuário for mútuo, atualiza e sincroniza cache
+                                    const mutuosList = (typeof lists !== 'undefined' && lists) ? lists['tabSeguidoresMutuos'] : null;
+                                    if (mutuosList) {
+                                        const mIndex = mutuosList.findIndex(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() === username.toLowerCase());
+                                        if (mIndex > -1) {
+                                            if (activeTab !== 'tabSeguidoresMutuos') mutuosList.splice(mIndex, 1);
+                                            const countM = document.getElementById('countSeguidoresMutuos');
+                                            if (countM) countM.innerText = mutuosList.length;
+                                            dbHelper.saveCache('seguidoresMutuos', mutuosList).catch(e => console.error(e));
+                                        }
                                     }
 
                                     // Remove do cache de seguindo
@@ -11347,6 +11420,17 @@
                                 if (userIndex > -1) naoSegueList.splice(userIndex, 1);
                                 const countSpan = document.getElementById('countNaoSegue');
                                 if (countSpan) countSpan.innerText = naoSegueList.length;
+                            }
+
+                            const mutuosList = (typeof lists !== 'undefined' && lists) ? lists['tabSeguidoresMutuos'] : null;
+                            if (mutuosList) {
+                                const userIndex = mutuosList.findIndex(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() === username.toLowerCase());
+                                if (userIndex > -1) {
+                                    mutuosList.splice(userIndex, 1);
+                                    const countSpan = document.getElementById('countSeguidoresMutuos');
+                                    if (countSpan) countSpan.innerText = mutuosList.length;
+                                    dbHelper.saveCache('seguidoresMutuos', mutuosList).catch(e => console.error("Erro ao atualizar cache seguidoresMutuos:", e));
+                                }
                             }
 
                             const lowerUser = username.toLowerCase();

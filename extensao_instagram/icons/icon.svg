@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="igGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#833AB4"/>
+      <stop offset="30%" stop-color="#C13584"/>
+      <stop offset="60%" stop-color="#E1306C"/>
+      <stop offset="85%" stop-color="#FD1D1D"/>
+      <stop offset="100%" stop-color="#F77737"/>
+    </linearGradient>
+
+    <!-- Dark Orb Gradient -->
+    <radialGradient id="darkOrb" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1e1035"/>
+      <stop offset="70%" stop-color="#0f051d"/>
+      <stop offset="100%" stop-color="#05010a"/>
+    </radialGradient>
+
+    <!-- Glow Neon Gradient -->
+    <linearGradient id="neonGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f2fe"/>
+      <stop offset="50%" stop-color="#4facfe"/>
+      <stop offset="100%" stop-color="#a18cd1"/>
+    </linearGradient>
+
+    <!-- Gold/Amber Glow -->
+    <linearGradient id="goldGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFD700"/>
+      <stop offset="100%" stop-color="#FF6B6B"/>
+    </linearGradient>
+
+    <!-- Shutter Petals Gradient -->
+    <linearGradient id="petalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d946ef"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+
+    <!-- Drop Shadows and Glow Filters -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Squircle Base with Instagram Gradient Border -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#igGrad)" filter="url(#softShadow)"/>
+  
+  <!-- Inner Dark Glassmorphism Canvas -->
+  <rect x="28" y="28" width="456" height="456" rx="96" fill="url(#darkOrb)"/>
+
+  <!-- Subtle Glowing Ring -->
+  <circle cx="256" cy="256" r="180" fill="none" stroke="url(#igGrad)" stroke-width="6" opacity="0.6"/>
+  <circle cx="256" cy="256" r="172" fill="none" stroke="rgba(255, 255, 255, 0.15)" stroke-width="2"/>
+
+  <!-- Stylized Aperture / Camera Lens Blades -->
+  <g opacity="0.9" filter="url(#glow)">
+    <!-- Blade 1 -->
+    <path d="M 256 96 C 300 96 340 115 368 146 L 290 200 L 256 96 Z" fill="url(#igGrad)" opacity="0.85"/>
+    <!-- Blade 2 -->
+    <path d="M 368 146 C 400 180 416 226 414 272 L 320 250 L 368 146 Z" fill="url(#petalGrad)" opacity="0.85"/>
+    <!-- Blade 3 -->
+    <path d="M 414 272 C 410 320 384 364 346 394 L 280 320 L 414 272 Z" fill="url(#igGrad)" opacity="0.85"/>
+    <!-- Blade 4 -->
+    <path d="M 346 394 C 308 422 258 430 212 416 L 236 320 L 346 394 Z" fill="url(#petalGrad)" opacity="0.85"/>
+    <!-- Blade 5 -->
+    <path d="M 212 416 C 166 400 130 364 112 320 L 200 278 L 212 416 Z" fill="url(#igGrad)" opacity="0.85"/>
+    <!-- Blade 6 -->
+    <path d="M 112 320 C 96 276 102 226 128 184 L 210 220 L 112 320 Z" fill="url(#petalGrad)" opacity="0.85"/>
+    <!-- Blade 7 -->
+    <path d="M 128 184 C 154 142 198 112 246 100 L 250 204 L 128 184 Z" fill="url(#igGrad)" opacity="0.85"/>
+  </g>
+
+  <!-- Central Aperture Core Circle -->
+  <circle cx="256" cy="256" r="105" fill="#130722" stroke="url(#igGrad)" stroke-width="4" filter="url(#glow)"/>
+
+  <!-- Stealth / Insight Eye (Symbolizing Stories & Profile Insight) -->
+  <g filter="url(#glow)">
+    <!-- Eye Outline Shape -->
+    <path d="M 180 256 C 205 210 307 210 332 256 C 307 302 205 302 180 256 Z" fill="none" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Eye Iris -->
+    <circle cx="256" cy="256" r="32" fill="url(#igGrad)"/>
+    <!-- Eye Pupil -->
+    <circle cx="256" cy="256" r="18" fill="#FFFFFF"/>
+    <!-- Eye Reflection -->
+    <circle cx="264" cy="248" r="6" fill="#FFFFFF" opacity="0.9"/>
+  </g>
+
+  <!-- Electric Bolt + Pro Downloader Arrow Crest -->
+  <g filter="url(#glow)">
+    <!-- Lightning Fast Downloader Arrow -->
+    <path d="M 268 285 L 298 335 L 266 335 L 282 390 L 222 335 L 252 335 L 240 285 Z" fill="url(#goldGlow)" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Corner "PRO" Badge Dot (Upper Right) -->
+  <circle cx="390" cy="120" r="16" fill="#00f2fe" filter="url(#glow)"/>
+  <circle cx="390" cy="120" r="8" fill="#ffffff"/>
+
+  <!-- Glass Gloss Highlight Arc -->
+  <path d="M 70 80 A 180 180 0 0 1 442 80 A 210 210 0 0 0 70 80 Z" fill="white" opacity="0.08"/>
+</svg>

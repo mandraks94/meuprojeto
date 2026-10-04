@@ -3,6 +3,21 @@
   "name": "IG Tools Pro",
   "version": "1.1.0",
   "description": "Ferramentas avançadas para Instagram: Download de mídias, Histórias, Destaques, Gestão de Seguidores, Bloqueados e Modo Anônimo.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "IG Tools Pro"
+  },
   "permissions": [
     "storage",
     "declarativeNetRequest"

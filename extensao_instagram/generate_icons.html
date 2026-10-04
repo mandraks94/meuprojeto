@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Gerador de Ícones - IG Tools Pro</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f0f12; color: #eee; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .card { background: #1a1a24; border: 1px solid #2d2d3f; padding: 36px; border-radius: 16px; box-shadow: 0 12px 40px rgba(0,0,0,0.6); text-align: center; max-width: 520px; width: 100%; }
+        .logo-preview { width: 128px; height: 128px; border-radius: 28px; margin: 0 auto 20px auto; display: block; box-shadow: 0 8px 30px rgba(225, 48, 108, 0.45); }
+        h2 { margin: 0 0 10px 0; font-size: 22px; color: #fff; }
+        p { color: #aaa; font-size: 14px; line-height: 1.5; margin-bottom: 24px; }
+        .btn-main { background: linear-gradient(45deg, #833ab4, #fd1d1d, #fcb045); color: white; border: none; padding: 14px 28px; font-size: 15px; font-weight: 700; border-radius: 10px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 15px rgba(253, 29, 29, 0.4); }
+        .btn-main:hover { transform: scale(1.04); box-shadow: 0 6px 22px rgba(253, 29, 29, 0.6); }
+        .status { margin-top: 20px; font-size: 14px; font-weight: 600; color: #2ecc71; min-height: 24px; }
+        .instructions { margin-top: 24px; padding: 16px; background: rgba(255,255,255,0.04); border-radius: 10px; font-size: 13px; text-align: left; color: #bbb; line-height: 1.6; border-left: 3px solid #e1306c; }
+        .instructions ol { margin: 8px 0 0 0; padding-left: 20px; }
+        .instructions li { margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div id="svgContainer" class="logo-preview"></div>
+        <h2>IG Tools Pro - Gerador de Ícones</h2>
+        <p>Clique no botão abaixo para gerar e baixar automaticamente os 4 arquivos PNG necessários para o Chrome (<strong>icon16.png</strong>, <strong>icon32.png</strong>, <strong>icon48.png</strong> e <strong>icon128.png</strong>).</p>
+        
+        <button id="btnDownload" class="btn-main">⚡ Baixar os 4 Ícones PNG</button>
+        <div id="status" class="status"></div>
+
+        <div class="instructions">
+            <strong>📋 O que fazer após baixar:</strong>
+            <ol>
+                <li>Mova os 4 arquivos baixados para a pasta: <br><code style="color: #f39c12;">extensao_instagram/icons/</code></li>
+                <li>Volte no Chrome e clique em <strong>"Tentar novamente"</strong> (ou no botão <strong>Atualizar</strong> em <code>chrome://extensions</code>).</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        const svgString = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="igGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#833AB4"/>
+      <stop offset="30%" stop-color="#C13584"/>
+      <stop offset="60%" stop-color="#E1306C"/>
+      <stop offset="85%" stop-color="#FD1D1D"/>
+      <stop offset="100%" stop-color="#F77737"/>
+    </linearGradient>
+    <radialGradient id="darkOrb" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1e1035"/>
+      <stop offset="70%" stop-color="#0f051d"/>
+      <stop offset="100%" stop-color="#05010a"/>
+    </radialGradient>
+    <linearGradient id="goldGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFD700"/>
+      <stop offset="100%" stop-color="#FF6B6B"/>
+    </linearGradient>
+    <linearGradient id="petalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d946ef"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#igGrad)"/>
+  <rect x="28" y="28" width="456" height="456" rx="96" fill="url(#darkOrb)"/>
+  <circle cx="256" cy="256" r="180" fill="none" stroke="url(#igGrad)" stroke-width="6" opacity="0.6"/>
+  <circle cx="256" cy="256" r="172" fill="none" stroke="rgba(255, 255, 255, 0.15)" stroke-width="2"/>
+  <g opacity="0.9">
+    <path d="M 256 96 C 300 96 340 115 368 146 L 290 200 L 256 96 Z" fill="url(#igGrad)" opacity="0.85"/>
+    <path d="M 368 146 C 400 180 416 226 414 272 L 320 250 L 368 146 Z" fill="url(#petalGrad)" opacity="0.85"/>
+    <path d="M 414 272 C 410 320 384 364 346 394 L 280 320 L 414 272 Z" fill="url(#igGrad)" opacity="0.85"/>
+    <path d="M 346 394 C 308 422 258 430 212 416 L 236 320 L 346 394 Z" fill="url(#petalGrad)" opacity="0.85"/>
+    <path d="M 212 416 C 166 400 130 364 112 320 L 200 278 L 212 416 Z" fill="url(#igGrad)" opacity="0.85"/>
+    <path d="M 112 320 C 96 276 102 226 128 184 L 210 220 L 112 320 Z" fill="url(#petalGrad)" opacity="0.85"/>
+    <path d="M 128 184 C 154 142 198 112 246 100 L 250 204 L 128 184 Z" fill="url(#igGrad)" opacity="0.85"/>
+  </g>
+  <circle cx="256" cy="256" r="105" fill="#130722" stroke="url(#igGrad)" stroke-width="4"/>
+  <path d="M 180 256 C 205 210 307 210 332 256 C 307 302 205 302 180 256 Z" fill="none" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="256" cy="256" r="32" fill="url(#igGrad)"/>
+  <circle cx="256" cy="256" r="18" fill="#FFFFFF"/>
+  <circle cx="264" cy="248" r="6" fill="#FFFFFF" opacity="0.9"/>
+  <path d="M 268 285 L 298 335 L 266 335 L 282 390 L 222 335 L 252 335 L 240 285 Z" fill="url(#goldGlow)" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="390" cy="120" r="14" fill="#00f2fe"/>
+  <circle cx="390" cy="120" r="7" fill="#ffffff"/>
+  <path d="M 70 80 A 180 180 0 0 1 442 80 A 210 210 0 0 0 70 80 Z" fill="white" opacity="0.08"/>
+</svg>`;
+
+        document.getElementById('svgContainer').innerHTML = svgString;
+
+        const sizes = [16, 32, 48, 128];
+
+        document.getElementById('btnDownload').onclick = async () => {
+            const status = document.getElementById('status');
+            status.innerText = 'Processando imagens...';
+            
+            const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const img = new Image();
+            img.src = url;
+
+            await new Promise(r => img.onload = r);
+
+            for (const size of sizes) {
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(img, 0, 0, size, size);
+                
+                const a = document.createElement('a');
+                a.download = `icon${size}.png`;
+                a.href = canvas.toDataURL('image/png');
+                a.click();
+                await new Promise(r => setTimeout(r, 200));
+            }
+            URL.revokeObjectURL(url);
+            status.innerText = '✅ Os 4 arquivos (icon16, icon32, icon48, icon128) foram baixados!';
+        };
+    </script>
+</body>
+</html>

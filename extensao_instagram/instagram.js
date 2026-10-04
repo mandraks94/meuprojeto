@@ -1721,7 +1721,54 @@
                 const cachedId = getCachedUserId(cleanUsername);
                 if (cachedId) return String(cachedId);
 
-                // 4. Fallback topsearch oficial da API web do Instagram (/api/v1/web/search/topsearch/)
+                // 4. Se for o perfil atualmente aberto na página, tenta obter do DOM / React
+                try {
+                    const currentProf = (typeof getProfilePageUsername === 'function') ? getProfilePageUsername() : null;
+                    if (currentProf === cleanUsername) {
+                        const actorId = getActorId();
+                        if (actorId && document.querySelector('header a[href*="/' + cleanUsername + '/"]')) {
+                            setCachedUserId(cleanUsername, String(actorId));
+                            return String(actorId);
+                        }
+                    }
+                } catch (_) { }
+
+                // 5. Fallback HTML do perfil (extrai ID sem acionar limite 429 de endpoints REST)
+                try {
+                    const profileResponse = await fetch(`https://www.instagram.com/${encodeURIComponent(cleanUsername)}/`, {
+                        credentials: 'include',
+                        cache: 'no-store'
+                    });
+                    if (profileResponse.ok) {
+                        const html = await profileResponse.text();
+                        const idMatch = html.match(/"(?:props_id|user_id|target_id|profile_id)"\s*:\s*"?(\d{6,})"?/i) ||
+                                        html.match(/"id"\s*:\s*"(\d{6,})"/i) ||
+                                        html.match(/"pk"\s*:\s*"(\d{6,})"/i);
+                        if (idMatch?.[1]) {
+                            const id = String(idMatch[1]);
+                            setCachedUserId(cleanUsername, id);
+                            console.log(`[IG Tools] ID obtido pelo HTML do perfil de ${cleanUsername}: ${id}`);
+                            return id;
+                        }
+                        const usernamePattern = new RegExp(`"username"\\s*:\\s*"${cleanUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'i');
+                        const usernameMatch = usernamePattern.exec(html);
+                        if (usernameMatch) {
+                            const nearby = html.slice(Math.max(0, usernameMatch.index - 3000), usernameMatch.index + 3000);
+                            const idMatches = [...nearby.matchAll(/"(?:pk|id|user_id|pk_id)"\s*:\s*"?(\d+)"?/g)];
+                            const match = idMatches[idMatches.length - 1];
+                            if (match?.[1]) {
+                                const id = String(match[1]);
+                                setCachedUserId(cleanUsername, id);
+                                console.log(`[IG Tools] ID obtido pelo HTML contextual de ${cleanUsername}: ${id}`);
+                                return id;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`[IG Tools] Falha ao obter o HTML do perfil de ${cleanUsername}:`, e);
+                }
+
+                // 6. Fallback final topsearch apenas se os métodos anteriores falharem
                 try {
                     const searchRes = await fetch(`https://www.instagram.com/api/v1/web/search/topsearch/?context=blended&query=${encodeURIComponent(cleanUsername)}`, {
                         headers: getApiHeaders(),
@@ -1741,32 +1788,6 @@
                     }
                 } catch (e) { }
 
-                // 5. Fallback HTML do perfil
-                try {
-                    const profileResponse = await fetch(`https://www.instagram.com/${encodeURIComponent(cleanUsername)}/`, {
-                        credentials: 'include',
-                        cache: 'no-store'
-                    });
-                    if (profileResponse.ok) {
-                        const html = await profileResponse.text();
-                        const usernamePattern = new RegExp(`"username"\\s*:\\s*"${cleanUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'i');
-                        const usernameMatch = usernamePattern.exec(html);
-                        if (usernameMatch) {
-                            const nearby = html.slice(Math.max(0, usernameMatch.index - 3000), usernameMatch.index + 3000);
-                            const idMatches = [...nearby.matchAll(/"(?:pk|id|user_id|pk_id)"\s*:\s*"?(\d+)"?/g)];
-                            const idMatch = idMatches[idMatches.length - 1];
-                            if (idMatch?.[1]) {
-                                const id = String(idMatch[1]);
-                                setCachedUserId(cleanUsername, id);
-                                console.log(`[IG Tools] ID obtido pelo HTML do perfil de ${cleanUsername}: ${id}`);
-                                return id;
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.warn(`[IG Tools] Falha ao obter o HTML do perfil de ${cleanUsername}:`, e);
-                }
-
                 return null;
             }
 
@@ -1774,43 +1795,140 @@
             try { window.DEFAULT_AVATAR = DEFAULT_AVATAR; } catch (_) { }
             try { if (typeof unsafeWindow !== 'undefined') unsafeWindow.DEFAULT_AVATAR = DEFAULT_AVATAR; } catch (_) { }
 
-            // Helper seguro para buscar informações do perfil sem lançar erro de sintaxe JSON quando ocorre 429 ou 400
+            // Helper moderno para buscar informações do perfil sem depender de endpoints REST descontinuados (evita 429)
             async function safeFetchProfileInfo(username) {
                 if (!username) return null;
                 const cleanUsername = username.trim().toLowerCase();
-                const encodedUsername = encodeURIComponent(cleanUsername);
 
+                // 1. Se estiver na página do perfil, extrai do DOM / React instantaneamente
                 try {
-                    const response = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodedUsername}`, {
-                        headers: {
-                            'X-IG-App-ID': '936619743392459',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        credentials: 'include'
-                    });
-                    if (response.status === 429) {
-                        console.warn(`[IG Tools] HTTP 429 (Rate limit) em web_profile_info para ${cleanUsername}`);
-                    } else if (response.ok) {
-                        const contentType = response.headers.get("content-type");
-                        if (contentType && contentType.includes("application/json")) {
-                            const data = await response.json();
-                            if (data && data.data && data.data.user) {
-                                if (data.data.user.id) setCachedUserId(cleanUsername, data.data.user.id);
-                                return data;
+                    const currentProf = (typeof getProfilePageUsername === 'function') ? getProfilePageUsername() : null;
+                    if (currentProf === cleanUsername) {
+                        const header = document.querySelector('header');
+                        if (header) {
+                            let followers = 0;
+                            let following = 0;
+                            const links = header.querySelectorAll('a[href*="/followers/"], a[href*="/following/"]');
+                            for (const l of links) {
+                                const txt = l.textContent || '';
+                                const m = txt.replace(/[,.]/g, '').match(/\d+/);
+                                if (m) {
+                                    if (l.getAttribute('href').includes('/followers/')) followers = parseInt(m[0], 10);
+                                    else if (l.getAttribute('href').includes('/following/')) following = parseInt(m[0], 10);
+                                }
+                            }
+                            const avatarImg = header.querySelector('img[alt*="perfil"], img[alt*="profile"], img');
+                            const photoUrl = avatarImg ? avatarImg.src : null;
+                            const uid = getCachedUserId(cleanUsername) || getActorId() || '';
+                            if (followers > 0 || following > 0 || uid) {
+                                return {
+                                    data: {
+                                        user: {
+                                            id: uid || 'current',
+                                            pk: uid || 'current',
+                                            username: cleanUsername,
+                                            profile_pic_url: photoUrl,
+                                            edge_followed_by: { count: followers },
+                                            edge_follow: { count: following },
+                                            edge_owner_to_timeline_media: { count: 0 }
+                                        }
+                                    }
+                                };
                             }
                         }
                     }
-                } catch (e) {
-                    console.warn(`[IG Tools] Erro ao buscar web_profile_info para ${cleanUsername}:`, e);
+                } catch (_) { }
+
+                // 2. Obtém o ID do usuário (cache / lista / DOM / HTML)
+                let uid = getCachedUserId(cleanUsername);
+                if (!uid && typeof getUserId === 'function') {
+                    uid = await getUserId(cleanUsername);
                 }
 
-                // Fallback: se web_profile_info falhou/429, tenta obter ao menos o ID via getUserId (cache / DOM / HTML)
-                const fallbackId = await getUserId(cleanUsername);
-                if (fallbackId) {
+                // 3. Com o ID, busca via GraphQL Oficial (PolarisUserHoverCardContentV2Query)
+                if (uid && typeof executeGraphqlUserHoverCard === 'function') {
+                    try {
+                        const stats = await executeGraphqlUserHoverCard(uid);
+                        if (stats && (stats.followers !== null || stats.following !== null || stats.profilePicUrl)) {
+                            return {
+                                data: {
+                                    user: {
+                                        id: String(uid),
+                                        pk: String(uid),
+                                        username: cleanUsername,
+                                        full_name: stats.fullName || '',
+                                        biography: stats.biography || '',
+                                        is_private: Boolean(stats.isPrivate),
+                                        profile_pic_url: stats.profilePicUrl || null,
+                                        edge_followed_by: { count: Number(stats.followers) || 0 },
+                                        edge_follow: { count: Number(stats.following) || 0 },
+                                        edge_owner_to_timeline_media: { count: Number(stats.mediaCount) || 0 }
+                                    }
+                                }
+                            };
+                        }
+                    } catch (e) {
+                        console.warn(`[IG Tools] Falha no GraphQL HoverCard para ${cleanUsername}:`, e);
+                    }
+                }
+
+                // 4. Fallback HTML da página do perfil (extrai contagens e dados embutidos)
+                try {
+                    const profileRes = await fetch(`https://www.instagram.com/${encodeURIComponent(cleanUsername)}/`, {
+                        credentials: 'include',
+                        cache: 'no-store'
+                    });
+                    if (profileRes.ok) {
+                        const html = await profileRes.text();
+                        let foundId = uid;
+                        if (!foundId) {
+                            const idMatch = html.match(/"(?:props_id|user_id|target_id|profile_id)"\s*:\s*"?(\d{6,})"?/i) ||
+                                            html.match(/"id"\s*:\s*"(\d{6,})"/i) ||
+                                            html.match(/"pk"\s*:\s*"(\d{6,})"/i);
+                            if (idMatch?.[1]) {
+                                foundId = idMatch[1];
+                                setCachedUserId(cleanUsername, foundId);
+                            }
+                        }
+
+                        const followersMatch = html.match(/"(?:follower_count|edge_followed_by)"\s*:\s*(?:{"count"\s*:\s*)?(\d+)/i);
+                        const followingMatch = html.match(/"(?:following_count|edge_follow)"\s*:\s*(?:{"count"\s*:\s*)?(\d+)/i);
+                        const picMatch = html.match(/"profile_pic_url(?:_hd)?"\s*:\s*"([^"]+)"/i);
+                        const privMatch = html.match(/"is_private"\s*:\s*(true|false)/i);
+
+                        const followers = followersMatch ? parseInt(followersMatch[1], 10) : 0;
+                        const following = followingMatch ? parseInt(followingMatch[1], 10) : 0;
+                        const pic = picMatch ? picMatch[1].replace(/\\u0026/g, '&') : null;
+                        const isPriv = privMatch ? (privMatch[1].toLowerCase() === 'true') : false;
+
+                        if (foundId || followers > 0 || following > 0) {
+                            return {
+                                data: {
+                                    user: {
+                                        id: String(foundId || getActorId() || ''),
+                                        pk: String(foundId || getActorId() || ''),
+                                        username: cleanUsername,
+                                        is_private: isPriv,
+                                        profile_pic_url: pic,
+                                        edge_followed_by: { count: followers },
+                                        edge_follow: { count: following },
+                                        edge_owner_to_timeline_media: { count: 0 }
+                                    }
+                                }
+                            };
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`[IG Tools] Falha ao extrair perfil via HTML para ${cleanUsername}:`, e);
+                }
+
+                // 5. Fallback com ID resolvido
+                if (uid) {
                     return {
                         data: {
                             user: {
-                                id: fallbackId,
+                                id: String(uid),
+                                pk: String(uid),
                                 username: cleanUsername,
                                 edge_follow: { count: 0 },
                                 edge_followed_by: { count: 0 }
@@ -1818,6 +1936,7 @@
                         }
                     };
                 }
+
                 return null;
             }
 
@@ -3052,7 +3171,9 @@
                 toggleRgbBorder(settings.rgbBorder);
                 toggleAnonymousStories(settings.anonymousStories);
                 toggleUseApi(settings.useApi);
-                // Não precisa de uma função toggle separada para validateProfileStatus, pois ele não tem efeito visual imediato.
+                if (settings.validateProfileStatus && typeof validateCurrentPagePrivacy === 'function') {
+                    validateCurrentPagePrivacy();
+                }
             }
 
             // --- LÓGICA PARA ATALHOS ---
@@ -3543,12 +3664,27 @@
                             }
 
                             .menu-item-button {
-                                background: #f8f9fa; border: 1px solid #dbdbdb; padding: 10px; border-radius: 8px; cursor: pointer; text-align: left; font-size: 16px; color: black;
+                                background: #f8f9fa; border: 1px solid #dbdbdb; padding: 10px; border-radius: 8px; cursor: pointer; text-align: left; font-size: 15px; color: black; transition: background 0.2s, border-color 0.2s;
                             }
+                            .dark-mode .submenu-modal .menu-item-button,
+                            .dark-mode #settingsModal .menu-item-button,
                             .dark-mode #reelsSubmenuModal .menu-item-button {
                                 background: #262626 !important;
-                                color: white !important;
+                                color: #ffffff !important;
                                 border-color: #555 !important;
+                            }
+                            .dark-mode .submenu-modal .menu-item-button:hover,
+                            .dark-mode #settingsModal .menu-item-button:hover,
+                            .dark-mode #reelsSubmenuModal .menu-item-button:hover {
+                                background: #333333 !important;
+                            }
+                            .dark-mode #googleLoginBtn {
+                                background: #262626 !important;
+                                color: #ffffff !important;
+                                border: 1px solid #555 !important;
+                            }
+                            .dark-mode #googleLoginBtn:hover {
+                                background: #333333 !important;
                             }
                             .tab-container {
                                 display: flex;
@@ -4842,44 +4978,64 @@
                                 for (const mUser of missingOnPage) {
                                     try {
                                         const clean = mUser.username.toLowerCase();
-                                        const res = await fetch(`https://www.instagram.com/api/v1/web/search/topsearch/?context=blended&query=${encodeURIComponent(mUser.username)}`, {
-                                            headers: getApiHeaders(),
-                                            credentials: 'include'
-                                        });
-                                        if (res.ok) {
-                                            const sData = await res.json();
-                                            const exact = sData.users?.find(item => item?.user?.username?.toLowerCase() === clean);
-                                            if (exact?.user) {
-                                                const pic = exact.user.profile_pic_url || exact.user.profile_pic_url_hd;
-                                                if (pic) {
-                                                    mUser.photoUrl = pic;
-                                                    if (exact.user.pk) mUser.pk = String(exact.user.pk);
-                                                    if (exact.user.full_name && !mUser.fullName) mUser.fullName = exact.user.full_name;
+                                        let pic = null;
+                                        let fullName = null;
+                                        let pk = mUser.pk;
 
-                                                    // Atualiza diretamente no elemento visual da tabela
-                                                    const rowEl = container.querySelector(`tr[data-username="${mUser.username}"]`);
-                                                    if (rowEl) {
-                                                        const imgEl = rowEl.querySelector('img');
-                                                        if (imgEl) imgEl.src = pic;
-                                                        if (exact.user.full_name) {
-                                                            const nameEl = rowEl.querySelector('span[style*="font-size: 12px"]');
-                                                            if (nameEl) nameEl.innerText = exact.user.full_name;
-                                                        }
-                                                        if (exact.user.pk) {
-                                                            const pkEl = rowEl.querySelectorAll('td')[2];
-                                                            if (pkEl && pkEl.innerText === '-') pkEl.innerText = String(exact.user.pk);
-                                                        }
-                                                    }
+                                        // 1. Tenta GraphQL se já tiver o PK
+                                        if (pk && typeof executeGraphqlUserHoverCard === 'function') {
+                                            const stats = await executeGraphqlUserHoverCard(pk);
+                                            if (stats?.profilePicUrl) {
+                                                pic = stats.profilePicUrl;
+                                                fullName = stats.fullName;
+                                            }
+                                        }
 
-                                                    // Salva no cache em memória
-                                                    if (typeof cachedData !== 'undefined' && cachedData?.userDetails) {
-                                                        cachedData.userDetails.set(clean, { username: mUser.username, photoUrl: pic, id: mUser.pk, fullName: mUser.fullName });
-                                                    }
+                                        // 2. Se não encontrou, tenta topsearch (com proteção contra 429)
+                                        if (!pic) {
+                                            const res = await fetch(`https://www.instagram.com/api/v1/web/search/topsearch/?context=blended&query=${encodeURIComponent(mUser.username)}`, {
+                                                headers: getApiHeaders(),
+                                                credentials: 'include'
+                                            });
+                                            if (res.status === 429) {
+                                                break; // Para o loop imediatamente se o Instagram retornar 429
+                                            }
+                                            if (res.ok) {
+                                                const sData = await res.json();
+                                                const exact = sData.users?.find(item => item?.user?.username?.toLowerCase() === clean);
+                                                if (exact?.user) {
+                                                    pic = exact.user.profile_pic_url || exact.user.profile_pic_url_hd;
+                                                    if (exact.user.pk) pk = String(exact.user.pk);
+                                                    if (exact.user.full_name) fullName = exact.user.full_name;
                                                 }
                                             }
                                         }
+
+                                        if (pic) {
+                                            mUser.photoUrl = pic;
+                                            if (pk) mUser.pk = String(pk);
+                                            if (fullName && !mUser.fullName) mUser.fullName = fullName;
+
+                                            const rowEl = container.querySelector(`tr[data-username="${mUser.username}"]`);
+                                            if (rowEl) {
+                                                const imgEl = rowEl.querySelector('img');
+                                                if (imgEl) imgEl.src = pic;
+                                                if (fullName) {
+                                                    const nameEl = rowEl.querySelector('span[style*="font-size: 12px"]');
+                                                    if (nameEl) nameEl.innerText = fullName;
+                                                }
+                                                if (pk) {
+                                                    const pkEl = rowEl.querySelectorAll('td')[2];
+                                                    if (pkEl && pkEl.innerText === '-') pkEl.innerText = String(pk);
+                                                }
+                                            }
+
+                                            if (typeof cachedData !== 'undefined' && cachedData?.userDetails) {
+                                                cachedData.userDetails.set(clean, { username: mUser.username, photoUrl: pic, id: pk, fullName: mUser.fullName });
+                                            }
+                                        }
                                     } catch (_) { }
-                                    await new Promise(r => setTimeout(r, 120));
+                                    await new Promise(r => setTimeout(r, 150));
                                 }
                             })();
                         }
@@ -12089,7 +12245,7 @@
                                     if (privacyCache.has(u)) {
                                         renderBadge(privacyCache.get(u));
                                     } else {
-                                        const isPrivate = await checkProfilePrivacy(u);
+                                        const isPrivate = await checkProfilePrivacy(u, badgeSpan);
                                         if (isPrivate !== null) {
                                             renderBadge(isPrivate);
                                         }
@@ -12860,8 +13016,17 @@
                     };
 
                     document.getElementById("settingsValidateProfileToggle").onchange = (e) => {
-                        saveSettings({ validateProfileStatus: e.target.checked });
-                        showToast(`Validação de Status: ${e.target.checked ? 'ON' : 'OFF'}`);
+                        const isChecked = e.target.checked;
+                        saveSettings({ validateProfileStatus: isChecked });
+                        showToast(`Validação de Status: ${isChecked ? 'ON' : 'OFF'}`);
+                        if (isChecked) {
+                            if (typeof validateCurrentPagePrivacy === 'function') {
+                                validateCurrentPagePrivacy();
+                            }
+                        } else {
+                            document.querySelectorAll('.ig-privacy-badge').forEach(b => b.remove());
+                            document.querySelectorAll('[data-privacy-processed]').forEach(el => el.removeAttribute('data-privacy-processed'));
+                        }
                     };
 
                     document.getElementById("settingsVoiceBtn").onclick = () => {
@@ -15792,17 +15957,18 @@
             setInterval(() => {
                 if (window.location.href.includes("instagram.com")) {
                     injectMenu();
-                    document.querySelectorAll('article:not([data-privacy-processed="true"])').forEach(processArticlePrivacy);
+                    if (loadSettings().validateProfileStatus) {
+                        validateCurrentPagePrivacy();
+                    }
                 }
             }, 1000);
 
-            // --- VERIFICAÇÃO DE PRIVACIDADE DO PERFIL ---
+            // --- VERIFICAÇÃO DE PRIVACIDADE DO PERFIL (STATUS P/A) ---
             const privacyCache = new Map();
             const privacyPending = new Map();
             const privacyErrorCooldown = new Map();
             const privacyQueue = [];
             let isProcessingQueue = false;
-            let globalRateLimitResetTime = 0;
 
             async function processPrivacyQueue() {
                 if (isProcessingQueue) return;
@@ -15816,59 +15982,217 @@
                     } catch (e) {
                         task.reject(e);
                     }
-                    // Cooldown de 1.5 segundos entre as requisições para evitar rate limit (429)
-                    await new Promise(r => setTimeout(r, 1500));
+                    await new Promise(r => setTimeout(r, 200));
                 }
 
                 isProcessingQueue = false;
             }
 
-            function checkProfilePrivacy(username) {
+            function getProfilePageUsername() {
+                try {
+                    const path = window.location.pathname;
+                    const parts = path.split('/').filter(Boolean);
+                    if (parts.length === 1) {
+                        const u = parts[0].toLowerCase();
+                        const nonUsernames = ['explore', 'reels', 'stories', 'direct', 'accounts', 'emails', 'developer', 'about', 'legal', 'privacy', 'p', 'reel'];
+                        if (!nonUsernames.includes(u) && /^[a-zA-Z0-9._]+$/.test(u)) {
+                            return u;
+                        }
+                    }
+                } catch (_) { }
+                return null;
+            }
+
+            // Extrai o status de privacidade diretamente da árvore React da página (0 requisições, sem REST)
+            function extractPrivacyFromReact(element) {
+                if (!element) return null;
+
+                const nodesToScan = [];
+                if (Array.isArray(element)) {
+                    nodesToScan.push(...element);
+                } else {
+                    nodesToScan.push(element);
+                    if (element.querySelectorAll) {
+                        const imgs = element.querySelectorAll('header img, img');
+                        for (const img of imgs) nodesToScan.push(img);
+                        const links = element.querySelectorAll('header a, a');
+                        for (const a of links) nodesToScan.push(a);
+                    }
+                }
+
+                function scan(val, depth) {
+                    if (!val || depth > 6 || typeof val !== 'object') return null;
+                    if (typeof val.is_private === 'boolean') return val.is_private;
+                    if (typeof val.isPrivate === 'boolean') return val.isPrivate;
+
+                    if (val.user && typeof val.user.is_private === 'boolean') return val.user.is_private;
+                    if (val.user && typeof val.user.isPrivate === 'boolean') return val.user.isPrivate;
+                    if (val.owner && typeof val.owner.is_private === 'boolean') return val.owner.is_private;
+                    if (val.owner && typeof val.owner.isPrivate === 'boolean') return val.owner.isPrivate;
+                    if (val.author && typeof val.author.is_private === 'boolean') return val.author.is_private;
+                    if (val.user_dict && typeof val.user_dict.is_private === 'boolean') return val.user_dict.is_private;
+                    if (val.post?.user && typeof val.post.user.is_private === 'boolean') return val.post.user.is_private;
+                    if (val.post?.owner && typeof val.post.owner.is_private === 'boolean') return val.post.owner.is_private;
+                    if (val.item?.user && typeof val.item.user.is_private === 'boolean') return val.item.user.is_private;
+                    if (val.media?.user && typeof val.media.user.is_private === 'boolean') return val.media.user.is_private;
+                    if (val.data?.user && typeof val.data.user.is_private === 'boolean') return val.data.user.is_private;
+
+                    const priorityKeys = ['user', 'owner', 'author', 'user_dict', 'item', 'post', 'media', 'data', 'props', 'targetUser'];
+                    for (const k of priorityKeys) {
+                        if (val[k] && typeof val[k] === 'object') {
+                            const res = scan(val[k], depth + 1);
+                            if (res !== null) return res;
+                        }
+                    }
+
+                    if (val.children) {
+                        if (Array.isArray(val.children)) {
+                            for (const c of val.children) {
+                                if (c && typeof c === 'object') {
+                                    const res = scan(c, depth + 1);
+                                    if (res !== null) return res;
+                                }
+                            }
+                        } else if (typeof val.children === 'object') {
+                            const res = scan(val.children, depth + 1);
+                            if (res !== null) return res;
+                        }
+                    }
+
+                    return null;
+                }
+
+                for (const node of nodesToScan) {
+                    if (!node) continue;
+                    try {
+                        const propsKey = Object.keys(node).find(k => k.startsWith('__reactProps$'));
+                        if (propsKey && node[propsKey]) {
+                            const found = scan(node[propsKey], 0);
+                            if (found !== null) return found;
+                        }
+
+                        const fiberKey = Object.keys(node).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+                        if (fiberKey && node[fiberKey]) {
+                            let curr = node[fiberKey];
+                            let steps = 0;
+                            while (curr && steps < 25) {
+                                if (curr.memoizedProps) {
+                                    const found = scan(curr.memoizedProps, 0);
+                                    if (found !== null) return found;
+                                }
+                                if (curr.memoizedState) {
+                                    const found = scan(curr.memoizedState, 0);
+                                    if (found !== null) return found;
+                                }
+                                curr = curr.return;
+                                steps++;
+                            }
+                        }
+                    } catch (_) { }
+                }
+
+                return null;
+            }
+
+            function checkProfilePrivacy(username, ...domElements) {
                 if (!loadSettings().validateProfileStatus) {
                     return Promise.resolve(null);
                 }
-                if (privacyCache.has(username)) {
-                    return Promise.resolve(privacyCache.get(username));
-                }
-                if (Date.now() < globalRateLimitResetTime) {
+                const cleanUsername = String(username || '').trim().toLowerCase().replace(/^@/, '');
+                if (!cleanUsername) {
                     return Promise.resolve(null);
                 }
-                if (privacyErrorCooldown.has(username) && Date.now() - privacyErrorCooldown.get(username) < 60000) {
-                    return Promise.resolve(null);
+
+                // 1. Cache em memória
+                if (privacyCache.has(cleanUsername)) {
+                    return Promise.resolve(privacyCache.get(cleanUsername));
                 }
-                if (privacyPending.has(username)) {
-                    return privacyPending.get(username);
+
+                // 2. Extração instantânea do React Fiber/Props (zero requisições de rede!)
+                for (const el of domElements) {
+                    if (!el) continue;
+                    const fromReact = extractPrivacyFromReact(el);
+                    if (typeof fromReact === 'boolean') {
+                        privacyCache.set(cleanUsername, fromReact);
+                        return Promise.resolve(fromReact);
+                    }
+                }
+
+                // 3. Verificação pelo DOM se for o perfil atualmente aberto
+                const currentProfile = getProfilePageUsername();
+                if (currentProfile === cleanUsername) {
+                    const bodyText = (document.body && document.body.innerText) || '';
+                    const isPrivateDom = bodyText.includes('Esta conta é privada') ||
+                                         bodyText.includes('This account is private') ||
+                                         bodyText.includes('Esta cuenta es privada') ||
+                                         Boolean(document.querySelector('svg[aria-label*="privad"], svg[aria-label*="Private"], svg[aria-label*="lock"]'));
+                    if (isPrivateDom) {
+                        privacyCache.set(cleanUsername, true);
+                        return Promise.resolve(true);
+                    }
+                    const hasVisiblePosts = Boolean(document.querySelector('main a[href*="/p/"], main a[href*="/reel/"]'));
+                    if (hasVisiblePosts) {
+                        privacyCache.set(cleanUsername, false);
+                        return Promise.resolve(false);
+                    }
+                }
+
+                // 4. Se já há requisição pendente
+                if (privacyPending.has(cleanUsername)) {
+                    return privacyPending.get(cleanUsername);
+                }
+
+                // 5. Cooldown para evitar loops em caso de falha
+                if (privacyErrorCooldown.has(cleanUsername) && Date.now() - privacyErrorCooldown.get(cleanUsername) < 45000) {
+                    return Promise.resolve(null);
                 }
 
                 const promise = new Promise((resolve, reject) => {
                     privacyQueue.push({
                         fn: async () => {
-                            if (Date.now() < globalRateLimitResetTime) {
-                                return null;
-                            }
                             try {
-                                const appID = '936619743392459';
-                                const response = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, {
-                                    headers: { 'X-IG-App-ID': appID }
-                                });
-                                if (!response.ok) {
-                                    if (response.status === 429) {
-                                        console.warn("[IG Tools] Taxa de requisições excedida (429). Pausando consultas por 2 minutos.");
-                                        globalRateLimitResetTime = Date.now() + 120000; // Bloqueia por 2 minutos
+                                // Tentativa 1: GraphQL Oficial PolarisUserHoverCardContentV2Query
+                                let uid = getCachedUserId(cleanUsername);
+                                if (!uid && typeof getUserId === 'function') {
+                                    uid = await getUserId(cleanUsername);
+                                }
+                                if (uid && typeof executeGraphqlUserHoverCard === 'function') {
+                                    try {
+                                        const stats = await executeGraphqlUserHoverCard(uid);
+                                        if (stats && typeof stats.isPrivate === 'boolean') {
+                                            privacyCache.set(cleanUsername, stats.isPrivate);
+                                            privacyErrorCooldown.delete(cleanUsername);
+                                            return stats.isPrivate;
+                                        }
+                                    } catch (_) { }
+                                }
+
+                                // Tentativa 2: HTML direto da página do perfil (extrai dados Relay/GraphQL embutidos)
+                                try {
+                                    const profileRes = await fetch(`https://www.instagram.com/${encodeURIComponent(cleanUsername)}/`, {
+                                        credentials: 'include'
+                                    });
+                                    if (profileRes.ok) {
+                                        const html = await profileRes.text();
+                                        const match = html.match(/"is_private"\s*:\s*(true|false)/i);
+                                        if (match) {
+                                            const isPrivate = match[1].toLowerCase() === 'true';
+                                            privacyCache.set(cleanUsername, isPrivate);
+                                            privacyErrorCooldown.delete(cleanUsername);
+                                            return isPrivate;
+                                        }
+                                        if (html.includes('Esta conta é privada') || html.includes('This account is private')) {
+                                            privacyCache.set(cleanUsername, true);
+                                            privacyErrorCooldown.delete(cleanUsername);
+                                            return true;
+                                        }
                                     }
-                                    throw new Error(`HTTP ${response.status}`);
-                                }
-                                const data = await response.json();
-                                const isPrivate = data.data?.user?.is_private;
-                                if (isPrivate !== undefined) {
-                                    privacyCache.set(username, isPrivate);
-                                    privacyErrorCooldown.delete(username);
-                                    return isPrivate;
-                                }
-                                throw new Error("Dados inválidos da API");
+                                } catch (_) { }
+
+                                privacyErrorCooldown.set(cleanUsername, Date.now());
+                                return null;
                             } catch (e) {
-                                console.error(`[IG Tools] Erro ao obter privacidade para ${username}:`, e);
-                                privacyErrorCooldown.set(username, Date.now());
+                                privacyErrorCooldown.set(cleanUsername, Date.now());
                                 return null;
                             }
                         },
@@ -15877,48 +16201,132 @@
                     });
                 });
 
-                privacyPending.set(username, promise);
+                privacyPending.set(cleanUsername, promise);
                 promise.finally(() => {
-                    privacyPending.delete(username);
+                    privacyPending.delete(cleanUsername);
                 });
 
                 processPrivacyQueue();
                 return promise;
             }
 
-            function getPostAuthorElement(article) {
-                const header = article.querySelector('header');
-                if (header) {
-                    const links = header.querySelectorAll('a[href]');
-                    for (const link of links) {
-                        const href = link.getAttribute('href');
-                        if (!href) continue;
-                        const cleanPath = href.split('?')[0].split('#')[0];
-                        const parts = cleanPath.split('/').filter(Boolean);
-                        if (parts.length === 1) {
-                            const username = parts[0];
-                            if (/^[a-zA-Z0-9._]+$/.test(username)) {
-                                const text = link.textContent.trim();
-                                if (text === username) {
-                                    return { username, element: link };
-                                }
-                            }
+            function processProfilePagePrivacy() {
+                if (!loadSettings().validateProfileStatus) {
+                    const badge = document.querySelector('.ig-profile-header-privacy-badge');
+                    if (badge) badge.remove();
+                    return;
+                }
+
+                const username = getProfilePageUsername();
+                if (!username) return;
+
+                const header = document.querySelector('header');
+                if (!header) return;
+
+                // Encontra o elemento do título do perfil com o username
+                let titleEl = null;
+                const headings = header.querySelectorAll('h2, h1');
+                for (const h of headings) {
+                    const text = h.textContent.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase();
+                    if (text === username || text.startsWith(username)) {
+                        titleEl = h;
+                        break;
+                    }
+                }
+                if (!titleEl) {
+                    for (const el of header.querySelectorAll('span, div')) {
+                        const text = el.textContent.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase();
+                        if (text === username && el.children.length === 0) {
+                            titleEl = el;
+                            break;
                         }
                     }
                 }
-                const links = article.querySelectorAll('a[href]');
+                if (!titleEl) return;
+
+                let existingBadge = header.querySelector('.ig-profile-header-privacy-badge');
+                if (existingBadge) {
+                    if (existingBadge.getAttribute('data-badge-username') === username) return;
+                    existingBadge.remove();
+                }
+
+                const renderBadge = (isPrivate) => {
+                    if (!header.contains(titleEl)) return;
+                    if (header.querySelector('.ig-profile-header-privacy-badge')) return;
+
+                    const badge = document.createElement('span');
+                    badge.className = 'ig-privacy-badge ig-profile-header-privacy-badge';
+                    badge.setAttribute('data-badge-username', username);
+                    badge.style.cssText = `
+                        margin-left: 8px;
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 3px 8px;
+                        font-size: 13px;
+                        font-weight: 700;
+                        border-radius: 6px;
+                        color: #ffffff;
+                        vertical-align: middle;
+                        background-color: ${isPrivate ? '#e1306c' : '#28a745'};
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                        cursor: default;
+                        user-select: none;
+                    `;
+                    badge.innerText = isPrivate ? 'P' : 'A';
+                    badge.title = isPrivate ? 'Perfil Privado (P)' : 'Perfil Aberto / Público (A)';
+
+                    if (titleEl.nextSibling) {
+                        titleEl.parentNode.insertBefore(badge, titleEl.nextSibling);
+                    } else if (titleEl.parentNode) {
+                        titleEl.parentNode.appendChild(badge);
+                    } else {
+                        titleEl.appendChild(badge);
+                    }
+                };
+
+                if (privacyCache.has(username)) {
+                    renderBadge(privacyCache.get(username));
+                } else {
+                    checkProfilePrivacy(username, titleEl, header).then(isPrivate => {
+                        if (isPrivate !== null) {
+                            renderBadge(isPrivate);
+                        }
+                    });
+                }
+            }
+
+            function getPostAuthorElement(article) {
+                const header = article.querySelector('header') || article;
+                const links = header.querySelectorAll('a[href]');
+                const systemPaths = ['explore', 'reels', 'stories', 'direct', 'accounts', 'p', 'reel', 'tv'];
+
                 for (const link of links) {
                     const href = link.getAttribute('href');
                     if (!href) continue;
                     const cleanPath = href.split('?')[0].split('#')[0];
                     const parts = cleanPath.split('/').filter(Boolean);
                     if (parts.length === 1) {
-                        const username = parts[0];
-                        if (/^[a-zA-Z0-9._]+$/.test(username)) {
-                            const text = link.textContent.trim();
-                            if (text === username) {
+                        const username = parts[0].toLowerCase();
+                        if (!systemPaths.includes(username) && /^[a-zA-Z0-9._]+$/.test(username)) {
+                            const text = link.textContent.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase();
+                            if (text.includes(username) || text === username) {
                                 return { username, element: link };
                             }
+                        }
+                    }
+                }
+
+                // Fallback para qualquer link de perfil no cabeçalho
+                for (const link of links) {
+                    const href = link.getAttribute('href');
+                    if (!href) continue;
+                    const cleanPath = href.split('?')[0].split('#')[0];
+                    const parts = cleanPath.split('/').filter(Boolean);
+                    if (parts.length === 1) {
+                        const username = parts[0].toLowerCase();
+                        if (!systemPaths.includes(username) && /^[a-zA-Z0-9._]+$/.test(username)) {
+                            return { username, element: link };
                         }
                     }
                 }
@@ -15926,9 +16334,7 @@
             }
 
             async function processArticlePrivacy(article) {
-                // Verifica se a validação de perfil está ativada nas configurações
                 if (!loadSettings().validateProfileStatus) return;
-
                 if (article.getAttribute('data-privacy-processed') === 'true') return;
 
                 const authorInfo = getPostAuthorElement(article);
@@ -15937,13 +16343,14 @@
                 const { username, element } = authorInfo;
                 article.setAttribute('data-privacy-processed', 'true');
 
-                const isPrivate = await checkProfilePrivacy(username);
+                // Passa tanto o link quanto o artigo para extração de React (sem rede!)
+                const isPrivate = await checkProfilePrivacy(username, element, article);
                 if (isPrivate === null) {
                     article.removeAttribute('data-privacy-processed');
                     return;
                 }
 
-                if (element.querySelector('.ig-privacy-badge')) return;
+                if (element.querySelector('.ig-privacy-badge') || element.parentElement?.querySelector('.ig-privacy-badge')) return;
 
                 const badge = document.createElement('span');
                 badge.className = 'ig-privacy-badge';
@@ -15958,19 +16365,95 @@
                     border-radius: 4px;
                     color: #ffffff;
                     vertical-align: middle;
+                    background-color: ${isPrivate ? '#e1306c' : '#28a745'};
+                    user-select: none;
+                    cursor: default;
                 `;
+                badge.innerText = isPrivate ? 'P' : 'A';
+                badge.title = isPrivate ? 'Perfil Privado (P)' : 'Perfil Aberto / Público (A)';
+                badge.addEventListener('click', (e) => e.stopPropagation());
 
-                if (isPrivate) {
-                    badge.innerText = 'P';
-                    badge.style.backgroundColor = '#e1306c';
-                    badge.title = 'Perfil Privado';
+                if (element.nextSibling) {
+                    element.parentNode.insertBefore(badge, element.nextSibling);
+                } else if (element.parentNode) {
+                    element.parentNode.appendChild(badge);
                 } else {
-                    badge.innerText = 'A';
-                    badge.style.backgroundColor = '#28a745';
-                    badge.title = 'Perfil Público';
+                    element.appendChild(badge);
                 }
+            }
 
-                element.appendChild(badge);
+            function processDialogPrivacy() {
+                if (!loadSettings().validateProfileStatus) return;
+                const dialogs = document.querySelectorAll('div[role="dialog"]');
+                if (!dialogs.length) return;
+
+                dialogs.forEach(dialog => {
+                    if (dialog.closest('.assistive-menu') || dialog.closest('.submenu-modal')) return;
+
+                    const userLinks = dialog.querySelectorAll('a[href]:not([data-privacy-processed="true"])');
+                    const systemPaths = ['explore', 'reels', 'stories', 'direct', 'accounts', 'p', 'reel'];
+
+                    userLinks.forEach(async (link) => {
+                        const href = link.getAttribute('href');
+                        if (!href) return;
+                        const cleanPath = href.split('?')[0].split('#')[0];
+                        const parts = cleanPath.split('/').filter(Boolean);
+                        if (parts.length === 1) {
+                            const username = parts[0].toLowerCase();
+                            if (systemPaths.includes(username) || !/^[a-zA-Z0-9._]+$/.test(username)) return;
+
+                            const text = link.textContent.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase();
+                            if (!text.includes(username)) return;
+
+                            link.setAttribute('data-privacy-processed', 'true');
+                            if (link.querySelector('.ig-privacy-badge') || link.parentElement?.querySelector('.ig-privacy-badge')) return;
+
+                            const isPrivate = await checkProfilePrivacy(username, link);
+                            if (isPrivate === null) {
+                                link.removeAttribute('data-privacy-processed');
+                                return;
+                            }
+
+                            if (link.querySelector('.ig-privacy-badge') || link.parentElement?.querySelector('.ig-privacy-badge')) return;
+
+                            const badge = document.createElement('span');
+                            badge.className = 'ig-privacy-badge';
+                            badge.style.cssText = `
+                                margin-left: 6px;
+                                display: inline-flex;
+                                align-items: center;
+                                justify-content: center;
+                                padding: 1px 5px;
+                                font-size: 10px;
+                                font-weight: bold;
+                                border-radius: 4px;
+                                color: #ffffff;
+                                vertical-align: middle;
+                                background-color: ${isPrivate ? '#e1306c' : '#28a745'};
+                                user-select: none;
+                                cursor: default;
+                            `;
+                            badge.innerText = isPrivate ? 'P' : 'A';
+                            badge.title = isPrivate ? 'Perfil Privado (P)' : 'Perfil Aberto / Público (A)';
+                            badge.addEventListener('click', (e) => e.stopPropagation());
+
+                            if (link.nextSibling) {
+                                link.parentNode.insertBefore(badge, link.nextSibling);
+                            } else if (link.parentNode) {
+                                link.parentNode.appendChild(badge);
+                            } else {
+                                link.appendChild(badge);
+                            }
+                        }
+                    });
+                });
+            }
+
+            function validateCurrentPagePrivacy() {
+                if (!loadSettings().validateProfileStatus) return;
+                processProfilePagePrivacy();
+                document.querySelectorAll('article:not([data-privacy-processed="true"])').forEach(processArticlePrivacy);
+                processDialogPrivacy();
             }
 
             // --- DOWNLOAD DE MÍDIA DO FEED E REELS ---
@@ -15985,8 +16468,10 @@
                                 addDownloadButtonToMedia(article);
                             });
 
-                            // Processa o status de privacidade para posts
-                            document.querySelectorAll('article:not([data-privacy-processed="true"])').forEach(processArticlePrivacy);
+                            // Processa status de privacidade na página
+                            if (loadSettings().validateProfileStatus) {
+                                validateCurrentPagePrivacy();
+                            }
                         }
                     });
                 });
@@ -15997,7 +16482,9 @@
                 });
 
                 // Varredura inicial de privacidade
-                document.querySelectorAll('article:not([data-privacy-processed="true"])').forEach(processArticlePrivacy);
+                if (loadSettings().validateProfileStatus) {
+                    validateCurrentPagePrivacy();
+                }
             }
 
             function addDownloadButtonToMedia(article) {

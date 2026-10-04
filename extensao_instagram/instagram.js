@@ -160,19 +160,19 @@
                                 },
                                 body: options.data || null
                             })
-                            .then(async (res) => {
-                                const text = await res.text();
-                                if (res.status >= 200 && res.status < 300) {
-                                    try { resolve(text ? JSON.parse(text) : {}); }
-                                    catch (e) { resolve(text); }
-                                } else {
-                                    reject(new Error(`HTTP ${res.status}: ${text}`));
-                                }
-                            })
-                            .catch((err) => {
-                                console.error("[IG Tools] Network Error Direct Fetch:", err);
-                                reject(err instanceof Error ? err : new Error(String(err)));
-                            });
+                                .then(async (res) => {
+                                    const text = await res.text();
+                                    if (res.status >= 200 && res.status < 300) {
+                                        try { resolve(text ? JSON.parse(text) : {}); }
+                                        catch (e) { resolve(text); }
+                                    } else {
+                                        reject(new Error(`HTTP ${res.status}: ${text}`));
+                                    }
+                                })
+                                .catch((err) => {
+                                    console.error("[IG Tools] Network Error Direct Fetch:", err);
+                                    reject(err instanceof Error ? err : new Error(String(err)));
+                                });
                         };
 
                         const httpHandler = (typeof GM_xmlhttpRequest !== 'undefined')
@@ -280,11 +280,49 @@
             function getActorId() {
                 try {
                     const rur = getCookie('rur') || '';
-                    const decoded = decodeURIComponent(rur);
-                    const match = decoded.match(/,\s*(\d{10,})\s*,/);
+                    const decoded = decodeURIComponent(rur).replace(/\\054/g, ',');
+                    const match = decoded.match(/,\s*(\d{5,15})\s*,/);
                     if (match && match[1]) return match[1];
                 } catch (_) { }
                 return getCookie('ds_user_id') || '';
+            }
+
+            function getLoggedInUsername() {
+                try {
+                    if (window._sharedData?.config?.viewer?.username) return window._sharedData.config.viewer.username.toLowerCase();
+                    if (window.__initialData?.data?.viewer?.username) return window.__initialData.data.viewer.username.toLowerCase();
+                    if (window.__cu?.username) return window.__cu.username.toLowerCase();
+
+                    // Se estiver no próprio perfil (detectado pelo botão "Editar perfil" ou similares no DOM)
+                    if (document.querySelector('a[href*="/accounts/edit/"]') || document.querySelector('a[href*="/archive/stories/"]')) {
+                        const h2 = document.querySelector('header h2, header h1, section main header h2');
+                        if (h2 && h2.textContent) {
+                            const u = h2.textContent.trim().toLowerCase();
+                            if (u && !u.includes(' ') && u.length >= 2) return u;
+                        }
+                        const firstSeg = window.location.pathname.split('/').filter(Boolean)[0];
+                        if (firstSeg && !['accounts', 'direct', 'explore', 'reels', 'stories'].includes(firstSeg.toLowerCase())) {
+                            return firstSeg.toLowerCase();
+                        }
+                    }
+
+                    // Avatar de perfil no menu lateral/navegação
+                    const navProfileLink = document.querySelector('div[role="navigation"] a[href^="/"][role="link"] img[alt*="perfil"], div[role="navigation"] a[href^="/"][role="link"] img[alt*="profile"], nav a[href^="/"] img[alt*="perfil"]');
+                    if (navProfileLink) {
+                        const href = navProfileLink.closest('a')?.getAttribute('href') || '';
+                        const clean = href.replace(/\//g, '').trim().toLowerCase();
+                        if (clean && !['accounts', 'direct', 'explore', 'reels', 'stories'].includes(clean)) return clean;
+                    }
+
+                    // Links de perfil com avatar próprio
+                    const selfLink = document.querySelector('a[href^="/"][role="link"]:has(img[data-testid="user-avatar"])');
+                    if (selfLink) {
+                        const href = selfLink.getAttribute('href') || '';
+                        const clean = href.replace(/\//g, '').trim().toLowerCase();
+                        if (clean && !['accounts', 'direct', 'explore', 'reels', 'stories'].includes(clean)) return clean;
+                    }
+                } catch (_) { }
+                return '';
             }
 
             function getDeviceId() {
@@ -358,12 +396,41 @@
                 return headers;
             }
 
+            function getMainWorldTokens() {
+                try {
+                    let dtsg = window.__fb_dtsg || window.DTSGInitialData?.token || (typeof window.DTSG?.getToken === 'function' ? window.DTSG.getToken() : '');
+                    if (!dtsg && typeof window.require === 'function') {
+                        try { dtsg = window.require('DTSGInitialData')?.token || ''; } catch (_) { }
+                    }
+                    let lsd = window.__lsd || window.LSD?.token || '';
+                    if (!lsd && typeof window.require === 'function') {
+                        try { lsd = window.require('LSD')?.token || ''; } catch (_) { }
+                    }
+                    const spin_r = window.__spin_r || window._spin_r || '';
+                    const spin_t = window.__spin_t || window._spin_t || '';
+                    const hsi = window.__hsi || '';
+                    const dyn = window.__dyn || '';
+                    const csr = window.__csr || '';
+
+                    return { dtsg, lsd, spin_r, spin_t, hsi, dyn, csr };
+                } catch (_) {
+                    return {};
+                }
+            }
+
             function getDtsgToken() {
                 try {
-                    if (window.DTSGInitialData?.token) return window.DTSGInitialData.token;
-                    if (window.DTSG?.getToken) return window.DTSG.getToken();
                     if (window.__fb_dtsg) return window.__fb_dtsg;
+                    if (window.DTSGInitialData?.token) return window.DTSGInitialData.token;
+                    if (typeof window.DTSG?.getToken === 'function') return window.DTSG.getToken();
+                    if (typeof window.require === 'function') {
+                        const reqToken = window.require('DTSGInitialData')?.token;
+                        if (reqToken) return reqToken;
+                    }
                 } catch (e) { }
+
+                const live = getMainWorldTokens();
+                if (live.dtsg) return live.dtsg;
 
                 const input = document.querySelector('input[name="fb_dtsg"]');
                 if (input?.value) return input.value;
@@ -374,31 +441,51 @@
                     const scripts = document.querySelectorAll('script');
                     for (const s of scripts) {
                         const txt = s.textContent || '';
-                        if (!txt || (!txt.includes('token') && !txt.includes('DTSG'))) continue;
-                        const m = txt.match(/\["DTSGInitialData",\[\],\{"token":"([^"]+)"\}/) ||
-                            txt.match(/"DTSGInitialData"[^>]*?"token":"([^"]+)"/) ||
-                            txt.match(/"token":"([a-zA-Z0-9_-]{10,}:\d+:\d+)"/) ||
-                            txt.match(/"dtsg":\{"token":"([^"]+)"\}/);
-                        if (m && m[1]) return m[1];
+                        if (!txt || (!txt.includes('token') && !txt.includes('DTSG') && !txt.includes('async_get_token'))) continue;
+                        const m = txt.match(/\["DTSGInitialData",\s*\[\],\s*\{"token"\s*:\s*"([^"]+)"/i) ||
+                            txt.match(/"DTSGInitialData"[^>]*?"token"\s*:\s*"([^"]+)"/i) ||
+                            txt.match(/(?:DTSGInitialData|DTSGInitData|dtsg)[^]*?"token"\s*:\s*"([a-zA-Z0-9_\-\:]{20,})"/i) ||
+                            txt.match(/"async_get_token"\s*:\s*"([a-zA-Z0-9_\-\:]{20,})"/i) ||
+                            txt.match(/"token"\s*:\s*"([a-zA-Z0-9_\-\:]{20,})"/);
+                        if (m && m[1]) {
+                            window.__fb_dtsg = m[1];
+                            return m[1];
+                        }
                     }
                 } catch (e) { }
 
                 try {
                     const html = document.documentElement.innerHTML;
-                    const m = html.match(/"token":"([a-zA-Z0-9_-]{10,}:\d+:\d+)"/) ||
-                        html.match(/\["DTSGInitialData",\[\],\{"token":"([^"]+)"\}/) ||
-                        html.match(/"DTSGInitialData"[^>]*?"token":"([^"]+)"/);
-                    if (m && m[1]) return m[1];
+                    const m = html.match(/\["DTSGInitialData",\s*\[\],\s*\{"token"\s*:\s*"([^"]+)"/i) ||
+                        html.match(/"DTSGInitialData"[^>]*?"token"\s*:\s*"([^"]+)"/i) ||
+                        html.match(/"async_get_token"\s*:\s*"([a-zA-Z0-9_\-\:]{20,})"/i) ||
+                        html.match(/(?:DTSGInitialData|DTSGInitData|dtsg)[^]*?"token"\s*:\s*"([a-zA-Z0-9_\-\:]{20,})"/i);
+                    if (m && m[1]) {
+                        window.__fb_dtsg = m[1];
+                        return m[1];
+                    }
                 } catch (e) { }
+
+                try {
+                    const cached = localStorage.getItem('ig_tools_fb_dtsg');
+                    if (cached) return cached;
+                } catch (_) { }
 
                 return '';
             }
 
             function getLsdToken() {
                 try {
-                    if (window.LSD?.token) return window.LSD.token;
                     if (window.__lsd) return window.__lsd;
+                    if (window.LSD?.token) return window.LSD.token;
+                    if (typeof window.require === 'function') {
+                        const reqLsd = window.require('LSD')?.token;
+                        if (reqLsd) return reqLsd;
+                    }
                 } catch (e) { }
+
+                const live = getMainWorldTokens();
+                if (live.lsd) return live.lsd;
 
                 const input = document.querySelector('input[name="lsd"]');
                 if (input?.value) return input.value;
@@ -408,19 +495,31 @@
                     for (const s of scripts) {
                         const txt = s.textContent || '';
                         if (!txt || !txt.includes('LSD')) continue;
-                        const m = txt.match(/\["LSD",\[\],\{"token":"([^"]+)"\}/) ||
-                            txt.match(/"LSDInitialData"[^>]*?"token":"([^"]+)"/) ||
-                            txt.match(/"lsd":"([^"]+)"/);
-                        if (m && m[1]) return m[1];
+                        const m = txt.match(/\["LSD",\s*\[\],\s*\{"token"\s*:\s*"([^"]+)"/i) ||
+                            txt.match(/"LSDInitialData"[^>]*?"token"\s*:\s*"([^"]+)"/i) ||
+                            txt.match(/"lsd"\s*:\s*"([^"]+)"/i);
+                        if (m && m[1]) {
+                            window.__lsd = m[1];
+                            return m[1];
+                        }
                     }
                 } catch (e) { }
 
                 try {
                     const html = document.documentElement.innerHTML;
-                    const m = html.match(/\["LSD",\[\],\{"token":"([^"]+)"\}/) ||
-                        html.match(/"LSDInitialData"[^>]*?"token":"([^"]+)"/);
-                    if (m && m[1]) return m[1];
+                    const m = html.match(/\["LSD",\s*\[\],\s*\{"token"\s*:\s*"([^"]+)"/i) ||
+                        html.match(/"LSDInitialData"[^>]*?"token"\s*:\s*"([^"]+)"/i) ||
+                        html.match(/"lsd"\s*:\s*"([^"]+)"/i);
+                    if (m && m[1]) {
+                        window.__lsd = m[1];
+                        return m[1];
+                    }
                 } catch (e) { }
+
+                try {
+                    const cached = localStorage.getItem('ig_tools_lsd');
+                    if (cached) return cached;
+                } catch (_) { }
 
                 return '';
             }
@@ -448,6 +547,47 @@
                     spin_b: 'trunk',
                     spin_t: t || String(Math.floor(Date.now() / 1000))
                 };
+            }
+
+            function isValidInstagramUsername(uname) {
+                if (!uname || typeof uname !== 'string') return false;
+                const clean = uname.trim().toLowerCase();
+                if (clean.length < 1 || clean.length > 30) return false;
+
+                // Não pode ser formato de dimensão de imagem (ex: 192x192, 75x75, 120x120, etc.)
+                if (/^\d+x\d+$/i.test(clean)) return false;
+
+                // Apenas caracteres válidos no Instagram (letras, números, '.', '_')
+                if (!/^[a-zA-Z0-9._]+$/.test(clean)) return false;
+
+                // Não pode começar ou terminar com ponto, nem ter dois pontos consecutivos
+                if (clean.startsWith('.') || clean.endsWith('.') || clean.includes('..')) return false;
+
+                // Não pode ser puramente numérico com muitos dígitos (são IDs ou timestamps, não usernames)
+                if (/^\d+$/.test(clean) && clean.length > 4) return false;
+
+                // Termos HTML, CSS, JavaScript, bundles e palavras reservadas
+                const invalidWords = new Set([
+                    'hr', 'icon', 'preconnect', 'viewport', 'preload', 'stylesheet', 'anonymous',
+                    'manifest_base_uri', '_api', 'api', 'sorted', 'main', 'true', 'false', 'null',
+                    'undefined', 'default', 'components', 'flexbox', 'text', 'image', 'action',
+                    'bloks', 'const', 'button', 'screen', 'view', 'hide_story', 'close_friends',
+                    'story', 'stories', 'uri', 'url', 'src', 'width', 'height', 'scale', 'fit',
+                    'center', 'cover', 'style', 'color', 'background', 'border', 'padding', 'margin',
+                    'font', 'size', 'weight', 'bold', 'normal', 'auto', 'row', 'column', 'flex',
+                    'none', 'solid', 'hidden', 'visible', 'scroll', 'inherit', 'type', 'id', 'pk',
+                    'key', 'value', 'items', 'item', 'data', 'props', 'children', 'node', 'nodes',
+                    'edges', 'edge', 'account', 'accounts', 'profile', 'user', 'users', 'status',
+                    'title', 'graphql', 'query', 'variables', 'response', 'request', 'token',
+                    'csrf', 'session', 'hash', 'relay', 'polaris', 'facebook', 'meta', 'instagram',
+                    'threads', 'crossorigin', 'referrerpolicy', 'dns-prefetch', 'manifest',
+                    'undefined', 'avatar', 'img', 'div', 'span', 'script', 'link'
+                ]);
+
+                if (invalidWords.has(clean)) return false;
+                if (clean.endsWith('.js') || clean.endsWith('.css') || clean.endsWith('.png') || clean.endsWith('.jpg') || clean.endsWith('.webp')) return false;
+
+                return true;
             }
 
             function getInstagramFormToken(name) {
@@ -1065,7 +1205,41 @@
 
                 const hasErrors = Array.isArray(data?.errors) && data.errors.length > 0;
                 const mutationData = data?.data?.xdt_set_besties ?? data?.data?.set_besties ?? data?.data;
-                const success = response.ok && !hasErrors && (mutationData !== null && mutationData !== undefined);
+                let success = response.ok && !hasErrors && (mutationData !== null && mutationData !== undefined);
+
+                // Fallback automático REST caso GraphQL falhe
+                if (!success) {
+                    try {
+                        console.log("[IG Tools Besties] GraphQL não retornou sucesso, tentando fallback REST (friendships/set_besties/)...");
+                        const restParams = new URLSearchParams();
+                        if (addList.length > 0) restParams.append('add', JSON.stringify(addList));
+                        if (removeList.length > 0) restParams.append('remove', JSON.stringify(removeList));
+                        restParams.append('module', 'favorites_home');
+                        if (viewerId) restParams.append('_uid', viewerId);
+
+                        const csrf = getCookie('csrftoken') || '';
+                        const restRes = await fetch('https://www.instagram.com/api/v1/friendships/set_besties/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                                'X-CSRFToken': csrf,
+                                'X-IG-App-ID': '936619743392459',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: restParams.toString(),
+                            credentials: 'include'
+                        });
+                        if (restRes.ok) {
+                            const restData = await restRes.json();
+                            if (restData && (restData.status === 'ok' || restData.users)) {
+                                console.log("[IG Tools Besties] Sucesso via fallback REST!");
+                                return { response: restRes, success: true, data: restData, isRest: true };
+                            }
+                        }
+                    } catch (restErr) {
+                        console.warn("[IG Tools Besties] Fallback REST falhou:", restErr);
+                    }
+                }
 
                 return { response, success, data, rawText };
             }
@@ -1168,75 +1342,110 @@
             async function executeWbloksHideStory(uid, username, action = 'hide') {
                 if (!uid) return { success: false, error: 'no_uid' };
 
-                const viewerId = getCookie('ds_user_id') || getInstagramFormToken('av') || '';
-                const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
-                const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
-                const jazoest = computeJazoest(fbDtsg) || '26321';
-                const spin = getSpinParams();
                 const shouldUnhide = action === 'unhide';
+                console.log(`[IG Tools HideStory] Executando ${action} para @${username} (UID: ${uid})...`);
 
-                const params = {
-                    user_id: Number(uid) || uid,
-                    username: username,
-                    should_unhide: shouldUnhide
-                };
-
-                const url = 'https://www.instagram.com/async/wbloks/fetch/?appid=com.instagram.portable_settings.privacy.hide_story_from_screen.hide_story_from&type=action&__bkv=62077fc559de123afe03ebeb18194a88ba5d4e6874d9a07873752f3792adb8a0';
-
-                const dyn = getInstagramFormToken('__dyn') || '7xeUjG1mxu1syaxG4Vp41twpUnwgU7SbzEdF8vyUco2qwJyEiw50x609vCwjE1EEc87m0yE462mcw5Mx62G5UswoEcE7O2l0Fwqo5W1yw9O1lwxwQzXwae4UaEW2G0AEco5G0zK5o4q0HU1wEbUGdwtUeo9UaQ0Lo6-bwHwKG6Ufk0zU8oC1IwjUpwlAcwBwUQp1yU426V8aUuwm8jxK1mwa6bBK4o16UeUGq2Kq11whE984O0XEdoCQ1jw';
-                const csr = getInstagramFormToken('__csr') || 'iMB0FNX5N22j9eUHPWl8iGkV-eGXT8G5OPdP8VIzehP8KBh9pV9cNGWnip9Wh4BGfld8Dif4W4au9Irs8F4l9JbhAF4gJ7l95AFagBBBAkDiq9uVdppZDJykAch9QvAKiXjAV4HgzDBoLaaGh3Q68K9zGzay9pUC8yEj-dyWxe9zEGK9zXBzWzWyuQmbyWxaZ3KFEgxjhj1ycBzk5uVoGdgK8Ax3AAHV8K5GgG22maG1UUK1sweq7okw5ww08Ha00Y8EcU0vn2UKkMoQ18xgE0h1opw6yCtw2TU0hyS0Koqguw8Z0BwiUdK0qW5Eo6jw4dU3HwbWq3G8wTg1iV2By84iUy8guGywqodE2YrRrw1s2i1lG5o06KC02qu2K9g6rw0E5weS0fcw';
-                const hsdp = getInstagramFormToken('__hsdp') || 'gjMb_j1GkkCPcx4Pn9lEHV2NOEO99KXjQ3pyigsojx5AqI9xeGG48qx222boGwm9cwnoAV4A-FUK19gZ91G8woHuSHG4u7dChF4mmQ4B8fCK68G2GUC9wzz84e11wywkqwHxS3u6Ed98S19wDxedwm8qwk8szofoKU28wJwok32361dyUO0j-0pC2O0cPwpE0B20YEnwtE0mCw5Ywa20zi08-5o0Guew5fxvw2GA0gW09Iwww5GwmU887K0kO0BVk7nu';
-                const hblp = getInstagramFormToken('__hblp') || '0CG7E5u10wxzEb9bK9wAxedy69G1lwFBGm5ECiCiqim8K8yEyi2W5GAHyXEyjRwrAAq4Vk1ACg-eHxa9VbhFbGmUW4oyqWxny8hxeiCmECqUObz9ohwEGbxPx7Gmqmm9wkqz8hz8twTy-cgO4UiAzoiwSwDxedxam3-UmwYxe59US2u5kaK2K1czQ2O1tig8ES363CubCAz81fU7uiaw4hwIw8a1Lwt82zwGxS2W1Lw_wpE4e0N89U17U3Oxu1Sw2Yo0Hi5o2bwOwau1ewJwzwm8O2swuJ4wkU7u0HE1GoW0NE28xvwRxvw24o4x04ew5twah0q88awvU3xBwDwPwwyU6-0w85K1sxa8x_wr9k7nu';
-                const sjsp = getInstagramFormToken('__sjsp') || getInstagramFormToken('_sjsp') || 'gjMbXj2k4hhiragx4PmpmyLAb7az8ACXKjgdES8UA4M9S9wFwQx2226a1oswnoB4AijWwrAA6E2QS4Qfg5u2GUjwzw6cwl8';
-                const sParam = getInstagramFormToken('__s') || 'z3nm3y:imx696:n7ke1q';
-                const hsi = getInstagramFormToken('__hsi') || '7689958851794881797';
-                const hs = getInstagramFormToken('__hs') || '20722.HYP:instagram_web_pkg.2.1...0';
-
-                const body = new URLSearchParams({
-                    __d: 'www',
-                    __user: '0',
-                    __a: '1',
-                    __req: '24',
-                    __hs: hs,
-                    dpr: '2',
-                    __ccg: 'EXCELLENT',
-                    __rev: spin.spin_r || '1048569652',
-                    __s: sParam,
-                    __hsi: hsi,
-                    __dyn: dyn,
-                    __csr: csr,
-                    __hsdp: hsdp,
-                    __hblp: hblp,
-                    __sjsp: sjsp,
-                    _sjsp: sjsp,
-                    __comet_req: '7',
-                    server_timestamps: 'true',
-                    __spin_r: spin.spin_r || '1048569652',
-                    __spin_b: spin.spin_b || 'trunk',
-                    __spin_t: spin.spin_t || String(Math.floor(Date.now() / 1000)),
-                    __crn: 'comet.igweb.PolarisSettingsHideStoryAndLiveFromRoute',
-                    params: JSON.stringify(params)
-                });
-
-                if (fbDtsg) body.append('fb_dtsg', fbDtsg);
-                if (jazoest) body.append('jazoest', jazoest);
-                if (lsd) body.append('lsd', lsd);
-
-                const headers = {
-                    ...getApiHeaders(true),
-                    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-                    'X-FB-LSD': lsd
-                };
-
-                console.log(`[IG Tools HideStory] Enviando Wbloks (${action}):`, params);
-
+                // 1. TENTATIVA REST API (Oficial e Direto: block_friend_reel / unblock_friend_reel)
                 try {
+                    const endpoint = shouldUnhide
+                        ? `https://www.instagram.com/api/v1/friendships/unblock_friend_reel/${uid}/`
+                        : `https://www.instagram.com/api/v1/friendships/block_friend_reel/${uid}/`;
+
+                    const res = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {
+                            ...getApiHeaders(true),
+                            'X-CSRFToken': getCookie('csrftoken') || '',
+                            'X-IG-App-ID': '936619743392459',
+                            'X-Instagram-AJAX': '1',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Content-Type': 'application/x-www-form-urlencoded'
+                        },
+                        body: 'source=story_settings',
+                        credentials: 'include'
+                    });
+
+                    const json = await res.json().catch(() => null);
+                    console.log(`[IG Tools HideStory] Resposta REST ${endpoint}:`, res.status, json);
+                    if (res.ok && (json?.status === 'ok' || !json?.error)) {
+                        return { success: true, method: 'rest_friendship', data: json };
+                    }
+                } catch (e1) {
+                    console.warn('[IG Tools HideStory] Erro na tentativa REST friendship:', e1);
+                }
+
+                // 2. TENTATIVA REST set_reel_settings (Alternativa direta para batch/single)
+                try {
+                    const paramKey = shouldUnhide ? 'user_ids_to_unblock' : 'user_ids_to_block';
+                    const res = await fetch('https://www.instagram.com/api/v1/friendships/set_reel_settings/', {
+                        method: 'POST',
+                        headers: {
+                            ...getApiHeaders(true),
+                            'X-CSRFToken': getCookie('csrftoken') || '',
+                            'X-IG-App-ID': '936619743392459',
+                            'X-Instagram-AJAX': '1',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Content-Type': 'application/x-www-form-urlencoded'
+                        },
+                        body: `${paramKey}=${uid}`,
+                        credentials: 'include'
+                    });
+
+                    const json = await res.json().catch(() => null);
+                    console.log(`[IG Tools HideStory] Resposta set_reel_settings:`, res.status, json);
+                    if (res.ok && (json?.status === 'ok' || !json?.error)) {
+                        return { success: true, method: 'set_reel_settings', data: json };
+                    }
+                } catch (e2) {
+                    console.warn('[IG Tools HideStory] Erro no set_reel_settings:', e2);
+                }
+
+                // 3. TENTATIVA WBLOKS com tokens reais
+                try {
+                    const viewerId = getCookie('ds_user_id') || getInstagramFormToken('av') || '';
+                    const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                    const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                    const jazoest = computeJazoest(fbDtsg);
+                    const spin = getSpinParams();
+
+                    const params = {
+                        user_id: Number(uid) || uid,
+                        username: username,
+                        should_unhide: shouldUnhide
+                    };
+
+                    const url = 'https://www.instagram.com/async/wbloks/fetch/?appid=com.instagram.portable_settings.privacy.hide_story_from_screen.hide_story_from&type=action&__bkv=bebad2b121ef373e1847b0445ffd0ce996417496c088e54f6b5d2f5c6501842d';
+
+                    const body = new URLSearchParams({
+                        __d: 'www',
+                        __user: viewerId || '0',
+                        __a: '1',
+                        __req: '24',
+                        _comet_req: '7',
+                        __comet_req: '7',
+                        params: JSON.stringify(params)
+                    });
+
+                    if (viewerId) body.set('av', viewerId);
+                    if (fbDtsg) body.set('fb_dtsg', fbDtsg);
+                    if (jazoest) body.set('jazoest', jazoest);
+                    if (lsd) body.set('lsd', lsd);
+                    if (spin.spin_r) body.set('_spin_r', spin.spin_r);
+                    if (spin.spin_t) body.set('_spin_t', spin.spin_t);
+
+                    const headers = {
+                        ...getApiHeaders(true),
+                        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                        'X-FB-LSD': lsd
+                    };
+
                     const response = await fetch(url, {
                         method: 'POST',
                         headers,
                         body: body.toString(),
                         credentials: 'include',
-                        cache: 'no-store'
+                        cache: 'no-store',
+                        signal: AbortSignal.timeout(6000)
                     });
 
                     const rawText = await response.text();
@@ -1268,13 +1477,106 @@
                         rawPreview: rawText.slice(0, 200)
                     });
 
-                    const hasErrors = Array.isArray(data?.errors) && data.errors.length > 0;
-                    return { response, success: response.ok && !hasErrors, data, rawText };
+                    const hasErrors = data?.error || (Array.isArray(data?.errors) && data.errors.length > 0);
+                    const success = response.ok && !hasErrors;
+                    return { response, success, data, rawText };
                 } catch (err) {
                     console.error(`[IG Tools HideStory] Erro Wbloks:`, err);
                     return { success: false, error: err };
                 }
             }
+
+            // Fetch do total oficial de stories ocultados via WBloks count_updater
+            async function fetchWbloksHideStoryCount() {
+                try {
+                    const viewerId = getCookie('ds_user_id') || getActorId() || '';
+                    const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
+                    const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                    const jazoest = computeJazoest(fbDtsg) || '26342';
+                    const spin = getSpinParams();
+
+                    const url = 'https://www.instagram.com/async/wbloks/fetch/?appid=com.instagram.portable_settings.privacy.hide_story_from_screen.hide_story_count_updater&type=action&__bkv=bebad2b121ef373e1847b0445ffd0ce996417496c088e54f6b5d2f5c6501842d';
+
+                    const dyn = getInstagramFormToken('__dyn') || '7xeUjG1mxu1syaxG4Vp41twpUnwgU7SbzEdF8vyUco2qwJyEiw50x609vCwjE1EEc87m0yE462mcw5Mx62G5UswoEcE7O2l0Fwqo5W1yw9O1lwxwQzXwae4UaEW2G0AEco5G0zK5o4q0HU1wEbUGdwtUeo9UaQ0Lo6-bwHwKG6Ufk0zU8oC1IwjUpwlAcwBwUQp1yU426V8aUuwm8jxK1mwa6bBK4o16UeUGq2Kq11whE984O0XEdoCQ1jw';
+                    const csr = getInstagramFormToken('__csr') || 'iMB0FNX5N22j9eUHPWl8iGkV-eGXT8G5OPdP8VIzehP8KBh9pV9cNGWnip9Wh4BGfld8Dif4W4au9Irs8F4l9JbhAF4gJ7l95AFagBBBAkDiq9uVdppZDJykAch9QvAKiXjAV4HgzDBoLaaGh3Q68K9zGzay9pUC8yEj-dyWxe9zEGK9zXBzWzWyuQmbyWxaZ3KFEgxjhj1ycBzk5uVoGdgK8Ax3AAHV8K5GgG22maG1UUK1sweq7okw5ww08Ha00Y8EcU0vn2UKkMoQ18xgE0h1opw6yCtw2TU0hyS0Koqguw8Z0BwiUdK0qW5Eo6jw4dU3HwbWq3G8wTg1iV2By84iUy8guGywqodE2YrRrw1s2i1lG5o06KC02qu2K9g6rw0E5weS0fcw';
+                    const hsdp = getInstagramFormToken('__hsdp') || 'gjMb_j1GkkCPcx4Pn9lEHV2NOEO99KXjQ3pyigsojx5AqI9xeGG48qx222boGwm9cwnoAV4A-FUK19gZ91G8woHuSHG4u7dChF4mmQ4B8fCK68G2GUC9wzz84e11wywkqwHxS3u6Ed98S19wDxedwm8qwk8szofoKU28wJwok32361dyUO0j-0pC2O0cPwpE0B20YEnwtE0mCw5Ywa20zi08-5o0Guew5fxvw2GA0gW09Iwww5GwmU887K0kO0BVk7nu';
+                    const hblp = getInstagramFormToken('__hblp') || getInstagramFormToken('_hblp') || '0Cx-1xwUyU4ScCACy23pEiwh84q8wwx6cihEOWAVCegSEdEgyQHxGi6A1zzVbwJDgqyh98jgjUkWUCVoG7966F9bCBGiVUpG5kfg9UhyEtwYhXG48CU4O74eDjyEnx-4USGK4oixHu33wJHwyCxqq3KfDwor-iucwCzodUS4oeoiwwy8GHwlzVbwhUG1DwSwq86S3Lwi82vwc63q7U1PU3fw5qw8q0jm1cxa0m-0lo7y8Aw20U2kwu8dU4q1uw8q0AE5W1nwhEa88mm5okwxBxC1wwbu0ra2W0F82uU4aUy0j50aN04Pw7qwzwgQ1CwEwhU5y1-xi1PgS360E8861lwQwkey5F82pIGqaw';
+                    const sjsp = getInstagramFormToken('__sjsp') || getInstagramFormToken('_sjsp') || 'grgacmRNQ4ipiKhLjOkhd6R4qd8AbeyAerVEbZpas4EaGo468wg8rx22mg5p9224I7wbO3q6EAi68aQ1Dg4e3q0G8';
+                    const sParam = getInstagramFormToken('__s') || 'z3nm3y:imx696:n7ke1q';
+                    const hsi = getInstagramFormToken('__hsi') || '7689958851794881797';
+                    const hs = getInstagramFormToken('__hs') || '20722.HYP:instagram_web_pkg.2.1...0';
+
+                    const body = new URLSearchParams({
+                        __d: 'www',
+                        __user: viewerId || '0',
+                        __a: '1',
+                        __req: '7',
+                        __hs: hs,
+                        dpr: '2',
+                        __ccg: 'EXCELLENT',
+                        __rev: spin.spin_r || '1049106301',
+                        __s: sParam,
+                        __hsi: hsi,
+                        __dyn: dyn,
+                        __csr: csr,
+                        __hsdp: hsdp,
+                        _hblp: hblp,
+                        __hblp: hblp,
+                        _sjsp: sjsp,
+                        __sjsp: sjsp,
+                        _comet_req: '7',
+                        __comet_req: '7',
+                        server_timestamps: 'true',
+                        _spin_r: spin.spin_r || '1049106301',
+                        __spin_r: spin.spin_r || '1049106301',
+                        _spin_b: spin.spin_b || 'trunk',
+                        __spin_b: spin.spin_b || 'trunk',
+                        _spin_t: spin.spin_t || String(Math.floor(Date.now() / 1000)),
+                        __spin_t: spin.spin_t || String(Math.floor(Date.now() / 1000)),
+                        _crn: 'comet.igweb.PolarisSettingsHideStoryAndLiveFromRoute',
+                        __crn: 'comet.igweb.PolarisSettingsHideStoryAndLiveFromRoute',
+                        params: '{}'
+                    });
+
+                    if (viewerId) {
+                        body.append('av', viewerId);
+                        body.append('__user', viewerId);
+                    }
+                    if (fbDtsg) body.append('fb_dtsg', fbDtsg);
+                    if (jazoest) body.append('jazoest', jazoest);
+                    if (lsd) body.append('lsd', lsd);
+
+                    const headers = {
+                        ...getApiHeaders(true),
+                        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                        'X-FB-LSD': lsd
+                    };
+
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers,
+                        body: body.toString(),
+                        credentials: 'include',
+                        cache: 'no-store',
+                        signal: AbortSignal.timeout(6000)
+                    });
+
+                    if (res.ok) {
+                        const rawText = await res.text();
+                        const match = rawText.match(/privacy_settings_number_users_story_hidden_from[^\d]*(\d+)/);
+                        if (match && match[1]) {
+                            window._igHideStoryTotalCount = parseInt(match[1], 10);
+                            console.log(`[IG Tools HideStory] fetchWbloksHideStoryCount obteve total oficial: ${window._igHideStoryTotalCount}`);
+                            return window._igHideStoryTotalCount;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[IG Tools HideStory] Falha no fetchWbloksHideStoryCount:', e);
+                }
+                return null;
+            }
+
+
 
             async function executeGraphqlFollow(uid) {
                 if (!uid) return { response: { ok: false, status: 0 }, success: false, result: null, text: 'no_uid' };
@@ -1456,7 +1758,7 @@
                         const usernameMatch = usernamePattern.exec(html);
                         if (usernameMatch) {
                             const nearby = html.slice(Math.max(0, usernameMatch.index - 3000), usernameMatch.index + 3000);
-                            const idMatches = [...nearby.matchAll(/"(?:pk|id|user_id|pk_id)"\s*:\\s*"?(\\d+)"?/g)];
+                            const idMatches = [...nearby.matchAll(/"(?:pk|id|user_id|pk_id)"\s*:\s*"?(\d+)"?/g)];
                             const idMatch = idMatches[idMatches.length - 1];
                             if (idMatch?.[1]) {
                                 const id = String(idMatch[1]);
@@ -1571,6 +1873,295 @@
                 if (!window._igHideStoryUsersCapture) {
                     window._igHideStoryUsersCapture = { users: new Map(), callbacks: [] };
                 }
+                // Variável compartilhada para capturar dados de amigos próximos via Bloks (incluindo paginação)
+                if (!window._igCloseFriendsUsersCapture) {
+                    window._igCloseFriendsUsersCapture = { users: new Map(), callbacks: [] };
+                }
+
+                function parseHideStoryBloksText(text) {
+                    if (!text || typeof text !== 'string') return [];
+
+                    // Se for um documento HTML completo, extrai todos os scripts relevantes para processar
+                    if (text.includes('<!DOCTYPE') || text.includes('<html') || text.includes('<head>')) {
+                        try {
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(text, 'text/html');
+                            const scripts = Array.from(doc.querySelectorAll('script'));
+                            for (const s of scripts) {
+                                if (s.textContent && (s.textContent.includes('hide_story') || s.textContent.includes('should_unhide') || s.textContent.includes('username'))) {
+                                    parseHideStoryBloksText(s.textContent);
+                                }
+                            }
+                            if (window._igHideStoryUsersCapture?.users && window._igHideStoryUsersCapture.users.size > 0) {
+                                return Array.from(window._igHideStoryUsersCapture.users.values());
+                            }
+                        } catch (_) { }
+                    }
+
+                    if (!window._igHideStoryUsersCapture) {
+                        window._igHideStoryUsersCapture = { users: new Map(), callbacks: [] };
+                    }
+
+                    const usersMap = window._igHideStoryUsersCapture.users;
+                    let newCount = 0;
+
+                    // 1. Normaliza escapes sem corromper barras ou chaves
+                    let cleanText = text.trim();
+                    if (cleanText.startsWith('for (;;);')) {
+                        cleanText = cleanText.slice(9).trim();
+                    }
+                    const normalized = cleanText.replace(/\\+"/g, '"').replace(/\\\//g, '/');
+
+                    // Nome do próprio usuário logado e ID para nunca incluir a si mesmo
+                    const currentLoggedUser = (getLoggedInUsername() || '').toLowerCase().trim();
+                    const currentLoggedUid = getCookie('ds_user_id') || getActorId() || '';
+
+                    // 2. Extrai total oficial de stories ocultados se presente no Consistency Store
+                    const countMatch = normalized.match(/privacy_settings_number_users_story_hidden_from[^\d]*(\d+)/);
+                    if (countMatch && countMatch[1]) {
+                        window._igHideStoryTotalCount = parseInt(countMatch[1], 10);
+                        console.log(`[IG Tools HideStory] Total oficial de stories ocultados no Instagram: ${window._igHideStoryTotalCount}`);
+                    }
+
+                    // 2.1. Extrai cursor e container de paginação se presentes (WBloks com.instagram.pagination.async)
+                    const cursorMatch = text.match(/"cursor"\s*:\s*"([^"]+)"/) ||
+                        normalized.match(/cursor\\*"\s*:\s*\\*"([^"\\\\]+)/) ||
+                        text.match(/cursor["\\]*\s*:\s*["\\]*([^"\\,\s\}]+)/);
+                    if (cursorMatch && cursorMatch[1]) {
+                        window._igHideStoryLastCursor = cursorMatch[1];
+                        console.log(`[IG Tools HideStory] Novo cursor de paginação detectado: ${window._igHideStoryLastCursor.slice(0, 20)}...`);
+                    }
+                    const containerMatch = text.match(/"container_id"\s*:\s*"(\d+)"/) ||
+                        normalized.match(/container_id\\*"\s*:\s*\\*"(\d+)/);
+                    if (containerMatch && containerMatch[1]) {
+                        window._igHideStoryContainerId = containerMatch[1];
+                    }
+                    const loadingMatch = text.match(/"loading_component_id"\s*:\s*"(\d+)"/) ||
+                        normalized.match(/loading_component_id\\*"\s*:\s*\\*"(\d+)/);
+                    if (loadingMatch && loadingMatch[1]) {
+                        window._igHideStoryLoadingId = loadingMatch[1];
+                    }
+
+                    const isPaginationOnly = normalized.includes('com.instagram.pagination.async') &&
+                        !normalized.includes('hide_story_from_screen.hide_story_from');
+
+                    // 3. Identifica posições dos blocos de Ocultados e Sugestões
+                    let posSel = normalized.search(/1799674124(?:_0)?/);
+                    let posUnsel = normalized.search(/1799674125(?:_0)?/);
+                    if (posUnsel === -1) posUnsel = normalized.search(/selection_list_component\.unselected_users/i);
+                    if (posUnsel === -1) posUnsel = normalized.search(/unselected_users/i);
+                    if (posUnsel === -1) posUnsel = normalized.search(/autoload_params/i);
+                    if (posUnsel === -1) posUnsel = normalized.search(/"sugest|"sugerid|"sugerencias|"suggest/i);
+
+                    console.log('[IG Tools HideStory] Parser acionado. Blocos:', { posSel, posUnsel, totalOficial: window._igHideStoryTotalCount, isPaginationOnly, len: normalized.length });
+
+                    const hasHiddenSignal = (strLower) => {
+                        return /should_unhide["\s]*:\s*(?:true|1)/i.test(strLower) ||
+                            /is_checked["\s]*:\s*(?:true|1)/i.test(strLower) ||
+                            /is_selected["\s]*:\s*(?:true|1)/i.test(strLower) ||
+                            /["']selected["']\s*:\s*(?:true|1)/i.test(strLower) ||
+                            strLower.includes('circle-check') ||
+                            strLower.includes('boolean.const, true') ||
+                            strLower.includes('boolean.const,true') ||
+                            strLower.includes('bk.action.bool.const, true') ||
+                            strLower.includes('bk.action.bool.const,true');
+                    };
+
+                    // Padrão Universal: Varredura de usernames no payload com extração de contexto local
+                    const userRegex = /"username"\s*:\s*"([a-zA-Z0-9._]{2,30})"/g;
+                    let um;
+                    while ((um = userRegex.exec(normalized)) !== null) {
+                        const uname = um[1];
+                        if (!uname || !isValidInstagramUsername(uname) || uname === 'instagram' || uname === 'threads') continue;
+                        if (currentLoggedUser && uname.toLowerCase() === currentLoggedUser) continue;
+
+                        const start = Math.max(0, um.index - 800);
+                        const end = Math.min(normalized.length, um.index + 1200);
+                        const chunk = normalized.slice(start, end);
+                        const chunkLower = chunk.toLowerCase();
+
+                        const pkMatch = chunk.match(/"pk"\s*:\s*"?(\d+)"?/) ||
+                            chunk.match(/"user_id"\s*:\s*"?(\d+)"?/) ||
+                            chunk.match(/"id"\s*:\s*"?(\d+)"?/) ||
+                            chunk.match(/bk\.action\.(?:i32|i64)\.Const[,\s]+"?(\d+)"?/);
+                        const pk = pkMatch ? pkMatch[1] : '';
+                        if (pk && currentLoggedUid && String(pk) === String(currentLoggedUid)) continue;
+                        if (pk) setCachedUserId(uname, pk);
+
+                        const picMatch = chunk.match(/"profile_pic_url"\s*:\s*"([^"]+)"/) ||
+                            chunk.match(/"(https?:\/\/[^"\s]+(?:fbcdn\.net|cdninstagram\.com|\/v\/t51|\/s150x150)[^"\s]*)"/);
+                        const rawPic = picMatch ? (picMatch[1] || picMatch[0]) : '';
+                        const photoUrl = (rawPic && !rawPic.includes('rsrc.php') && !rawPic.includes('static.xx')) ? rawPic.replace(/\\/g, '').replace(/\\u0026/g, '&') : DEFAULT_AVATAR;
+
+                        const nameMatch = chunk.match(/"full_name"\s*:\s*"([^"]+)"/) || chunk.match(/"name"\s*:\s*"([^"]+)"/);
+                        let fullName = nameMatch ? nameMatch[1] : '';
+                        try { fullName = JSON.parse(`"${fullName}"`); } catch (_) { }
+
+                        let isUserHidden = false;
+                        if (!isPaginationOnly) {
+                            if (chunkLower.includes('should_unhide":true') ||
+                                chunkLower.includes('should_unhide": true') ||
+                                chunkLower.includes('should_unhide\\":true') ||
+                                chunkLower.includes('should_unhide\\": true') ||
+                                chunkLower.includes('"should_unhide":1') ||
+                                hasHiddenSignal(chunkLower)) {
+                                isUserHidden = true;
+                            } else if (posUnsel !== -1 && um.index < posUnsel) {
+                                isUserHidden = true;
+                            } else if (posUnsel === -1 && window._igHideStoryTotalCount && usersMap.size < window._igHideStoryTotalCount) {
+                                isUserHidden = true;
+                            }
+                        }
+
+                        if (!usersMap.has(uname)) {
+                            usersMap.set(uname, {
+                                username: uname,
+                                fullName: fullName,
+                                photoUrl: photoUrl,
+                                pk: pk,
+                                id: pk,
+                                isChecked: isUserHidden,
+                                isHidden: isUserHidden
+                            });
+                            newCount++;
+                        } else {
+                            const ex = usersMap.get(uname);
+                            if (isUserHidden) {
+                                ex.isChecked = true;
+                                ex.isHidden = true;
+                            }
+                            if (!ex.pk && pk) ex.pk = pk;
+                            if (!ex.id && pk) ex.id = pk;
+                            if (!ex.fullName && fullName) ex.fullName = fullName;
+                            if ((!ex.photoUrl || ex.photoUrl === DEFAULT_AVATAR) && photoUrl !== DEFAULT_AVATAR) ex.photoUrl = photoUrl;
+                        }
+                    }
+
+                    // Padrão Lispy adicional (arrays de paginação com Const)
+                    const lispyArrayRegex = /\(bk\.action\.(?:i32|i64)\.Const,\s*(\d+)\),\s*"([a-zA-Z0-9._]{2,30})",\s*"([^"]*)",\s*"(https?:\/\/[^"\s]+)"/g;
+                    let lam;
+                    while ((lam = lispyArrayRegex.exec(normalized)) !== null) {
+                        const pk = lam[1];
+                        const uname = lam[2];
+                        if (!isValidInstagramUsername(uname) || uname === 'instagram' || uname === 'threads') continue;
+                        if (currentLoggedUser && uname.toLowerCase() === currentLoggedUser) continue;
+                        if (pk && currentLoggedUid && String(pk) === String(currentLoggedUid)) continue;
+
+                        let fullName = lam[3] || '';
+                        try { fullName = JSON.parse(`"${fullName}"`); } catch (_) { }
+
+                        let rawPic = lam[4] || '';
+                        rawPic = rawPic.replace(/\\\//g, '/').replace(/\\u0026/g, '&');
+                        const photoUrl = (rawPic && !rawPic.includes('rsrc.php') && !rawPic.includes('static.xx')) ? rawPic : DEFAULT_AVATAR;
+
+                        if (pk) setCachedUserId(uname, pk);
+
+                        let isUserHidden = false;
+                        if (!isPaginationOnly) {
+                            if (posUnsel !== -1 && lam.index < posUnsel) {
+                                isUserHidden = true;
+                            } else if (posUnsel === -1 && window._igHideStoryTotalCount && usersMap.size < window._igHideStoryTotalCount) {
+                                isUserHidden = true;
+                            }
+                        }
+
+                        if (!usersMap.has(uname)) {
+                            usersMap.set(uname, {
+                                username: uname,
+                                fullName: fullName,
+                                photoUrl: photoUrl,
+                                pk: pk,
+                                id: pk,
+                                isChecked: isUserHidden,
+                                isHidden: isUserHidden
+                            });
+                            newCount++;
+                        } else {
+                            const existing = usersMap.get(uname);
+                            if (isUserHidden) {
+                                existing.isChecked = true;
+                                existing.isHidden = true;
+                            }
+                            if (!existing.pk && pk) existing.pk = pk;
+                            if (!existing.id && pk) existing.id = pk;
+                            if (!existing.fullName && fullName) existing.fullName = fullName;
+                            if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && photoUrl !== DEFAULT_AVATAR) existing.photoUrl = photoUrl;
+                        }
+                    }
+
+                    // Padrão 4: Formato JSON de usuário (com e sem aspas no key, suportando username e user_name)
+                    const jsonUserRegex = /(?:["']?username["']?|["']?user_name["']?)\s*[:=]\s*["']([a-zA-Z0-9._]{2,30})["']/g;
+                    let jm;
+                    while ((jm = jsonUserRegex.exec(normalized)) !== null) {
+                        const uname = jm[1];
+                        if (!isValidInstagramUsername(uname)) continue;
+                        if (currentLoggedUser && uname.toLowerCase() === currentLoggedUser) continue;
+                        const windowSlice = normalized.slice(Math.max(0, jm.index - 350), Math.min(normalized.length, jm.index + 450));
+                        const winLower = windowSlice.toLowerCase();
+                        const picMatch = windowSlice.match(/"(?:profile_pic_url|avatar_url|profile_pic)"\s*:\s*"([^"]+)"/);
+                        const rawPic = picMatch ? picMatch[1].replace(/\\/g, '').replace(/\\u0026/g, '&') : '';
+                        const photoUrl = (rawPic && !rawPic.includes('rsrc.php') && !rawPic.includes('static.xx')) ? rawPic : DEFAULT_AVATAR;
+                        const pkMatch = windowSlice.match(/"(?:pk|id|user_id)"\s*:\s*"?(\d+)"?/) || windowSlice.match(/\b(\d{7,15})\b/);
+                        const pk = pkMatch ? pkMatch[1] : (getCachedUserId(uname) || '');
+                        if (pk && currentLoggedUid && String(pk) === String(currentLoggedUid)) continue;
+                        if (pk) setCachedUserId(uname, pk);
+
+                        const nameMatch = windowSlice.match(/"(?:full_name|name)"\s*:\s*"([^"]+)"/);
+                        let fullName = nameMatch ? nameMatch[1] : '';
+                        try { fullName = JSON.parse(`"${fullName}"`); } catch (_) { }
+
+                        let isUserHidden = false;
+                        if (!isPaginationOnly) {
+                            if (hasHiddenSignal(winLower)) {
+                                isUserHidden = true;
+                            } else if (posUnsel !== -1 && jm.index < posUnsel) {
+                                isUserHidden = true;
+                            } else if (posUnsel === -1 && window._igHideStoryTotalCount && usersMap.size < window._igHideStoryTotalCount) {
+                                isUserHidden = true;
+                            }
+                        }
+
+                        if (!usersMap.has(uname)) {
+                            usersMap.set(uname, {
+                                username: uname,
+                                fullName: fullName,
+                                photoUrl: photoUrl,
+                                pk: pk,
+                                id: pk,
+                                isChecked: isUserHidden,
+                                isHidden: isUserHidden
+                            });
+                            newCount++;
+                        } else {
+                            const existing = usersMap.get(uname);
+                            if (isUserHidden) {
+                                existing.isChecked = true;
+                                existing.isHidden = true;
+                            }
+                            if (!existing.pk && pk) existing.pk = pk;
+                            if (!existing.id && pk) existing.id = pk;
+                            if (!existing.fullName && fullName) existing.fullName = fullName;
+                            if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && photoUrl !== DEFAULT_AVATAR) existing.photoUrl = photoUrl;
+                        }
+                    }
+
+                    // Retorna os usuários mapeados com base estrita nos dados reais
+
+                    const usersArray = Array.from(usersMap.values());
+                    console.log(`[IG Tools HideStory] Parse finalizado. Total de usuários mapeados: ${usersArray.length} (${usersArray.filter(u => u.isChecked || u.isHidden).length} ocultados).`);
+                    if (usersArray.length === 0) {
+                        console.warn('[IG Tools HideStory] Nenhum usuário extraído do payload. Primeiros 200 caracteres:', text.slice(0, 200));
+                    }
+
+                    if (window._igHideStoryUsersCapture.callbacks) {
+                        window._igHideStoryUsersCapture.callbacks.forEach(cb => {
+                            try { cb(usersArray); } catch (_) { }
+                        });
+                    }
+
+                    return usersArray;
+                }
+                window.parseHideStoryBloksText = parseHideStoryBloksText;
 
                 function handleBloksResponseText(urlString, text) {
                     if (!text || typeof text !== 'string') return;
@@ -1584,6 +2175,9 @@
 
                         const isHideStoryContext = urlString.includes('hide_story') ||
                             (path.includes('hide_story_and_live_from') && (urlString.includes('com.instagram.pagination.async') || urlString.includes('/async/wbloks/fetch/')));
+
+                        const isCloseFriendsContext = urlString.includes('close_friends') || urlString.includes('close_friend') ||
+                            (path.includes('close_friends') && (urlString.includes('com.instagram.pagination.async') || urlString.includes('/async/wbloks/fetch/')));
 
                         if (isMutedContext) {
                             const userRegex = /"username":"([a-zA-Z0-9._]+)"/g;
@@ -1668,6 +2262,26 @@
                                 });
                             }
                         } else if (isHideStoryContext) {
+                            const parsed = parseHideStoryBloksText(text);
+                            if (Array.isArray(parsed) && parsed.length > 0) {
+                                const hidden = parsed.filter(u => u.isHidden || u.isChecked);
+                                if (hidden.length > 0) {
+                                    try {
+                                        localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(parsed));
+                                        dbHelper.saveCache('hiddenStory', hidden);
+                                        dbHelper.saveCache('hideStory', hidden);
+                                        if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
+                                        hidden.forEach(u => userListCache.hiddenStory.add(u.username));
+                                    } catch (_) { }
+                                }
+                                if (window._igHideStoryUsersCapture && window._igHideStoryUsersCapture.callbacks) {
+                                    const usersArray = Array.from(window._igHideStoryUsersCapture.users.values());
+                                    window._igHideStoryUsersCapture.callbacks.forEach(cb => {
+                                        try { cb(usersArray); } catch (_) { }
+                                    });
+                                }
+                            }
+                        } else if (isCloseFriendsContext) {
                             const userRegex = /"username":"([a-zA-Z0-9._]+)"/g;
                             let match;
                             let newCount = 0;
@@ -1692,25 +2306,100 @@
                                     isChecked = true;
                                 }
 
-                                if (!window._igHideStoryUsersCapture.users.has(uname)) {
-                                    window._igHideStoryUsersCapture.users.set(uname, { username: uname, photoUrl, pk, isChecked });
+                                if (!window._igCloseFriendsUsersCapture.users.has(uname)) {
+                                    window._igCloseFriendsUsersCapture.users.set(uname, { username: uname, photoUrl, pk, isChecked });
                                     newCount++;
                                 } else {
-                                    const existing = window._igHideStoryUsersCapture.users.get(uname);
+                                    const existing = window._igCloseFriendsUsersCapture.users.get(uname);
                                     if (!existing.pk && pk) existing.pk = pk;
                                     if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && photoUrl !== DEFAULT_AVATAR) existing.photoUrl = photoUrl;
                                     if (!existing.isChecked && isChecked) existing.isChecked = true;
                                 }
                             }
-                            if (newCount > 0 || window._igHideStoryUsersCapture.users.size > 0) {
-                                console.log(`[IG Tools] Bloks interceptou ${window._igHideStoryUsersCapture.users.size} usuário(s) ocultar story (+${newCount} novos).`);
-                                const usersArray = Array.from(window._igHideStoryUsersCapture.users.values());
-                                window._igHideStoryUsersCapture.callbacks.forEach(cb => {
+                            if (newCount > 0 || window._igCloseFriendsUsersCapture.users.size > 0) {
+                                console.log(`[IG Tools] Bloks interceptou ${window._igCloseFriendsUsersCapture.users.size} usuário(s) em Amigos Próximos (+${newCount} novos).`);
+                                const usersArray = Array.from(window._igCloseFriendsUsersCapture.users.values());
+                                window._igCloseFriendsUsersCapture.callbacks.forEach(cb => {
                                     try { cb(usersArray); } catch (e) { }
                                 });
                             }
                         }
                     } catch (e) { /* silencia erros de parse */ }
+                }
+                window.handleBloksResponseText = handleBloksResponseText;
+
+                // Auto-captura em segundo plano ao acessar a rota nativa de Ocultar Story
+                if (window.location.pathname.includes('/accounts/hide_story_and_live_from/')) {
+                    const runDomScanAuto = () => {
+                        try {
+                            const scanned = scanHideStoryDomRows(document);
+                            const list = Array.from(scanned.values());
+                            const hidden = list.filter(u => u.isHidden);
+                            if (hidden.length > 0) {
+                                console.log(`[IG Tools HideStory] Auto-scan nativo detectou ${hidden.length} contas com story ocultado! Gravando cache...`);
+                                localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(list));
+                                dbHelper.saveCache('hideStory', hidden);
+                            }
+                        } catch (_) { }
+                    };
+                    setTimeout(runDomScanAuto, 800);
+                    setTimeout(runDomScanAuto, 2000);
+                    setTimeout(runDomScanAuto, 4000);
+                }
+
+                function captureLiveTokensFromPayload(body) {
+                    if (!body) return;
+                    try {
+                        let str = '';
+                        if (typeof body === 'string') {
+                            str = body;
+                        } else if (body instanceof URLSearchParams) {
+                            str = body.toString();
+                        } else if (body instanceof FormData) {
+                            if (body.has('fb_dtsg')) {
+                                const val = body.get('fb_dtsg');
+                                if (val && typeof val === 'string' && val.length > 15) {
+                                    window.__fb_dtsg = val;
+                                    localStorage.setItem('ig_tools_fb_dtsg', val);
+                                }
+                            }
+                            if (body.has('lsd')) {
+                                const val = body.get('lsd');
+                                if (val && typeof val === 'string') {
+                                    window.__lsd = val;
+                                    localStorage.setItem('ig_tools_lsd', val);
+                                }
+                            }
+                            return;
+                        }
+
+                        if (str && str.includes('fb_dtsg=')) {
+                            const m = str.match(/(?:^|&)fb_dtsg=([^&]+)/);
+                            if (m && m[1]) {
+                                const val = decodeURIComponent(m[1]);
+                                if (val && val.length > 15) {
+                                    window.__fb_dtsg = val;
+                                    localStorage.setItem('ig_tools_fb_dtsg', val);
+                                }
+                            }
+                            const mLsd = str.match(/(?:^|&)lsd=([^&]+)/);
+                            if (mLsd && mLsd[1]) {
+                                const val = decodeURIComponent(mLsd[1]);
+                                if (val) {
+                                    window.__lsd = val;
+                                    localStorage.setItem('ig_tools_lsd', val);
+                                }
+                            }
+                            const mSpinR = str.match(/(?:^|&)(?:__)?spin_r=([^&]+)/);
+                            if (mSpinR && mSpinR[1]) {
+                                window.__spin_r = decodeURIComponent(mSpinR[1]);
+                            }
+                            const mSpinT = str.match(/(?:^|&)(?:__)?spin_t=([^&]+)/);
+                            if (mSpinT && mSpinT[1]) {
+                                window.__spin_t = decodeURIComponent(mSpinT[1]);
+                            }
+                        }
+                    } catch (_) { }
                 }
 
                 const targetWindows = [window];
@@ -1730,6 +2419,8 @@
                         };
 
                         tw.XMLHttpRequest.prototype.send = function (body) {
+                            captureLiveTokensFromPayload(body);
+
                             if (isStorySeenPayload(this._url, body)) {
                                 let isAnon = false;
                                 try {
@@ -1748,7 +2439,7 @@
                             this.addEventListener('load', function () {
                                 try {
                                     const url = this._url || '';
-                                    if (url.includes('/async/wbloks/fetch/') || url.includes('pagination.async') || url.includes('muted_accounts') || url.includes('blocked_accounts') || url.includes('hide_story')) {
+                                    if (url.includes('/async/wbloks/fetch/') || url.includes('pagination.async') || url.includes('muted_accounts') || url.includes('blocked_accounts') || url.includes('hide_story') || url.includes('close_friends') || url.includes('close_friend')) {
                                         handleBloksResponseText(url, this.responseText);
                                     }
                                 } catch (e) { }
@@ -1770,6 +2461,7 @@
                             }
 
                             const bodyData = init?.body || (input && typeof input === 'object' ? input.body : null);
+                            captureLiveTokensFromPayload(bodyData);
 
                             if (isStorySeenPayload(urlString, bodyData)) {
                                 let isAnon = false;
@@ -1788,23 +2480,25 @@
                             }
 
                             // Sniffer automático de queries GraphQL no console
-                            if (urlString.includes('/api/graphql') && bodyData) {
+                            if ((urlString.includes('graphql') || urlString.includes('wbloks') || urlString.includes('friendships')) && bodyData) {
                                 try {
                                     const params = new URLSearchParams(typeof bodyData === 'string' ? bodyData : '');
                                     const qName = params.get('fb_api_req_friendly_name') || '';
                                     const qDocId = params.get('doc_id') || '';
                                     const qVars = params.get('variables') || '';
                                     if (qName && !qName.includes('PolarisScreenTimeLogger')) {
-                                        console.log(`%c[IG GraphQL Sniffer] ${qName} (doc_id: ${qDocId})`, 'color: #00ffaa; background: #003311; font-weight: bold; padding: 2px 6px; border-radius: 3px;', qVars);
+                                        console.log(`%c[IG Sniffer] ${qName} (doc_id: ${qDocId})`, 'color: #00ffaa; background: #003311; font-weight: bold; padding: 2px 6px; border-radius: 3px;', qVars);
                                     }
                                 } catch (_) { }
                             }
-                            // Verifica se é resposta Bloks de contas silenciadas, bloqueadas, ocultar story ou paginação assíncrona
+                            // Verifica se é resposta Bloks de contas silenciadas, bloqueadas, ocultar story, amigos próximos ou paginação assíncrona
                             if (urlString.includes('com.instagram.pagination.async') ||
                                 urlString.includes('bloks/apps/com.instagram.interactions.privacy') ||
                                 urlString.includes('blocked_accounts') ||
                                 urlString.includes('muted_accounts') ||
                                 urlString.includes('hide_story') ||
+                                urlString.includes('close_friends') ||
+                                urlString.includes('close_friend') ||
                                 urlString.includes('/async/wbloks/fetch/')) {
                                 return originalFetch.apply(this, arguments).then(async response => {
                                     try {
@@ -2172,15 +2866,15 @@
                             headers: { "Content-Type": "application/json" },
                             body: postData
                         })
-                        .then(async (res) => {
-                            const text = await res.text();
-                            if (res.ok) resolve(text);
-                            else reject("Erro no envio do e-mail: " + res.status);
-                        })
-                        .catch((err) => {
-                            console.error("[IG Tools] Erro ao enviar e-mail via webhook:", err);
-                            reject(err);
-                        });
+                            .then(async (res) => {
+                                const text = await res.text();
+                                if (res.ok) resolve(text);
+                                else reject("Erro no envio do e-mail: " + res.status);
+                            })
+                            .catch((err) => {
+                                console.error("[IG Tools] Erro ao enviar e-mail via webhook:", err);
+                                reject(err);
+                            });
                     }
                 });
             }
@@ -2691,6 +3385,21 @@
                             }
                                     .dark-mode .submenu-modal span, .dark-mode .submenu-modal th, .dark-mode .submenu-modal td, .dark-mode .submenu-modal li span, .dark-mode .submenu-modal a, .dark-mode .submenu-modal label {
                                 color: white !important;
+                            }
+                            .dark-mode .badge-hs-hidden {
+                                background: rgba(230, 126, 34, 0.25) !important;
+                                color: #f39c12 !important;
+                                border: 1px solid rgba(230, 126, 34, 0.5) !important;
+                            }
+                            .dark-mode .badge-hs-visible, .dark-mode .badge-cf-following {
+                                background: rgba(108, 117, 125, 0.25) !important;
+                                color: #adb5bd !important;
+                                border: 1px solid rgba(108, 117, 125, 0.5) !important;
+                            }
+                            .dark-mode .badge-cf-active {
+                                background: rgba(46, 204, 113, 0.25) !important;
+                                color: #2ecc71 !important;
+                                border: 1px solid rgba(46, 204, 113, 0.5) !important;
                             }
                             /* Correção para visibilidade de categorias no modo escuro */
                             .dark-mode .category-item-container {
@@ -3368,55 +4077,13 @@
                 // --- NOVO MENU: AMIGOS PRÓXIMOS ---
                 document.getElementById("closeFriendsBtn").addEventListener("click", () => {
                     closeMenu();
-                    console.log("Botão Amigos Próximos clicado");
-                    // Direcionar para a página de amigos próximos se não estiver lá
-                    if (window.location.pathname !== "/accounts/close_friends/") {
-                        console.log("Navegando para /accounts/close_friends/");
-                        history.pushState(null, null, "/accounts/close_friends/");
-                        window.dispatchEvent(new Event("popstate"));
-
-                        let modalStarted = false;
-                        // Espera o carregamento da página antes de abrir o modal
-                        let checkLoad = setInterval(async () => {
-                            if (document.querySelector('div[data-bloks-name="bk.components.Flexbox"]') && !modalStarted) {
-                                modalStarted = true;
-                                clearInterval(checkLoad);
-                                await new Promise(r => setTimeout(r, 1000)); // Delay extra para estabilidade
-                                await abrirModalAmigosProximos();
-                            }
-                        }, 500);
-                        // Timeout de segurança após 5s
-                        setTimeout(() => clearInterval(checkLoad), 5000);
-                    } else {
-                        console.log("Já na página /accounts/close_friends/, abrindo modal");
-                        abrirModalAmigosProximos();
-                    }
+                    abrirModalAmigosProximos();
                 });
 
                 // --- NOVO MENU: OCULTAR STORY ---
                 document.getElementById("hideStoryBtn").addEventListener("click", () => {
                     closeMenu();
-                    console.log("Botão Ocultar Story clicado");
-                    // Direcionar para a página de ocultar story se não estiver lá
-                    if (window.location.pathname !== "/accounts/hide_story_and_live_from/") {
-                        console.log("Navegando para /accounts/hide_story_and_live_from/");
-                        history.pushState(null, null, "/accounts/hide_story_and_live_from/");
-                        window.dispatchEvent(new Event("popstate"));
-
-                        let modalStarted = false;
-                        let checkLoad = setInterval(async () => {
-                            if (document.querySelector('div[data-bloks-name="bk.components.Flexbox"]') && !modalStarted) {
-                                modalStarted = true;
-                                clearInterval(checkLoad);
-                                await new Promise(r => setTimeout(r, 1000));
-                                await abrirModalOcultarStory();
-                            }
-                        }, 500);
-                        setTimeout(() => clearInterval(checkLoad), 5000);
-                    } else {
-                        console.log("Já na página /accounts/hide_story_and_live_from/, abrindo modal");
-                        abrirModalOcultarStory();
-                    }
+                    abrirModalOcultarStory();
                 });
 
                 document.getElementById("mutedAccountsBtn").addEventListener("click", () => {
@@ -3459,482 +4126,25 @@
                     abrirModalConfiguracoes();
                 });
 
+                // --- GERENCIADOR DE AMIGOS PRÓXIMOS (INSTANTÂNEO & MODERNO) ---
+                let cachedCloseFriends = [];
+                try {
+                    const saved = localStorage.getItem('ig_tools_cached_close_friends');
+                    if (saved) {
+                        const parsed = JSON.parse(saved);
+                        if (Array.isArray(parsed) && parsed.length > 0) cachedCloseFriends = parsed;
+                    }
+                } catch (_) { }
+
+                let modalAbertoCloseFriends = false;
+
+                // 1. Extrator completo via rolagem (Turbo Scroll) e interceptação Bloks
                 function extractCloseFriendsUsernames(doc = document) {
                     return new Promise((resolve) => {
                         const users = new Map();
                         let scrollInterval;
                         let noNewUsersCount = 0;
-                        const maxIdleCount = 3;
-
-                        let cancelled = false;
-                        const { bar, update, closeButton } = createCancellableProgressBar();
-                        closeButton.onclick = () => { cancelled = true; finishExtraction(); };
-                        update(0, 0, "Carregando Amigos Próximos...");
-
-                        function finishExtraction() {
-                            clearInterval(scrollInterval);
-                            if (bar) bar.remove();
-                            resolve(cancelled ? [] : Array.from(users.values()));
-                        }
-
-                        function performScrollAndExtract() {
-                            const initialUserCount = users.size;
-                            const userElements = Array.from(doc.querySelectorAll('div.wbloks_1, div[data-bloks-name="bk.components.Flexbox"]'))
-                                .filter(el => el.querySelector('div[aria-label*="caixa de seleção"], div[role="button"][aria-label*="caixa de seleção"]') || (el.querySelector('img') && el.innerText && el.innerText.includes('\n')));
-
-                            userElements.forEach(userElement => {
-                                const spans = Array.from(userElement.querySelectorAll('span'));
-                                let username = spans.length > 0 ? spans[0].innerText.trim() : (userElement.innerText ? userElement.innerText.trim().split('\n')[0] : '');
-                                username = username.replace(/^@/, '');
-
-                                if (username && !users.has(username) && /^[a-zA-Z0-9_.]+$/.test(username)) {
-                                    const imgTag = userElement.querySelector('img');
-                                    users.set(username, { username, photoUrl: imgTag ? imgTag.src : '' });
-                                }
-                            });
-
-                            update(users.size, users.size, `Encontrado(s) ${users.size}...`);
-
-                            if (users.size === initialUserCount) noNewUsersCount++;
-                            else noNewUsersCount = 0;
-
-                            if (noNewUsersCount >= (users.size > 0 ? maxIdleCount : 5)) {
-                                finishExtraction();
-                                return;
-                            }
-
-                            // Rolagem inteligente (Desktop e Mobile)
-                            const scrollContainer = doc.querySelector('div[role="dialog"] ._aano') ||
-                                doc.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]') ||
-                                doc.querySelector('main div[style*="overflow-y: auto"]') ||
-                                doc.querySelector('div[style*="overflow-y: auto"]') ||
-                                doc.querySelector('._aano') ||
-                                doc.documentElement;
-                            if (scrollContainer && scrollContainer !== doc.documentElement) {
-                                scrollContainer.scrollTop = scrollContainer.scrollHeight;
-                            } else {
-                                window.scrollTo(0, document.body.scrollHeight);
-                            }
-                        }
-
-                        scrollInterval = setInterval(performScrollAndExtract, 1000);
-                    });
-                }
-
-                async function abrirModalAmigosProximos() {
-                    if (modalAberto) return; // Se modal já aberto, não faz nada
-
-                    modalAberto = true; // Marca que modal foi aberto para evitar loop infinito
-
-                    const users = await extractCloseFriendsUsernames();
-
-                    // Monta a div
-                    const div = document.createElement("div");
-                    div.id = "allCloseFriendsDiv";
-                    div.className = "submenu-modal";
-                    div.style.cssText = `
-            position: fixed;
-            top: 100px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 70vw;
-            max-width: 700px;
-            max-height: 85vh;
-            overflow: auto;
-            border: 2px solid #0095f6;
-            border-radius: 10px;
-            z-index: 2147483647;
-            padding: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        `;
-
-                    const itemsPerPage = loadSettings().itemsPerPage;
-                    let currentPage = 1;
-                    let currentTab = 'nao_selecionados'; // 'selecionados' or 'nao_selecionados'
-
-                    // Cache official checkbox states for performance
-                    const officialCheckboxStates = new Map();
-                    const flexboxes = Array.from(document.querySelectorAll('div.wbloks_1, [data-bloks-name="bk.components.Flexbox"]'));
-                    flexboxes.forEach(flex => {
-                        const spans = Array.from(flex.querySelectorAll('span'));
-                        const userText = spans.length > 0 ? spans[0].innerText.trim() : (flex.innerText && flex.innerText.trim().split('\n')[0]);
-                        if (userText) {
-                            const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"], div[aria-label*="caixa de seleção"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção') || el.getAttribute('role') === 'button');
-                            if (officialCheckboxContainer) {
-                                const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"], div.wbloks_1') || officialCheckboxContainer;
-                                const style = window.getComputedStyle(iconDiv);
-                                const bgColor = style.backgroundColor;
-                                const mask = style.maskImage || style.webkitMaskImage;
-                                const bgImg = style.backgroundImage;
-                                const isChecked = (bgColor === "rgb(0, 149, 246)" || bgColor === "rgb(74, 93, 249)" || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled')));
-                                officialCheckboxStates.set(userText, isChecked);
-                            }
-                        }
-                    });
-
-                    // Filtra e armazena no cache APENAS os usuários que estão realmente marcados
-                    const closeFriendsUsernames = users
-                        .filter(u => officialCheckboxStates.get(u.username) === true)
-                        .map(u => u.username);
-                    userListCache.closeFriends = new Set(closeFriendsUsernames);
-                    console.log(`Cache atualizado com ${userListCache.closeFriends.size} melhores amigos.`);
-
-                    // Gerenciamento de estado para os checkboxes do modal, similar a "Ocultar Story"
-                    const modalStates = new Map();
-                    users.forEach(({ username }) => {
-                        modalStates.set(username, officialCheckboxStates.get(username) || false);
-                    });
-
-                    // Armazena os estados iniciais para comparar no "Aplicar"
-                    const initialStates = new Map(modalStates);
-
-                    function renderPage(page) {
-                        let html = `
-                <div class="modal-header">
-                    <span class="modal-title">
-                        Amigos Próximos <span id="cfSelectedCount" style="font-size:12px; font-weight:normal; color:#0095f6;">(${Array.from(modalStates.values()).filter(v => v).length} selecionados)</span>
-                        <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie sua lista de Melhores Amigos. Selecione quem pode ver seus stories exclusivos (círculo verde).</span></div>
-                    </span>
-                    <div class="modal-controls"><button id="closeFriendsMinimizarBtn" title="Minimizar">_</button><button id="closeFriendsFecharBtn" title="Fechar">X</button></div>
-                </div>`;
-                        html += `
-                <div style="padding: 15px;">
-                    <button id="closeFriendsMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
-                    <button id="closeFriendsDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
-                    <button id="closeFriendsAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
-                </div>
-                <div style="padding: 0 15px 15px 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                    <button id="closeFriendsRefreshBtn" style="background: #1abc9c; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar Lista</button>
-                    <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; flex: 1; justify-content: flex-end; border: none; background: transparent;">
-                        <span style="font-size: 13px; font-weight: 500;">⚡ API</span>
-                        <label class="switch">
-                            <input type="checkbox" id="closeFriendsUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}>
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                </div>
-                <div style="margin-bottom:15px;">
-                        <input type="text" id="closeFriendsSearchInput" placeholder="Pesquisar..." style="width: 100%; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
-                </div>
-                <div class="tab-container">
-                    <button id="tabSelecionados" class="tab-button ${currentTab === 'selecionados' ? 'active' : ''}">Melhores Amigos</button>
-                    <button id="tabNaoSelecionados" class="tab-button ${currentTab === 'nao_selecionados' ? 'active' : ''}">Amigos</button>
-                </div>
-                <ul id="closeFriendsList" style='list-style:none;padding:0;max-height:40vh;overflow:auto;'>
-            `;
-
-                        // Filter users based on tab
-                        let filteredUsers = users;
-                        if (currentTab === 'selecionados') {
-                            filteredUsers = users.filter(({
-                                username
-                            }) => {
-                                return modalStates.get(username) === true;
-                            });
-                        } else if (currentTab === 'nao_selecionados') {
-                            filteredUsers = users.filter(({
-                                username
-                            }) => !modalStates.get(username));
-                        }
-
-                        const startIndex = (page - 1) * itemsPerPage;
-                        const endIndex = Math.min(startIndex + itemsPerPage, filteredUsers.length);
-                        const pageUsers = filteredUsers.slice(startIndex, endIndex);
-
-                        pageUsers.forEach(({ username, photoUrl }, idx) => {
-                            const isChecked = modalStates.get(username) || false;
-
-                            html += `
-                    <li style="padding:5px 0;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px;">
-                        <label class="custom-checkbox" for="cfcb_${username}" style="margin:0;">
-                            <input type="checkbox" class="closeFriendCheckbox" id="cfcb_${username}" data-username="${username}" ${isChecked ? "checked" : ""}>
-                            <span class="checkmark"></span>
-                        </label>
-                        <img src="${photoUrl || DEFAULT_AVATAR}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
-                        <span style="cursor:pointer; color: black;">${username}</span>
-                    </li>
-                `;
-                        });
-                        html += "</ul>";
-                        const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
-                        html += `<div id="paginationControls" style="margin-top:20px; display:flex; justify-content:center; align-items:center; gap:10px;">`;
-                        if (totalPages > 1) {
-                            if (page > 1) html += `<button id="prevPageBtn">Anterior</button>`;
-                            html += `<span style="font-weight:bold;">Página ${page} de ${totalPages}</span>`;
-                            if (page < totalPages) html += `<button id="nextPageBtn">Próximo</button>`;
-                        }
-                        html += `</div>`;
-                        div.innerHTML = html;
-                        document.body.appendChild(div);
-
-                        document.getElementById("closeFriendsFecharBtn").onclick = () => {
-                            div.remove();
-                            modalAberto = false;
-                        };
-                        document.getElementById("closeFriendsMinimizarBtn").onclick = () => {
-                            const modal = document.getElementById('allCloseFriendsDiv');
-                            const contentToToggle = [
-                                modal.querySelector('input[type="text"]'),
-                                modal.querySelector('.tab-container'),
-                                modal.querySelector('ul'),
-                                modal.querySelector('#paginationControls')
-                            ].filter(Boolean);
-
-                            const btn = document.getElementById('closeFriendsMinimizarBtn');
-                            const isMinimized = modal.dataset.minimized === 'true';
-
-                            contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
-
-                            modal.dataset.minimized = !isMinimized;
-                            btn.textContent = isMinimized ? 'Minimizar' : 'Maximizar';
-                            modal.style.maxHeight = isMinimized ? '85vh' : 'none';
-                        };
-
-                        document.getElementById("closeFriendsRefreshBtn").onclick = () => {
-                            div.remove();
-                            modalAberto = false;
-                            abrirModalAmigosProximos();
-                        };
-
-                        document.getElementById("closeFriendsUseApiToggle").onchange = (e) => {
-                            saveSettings({ useApi: e.target.checked });
-                            showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
-                        };
-
-                        document.getElementById("closeFriendsMarcarTodosBtn").onclick = () => {
-                            // Filtra os usuários da aba atual e depois pega apenas os da página visível
-                            const filteredUsers = users.filter(({ username }) => {
-                                return currentTab === 'selecionados' ? modalStates.get(username) : !modalStates.get(username);
-                            });
-                            const startIndex = (currentPage - 1) * itemsPerPage;
-                            const endIndex = Math.min(startIndex + itemsPerPage, filteredUsers.length);
-                            const pageUsers = filteredUsers.slice(startIndex, endIndex);
-
-                            pageUsers.forEach(({ username }) => modalStates.set(username, true));
-                            renderPage(currentPage);
-                        };
-                        document.getElementById("closeFriendsDesmarcarTodosBtn").onclick = () => {
-                            // Filtra os usuários da aba atual e depois pega apenas os da página visível
-                            const filteredUsers = users.filter(({ username }) => {
-                                return currentTab === 'selecionados' ? modalStates.get(username) : !modalStates.get(username);
-                            });
-                            const startIndex = (currentPage - 1) * itemsPerPage;
-                            const endIndex = Math.min(startIndex + itemsPerPage, filteredUsers.length);
-                            const pageUsers = filteredUsers.slice(startIndex, endIndex);
-
-                            pageUsers.forEach(({ username }) => modalStates.set(username, false));
-                            renderPage(currentPage);
-                        };
-
-                        const searchInput = document.getElementById("closeFriendsSearchInput");
-                        searchInput.addEventListener("input", () => {
-                            const filter = searchInput.value.toLowerCase();
-                            const listItems = div.querySelectorAll("#closeFriendsList li");
-                            listItems.forEach(li => {
-                                // Seletor ajustado para ser mais específico
-                                const usernameSpan = li.querySelector('span[style*="cursor:pointer"]');
-                                if (usernameSpan) {
-                                    const text = usernameSpan.textContent.toLowerCase();
-                                    li.style.display = text.includes(filter) ? "" : "none";
-                                }
-                            });
-                        });
-
-                        document.getElementById("tabSelecionados").onclick = () => {
-                            if (currentTab !== 'selecionados') {
-                                currentTab = 'selecionados';
-                                currentPage = 1;
-                                renderPage(currentPage);
-                            }
-                        };
-                        document.getElementById("tabNaoSelecionados").onclick = () => {
-                            if (currentTab !== 'nao_selecionados') {
-                                currentTab = 'nao_selecionados';
-                                currentPage = 1;
-                                renderPage(currentPage);
-                            }
-                        };
-
-                        const prevBtn = document.getElementById("prevPageBtn");
-                        if (prevBtn) prevBtn.onclick = () => {
-                            currentPage--;
-                            renderPage(currentPage);
-                        };
-                        const nextBtn = document.getElementById("nextPageBtn");
-                        if (nextBtn) nextBtn.onclick = () => {
-                            currentPage++;
-                            renderPage(currentPage);
-                        };
-
-                        // Adiciona eventos para os checkboxes na página atual
-                        document.querySelectorAll('.closeFriendCheckbox').forEach(cb => {
-                            cb.addEventListener('change', () => {
-                                modalStates.set(cb.dataset.username, cb.checked);
-                                const countEl = document.getElementById('cfSelectedCount');
-                                if (countEl) {
-                                    countEl.innerText = `(${Array.from(modalStates.values()).filter(v => v).length} selecionados)`;
-                                }
-                            });
-                        });
-
-                        document.getElementById("closeFriendsAplicarBtn").onclick = async () => {
-                            isApplyingChanges = true;
-                            const changedUsers = Array.from(modalStates.entries()).filter(([username, checked]) => {
-                                return initialStates.get(username) !== checked;
-                            });
-                            if (changedUsers.length === 0) {
-                                alert("Nenhuma alteração para aplicar.");
-                                isApplyingChanges = false;
-                                return;
-                            }
-
-                            let cancelled = false;
-                            const { bar, update, closeButton } = createCancellableProgressBar();
-                            closeButton.onclick = () => {
-                                cancelled = true;
-                                isApplyingChanges = false;
-                                bar.remove();
-                                alert("Processo interrompido.");
-                            };
-                            const isCancelled = () => cancelled;
-
-                            toggleLoading(true, 0, "Aplicando alterações...");
-                            // --- LÓGICA API VS HUMANA ---
-                            if (loadSettings().useApi) {
-                                update(0, changedUsers.length, "Obtendo IDs e aplicando via API...");
-                                const adds = [];
-                                const removes = [];
-
-                                for (let i = 0; i < changedUsers.length; i++) {
-                                    if (isCancelled()) break;
-                                    const [username, isChecked] = changedUsers[i];
-                                    update(i + 1, changedUsers.length, `Processando ${username}...`);
-                                    const uid = await getUserId(username);
-                                    if (uid) {
-                                        if (isChecked) adds.push(uid);
-                                        else removes.push(uid);
-                                    }
-                                    await new Promise(r => setTimeout(r, 200));
-                                }
-
-                                if (!isCancelled() && (adds.length > 0 || removes.length > 0)) {
-                                    try {
-                                        const res = await executeGraphqlSetBesties(adds, removes);
-                                        if (res.success) {
-                                            alert("Alterações aplicadas via API com sucesso!");
-                                        } else {
-                                            console.error("[IG Tools] Erro ao aplicar via API GraphQL:", res);
-                                            alert("Erro ao aplicar via API. Verifique o console.");
-                                        }
-                                    } catch (e) { console.error(e); alert("Erro ao aplicar via API."); }
-                                    toggleLoading(false);
-                                }
-                                bar.remove(); isApplyingChanges = false; return;
-                            }
-
-                            if (window.location.pathname !== "/accounts/close_friends/") {
-                                history.pushState(null, null, "/accounts/close_friends/");
-                                window.dispatchEvent(new Event("popstate"));
-                                await new Promise(resolve => setTimeout(resolve, 1000));
-                            }
-                            async function toggleOfficialCheckbox(username) {
-                                return new Promise((resolve) => {
-                                    let attempts = 0;
-                                    function tryToggle() {
-                                        attempts++;
-                                        const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
-                                        let found = false;
-                                        for (const flex of flexboxes) {
-                                            const userText = flex.innerText && flex.innerText.trim().split('\n')[0];
-                                            if (userText === username) {
-                                                const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção'));
-                                                if (officialCheckboxContainer) {
-                                                    officialCheckboxContainer.click();
-                                                    found = true;
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                        if (found || attempts >= 30) {
-                                            resolve();
-                                        } else {
-                                            setTimeout(tryToggle, 300);
-                                        }
-                                    }
-                                    tryToggle();
-                                });
-                            }
-                            for (let i = 0; i < changedUsers.length; i++) {
-                                if (isCancelled()) break;
-                                update(i + 1, changedUsers.length, "Aplicando alterações:");
-                                const [username, isChecked] = changedUsers[i];
-                                await toggleOfficialCheckbox(username);
-                                await new Promise(resolve => setTimeout(resolve, 2000));
-                                // Atualiza o estado inicial para o próximo "Aplicar"
-                                initialStates.set(username, isChecked);
-                                toggleLoading(true, ((i + 1) / changedUsers.length) * 100, "Aplicando alterações...");
-                            }
-
-                            bar.remove();
-                            isApplyingChanges = false;
-                        };
-
-                        let isApplyingChanges = false;
-                        setTimeout(() => {
-                            const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
-                            flexboxes.forEach(flex => {
-                                const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção'));
-                                if (!officialCheckboxContainer) return;
-                                if (officialCheckboxContainer._customSyncListener) return;
-                                officialCheckboxContainer._customSyncListener = true;
-                                officialCheckboxContainer.addEventListener("click", function () {
-                                    if (isApplyingChanges) return;
-                                    const userText = flex.innerText && flex.innerText.trim().split('\n')[0];
-                                    const customCheckbox = document.querySelector(`.closeFriendCheckbox[data-username="${userText}"]`);
-                                    if (customCheckbox) {
-                                        const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"]');
-                                        let isChecked = false;
-                                        if (iconDiv) {
-                                            const style = window.getComputedStyle(iconDiv);
-                                            const mask = style.maskImage || style.webkitMaskImage;
-                                            const bgImg = style.backgroundImage;
-                                            isChecked = (style.backgroundColor === 'rgb(0, 149, 246)' || style.backgroundColor === 'rgb(74, 93, 249)' || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled')));
-                                        }
-                                        if (customCheckbox.checked !== isChecked) {
-                                            customCheckbox.checked = isChecked;
-                                        }
-                                    }
-                                });
-                            });
-                        }, 500);
-                        const aplicarBtn = document.getElementById("closeFriendsAplicarBtn");
-                        if (aplicarBtn) {
-                            const originalHandler = aplicarBtn.onclick;
-                            aplicarBtn.onclick = async function () {
-                                isApplyingChanges = true;
-                                if (originalHandler) {
-                                    await originalHandler.apply(this, arguments);
-                                }
-                                toggleLoading(false);
-                                isApplyingChanges = false;
-                            };
-                        }
-                    }
-
-                    renderPage(currentPage);
-                }
-
-                let tentativasUser = 0;
-                let modalAberto = false; // Flag para evitar loop infinito
-                // --- FIM DO MENU AMIGOS PRÓXIMOS ---
-
-                // --- NOVO MENU: OCULTAR STORY ---
-                function extractHideStoryUsernames(doc = document) {
-                    return new Promise((resolve) => {
-                        const users = new Map(); // Usar Map para evitar duplicados e manter a ordem
-                        let scrollInterval;
-                        let noNewUsersCount = 0;
-                        const maxIdleCount = 6; // Parar após 6 tentativas rápidas sem novos usuários (~2.4s)
+                        const maxIdleCount = 6;
 
                         let cancelled = false;
                         const { bar, update, closeButton } = createCancellableProgressBar();
@@ -3942,94 +4152,90 @@
                             cancelled = true;
                             finishExtraction();
                         };
-                        update(0, 0, "Buscando e rolando a lista de usuários com story oculto...");
+                        update(0, 0, "Buscando e rolando a lista de Amigos Próximos...");
 
                         function finishExtraction() {
                             if (scrollInterval) clearInterval(scrollInterval);
-                            if (window._igHideStoryUsersCapture && window._igHideStoryUsersCapture.callbacks) {
-                                const idx = window._igHideStoryUsersCapture.callbacks.indexOf(networkCallback);
-                                if (idx !== -1) window._igHideStoryUsersCapture.callbacks.splice(idx, 1);
+                            if (window._igCloseFriendsUsersCapture && window._igCloseFriendsUsersCapture.callbacks) {
+                                const idx = window._igCloseFriendsUsersCapture.callbacks.indexOf(networkCallback);
+                                if (idx !== -1) window._igCloseFriendsUsersCapture.callbacks.splice(idx, 1);
                             }
                             if (bar) bar.remove();
-                            console.log(`[IG Tools] Extração de Ocultar Story finalizada. Total de ${users.size} usuários encontrados.`);
+                            console.log(`[IG Tools] Extração de Amigos Próximos finalizada. Total de ${users.size} contatos mapeados.`);
                             users.forEach(u => {
                                 if (u.username && u.pk) setCachedUserId(u.username, u.pk);
                             });
                             resolve(cancelled ? [] : Array.from(users.values()));
                         }
 
-                        // 1. Tenta extrair dados JSON embutidos pelo Instagram SSR (scripts application/json)
-                        function tryExtractFromSSRScripts() {
-                            try {
-                                const scripts = Array.from(doc.querySelectorAll('script[type="application/json"]'));
-                                for (const script of scripts) {
-                                    const text = script.textContent || '';
-                                    if (!text.includes('hide_story') && !text.includes('story') && !text.includes('username')) continue;
+                        // A. Extração de scripts SSR presentes no DOM
+                        try {
+                            const scripts = Array.from(doc.querySelectorAll('script[type="application/json"]'));
+                            for (const script of scripts) {
+                                const text = script.textContent || '';
+                                if (!text.includes('close_friend') && !text.includes('besties') && !text.includes('username')) continue;
 
-                                    const userRegex = /"username":"([a-zA-Z0-9._]+)"/g;
-                                    let match;
-                                    while ((match = userRegex.exec(text)) !== null) {
-                                        const uname = match[1];
-                                        if (!uname || uname === 'instagram' || uname === 'threads') continue;
+                                const userRegex = /"username":"([a-zA-Z0-9._]+)"/g;
+                                let match;
+                                while ((match = userRegex.exec(text)) !== null) {
+                                    const uname = match[1];
+                                    if (!uname || uname === 'instagram' || uname === 'threads') continue;
 
-                                        const start = Math.max(0, match.index - 300);
-                                        const end = Math.min(text.length, match.index + 500);
-                                        const chunk = text.slice(start, end);
+                                    const start = Math.max(0, match.index - 300);
+                                    const end = Math.min(text.length, match.index + 500);
+                                    const chunk = text.slice(start, end);
 
-                                        const picMatch = chunk.match(/"profile_pic_url":"([^"]+)"/);
-                                        const photoUrl = picMatch ? picMatch[1].replace(/\\/g, '').replace(/\\u0026/g, '&') : DEFAULT_AVATAR;
+                                    const picMatch = chunk.match(/"profile_pic_url":"([^"]+)"/);
+                                    const photoUrl = picMatch ? picMatch[1].replace(/\\/g, '').replace(/\\u0026/g, '&') : DEFAULT_AVATAR;
 
-                                        const pkMatch = chunk.match(/"pk":"?(\d+)"?/);
-                                        const pk = pkMatch ? pkMatch[1] : '';
-                                        if (pk) setCachedUserId(uname, pk);
+                                    const pkMatch = chunk.match(/"pk":"?(\d+)"?/);
+                                    const pk = pkMatch ? pkMatch[1] : '';
+                                    if (pk) setCachedUserId(uname, pk);
 
-                                        let isChecked = false;
-                                        const chunkLower = chunk.toLowerCase();
-                                        if (chunkLower.includes('circle-check') || chunkLower.includes('"is_selected":true') || chunkLower.includes('"selected":true')) {
-                                            isChecked = true;
-                                        }
+                                    let isChecked = false;
+                                    const chunkLower = chunk.toLowerCase();
+                                    if (chunkLower.includes('circle-check') || chunkLower.includes('"is_selected":true') || chunkLower.includes('"selected":true')) {
+                                        isChecked = true;
+                                    }
 
-                                        if (!users.has(uname)) {
-                                            users.set(uname, { username: uname, photoUrl, isChecked, pk });
-                                        }
+                                    if (!users.has(uname)) {
+                                        users.set(uname, { username: uname, photoUrl, isChecked, isCloseFriend: isChecked, pk });
                                     }
                                 }
-                                if (users.size > 0) {
-                                    console.log(`[IG Tools] Extraídos ${users.size} usuários de Ocultar Story via scripts SSR.`);
-                                    update(users.size, users.size, `Carregados ${users.size} usuário(s) iniciais...`);
-                                }
-                            } catch (e) { }
-                        }
+                            }
+                            if (users.size > 0) {
+                                console.log(`[IG Tools] Extraídos ${users.size} usuários de Amigos Próximos via scripts SSR.`);
+                                update(users.size, users.size, `Carregados ${users.size} usuário(s) iniciais...`);
+                            }
+                        } catch (e) { }
 
-                        tryExtractFromSSRScripts();
-
-                        // 2. Importa dados já capturados na sessão pelo interceptor de rede
-                        if (window._igHideStoryUsersCapture && window._igHideStoryUsersCapture.users) {
-                            window._igHideStoryUsersCapture.users.forEach(u => {
+                        // B. Importa dados já capturados na sessão pelo interceptor de rede
+                        if (window._igCloseFriendsUsersCapture && window._igCloseFriendsUsersCapture.users) {
+                            window._igCloseFriendsUsersCapture.users.forEach(u => {
                                 if (!users.has(u.username)) {
-                                    users.set(u.username, { username: u.username, photoUrl: u.photoUrl, isChecked: u.isChecked || false, pk: u.pk });
+                                    users.set(u.username, { username: u.username, photoUrl: u.photoUrl, isChecked: u.isChecked || false, isCloseFriend: u.isChecked || false, pk: u.pk });
                                 } else {
                                     const cur = users.get(u.username);
                                     if (!cur.pk && u.pk) cur.pk = u.pk;
                                     if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && u.photoUrl !== DEFAULT_AVATAR) cur.photoUrl = u.photoUrl;
-                                    if (!cur.isChecked && u.isChecked) cur.isChecked = true;
+                                    if (!cur.isChecked && u.isChecked) { cur.isChecked = true; cur.isCloseFriend = true; }
                                 }
                                 if (u.pk) setCachedUserId(u.username, u.pk);
                             });
                         }
 
-                        // 3. Callback em tempo real para paginação assíncrona (com.instagram.pagination.async)
+                        // C. Callback de rede em tempo real para paginações Bloks
                         function networkCallback(capturedArray) {
                             let added = false;
                             capturedArray.forEach(u => {
                                 if (!users.has(u.username)) {
-                                    users.set(u.username, { username: u.username, photoUrl: u.photoUrl, isChecked: u.isChecked || false, pk: u.pk });
+                                    users.set(u.username, { username: u.username, photoUrl: u.photoUrl, isChecked: u.isChecked || false, isCloseFriend: u.isChecked || false, pk: u.pk });
                                     added = true;
                                 } else {
                                     const cur = users.get(u.username);
                                     if (!cur.pk && u.pk) cur.pk = u.pk;
                                     if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && u.photoUrl !== DEFAULT_AVATAR) cur.photoUrl = u.photoUrl;
-                                    if (!cur.isChecked && u.isChecked) cur.isChecked = true;
+                                    if (!cur.isChecked && u.isChecked) { cur.isChecked = true; cur.isCloseFriend = true; }
                                 }
                                 if (u.pk) setCachedUserId(u.username, u.pk);
                             });
@@ -4038,16 +4244,15 @@
                                 update(users.size, users.size, `Capturado(s) ${users.size} usuário(s)... Rolando...`);
                             }
                         }
-                        if (window._igHideStoryUsersCapture) {
-                            window._igHideStoryUsersCapture.callbacks.push(networkCallback);
+                        if (window._igCloseFriendsUsersCapture) {
+                            window._igCloseFriendsUsersCapture.callbacks.push(networkCallback);
                         }
 
-                        // 4. Varredura no DOM combinada com rolagem acelerada (Turbo Scroll)
+                        // D. Varredura no DOM combinada com rolagem acelerada (Turbo Scroll)
                         function performScrollAndExtract() {
                             if (cancelled) return;
                             const initialUserCount = users.size;
 
-                            // Seletor para os elementos do DOM que contêm o nome de usuário
                             const userElements = Array.from(doc.querySelectorAll('div.wbloks_1, div[data-bloks-name="bk.components.Flexbox"]'))
                                 .filter(el => el.querySelector('div[aria-label*="caixa de seleção"], div[role="button"][aria-label*="caixa de seleção"]') || (el.querySelector('img') && el.innerText && el.innerText.includes('\n')));
 
@@ -4060,14 +4265,19 @@
                                 let isChecked = false;
                                 const checkboxContainer = userElement.querySelector('div[aria-label*="caixa de seleção"], div[role="button"][aria-label*="caixa de seleção"]') || userElement.querySelector('div[role="button"][tabindex="0"]');
                                 if (checkboxContainer) {
-                                    const icon = checkboxContainer.querySelector('[data-bloks-name="ig.components.Icon"], div.wbloks_1') || checkboxContainer;
-                                    if (icon) {
-                                        const style = window.getComputedStyle(icon);
-                                        const bg = style.backgroundColor;
-                                        const mask = style.maskImage || style.webkitMaskImage;
-                                        const bgImg = style.backgroundImage;
-                                        if (bg === 'rgb(0, 149, 246)' || bg === 'rgb(74, 93, 249)' || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled'))) {
-                                            isChecked = true;
+                                    const ariaChecked = checkboxContainer.getAttribute('aria-checked') || checkboxContainer.getAttribute('aria-selected');
+                                    if (ariaChecked === 'true') {
+                                        isChecked = true;
+                                    } else {
+                                        const icon = checkboxContainer.querySelector('[data-bloks-name="ig.components.Icon"], div.wbloks_1') || checkboxContainer;
+                                        if (icon) {
+                                            const style = window.getComputedStyle(icon);
+                                            const bg = style.backgroundColor;
+                                            const mask = style.maskImage || style.webkitMaskImage;
+                                            const bgImg = style.backgroundImage;
+                                            if (bg === 'rgb(0, 149, 246)' || bg === 'rgb(74, 93, 249)' || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled'))) {
+                                                isChecked = true;
+                                            }
                                         }
                                     }
                                 }
@@ -4077,10 +4287,10 @@
                                     const photoUrl = imgTag ? imgTag.src : DEFAULT_AVATAR;
 
                                     if (!users.has(username)) {
-                                        users.set(username, { username, photoUrl, isChecked, pk: getCachedUserId(username) || '' });
+                                        users.set(username, { username, photoUrl, isChecked, isCloseFriend: isChecked, pk: getCachedUserId(username) || '' });
                                     } else {
                                         const u = users.get(username);
-                                        if (!u.isChecked && isChecked) u.isChecked = true;
+                                        if (!u.isChecked && isChecked) { u.isChecked = true; u.isCloseFriend = true; }
                                         if ((!u.photoUrl || u.photoUrl === DEFAULT_AVATAR) && photoUrl !== DEFAULT_AVATAR) u.photoUrl = photoUrl;
                                     }
                                 }
@@ -4095,12 +4305,11 @@
                             }
 
                             if (noNewUsersCount >= (users.size > 0 ? maxIdleCount : 8)) {
-                                console.log("[IG Tools] Nenhum novo usuário após tentativas sucessivas. Finalizando extração.");
+                                console.log("[IG Tools] Nenhum novo usuário em Amigos Próximos após tentativas sucessivas. Finalizando.");
                                 finishExtraction();
                                 return;
                             }
 
-                            // Rolagem dinâmica (Desktop e Mobile)
                             const scrollContainer = doc.querySelector('div[role="dialog"] ._aano') ||
                                 doc.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]') ||
                                 doc.querySelector('main div[style*="overflow-y: auto"]') ||
@@ -4114,332 +4323,3255 @@
                             }
                         }
 
-                        // Inicia processo de rolagem rápida (400ms)
                         scrollInterval = setInterval(performScrollAndExtract, 400);
 
                         setTimeout(() => {
-                            if (scrollInterval) {
-                                console.log("[IG Tools] Timeout de segurança atingido. Finalizando extração.");
-                                finishExtraction();
-                            }
+                            if (scrollInterval) finishExtraction();
                         }, 60000);
                     });
                 }
 
-                async function abrirModalOcultarStory() {
-                    if (modalAbertoStory) return;
-                    modalAbertoStory = true;
-                    const users = await extractHideStoryUsernames();
-                    if (users.length === 0) {
-                        modalAbertoStory = false;
-                        return;
+                // 2. Extrai instantaneamente do DOM atual ou de scripts SSR sem esperar rolagem
+                async function extractCloseFriendsFromCurrentDomOrFetch() {
+                    const usersMap = new Map();
+
+                    // Tentativa direta via API REST oficial de besties (0ms e 100% de precisão)
+                    try {
+                        const apiRes = await fetch('https://www.instagram.com/api/v1/friendships/besties/', {
+                            headers: getApiHeaders(),
+                            credentials: 'include'
+                        });
+                        if (apiRes.ok) {
+                            const apiData = await apiRes.json();
+                            if (apiData && Array.isArray(apiData.users)) {
+                                apiData.users.forEach(u => {
+                                    const k = u.username.toLowerCase();
+                                    const pk = String(u.pk || u.id || '');
+                                    if (pk) setCachedUserId(u.username, pk);
+                                    usersMap.set(k, {
+                                        username: u.username,
+                                        photoUrl: u.profile_pic_url || DEFAULT_AVATAR,
+                                        pk,
+                                        id: pk,
+                                        fullName: u.full_name || '',
+                                        isCloseFriend: true
+                                    });
+                                });
+                                console.log(`[IG Tools Close Friends] ${apiData.users.length} amigos próximos mapeados diretamente via API REST.`);
+                            }
+                        }
+                    } catch (_) { }
+
+                    // DOM atual
+                    const flexboxes = Array.from(document.querySelectorAll('div.wbloks_1, [data-bloks-name="bk.components.Flexbox"]'));
+                    if (flexboxes.length > 0) {
+                        flexboxes.forEach(flex => {
+                            const spans = Array.from(flex.querySelectorAll('span'));
+                            let uname = spans.length > 0 ? spans[0].innerText.trim() : (flex.innerText ? flex.innerText.trim().split('\n')[0] : '');
+                            uname = uname.replace(/^@/, '');
+                            if (!uname || uname === 'Ver perfil' || !/^[a-zA-Z0-9_.]+$/.test(uname)) return;
+
+                            const checkboxContainer = flex.querySelector('div[aria-label*="caixa de seleção"], div[role="button"][aria-label*="caixa de seleção"], div[role="button"][tabindex="0"]');
+                            let isChecked = false;
+                            if (checkboxContainer) {
+                                const ariaChecked = checkboxContainer.getAttribute('aria-checked') || checkboxContainer.getAttribute('aria-selected');
+                                if (ariaChecked === 'true') isChecked = true;
+                                else {
+                                    const icon = checkboxContainer.querySelector('[data-bloks-name="ig.components.Icon"], div.wbloks_1') || checkboxContainer;
+                                    if (icon) {
+                                        const style = window.getComputedStyle(icon);
+                                        const bg = style.backgroundColor;
+                                        const mask = style.maskImage || style.webkitMaskImage;
+                                        const bgImg = style.backgroundImage;
+                                        if (bg === 'rgb(0, 149, 246)' || bg === 'rgb(74, 93, 249)' || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled'))) {
+                                            isChecked = true;
+                                        }
+                                    }
+                                }
+                            }
+
+                            const imgTag = flex.querySelector('img');
+                            const photoUrl = imgTag ? imgTag.src : DEFAULT_AVATAR;
+                            const pk = getCachedUserId(uname) || '';
+
+                            usersMap.set(uname.toLowerCase(), {
+                                username: uname,
+                                photoUrl,
+                                pk,
+                                id: pk,
+                                fullName: spans.length > 1 ? spans[1].innerText.trim() : '',
+                                isCloseFriend: isChecked
+                            });
+                        });
                     }
 
-                    // Carrega caches de seguindo e seguidores para o filtro
-                    const [followingCache, followersCache] = await Promise.all([
-                        dbHelper.loadCache('following'),
-                        dbHelper.loadCache('followers')
-                    ]);
-                    const followingSet = new Set(followingCache ? Array.from(followingCache).map(u => String(u).toLowerCase()) : []);
-                    const followersSet = new Set(followersCache ? Array.from(followersCache).map(u => String(u).toLowerCase()) : []);
+                    // Scripts SSR
+                    const scripts = Array.from(document.querySelectorAll('script[type="application/json"]'));
+                    for (const script of scripts) {
+                        const text = script.textContent || '';
+                        if (!text.includes('close_friend') && !text.includes('besties') && !text.includes('username')) continue;
+                        const userRegex = /"username":"([a-zA-Z0-9._]+)"/g;
+                        let match;
+                        while ((match = userRegex.exec(text)) !== null) {
+                            const uname = match[1];
+                            if (!uname || uname === 'instagram' || uname === 'threads') continue;
+                            const k = uname.toLowerCase();
 
-                    const officialStates = new Map();
-                    users.forEach(u => {
-                        officialStates.set(u.username, u.isChecked || false);
-                    });
-                    const modalStates = new Map(officialStates);
-                    const itemsPerPage = loadSettings().itemsPerPage;
+                            const start = Math.max(0, match.index - 300);
+                            const end = Math.min(text.length, match.index + 500);
+                            const chunk = text.slice(start, end);
+
+                            const picMatch = chunk.match(/"profile_pic_url":"([^"]+)"/);
+                            const photoUrl = picMatch ? picMatch[1].replace(/\\/g, '').replace(/\\u0026/g, '&') : DEFAULT_AVATAR;
+
+                            const pkMatch = chunk.match(/"pk":"?(\d+)"?/);
+                            const pk = pkMatch ? pkMatch[1] : '';
+                            if (pk) setCachedUserId(uname, pk);
+
+                            let isChecked = false;
+                            const chunkLower = chunk.toLowerCase();
+                            if (chunkLower.includes('circle-check') || chunkLower.includes('"is_selected":true') || chunkLower.includes('"selected":true')) {
+                                isChecked = true;
+                            }
+
+                            if (!usersMap.has(k)) {
+                                usersMap.set(k, {
+                                    username: uname,
+                                    photoUrl,
+                                    pk,
+                                    id: pk,
+                                    fullName: '',
+                                    isCloseFriend: isChecked
+                                });
+                            } else if (isChecked) {
+                                usersMap.get(k).isCloseFriend = true;
+                            }
+                        }
+                    }
+
+                    // Se vazia e fora de /accounts/close_friends/, tenta ler o HTML diretamente via fetch nativo
+                    const currentCloseCount = Array.from(usersMap.values()).filter(u => u.isCloseFriend).length;
+                    if (currentCloseCount === 0 && !window.location.pathname.includes('/accounts/close_friends/')) {
+                        try {
+                            const res = await fetch('https://www.instagram.com/accounts/close_friends/', { credentials: 'include' });
+                            if (res.ok) {
+                                const htmlText = await res.text();
+                                const userRegex = /"username":"([a-zA-Z0-9._]+)"/g;
+                                let match;
+                                while ((match = userRegex.exec(htmlText)) !== null) {
+                                    const uname = match[1];
+                                    if (!uname || uname === 'instagram' || uname === 'threads') continue;
+                                    const k = uname.toLowerCase();
+
+                                    const start = Math.max(0, match.index - 300);
+                                    const end = Math.min(htmlText.length, match.index + 500);
+                                    const chunk = htmlText.slice(start, end);
+
+                                    const picMatch = chunk.match(/"profile_pic_url":"([^"]+)"/);
+                                    const photoUrl = picMatch ? picMatch[1].replace(/\\/g, '').replace(/\\u0026/g, '&') : DEFAULT_AVATAR;
+
+                                    const pkMatch = chunk.match(/"pk":"?(\d+)"?/);
+                                    const pk = pkMatch ? pkMatch[1] : '';
+                                    if (pk) setCachedUserId(uname, pk);
+
+                                    let isChecked = false;
+                                    const chunkLower = chunk.toLowerCase();
+                                    if (chunkLower.includes('circle-check') || chunkLower.includes('"is_selected":true') || chunkLower.includes('"selected":true')) {
+                                        isChecked = true;
+                                    }
+
+                                    if (!usersMap.has(k)) {
+                                        usersMap.set(k, {
+                                            username: uname,
+                                            photoUrl,
+                                            pk,
+                                            id: pk,
+                                            fullName: '',
+                                            isCloseFriend: isChecked
+                                        });
+                                    } else if (isChecked) {
+                                        usersMap.get(k).isCloseFriend = true;
+                                    }
+                                }
+                            }
+                        } catch (_) { }
+                    }
+
+                    // Dados capturados em tempo real por rede
+                    if (window._igCloseFriendsUsersCapture && window._igCloseFriendsUsersCapture.users) {
+                        window._igCloseFriendsUsersCapture.users.forEach(u => {
+                            const k = u.username.toLowerCase();
+                            if (!usersMap.has(k)) {
+                                usersMap.set(k, {
+                                    username: u.username,
+                                    photoUrl: u.photoUrl || DEFAULT_AVATAR,
+                                    pk: u.pk || '',
+                                    id: u.pk || '',
+                                    fullName: '',
+                                    isCloseFriend: !!u.isChecked
+                                });
+                            } else if (u.isChecked) {
+                                usersMap.get(k).isCloseFriend = true;
+                            }
+                            if (u.pk) setCachedUserId(u.username, u.pk);
+                        });
+                    }
+
+                    return Array.from(usersMap.values());
+                }
+
+                async function abrirModalAmigosProximos() {
+                    const existingModal = document.getElementById("closeFriendsModal") || document.getElementById("allCloseFriendsDiv");
+                    if (existingModal) existingModal.remove();
+                    if (modalAbertoCloseFriends) return;
+                    modalAbertoCloseFriends = true;
+
+                    // Helper inteligente para resolver fotos de perfil através de múltiplos caches e sessões
+                    function resolveUserPhoto(username, currentPhoto = null) {
+                        if (currentPhoto && currentPhoto !== DEFAULT_AVATAR && !currentPhoto.includes('rsrc.php')) {
+                            return currentPhoto;
+                        }
+                        const clean = (username || '').toLowerCase();
+                        if (typeof cachedData !== 'undefined' && cachedData?.userDetails) {
+                            const p = cachedData.userDetails.get(clean)?.photoUrl;
+                            if (p && p !== DEFAULT_AVATAR && !p.includes('rsrc.php')) return p;
+                        }
+                        if (dbHelper?._cache?.following && Array.isArray(dbHelper._cache.following)) {
+                            const item = dbHelper._cache.following.find(x => (x?.username || x)?.toLowerCase() === clean);
+                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR) return item.photoUrl;
+                        }
+                        if (dbHelper?._cache?.followers && Array.isArray(dbHelper._cache.followers)) {
+                            const item = dbHelper._cache.followers.find(x => (x?.username || x)?.toLowerCase() === clean);
+                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR) return item.photoUrl;
+                        }
+                        if (dbHelper?._cache?.closeFriends && Array.isArray(dbHelper._cache.closeFriends)) {
+                            const item = dbHelper._cache.closeFriends.find(x => (x?.username || x)?.toLowerCase() === clean);
+                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR) return item.photoUrl;
+                        }
+                        if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                            const item = seguindoList.find(x => (typeof x === 'object' ? x?.username : x)?.toLowerCase() === clean);
+                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR) return item.photoUrl;
+                        }
+                        return DEFAULT_AVATAR;
+                    }
+
+                    // 1. CARREGAMENTO INSTANTÂNEO VIA CACHE LOCAL OU BANCO INDEXEDDB (0ms)
+                    let closeFriendsList = (Array.isArray(cachedCloseFriends) && cachedCloseFriends.length > 0)
+                        ? [...cachedCloseFriends]
+                        : [];
+
+                    if (closeFriendsList.length === 0) {
+                        try {
+                            const dbBesties = await dbHelper.loadCache('closeFriends');
+                            let bestiesArr = [];
+                            if (dbBesties) {
+                                if (Array.isArray(dbBesties)) bestiesArr = dbBesties;
+                                else if (dbBesties.details instanceof Map) bestiesArr = Array.from(dbBesties.details.values());
+                                else if (dbBesties instanceof Set) bestiesArr = Array.from(dbBesties).map(u => ({ username: u }));
+                            }
+                            if (bestiesArr.length > 0) {
+                                closeFriendsList = bestiesArr.map(u => ({
+                                    username: typeof u === 'string' ? u : u.username,
+                                    photoUrl: resolveUserPhoto(typeof u === 'string' ? u : u.username, typeof u === 'object' ? u.photoUrl : null),
+                                    pk: (typeof u === 'object' && (u.pk || u.id)) ? String(u.pk || u.id) : (getCachedUserId(typeof u === 'string' ? u : u.username) || ''),
+                                    fullName: (typeof u === 'object' && u.fullName) ? u.fullName : '',
+                                    isCloseFriend: true
+                                }));
+                                cachedCloseFriends = closeFriendsList;
+                            }
+                        } catch (_) { }
+                    }
+
+                    // Tenta mesclar contas de Seguindo imediatamente (para que "Quem Eu Sigo" já venha com fotos mesmo antes do primeiro sync manual)
+                    try {
+                        const dbFollowing = await dbHelper.loadCache('following');
+                        let fArr = [];
+                        if (dbFollowing) {
+                            if (Array.isArray(dbFollowing)) fArr = dbFollowing;
+                            else if (dbFollowing.details instanceof Map) fArr = Array.from(dbFollowing.details.values());
+                            else if (dbFollowing instanceof Set) fArr = Array.from(dbFollowing).map(u => ({ username: u }));
+                        }
+                        if (fArr.length === 0 && dbHelper?._cache?.following && Array.isArray(dbHelper._cache.following)) {
+                            fArr = dbHelper._cache.following;
+                        }
+                        if (fArr.length === 0 && typeof seguindoList !== 'undefined' && Array.isArray(seguindoList) && seguindoList.length > 0) {
+                            fArr = seguindoList;
+                        }
+                        if (fArr.length > 0) {
+                            const map = new Map();
+                            closeFriendsList.forEach(u => {
+                                const k = u.username.toLowerCase();
+                                const p = resolveUserPhoto(u.username, u.photoUrl);
+                                map.set(k, { ...u, photoUrl: p });
+                            });
+                            fArr.forEach(f => {
+                                const uname = typeof f === 'string' ? f : f.username;
+                                if (!uname) return;
+                                const k = uname.toLowerCase();
+                                const p = resolveUserPhoto(uname, (typeof f === 'object' && f.photoUrl) ? f.photoUrl : null);
+                                const existing = map.get(k);
+                                if (existing) {
+                                    if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && p && p !== DEFAULT_AVATAR) {
+                                        existing.photoUrl = p;
+                                    }
+                                    if (!existing.fullName && typeof f === 'object' && f.fullName) {
+                                        existing.fullName = f.fullName;
+                                    }
+                                    if (!existing.pk && typeof f === 'object' && (f.pk || f.id)) {
+                                        existing.pk = String(f.pk || f.id);
+                                    }
+                                } else {
+                                    const pk = (typeof f === 'object' && (f.pk || f.id)) ? String(f.pk || f.id) : (getCachedUserId(uname) || '');
+                                    map.set(k, {
+                                        username: uname,
+                                        pk: pk,
+                                        id: pk,
+                                        fullName: (typeof f === 'object' && f.fullName) ? f.fullName : '',
+                                        photoUrl: p || DEFAULT_AVATAR,
+                                        isCloseFriend: false
+                                    });
+                                }
+                            });
+                            closeFriendsList = Array.from(map.values());
+                            cachedCloseFriends = closeFriendsList;
+                        }
+                    } catch (_) { }
+
+                    const selectedUsers = new Set();
                     let currentPage = 1;
+                    let sortConfig = { key: 'isCloseFriend', direction: 'descending' };
+
+                    // 2. MONTAGEM IMEDIATA DO MODAL (0ms - Interface Responsiva e Polida)
                     const div = document.createElement("div");
-                    div.id = "allHideStoryDiv";
+                    div.id = "closeFriendsModal";
                     div.className = "submenu-modal";
                     div.style.cssText = `
-            position: fixed;
-            top: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 70vw;
-            max-width: 700px;
-            max-height: 85vh;
-            overflow: auto;
-            border: 2px solid #f39c12;
-            border-radius: 10px;
-            z-index: 2147483647;
-            padding: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        `;
-                    let currentTab = 'ocultados';
-                    let userFilterType = 'all'; // 'all', 'following', 'followers'
+                        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                        width: 90%; max-width: 820px; max-height: 90vh; border: 1px solid #ccc;
+                        border-radius: 12px; padding: 20px; z-index: 10000; overflow: auto;
+                        box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+                    `;
+
+                    const cfCount = closeFriendsList.filter(u => u.isCloseFriend).length;
 
                     div.innerHTML = `
-            <div class="modal-header">
-                <span class="modal-title">Ocultar Story <span id="hsSelectedCount" style="font-size:12px; font-weight:normal; color:#f39c12;">(${Array.from(modalStates.values()).filter(v => v).length} selecionados)</span> <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Selecione usuários para ocultar seus stories.</span></div></span>
-                <span class="modal-title">Ocultar Story <span id="hsSelectedCount" style="font-size:12px; font-weight:normal; color:#f39c12;">(${Array.from(modalStates.values()).filter(v => v).length} selecionados)</span> <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Selecione usuários para ocultar seus stories.</span></div></span>
-                <div class="modal-controls"><button id="hideStoryMinimizarBtn">_</button><button id="hideStoryFecharBtn">X</button></div>
-            </div>
-            <div style="padding: 15px;">
-                <button id="hideStoryMarcarTodosBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Selecionar</button>
-                <button id="hideStoryDesmarcarTodosBtn" style="background:#6c757d;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;margin-right:10px;">Desmarcar</button>
-                <button id="hideStoryAplicarBtn" style="background:#0095f6;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;">Aplicar</button>
-            </div>
-            <div style="padding: 0 15px 15px 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                <button id="hideStoryRefreshBtn" style="background: #1abc9c; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">🔄 Atualizar (Scroll)</button>
-                <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; flex: 1; justify-content: flex-end; border: none; background: transparent;">
-                    <span style="font-size: 13px; font-weight: 500;">⚡ API</span>
-                    <label class="switch">
-                        <input type="checkbox" id="hideStoryUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-            </div>
-            <div style="margin-bottom:15px; display: flex; gap: 10px; align-items: center; padding: 0 15px;">
-                <input type="text" id="hideStorySearchInput" placeholder="Pesquisar..." style="flex: 1; padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
-                <select id="hideStoryUserFilter" style="padding: 6px; border-radius: 5px; border: 1px solid #ccc; color: black; background: white;">
-                    <option value="all">Todos</option>
-                    <option value="following">Seguindo</option>
-                    <option value="followers">Seguidores</option>
-                </select>
-            </div>
-            <div class="tab-container">
-                <button id="tabOcultados" class="tab-button active">Ocultados</button>
-                <button id="tabAmigos" class="tab-button">Amigos</button>
-            </div>
-            <div id="hideStoryListContent"></div>
-        `;
+                        <div class="modal-header">
+                            <span class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+                                <span>⭐ Gerenciador de Amigos Próximos</span>
+                                <span id="cfSelectedCount" style="font-size:12px; font-weight:normal; color:#0095f6;">(0 selecionados)</span>
+                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie seus Melhores Amigos (círculo verde). Adicione ou remova contatos individualmente ou em lote com 1 clique.</span></div>
+                            </span>
+                            <div class="modal-controls">
+                                <button id="cfMinimizarBtn" title="Minimizar">_</button>
+                                <button id="cfFecharBtn" title="Fechar">X</button>
+                            </div>
+                        </div>
+                        <div style="padding: 15px 0 10px 0;">
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                                    <button id="cfRefreshBtn" title="Ler e sincronizar Amigos Próximos via Instagram Web" style="background: #1abc9c; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">🔄 Sincronizar</button>
+                                    <button id="cfImportJsonBtn" title="Importar arquivo oficial close_friends.json do Instagram" style="background: #8e44ad; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">📥 Importar JSON</button>
+                                    <button id="cfAddSelectedBtn" title="Adicionar selecionados aos Amigos Próximos" style="background: #2ecc71; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600;">⭐ Adicionar Selecionados</button>
+                                    <button id="cfRemoveSelectedBtn" title="Remover selecionados dos Amigos Próximos" style="background: #e74c3c; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600;">❌ Remover Selecionados</button>
+                                    <button id="cfSelectPageBtn" style="background: #0095f6; color: white; border: none; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 13px;">Selecionar Página</button>
+                                    <button id="cfDeselectAllBtn" style="background: #6c757d; color: white; border: none; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 13px;">Desmarcar Todos</button>
+                                    <input type="file" id="cfJsonFileInput" accept=".json" style="display: none;">
+                                </div>
+                                <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; display: flex; align-items: center;">
+                                    <span style="font-size: 13px; font-weight: 500;">⚡ Usar API</span>
+                                    <label class="switch"><input type="checkbox" id="cfUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}><span class="slider"></span></label>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 12px; display: flex; gap: 10px;">
+                            <input type="text" id="cfSearchInput" placeholder="Pesquisar por @usuário, nome ou ID..." style="flex: 2; padding: 8px 12px; height: 38px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; outline: none; box-sizing: border-box;">
+                            <select id="cfFilterSelect" style="flex: 1; padding: 0 10px; height: 38px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; cursor: pointer; outline: none; box-sizing: border-box;">
+                                <option value="besties">⭐ Melhores Amigos (${cfCount})</option>
+                                <option value="following">👤 Quem Eu Sigo (Para Adicionar)</option>
+                                <option value="all">Todos (${closeFriendsList.length})</option>
+                            </select>
+                        </div>
+                        <div id="statusCloseFriends" style="font-weight: 600; font-size: 13px; color: #555; display: flex; justify-content: space-between; align-items: center;">
+                            <span>Total: <strong style="color: #2ecc71;">${cfCount}</strong> melhores amigos cadastrados.</span>
+                            <span id="cfSyncInfo" style="font-size: 11px; color: #888;"></span>
+                        </div>
+                        <div id="tabelaCloseFriendsContainer" style="display: block; margin-top: 12px;"></div>
+                    `;
+
                     document.body.appendChild(div);
 
-                    function renderList(page) {
-                        const listContainer = document.getElementById("hideStoryListContent");
-                        const searchTerm = document.getElementById('hideStorySearchInput').value.toLowerCase();
+                    const container = document.getElementById("tabelaCloseFriendsContainer");
 
-                        let filteredUsers = users.filter(u => {
-                            const isMatch = u.username.toLowerCase().includes(searchTerm);
-                            const tabMatch = (currentTab === 'ocultados' ? modalStates.get(u.username) : !modalStates.get(u.username)); // Corrected to use modalStates
+                    const updateCounts = (paginatedUsers = []) => {
+                        const countEl = document.getElementById('cfSelectedCount');
+                        if (countEl) countEl.innerText = `(${selectedUsers.size} selecionados)`;
 
-                            let filterMatch = true;
-                            if (userFilterType === 'following') filterMatch = followingSet.has(String(u.username).toLowerCase());
-                            if (userFilterType === 'followers') filterMatch = followersSet.has(String(u.username).toLowerCase());
-
-                            return isMatch && tabMatch && filterMatch;
-                        });
-
-                        const startIndex = (page - 1) * itemsPerPage;
-                        const endIndex = Math.min(startIndex + itemsPerPage, filteredUsers.length);
-                        const pageUsers = filteredUsers.slice(startIndex, endIndex);
-
-                        let html = `<ul id="hideStoryList" style='list-style:none;padding:0;max-height:40vh;overflow:auto;'>`;
-                        pageUsers.forEach(({ username, photoUrl }, idx) => {
-                            const isChecked = modalStates.get(username) || false;
-                            html += `
-                    <li style="padding:5px 0;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px;">
-                    <label class="custom-checkbox" for="hsb_${username}" style="margin:0;">
-                        <input type="checkbox" class="hideStoryCheckbox" id="hsb_${username}" data-username="${username}" ${isChecked ? "checked" : ""}>
-                            <span class="checkmark"></span>
-                        </label>
-                        <img src="${photoUrl || DEFAULT_AVATAR}" alt="${username}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
-                        <span style="cursor:pointer; color: black;">${username}</span>
-                    </li>
-                `;
-                        });
-                        html += "</ul>";
-
-                        const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
-                        html += `<div id="paginationControls" style="margin-top:20px; display:flex; justify-content:center; align-items:center; gap:10px;">`;
-                        if (totalPages > 1) {
-                            if (page > 1) html += `<button id="prevPageBtn">Anterior</button>`;
-                            html += `<span style="font-weight:bold;">Página ${page} de ${totalPages}</span>`;
-                            if (page < totalPages) html += `<button id="nextPageBtn">Próximo</button>`;
+                        const selectAllCb = document.getElementById('selectAllCfCheckbox');
+                        if (selectAllCb && paginatedUsers.length > 0) {
+                            selectAllCb.checked = paginatedUsers.every(u => selectedUsers.has(u.username));
                         }
-                        html += `</div>`;
 
-                        listContainer.innerHTML = html;
+                        const curCfCount = closeFriendsList.filter(u => u.isCloseFriend).length;
+                        const filterSelect = document.getElementById('cfFilterSelect');
+                        if (filterSelect && filterSelect.options.length >= 3) {
+                            filterSelect.options[0].text = `⭐ Melhores Amigos (${curCfCount})`;
+                            filterSelect.options[2].text = `Todos (${closeFriendsList.length})`;
+                        }
 
-                        // Reatribui eventos
-                        document.querySelectorAll(".hideStoryCheckbox").forEach(cb => {
-                            cb.onchange = () => {
-                                modalStates.set(cb.dataset.username, cb.checked);
-                                const countEl = document.getElementById('hsSelectedCount');
-                                if (countEl) {
-                                    countEl.innerText = `(${Array.from(modalStates.values()).filter(v => v).length} selecionados)`;
-                                }
-                            };
+                        const statusEl = document.getElementById('statusCloseFriends');
+                        if (statusEl) {
+                            const totalSpan = statusEl.querySelector('span');
+                            if (totalSpan) totalSpan.innerHTML = `Total: <strong style="color: #2ecc71;">${curCfCount}</strong> melhores amigos cadastrados.`;
+                        }
+                    };
+
+                    const renderList = (page) => {
+                        const itemsPerPage = loadSettings().itemsPerPage || 10;
+                        const startIndex = (page - 1) * itemsPerPage;
+                        const endIndex = startIndex + itemsPerPage;
+
+                        const searchTerm = (document.getElementById('cfSearchInput')?.value || '').toLowerCase().trim();
+                        const filterValue = document.getElementById('cfFilterSelect')?.value || 'besties';
+
+                        let filteredUsers = closeFriendsList;
+
+                        if (filterValue === 'besties') {
+                            filteredUsers = filteredUsers.filter(u => u.isCloseFriend);
+                        } else if (filterValue === 'following') {
+                            filteredUsers = filteredUsers.filter(u => !u.isCloseFriend);
+                        }
+
+                        if (searchTerm) {
+                            filteredUsers = filteredUsers.filter(u =>
+                                (u.username && u.username.toLowerCase().includes(searchTerm)) ||
+                                (u.fullName && u.fullName.toLowerCase().includes(searchTerm)) ||
+                                (u.pk && u.pk.includes(searchTerm))
+                            );
+                        }
+
+                        const sortedUsers = [...filteredUsers].sort((a, b) => {
+                            let valA = '';
+                            let valB = '';
+                            if (sortConfig.key === 'username') {
+                                valA = (a.username || '').toLowerCase();
+                                valB = (b.username || '').toLowerCase();
+                            } else if (sortConfig.key === 'pk') {
+                                valA = Number(a.pk) || 0;
+                                valB = Number(b.pk) || 0;
+                            } else if (sortConfig.key === 'isCloseFriend') {
+                                valA = a.isCloseFriend ? 1 : 0;
+                                valB = b.isCloseFriend ? 1 : 0;
+                            }
+
+                            if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+                            if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
+                            return 0;
                         });
-                        const prevBtn = document.getElementById("prevPageBtn");
-                        if (prevBtn) prevBtn.onclick = () => {
-                            currentPage--;
+
+                        const totalPages = Math.max(1, Math.ceil(sortedUsers.length / itemsPerPage));
+                        if (page > totalPages) page = totalPages;
+                        currentPage = page;
+
+                        const paginatedUsers = sortedUsers.slice(startIndex, endIndex);
+
+                        let tableHtml = `
+                            <table style="width: 100%; border-collapse: collapse; margin-top: 5px;">
+                                <thead style="cursor: pointer;">
+                                    <tr style="text-align: left; border-bottom: 2px solid #dbdbdb;">
+                                        <th style="padding: 8px; width: 30px;"><input type="checkbox" id="selectAllCfCheckbox" title="Selecionar Todos da Página"></th>
+                                        <th style="padding: 8px;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                        <th style="padding: 8px; text-align: center;" data-sort-key="pk">ID (PK) ${sortConfig.key === 'pk' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                        <th style="padding: 8px; text-align: center;" data-sort-key="isCloseFriend">Status ${sortConfig.key === 'isCloseFriend' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                        <th style="padding: 8px; text-align: center;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                        `;
+
+                        if (paginatedUsers.length === 0) {
+                            tableHtml += `
+                                <tr>
+                                    <td colspan="5" style="text-align: center; padding: 30px 15px; color: #666;">
+                                        <div style="font-size: 15px; font-weight: 600; margin-bottom: 8px;">Nenhum usuário encontrado</div>
+                                        <div style="font-size: 13px; color: #888; max-width: 480px; margin: 0 auto; line-height: 1.5;">
+                                            Você pode clicar em <strong>🔄 Sincronizar</strong> para carregar sua lista de Melhores Amigos diretamente do Instagram Web ou clicar em <strong>📥 Importar JSON</strong> com o arquivo <code>close_friends.json</code>.
+                                        </div>
+                                    </td>
+                                </tr>
+                            `;
+                        } else {
+                            paginatedUsers.forEach(userObj => {
+                                const { username, pk, fullName, isCloseFriend } = userObj;
+                                const isChecked = selectedUsers.has(username);
+                                const photoUrl = resolveUserPhoto(username, userObj.photoUrl);
+                                if (photoUrl !== userObj.photoUrl && photoUrl !== DEFAULT_AVATAR) {
+                                    userObj.photoUrl = photoUrl;
+                                }
+
+                                tableHtml += `
+                                    <tr style="border-bottom: 1px solid #dbdbdb;" data-username="${username}">
+                                        <td style="padding: 8px;"><input type="checkbox" class="cf-user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
+                                        <td style="padding: 8px; display: flex; align-items: center; gap: 10px;">
+                                            <img src="${photoUrl || DEFAULT_AVATAR}" crossorigin="anonymous" loading="lazy" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${username}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid #eee; flex-shrink: 0;">
+                                            <div style="display: flex; flex-direction: column;">
+                                                <div style="display: flex; align-items: center; gap: 6px;">
+                                                    <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration: none; color: inherit; font-weight: 600;">${username}</a>
+                                                </div>
+                                                ${fullName ? `<span style="font-size: 12px; color: #666;">${fullName}</span>` : ''}
+                                            </div>
+                                        </td>
+                                        <td style="text-align: center; padding: 8px; font-family: monospace; font-size: 12px; color: #555;">${pk || '-'}</td>
+                                        <td style="text-align: center; padding: 8px;">
+                                            ${isCloseFriend
+                                        ? `<span style="background: #e8f8f0; color: #0f7b4b !important; border: 1px solid #a3e6cd; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">⭐ Amigo Próximo</span>`
+                                        : `<span style="background: #f1f3f5; color: #495057 !important; border: 1px solid #dee2e6; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">👤 Seguindo</span>`
+                                    }
+                                        </td>
+                                        <td style="text-align: center; padding: 8px;">
+                                            ${isCloseFriend
+                                        ? `<button class="btn-action-cf" data-username="${username}" data-uid="${pk}" data-action="remove" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">❌ Remover</button>`
+                                        : `<button class="btn-action-cf" data-username="${username}" data-uid="${pk}" data-action="add" style="background: #2ecc71; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">⭐ Adicionar</button>`
+                                    }
+                                        </td>
+                                    </tr>
+                                `;
+                            });
+                        }
+
+                        tableHtml += `</tbody></table>`;
+
+                        let paginationHtml = `<div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">`;
+                        if (page > 1) paginationHtml += `<button id="prevCfPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Anterior</button>`;
+                        paginationHtml += `<span style="font-size: 13px; font-weight: 600;">Página ${page} de ${totalPages}</span>`;
+                        if (page < totalPages) paginationHtml += `<button id="nextCfPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Próximo</button>`;
+                        paginationHtml += `</div>`;
+
+                        container.innerHTML = tableHtml + paginationHtml;
+
+                        // Busca assíncrona on-demand para preencher fotos que faltarem na página exibida
+                        const missingOnPage = paginatedUsers.filter(u => !u.photoUrl || u.photoUrl === DEFAULT_AVATAR);
+                        if (missingOnPage.length > 0) {
+                            (async () => {
+                                for (const mUser of missingOnPage) {
+                                    try {
+                                        const clean = mUser.username.toLowerCase();
+                                        const res = await fetch(`https://www.instagram.com/api/v1/web/search/topsearch/?context=blended&query=${encodeURIComponent(mUser.username)}`, {
+                                            headers: getApiHeaders(),
+                                            credentials: 'include'
+                                        });
+                                        if (res.ok) {
+                                            const sData = await res.json();
+                                            const exact = sData.users?.find(item => item?.user?.username?.toLowerCase() === clean);
+                                            if (exact?.user) {
+                                                const pic = exact.user.profile_pic_url || exact.user.profile_pic_url_hd;
+                                                if (pic) {
+                                                    mUser.photoUrl = pic;
+                                                    if (exact.user.pk) mUser.pk = String(exact.user.pk);
+                                                    if (exact.user.full_name && !mUser.fullName) mUser.fullName = exact.user.full_name;
+
+                                                    // Atualiza diretamente no elemento visual da tabela
+                                                    const rowEl = container.querySelector(`tr[data-username="${mUser.username}"]`);
+                                                    if (rowEl) {
+                                                        const imgEl = rowEl.querySelector('img');
+                                                        if (imgEl) imgEl.src = pic;
+                                                        if (exact.user.full_name) {
+                                                            const nameEl = rowEl.querySelector('span[style*="font-size: 12px"]');
+                                                            if (nameEl) nameEl.innerText = exact.user.full_name;
+                                                        }
+                                                        if (exact.user.pk) {
+                                                            const pkEl = rowEl.querySelectorAll('td')[2];
+                                                            if (pkEl && pkEl.innerText === '-') pkEl.innerText = String(exact.user.pk);
+                                                        }
+                                                    }
+
+                                                    // Salva no cache em memória
+                                                    if (typeof cachedData !== 'undefined' && cachedData?.userDetails) {
+                                                        cachedData.userDetails.set(clean, { username: mUser.username, photoUrl: pic, id: mUser.pk, fullName: mUser.fullName });
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } catch (_) { }
+                                    await new Promise(r => setTimeout(r, 120));
+                                }
+                            })();
+                        }
+
+                        // Checkbox individual listeners
+                        container.querySelectorAll('.cf-user-checkbox').forEach(cb => {
+                            cb.addEventListener('change', (e) => {
+                                const uname = e.target.dataset.username;
+                                if (e.target.checked) selectedUsers.add(uname);
+                                else selectedUsers.delete(uname);
+                                updateCounts(paginatedUsers);
+                            });
+                        });
+
+                        // Select all checkbox listener
+                        const selectAllCb = document.getElementById('selectAllCfCheckbox');
+                        if (selectAllCb) {
+                            selectAllCb.checked = paginatedUsers.length > 0 && paginatedUsers.every(u => selectedUsers.has(u.username));
+                            selectAllCb.onchange = (e) => {
+                                const isChecked = e.target.checked;
+                                paginatedUsers.forEach(u => {
+                                    if (isChecked) selectedUsers.add(u.username);
+                                    else selectedUsers.delete(u.username);
+                                });
+                                container.querySelectorAll('.cf-user-checkbox').forEach(cb => cb.checked = isChecked);
+                                updateCounts(paginatedUsers);
+                            };
+                        }
+
+                        // Sorting listeners
+                        container.querySelectorAll('th[data-sort-key]').forEach(th => {
+                            th.addEventListener('click', () => {
+                                const key = th.dataset.sortKey;
+                                if (sortConfig.key === key) {
+                                    sortConfig.direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+                                } else {
+                                    sortConfig.key = key;
+                                    sortConfig.direction = 'ascending';
+                                }
+                                renderList(currentPage);
+                            });
+                        });
+
+                        // Pagination button listeners
+                        const prevBtn = document.getElementById('prevCfPageBtn');
+                        if (prevBtn) prevBtn.onclick = () => renderList(currentPage - 1);
+                        const nextBtn = document.getElementById('nextCfPageBtn');
+                        if (nextBtn) nextBtn.onclick = () => renderList(currentPage + 1);
+
+                        // Botão individual Adicionar / Remover (1 clique com feedback visual)
+                        container.querySelectorAll('.btn-action-cf').forEach(btn => {
+                            btn.addEventListener('click', async (e) => {
+                                const targetBtn = e.currentTarget;
+                                const uname = targetBtn.dataset.username;
+                                const action = targetBtn.dataset.action; // 'add' ou 'remove'
+                                let uid = targetBtn.dataset.uid || getCachedUserId(uname);
+
+                                targetBtn.disabled = true;
+                                targetBtn.textContent = 'Salvando...';
+
+                                if (!uid) {
+                                    uid = await getUserId(uname);
+                                }
+
+                                if (!uid) {
+                                    showToast(`⚠️ Não foi possível obter o ID de @${uname}`);
+                                    targetBtn.disabled = false;
+                                    targetBtn.textContent = action === 'add' ? '⭐ Adicionar' : '❌ Remover';
+                                    return;
+                                }
+
+                                const adds = action === 'add' ? [String(uid)] : [];
+                                const removes = action === 'remove' ? [String(uid)] : [];
+
+                                try {
+                                    const res = await executeGraphqlSetBesties(adds, removes);
+                                    if (res && res.success) {
+                                        const userObj = closeFriendsList.find(u => u.username.toLowerCase() === uname.toLowerCase());
+                                        if (userObj) {
+                                            userObj.isCloseFriend = action === 'add';
+                                        }
+
+                                        if (!userListCache.closeFriends) userListCache.closeFriends = new Set();
+                                        if (action === 'add') {
+                                            userListCache.closeFriends.add(uname);
+                                            showToast(`⭐ @${uname} adicionado aos Amigos Próximos!`);
+                                        } else {
+                                            userListCache.closeFriends.delete(uname);
+                                            showToast(`❌ @${uname} removido dos Amigos Próximos.`);
+                                        }
+
+                                        cachedCloseFriends = closeFriendsList;
+                                        try {
+                                            localStorage.setItem('ig_tools_cached_close_friends', JSON.stringify(closeFriendsList));
+                                            await dbHelper.saveCache('closeFriends', closeFriendsList.filter(u => u.isCloseFriend));
+                                        } catch (_) { }
+
+                                        renderList(currentPage);
+                                        updateCounts();
+                                    } else {
+                                        showToast(`Erro ao atualizar @${uname}`);
+                                        targetBtn.disabled = false;
+                                        targetBtn.textContent = action === 'add' ? '⭐ Adicionar' : '❌ Remover';
+                                    }
+                                } catch (err) {
+                                    console.error('[IG Tools Close Friends] Erro:', err);
+                                    showToast(`Erro ao comunicar com o Instagram.`);
+                                    targetBtn.disabled = false;
+                                    targetBtn.textContent = action === 'add' ? '⭐ Adicionar' : '❌ Remover';
+                                }
+                            });
+                        });
+                    };
+
+                    // Sincronização avançada: se estiver na tela de melhores amigos, faz scroll; se não, tenta SSR/DOM e navega se solicitado
+                    async function sincronizarCloseFriends(forceScroll = false) {
+                        const refreshBtn = document.getElementById("cfRefreshBtn");
+                        try {
+                            if (refreshBtn) {
+                                refreshBtn.disabled = true;
+                                refreshBtn.textContent = "🔄 Mapeando...";
+                            }
+
+                            let extractedUsers = [];
+
+                            const isOnCloseFriendsPage = window.location.pathname.includes('/accounts/close_friends/');
+
+                            if (forceScroll || isOnCloseFriendsPage) {
+                                if (!isOnCloseFriendsPage) {
+                                    // Navega transparentemente para a rota oficial
+                                    history.pushState(null, null, '/accounts/close_friends/');
+                                    window.dispatchEvent(new Event('popstate'));
+                                    await new Promise(r => setTimeout(r, 1200));
+                                }
+                                extractedUsers = await extractCloseFriendsUsernames();
+                            } else {
+                                extractedUsers = await extractCloseFriendsFromCurrentDomOrFetch();
+                            }
+
+                            // Carrega lista de Seguindo para compor a opção "Quem Eu Sigo"
+                            let followingAccounts = [];
+                            try {
+                                const dbFollowing = await dbHelper.loadCache('following');
+                                if (dbFollowing) {
+                                    if (Array.isArray(dbFollowing)) followingAccounts = dbFollowing;
+                                    else if (dbFollowing.details instanceof Map) followingAccounts = Array.from(dbFollowing.details.values());
+                                    else if (dbFollowing instanceof Set) followingAccounts = Array.from(dbFollowing).map(u => ({ username: u }));
+                                }
+                            } catch (_) { }
+
+                            if (followingAccounts.length === 0 && dbHelper?._cache?.following && Array.isArray(dbHelper._cache.following)) {
+                                followingAccounts = dbHelper._cache.following;
+                            }
+
+                            if (followingAccounts.length === 0 && typeof seguindoList !== 'undefined' && Array.isArray(seguindoList) && seguindoList.length > 0) {
+                                followingAccounts = seguindoList;
+                            }
+
+                            const map = new Map();
+
+                            // Insere os já mapeados no cache atual
+                            closeFriendsList.forEach(u => {
+                                const k = u.username.toLowerCase();
+                                const p = resolveUserPhoto(u.username, u.photoUrl);
+                                map.set(k, { ...u, photoUrl: p });
+                            });
+
+                            // Atualiza com dados extraídos
+                            if (Array.isArray(extractedUsers) && extractedUsers.length > 0) {
+                                extractedUsers.forEach(u => {
+                                    const k = u.username.toLowerCase();
+                                    const existing = map.get(k);
+                                    const p = resolveUserPhoto(u.username, u.photoUrl);
+                                    if (existing) {
+                                        if (u.isCloseFriend) existing.isCloseFriend = true;
+                                        if (u.pk) existing.pk = u.pk;
+                                        if (p && p !== DEFAULT_AVATAR) existing.photoUrl = p;
+                                        if (u.fullName && !existing.fullName) existing.fullName = u.fullName;
+                                    } else {
+                                        map.set(k, {
+                                            username: u.username,
+                                            pk: u.pk || getCachedUserId(u.username) || '',
+                                            id: u.pk || getCachedUserId(u.username) || '',
+                                            fullName: u.fullName || '',
+                                            photoUrl: p || DEFAULT_AVATAR,
+                                            isCloseFriend: !!u.isCloseFriend
+                                        });
+                                    }
+                                    if (u.pk) setCachedUserId(u.username, u.pk);
+                                });
+                            }
+
+                            // Insere quem o usuário segue
+                            followingAccounts.forEach(f => {
+                                const uname = typeof f === 'string' ? f : f.username;
+                                if (!uname) return;
+                                const k = uname.toLowerCase();
+                                const p = resolveUserPhoto(uname, (typeof f === 'object' && f.photoUrl) ? f.photoUrl : null);
+                                const existing = map.get(k);
+                                if (existing) {
+                                    if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && p && p !== DEFAULT_AVATAR) {
+                                        existing.photoUrl = p;
+                                    }
+                                    if (!existing.fullName && typeof f === 'object' && f.fullName) {
+                                        existing.fullName = f.fullName;
+                                    }
+                                    if (!existing.pk && typeof f === 'object' && (f.pk || f.id)) {
+                                        existing.pk = String(f.pk || f.id);
+                                    }
+                                } else {
+                                    const pk = (typeof f === 'object' && (f.pk || f.id)) ? String(f.pk || f.id) : (getCachedUserId(uname) || '');
+                                    map.set(k, {
+                                        username: uname,
+                                        pk: pk,
+                                        id: pk,
+                                        fullName: (typeof f === 'object' && f.fullName) ? f.fullName : '',
+                                        photoUrl: p || DEFAULT_AVATAR,
+                                        isCloseFriend: false
+                                    });
+                                }
+                            });
+
+                            closeFriendsList = Array.from(map.values());
+                            cachedCloseFriends = closeFriendsList;
+
+                            try {
+                                localStorage.setItem('ig_tools_cached_close_friends', JSON.stringify(closeFriendsList));
+                                const bestiesOnly = closeFriendsList.filter(u => u.isCloseFriend);
+                                await dbHelper.saveCache('closeFriends', bestiesOnly);
+                                userListCache.closeFriends = new Set(bestiesOnly.map(u => u.username));
+                            } catch (_) { }
+
                             renderList(currentPage);
-                        };
-                        const nextBtn = document.getElementById("nextPageBtn");
-                        if (nextBtn) nextBtn.onclick = () => {
-                            currentPage++;
-                            renderList(currentPage);
-                        };
+                            updateCounts();
+
+                            const bestiesCount = closeFriendsList.filter(u => u.isCloseFriend).length;
+                            showToast(`Sincronizado! ${bestiesCount} melhores amigos mapeados.`);
+                        } catch (err) {
+                            console.error('[IG Tools Close Friends] Erro na sincronização:', err);
+                            showToast('Erro ao sincronizar amigos próximos.');
+                        } finally {
+                            if (refreshBtn) {
+                                refreshBtn.disabled = false;
+                                refreshBtn.textContent = "🔄 Sincronizar";
+                            }
+                        }
                     }
 
-                    document.getElementById("hideStorySearchInput").oninput = () => { currentPage = 1; renderList(1); };
-                    document.getElementById("hideStoryUserFilter").onchange = (e) => { userFilterType = e.target.value; currentPage = 1; renderList(1); };
-                    document.getElementById("tabOcultados").onclick = (e) => {
-                        currentTab = 'ocultados';
-                        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-                        e.target.classList.add('active');
-                        renderList(1);
-                    };
-                    document.getElementById("tabAmigos").onclick = (e) => {
-                        currentTab = 'amigos';
-                        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-                        e.target.classList.add('active');
-                        renderList(1);
-                    };
-                    document.getElementById("hideStoryFecharBtn").onclick = () => { div.remove(); modalAbertoStory = false; };
+                    // Renderização imediata (0ms)
+                    renderList(1);
+                    updateCounts();
 
-                    document.getElementById("hideStoryMarcarTodosBtn").onclick = () => {
-                        users.forEach(u => modalStates.set(u.username, true));
-                        renderList(currentPage);
-                    };
-                    document.getElementById("hideStoryDesmarcarTodosBtn").onclick = () => {
-                        users.forEach(u => modalStates.set(u.username, false));
-                        renderList(currentPage);
-                    };
+                    // Se não tiver nenhum amigo próximo em cache, tenta sincronizar instantaneamente via DOM/SSR
+                    if (cfCount === 0) {
+                        sincronizarCloseFriends(false);
+                    }
 
-                    document.getElementById("hideStoryRefreshBtn").onclick = () => {
+                    // Header Controls
+                    document.getElementById("cfFecharBtn").onclick = () => {
                         div.remove();
-                        modalAbertoStory = false;
-                        abrirModalOcultarStory();
-                    };
-                    document.getElementById("hideStoryUseApiToggle").onchange = (e) => {
-                        saveSettings({ useApi: e.target.checked });
-                        showToast(`Modo API ${e.target.checked ? 'Ativado' : 'Desativado'}`);
+                        modalAbertoCloseFriends = false;
                     };
 
-                    document.getElementById("hideStoryAplicarBtn").onclick = async () => {
-                        isApplyingChangesStory = true;
-                        const changedUsers = Array.from(modalStates.entries()).filter(([username, checked]) => officialStates.get(username) !== checked).map(([username, checked]) => ({ dataset: { username }, checked }));
-                        if (changedUsers.length === 0) {
-                            alert("Nenhuma alteração para aplicar.");
-                            isApplyingChangesStory = false;
+                    document.getElementById("cfMinimizarBtn").onclick = () => {
+                        const modal = document.getElementById('closeFriendsModal');
+                        if (!modal) return;
+                        const contentToToggle = [
+                            modal.querySelector('#cfSearchInput')?.parentElement,
+                            modal.querySelector('#statusCloseFriends'),
+                            modal.querySelector('#tabelaCloseFriendsContainer')
+                        ].filter(Boolean);
+
+                        const btn = document.getElementById('cfMinimizarBtn');
+                        const isMinimized = modal.dataset.minimized === 'true';
+
+                        contentToToggle.forEach(el => el.style.display = isMinimized ? '' : 'none');
+                        modal.dataset.minimized = !isMinimized;
+                        btn.textContent = isMinimized ? '_' : '⬜';
+                        btn.title = isMinimized ? 'Minimizar' : 'Maximizar';
+                        modal.style.maxHeight = isMinimized ? '90vh' : 'auto';
+                    };
+
+                    document.getElementById("cfRefreshBtn").onclick = () => {
+                        sincronizarCloseFriends(true);
+                    };
+
+                    // IMPORTAÇÃO OFICIAL VIA ARQUIVO JSON DO INSTAGRAM (0ms)
+                    const jsonFileInput = document.getElementById("cfJsonFileInput");
+                    document.getElementById("cfImportJsonBtn").onclick = () => {
+                        jsonFileInput.click();
+                    };
+
+                    jsonFileInput.addEventListener("change", async (event) => {
+                        const file = event.target.files && event.target.files[0];
+                        if (!file) return;
+
+                        try {
+                            const text = await file.text();
+                            const json = JSON.parse(text);
+                            const importedUsernames = new Set();
+
+                            // Suporta formatos de exportação de dados do Instagram:
+                            // Formato 1: relationships_close_friends -> string_list_data -> value
+                            if (Array.isArray(json.relationships_close_friends)) {
+                                json.relationships_close_friends.forEach(item => {
+                                    if (Array.isArray(item.string_list_data)) {
+                                        item.string_list_data.forEach(entry => {
+                                            if (entry.value) importedUsernames.add(entry.value.trim());
+                                        });
+                                    }
+                                });
+                            }
+                            // Formato 2: Array direto de strings ou objetos
+                            else if (Array.isArray(json)) {
+                                json.forEach(entry => {
+                                    if (typeof entry === 'string') importedUsernames.add(entry.trim());
+                                    else if (entry && entry.value) importedUsernames.add(entry.value.trim());
+                                    else if (entry && entry.username) importedUsernames.add(entry.username.trim());
+                                });
+                            }
+                            // Formato 3: { close_friends: [...] }
+                            else if (Array.isArray(json.close_friends)) {
+                                json.close_friends.forEach(entry => {
+                                    if (typeof entry === 'string') importedUsernames.add(entry.trim());
+                                    else if (entry && entry.value) importedUsernames.add(entry.value.trim());
+                                    else if (entry && entry.username) importedUsernames.add(entry.username.trim());
+                                    else if (entry && Array.isArray(entry.string_list_data)) {
+                                        entry.string_list_data.forEach(sub => {
+                                            if (sub && sub.value) importedUsernames.add(sub.value.trim());
+                                        });
+                                    }
+                                });
+                            }
+
+                            if (importedUsernames.size === 0) {
+                                alert("Nenhum usuário de Amigos Próximos foi identificado no arquivo JSON selecionado. Certifique-se de selecionar o arquivo 'close_friends.json' baixado do Instagram.");
+                                return;
+                            }
+
+                            // Mescla com a lista existente
+                            const map = new Map();
+                            closeFriendsList.forEach(u => map.set(u.username.toLowerCase(), u));
+
+                            importedUsernames.forEach(uname => {
+                                const k = uname.toLowerCase();
+                                if (map.has(k)) {
+                                    map.get(k).isCloseFriend = true;
+                                } else {
+                                    const pk = getCachedUserId(uname) || '';
+                                    map.set(k, {
+                                        username: uname,
+                                        pk: pk,
+                                        id: pk,
+                                        fullName: '',
+                                        photoUrl: DEFAULT_AVATAR,
+                                        isCloseFriend: true
+                                    });
+                                }
+                            });
+
+                            closeFriendsList = Array.from(map.values());
+                            cachedCloseFriends = closeFriendsList;
+
+                            try {
+                                localStorage.setItem('ig_tools_cached_close_friends', JSON.stringify(closeFriendsList));
+                                const bestiesOnly = closeFriendsList.filter(u => u.isCloseFriend);
+                                await dbHelper.saveCache('closeFriends', bestiesOnly);
+                                userListCache.closeFriends = new Set(bestiesOnly.map(u => u.username));
+                            } catch (_) { }
+
+                            renderList(1);
+                            updateCounts();
+                            alert(`Sucesso! ${importedUsernames.size} amigos próximos foram importados instantaneamente do JSON.`);
+                        } catch (err) {
+                            console.error("[IG Tools Close Friends] Erro ao ler JSON:", err);
+                            alert("Falha ao analisar o arquivo JSON: " + err.message);
+                        } finally {
+                            jsonFileInput.value = '';
+                        }
+                    });
+
+                    document.getElementById("cfSelectPageBtn").onclick = () => {
+                        const itemsPerPage = loadSettings().itemsPerPage || 10;
+                        const startIndex = (currentPage - 1) * itemsPerPage;
+                        const filterValue = document.getElementById('cfFilterSelect')?.value || 'besties';
+                        let listToSelect = closeFriendsList;
+                        if (filterValue === 'besties') listToSelect = listToSelect.filter(u => u.isCloseFriend);
+                        else if (filterValue === 'following') listToSelect = listToSelect.filter(u => !u.isCloseFriend);
+
+                        const pageUsers = listToSelect.slice(startIndex, startIndex + itemsPerPage);
+                        pageUsers.forEach(u => selectedUsers.add(u.username));
+                        container.querySelectorAll('.cf-user-checkbox').forEach(cb => cb.checked = true);
+                        updateCounts(pageUsers);
+                    };
+
+                    document.getElementById("cfDeselectAllBtn").onclick = () => {
+                        selectedUsers.clear();
+                        container.querySelectorAll('.cf-user-checkbox').forEach(cb => cb.checked = false);
+                        updateCounts();
+                    };
+
+                    const searchInput = document.getElementById("cfSearchInput");
+                    if (searchInput) {
+                        searchInput.addEventListener("input", () => renderList(1));
+                    }
+
+                    const filterSelect = document.getElementById("cfFilterSelect");
+                    if (filterSelect) {
+                        filterSelect.addEventListener("change", () => renderList(1));
+                    }
+
+                    const apiToggle = document.getElementById("cfUseApiToggle");
+                    if (apiToggle) {
+                        apiToggle.addEventListener("change", (e) => {
+                            const s = loadSettings();
+                            s.useApi = e.target.checked;
+                            saveSettings(s);
+                            showToast(`Modo API ${s.useApi ? 'ativado' : 'desativado'}.`);
+                        });
+                    }
+
+                    // AÇÃO EM LOTE: Adicionar Selecionados
+                    document.getElementById("cfAddSelectedBtn").onclick = async () => {
+                        if (selectedUsers.size === 0) {
+                            alert("Nenhum usuário selecionado.");
                             return;
                         }
+
+                        const usersToAdd = Array.from(selectedUsers).filter(uname => {
+                            const u = closeFriendsList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                            return u && !u.isCloseFriend;
+                        });
+
+                        if (usersToAdd.length === 0) {
+                            alert("Todos os usuários selecionados já estão na sua lista de Amigos Próximos.");
+                            return;
+                        }
+
+                        if (!confirm(`Deseja adicionar ${usersToAdd.length} usuário(s) aos seus Amigos Próximos?`)) return;
+
+                        const addBtn = document.getElementById("cfAddSelectedBtn");
+                        addBtn.disabled = true;
+                        addBtn.textContent = "Adicionando...";
+                        toggleLoading(true, 0, "Obtendo IDs e adicionando...");
+
+                        const uids = [];
+                        for (const uname of usersToAdd) {
+                            let uid = getCachedUserId(uname);
+                            if (!uid) {
+                                const u = closeFriendsList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                                if (u && u.pk) uid = u.pk;
+                            }
+                            if (!uid) uid = await getUserId(uname);
+                            if (uid) uids.push(String(uid));
+                        }
+
+                        try {
+                            const res = await executeGraphqlSetBesties(uids, []);
+                            toggleLoading(false);
+                            addBtn.disabled = false;
+                            addBtn.textContent = "⭐ Adicionar Selecionados";
+
+                            if (res && res.success) {
+                                usersToAdd.forEach(uname => {
+                                    const u = closeFriendsList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                                    if (u) u.isCloseFriend = true;
+                                    if (userListCache.closeFriends) userListCache.closeFriends.add(uname);
+                                });
+
+                                cachedCloseFriends = closeFriendsList;
+                                try {
+                                    localStorage.setItem('ig_tools_cached_close_friends', JSON.stringify(closeFriendsList));
+                                    await dbHelper.saveCache('closeFriends', closeFriendsList.filter(u => u.isCloseFriend));
+                                } catch (_) { }
+
+                                selectedUsers.clear();
+                                renderList(currentPage);
+                                updateCounts();
+                                alert(`Sucesso! ${usersToAdd.length} usuário(s) foram adicionados aos Amigos Próximos.`);
+                            } else {
+                                alert("Ocorreu uma falha ao adicionar os usuários via GraphQL.");
+                            }
+                        } catch (err) {
+                            toggleLoading(false);
+                            addBtn.disabled = false;
+                            addBtn.textContent = "⭐ Adicionar Selecionados";
+                            alert("Erro ao adicionar: " + err.message);
+                        }
+                    };
+
+                    // AÇÃO EM LOTE: Remover Selecionados
+                    document.getElementById("cfRemoveSelectedBtn").onclick = async () => {
+                        if (selectedUsers.size === 0) {
+                            alert("Nenhum usuário selecionado.");
+                            return;
+                        }
+
+                        const usersToRemove = Array.from(selectedUsers).filter(uname => {
+                            const u = closeFriendsList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                            return u && u.isCloseFriend;
+                        });
+
+                        if (usersToRemove.length === 0) {
+                            alert("Nenhum dos usuários selecionados está na sua lista de Amigos Próximos.");
+                            return;
+                        }
+
+                        if (!confirm(`Deseja remover ${usersToRemove.length} usuário(s) dos Amigos Próximos?`)) return;
+
+                        const removeBtn = document.getElementById("cfRemoveSelectedBtn");
+                        removeBtn.disabled = true;
+                        removeBtn.textContent = "Removendo...";
+                        toggleLoading(true, 0, "Obtendo IDs e removendo...");
+
+                        const uids = [];
+                        for (const uname of usersToRemove) {
+                            let uid = getCachedUserId(uname);
+                            if (!uid) {
+                                const u = closeFriendsList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                                if (u && u.pk) uid = u.pk;
+                            }
+                            if (!uid) uid = await getUserId(uname);
+                            if (uid) uids.push(String(uid));
+                        }
+
+                        try {
+                            const res = await executeGraphqlSetBesties([], uids);
+                            toggleLoading(false);
+                            removeBtn.disabled = false;
+                            removeBtn.textContent = "❌ Remover Selecionados";
+
+                            if (res && res.success) {
+                                usersToRemove.forEach(uname => {
+                                    const u = closeFriendsList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                                    if (u) u.isCloseFriend = false;
+                                    if (userListCache.closeFriends) userListCache.closeFriends.delete(uname);
+                                });
+
+                                cachedCloseFriends = closeFriendsList;
+                                try {
+                                    localStorage.setItem('ig_tools_cached_close_friends', JSON.stringify(closeFriendsList));
+                                    await dbHelper.saveCache('closeFriends', closeFriendsList.filter(u => u.isCloseFriend));
+                                } catch (_) { }
+
+                                selectedUsers.clear();
+                                renderList(currentPage);
+                                updateCounts();
+                                alert(`Sucesso! ${usersToRemove.length} usuário(s) foram removidos dos Amigos Próximos.`);
+                            } else {
+                                alert("Ocorreu uma falha ao remover os usuários via GraphQL.");
+                            }
+                        } catch (err) {
+                            toggleLoading(false);
+                            removeBtn.disabled = false;
+                            removeBtn.textContent = "❌ Remover Selecionados";
+                            alert("Erro ao remover: " + err.message);
+                        }
+                    };
+                }
+
+                // --- FIM DO MENU AMIGOS PRÓXIMOS ---
+
+                // --- NOVO MENU: OCULTAR STORY (MODERNO & 0MS) ---
+                let cachedHideStory = [];
+                try {
+                    const saved = localStorage.getItem('ig_tools_cached_hide_story');
+                    if (saved) {
+                        const parsed = JSON.parse(saved);
+                        if (Array.isArray(parsed) && parsed.length > 0) cachedHideStory = parsed;
+                    }
+                } catch (_) { }
+
+                let modalAbertoStory = false;
+
+                // Helper para varredura robusta do DOM nativo de Ocultar Story
+                function scanHideStoryDomRows(targetDoc = document) {
+                    const myUname = (getLoggedInUsername() || '').toLowerCase().trim();
+                    const myUid = getCookie('ds_user_id') || getActorId() || '';
+                    const foundUsers = new Map();
+                    const rowElements = new Set();
+
+                    // 1. Busca por candidatos a linha a partir dos avatares nativos da página (IGNORANDO qualquer modal da extensão)
+                    const avatarImgs = Array.from(targetDoc.querySelectorAll('img')).filter(img => {
+                        if (img.closest('.submenu-modal') || img.closest('#hideStoryModal') || img.closest('#closeFriendsModal')) return false;
+                        const s = img.src || '';
+                        return (s.includes('cdninstagram.com') || s.includes('fbcdn.net') || s.includes('/v/t51') || s.includes('/s150x150')) &&
+                            !s.includes('rsrc.php') && !s.includes('static.xx');
+                    });
+
+                    avatarImgs.forEach(img => {
+                        let el = img;
+                        let candidateRow = null;
+                        for (let d = 0; d < 8; d++) {
+                            if (!el.parentElement || el.parentElement === targetDoc.body || el.parentElement.tagName === 'BODY') break;
+                            el = el.parentElement;
+                            if (el.querySelectorAll('img').length > 2) break; // Passou do contêiner da linha individual
+
+                            const hasUsernameOrText = el.innerText && el.innerText.trim().length > 1;
+                            const hasControl = el.querySelector(`
+                                [style*="circle-check"],
+                                [style*="circle"],
+                                [style*="rgb(0, 149, 246)"],
+                                [style*="0, 149, 246"],
+                                [style*="rgb(74, 93, 249)"],
+                                [style*="74, 93, 249"],
+                                [style*="#0095f6"],
+                                [style*="mask-image"],
+                                div[role="checkbox"],
+                                div[role="button"],
+                                [class*="circle-check"],
+                                input[type="checkbox"],
+                                svg[aria-label*="Check" i],
+                                svg[aria-label*="check" i]
+                            `);
+
+                            if (hasUsernameOrText && hasControl) {
+                                candidateRow = el;
+                            }
+                        }
+                        if (candidateRow) rowElements.add(candidateRow);
+                    });
+
+                    // 2. Busca direta a partir de QUALQUER controle, ícone de check ou botão na página nativa
+                    const checkboxCandidates = Array.from(targetDoc.querySelectorAll(`
+                        [style*="circle-check"],
+                        [style*="circle__"],
+                        [style*="rgb(0, 149, 246)"],
+                        [style*="0, 149, 246"],
+                        [style*="rgb(74, 93, 249)"],
+                        [style*="74, 93, 249"],
+                        [style*="#0095f6"],
+                        div[role="checkbox"],
+                        input[type="checkbox"],
+                        div[aria-label*="caixa de seleção" i],
+                        div[aria-label*="selecion" i],
+                        div[aria-label*="desmarcar" i],
+                        div[aria-label*="checked" i],
+                        div[role="button"][tabindex="0"],
+                        svg[aria-label*="Check" i],
+                        svg[aria-label*="check" i],
+                        svg[aria-label*="marcar" i],
+                        svg[aria-label*="desmarcar" i],
+                        [class*="circle-check"]
+                    `)).filter(el => !el.closest('.submenu-modal') && !el.closest('#hideStoryModal') && !el.closest('#closeFriendsModal'));
+
+                    checkboxCandidates.forEach(cb => {
+                        let p = cb;
+                        for (let d = 0; d < 7; d++) {
+                            if (!p.parentElement || p.parentElement === targetDoc.body || p.parentElement.tagName === 'BODY') break;
+                            p = p.parentElement;
+                            if (p.querySelectorAll('img').length > 2) break;
+                            if (p.querySelector('img') && (p.innerText && p.innerText.trim().length > 1)) {
+                                rowElements.add(p);
+                                break;
+                            }
+                        }
+                    });
+
+                    // 3. Processa cada linha encontrada e determina se o story está ocultado
+                    rowElements.forEach(row => {
+                        if (row.closest('.submenu-modal') || row.closest('#hideStoryModal') || row.closest('#closeFriendsModal')) return;
+
+                        // Extração do username
+                        let uname = '';
+                        const link = row.querySelector('a[href^="/"]');
+                        if (link) {
+                            const cand = link.getAttribute('href').replace(/\//g, '').trim();
+                            if (isValidInstagramUsername(cand) && cand.toLowerCase() !== myUname && cand !== 'accounts' && cand !== 'explore') {
+                                uname = cand;
+                            }
+                        }
+                        if (!uname) {
+                            const textNodes = Array.from(row.querySelectorAll('span, div')).filter(el => el.children.length === 0 && el.innerText && el.innerText.trim());
+                            for (const tn of textNodes) {
+                                const cand = tn.innerText.trim().replace(/^@/, '');
+                                if (cand && isValidInstagramUsername(cand) && cand.toLowerCase() !== myUname && cand !== 'Ver perfil' && cand !== 'accounts' && cand !== 'explore') {
+                                    uname = cand;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!uname && row.innerText) {
+                            const lines = row.innerText.trim().split('\n').map(l => l.trim().replace(/^@/, ''));
+                            for (const line of lines) {
+                                if (line && isValidInstagramUsername(line) && line.toLowerCase() !== myUname && line !== 'Ver perfil' && line !== 'accounts') {
+                                    uname = line;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!uname || !isValidInstagramUsername(uname) || uname.toLowerCase() === myUname) return;
+
+                        // Nome completo
+                        let fullName = '';
+                        if (row.innerText) {
+                            const lines = row.innerText.trim().split('\n').map(l => l.trim());
+                            const other = lines.filter(l => l.replace(/^@/, '') !== uname && l !== 'Ver perfil' && !l.includes('Seguir') && l.length > 0);
+                            if (other.length > 0) fullName = other[0];
+                        }
+
+                        // Avatar
+                        const img = row.querySelector('img');
+                        const rawPhoto = img ? img.src : '';
+                        const photoUrl = (rawPhoto && !rawPhoto.includes('rsrc.php') && !rawPhoto.includes('static.xx')) ? rawPhoto : DEFAULT_AVATAR;
+
+                        // Detecção de seleção (Story Ocultado = círculo azul com check branco)
+                        let isChecked = false;
+
+                        // A. aria-checked="true" / aria-selected="true" / checkbox marcado
+                        const ariaEl = row.querySelector('[aria-checked="true"], [aria-selected="true"], [aria-label*="desmarcar" i], input[type="checkbox"]:checked');
+                        if (ariaEl) {
+                            isChecked = true;
+                        }
+
+                        // B. Elemento Bloks com mask-image circle-check__filled ou background azul
+                        if (!isChecked) {
+                            const checkElements = Array.from(row.querySelectorAll(`
+                                [style*="circle-check"],
+                                [style*="rgb(0, 149, 246)"],
+                                [style*="0, 149, 246"],
+                                [style*="rgb(74, 93, 249)"],
+                                [style*="74, 93, 249"],
+                                [style*="#0095f6"],
+                                [class*="circle-check__filled"],
+                                [class*="circle-check"],
+                                img[src*="circle-check"],
+                                svg[aria-label*="Check" i],
+                                svg[aria-label*="check" i],
+                                svg[aria-label*="desmarcar" i]
+                            `));
+                            for (const el of checkElements) {
+                                if (el.closest('[style*="display: none"], [style*="display:none"]')) continue;
+                                try {
+                                    const cs = window.getComputedStyle(el);
+                                    const bg = cs.backgroundColor || '';
+                                    const mask = cs.maskImage || cs.webkitMaskImage || '';
+                                    if (cs.display !== 'none' && cs.visibility !== 'hidden' && (el.offsetWidth > 0 || el.getBoundingClientRect().width > 0)) {
+                                        if (bg.includes('149, 246') || bg.includes('93, 249') || mask.includes('circle-check') || el.classList.toString().includes('circle-check__filled')) {
+                                            isChecked = true;
+                                            break;
+                                        }
+                                    }
+                                } catch (_) { }
+                            }
+                        }
+
+                        // C. Fallback por innerHTML da linha
+                        if (!isChecked && row.innerHTML) {
+                            if (row.innerHTML.includes('circle-check') || row.innerHTML.includes('rgb(0, 149, 246)') || row.innerHTML.includes('0, 149, 246') || row.innerHTML.includes('rgb(74, 93, 249)') || row.innerHTML.includes('74, 93, 249') || row.innerHTML.includes('#0095f6')) {
+                                isChecked = true;
+                            }
+                        }
+
+                        // D. Fallback estrutural: Se a linha estiver antes do cabeçalho "Sugeridos" no DOM
+                        if (!isChecked) {
+                            const sugeridosHeader = Array.from(targetDoc.querySelectorAll('span, div, h2, h3, h4, p')).find(el => {
+                                if (el.closest('.submenu-modal') || el.closest('#hideStoryModal') || el.closest('#closeFriendsModal')) return false;
+                                const t = (el.innerText || '').trim().toLowerCase();
+                                return t === 'sugeridos' || t === 'sugestões' || t === 'suggested' || t === 'sugerencias';
+                            });
+                            if (sugeridosHeader) {
+                                if (sugeridosHeader.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_PRECEDING) {
+                                    isChecked = true;
+                                }
+                            }
+                        }
+
+                        const pk = getCachedUserId(uname) || '';
+                        const k = uname.toLowerCase();
+                        if (!foundUsers.has(k)) {
+                            foundUsers.set(k, {
+                                username: uname,
+                                fullName,
+                                photoUrl,
+                                pk,
+                                id: pk,
+                                isHidden: isChecked
+                            });
+                        } else {
+                            const ex = foundUsers.get(k);
+                            if (isChecked) ex.isHidden = true;
+                            if (!ex.pk && pk) ex.pk = pk;
+                            if (!ex.fullName && fullName) ex.fullName = fullName;
+                            if ((!ex.photoUrl || ex.photoUrl === DEFAULT_AVATAR) && photoUrl !== DEFAULT_AVATAR) ex.photoUrl = photoUrl;
+                        }
+                    });
+
+                    return foundUsers;
+                }
+
+                // 1. Extrator completo via rolagem (Turbo Scroll) e interceptação Bloks
+                function extractHideStoryUsernames(doc = document) {
+                    return new Promise((resolve) => {
+                        const users = new Map();
+                        let scrollInterval;
+                        let noNewUsersCount = 0;
+                        const maxIdleCount = 6;
 
                         let cancelled = false;
                         const { bar, update, closeButton } = createCancellableProgressBar();
                         closeButton.onclick = () => {
                             cancelled = true;
-                            isApplyingChangesStory = false;
-                            bar.remove();
-                            alert("Processo interrompido.");
+                            finishExtraction();
                         };
-                        const isCancelled = () => cancelled;
+                        update(0, 0, "Buscando e rolando a lista de usuários com story ocultado...");
 
-                        toggleLoading(true, 0, "Aplicando alterações...");
-                        // --- LÓGICA API VS HUMANA ---
-                        if (loadSettings().useApi) {
-                            update(0, changedUsers.length, "Obtendo IDs e aplicando via API...");
-                            for (let i = 0; i < changedUsers.length; i++) {
-                                if (isCancelled()) break;
-                                const { dataset: { username }, checked } = changedUsers[i];
-                                update(i + 1, changedUsers.length, `Aplicando para ${username}...`);
-                                const uid = getCachedUserId(username) || await getUserId(username);
-                                if (uid) {
-                                    try {
-                                        const res = await executeWbloksHideStory(uid, username, checked ? 'hide' : 'unhide');
-                                        if (res.success) officialStates.set(username, checked);
-                                    } catch (e) { console.error(`Erro API Hide Story para ${username}`, e); }
-                                }
-                                await new Promise(r => setTimeout(r, 500));
+                        function finishExtraction() {
+                            if (scrollInterval) clearInterval(scrollInterval);
+                            if (window._igHideStoryUsersCapture && window._igHideStoryUsersCapture.callbacks) {
+                                const idx = window._igHideStoryUsersCapture.callbacks.indexOf(networkCallback);
+                                if (idx !== -1) window._igHideStoryUsersCapture.callbacks.splice(idx, 1);
                             }
-                            bar.remove(); isApplyingChangesStory = false; renderList(currentPage); alert("Processo via API concluído."); return;
-                            toggleLoading(false);
+                            if (bar) bar.remove();
+                            const hiddenCount = Array.from(users.values()).filter(u => u.isHidden).length;
+                            console.log(`[IG Tools] Extração de Ocultar Story finalizada. Total de ${users.size} contatos mapeados (${hiddenCount} ocultados).`);
+                            users.forEach(u => {
+                                if (u.username && u.pk) setCachedUserId(u.username, u.pk);
+                            });
+                            resolve(cancelled ? [] : Array.from(users.values()));
                         }
 
-                        if (window.location.pathname !== "/accounts/hide_story_and_live_from/") {
-                            history.pushState(null, null, "/accounts/hide_story_and_live_from/");
-                            window.dispatchEvent(new Event("popstate"));
-                            await new Promise(resolve => setTimeout(resolve, 1000));
-                        }
-                        async function toggleOfficialCheckbox(username) {
-                            return new Promise((resolve) => {
-                                let attempts = 0;
-                                function tryToggle() {
-                                    attempts++;
-                                    const flexboxes = Array.from(document.querySelectorAll('[data-bloks-name="bk.components.Flexbox"]'));
-                                    let found = false;
-                                    for (const flex of flexboxes) {
-                                        const userText = flex.innerText && flex.innerText.trim().split('\n')[0];
-                                        if (userText === username) {
-                                            const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção'));
-                                            if (officialCheckboxContainer) {
-                                                officialCheckboxContainer.click();
-                                                found = true;
-                                                break;
-                                            }
+                        // A. Extração de scripts SSR presentes no DOM
+                        try {
+                            const scripts = Array.from(doc.querySelectorAll('script[type="application/json"], script'));
+                            for (const script of scripts) {
+                                const text = script.textContent || '';
+                                if (!text.includes('hide_story') && !text.includes('should_unhide') && !text.includes('username')) continue;
+                                const fromScript = parseHideStoryBloksText(text);
+                                if (Array.isArray(fromScript)) {
+                                    fromScript.forEach(u => {
+                                        const k = (u.username || '').toLowerCase().trim();
+                                        if (!k) return;
+                                        if (!users.has(k)) {
+                                            users.set(k, { username: u.username, photoUrl: u.photoUrl, isHidden: !!(u.isHidden || u.isChecked), pk: u.pk, fullName: u.fullName || '' });
+                                        } else {
+                                            const ex = users.get(k);
+                                            if (u.isHidden || u.isChecked) ex.isHidden = true;
+                                            if (!ex.pk && u.pk) ex.pk = u.pk;
+                                            if (u.photoUrl && u.photoUrl !== DEFAULT_AVATAR) ex.photoUrl = u.photoUrl;
+                                            if (u.fullName) ex.fullName = u.fullName;
                                         }
-                                    }
-                                    if (found || attempts >= 30) {
-                                        resolve();
-                                    } else {
-                                        setTimeout(tryToggle, 300);
-                                    }
+                                    });
                                 }
-                                tryToggle();
+                            }
+                        } catch (_) { }
+
+                        // B. Importa dados já capturados na sessão pelo interceptor de rede
+                        if (window._igHideStoryUsersCapture && window._igHideStoryUsersCapture.users) {
+                            window._igHideStoryUsersCapture.users.forEach(u => {
+                                const k = (u.username || '').toLowerCase().trim();
+                                if (!k) return;
+                                if (!users.has(k)) {
+                                    users.set(k, { username: u.username, photoUrl: u.photoUrl, isHidden: !!(u.isHidden || u.isChecked), pk: u.pk, fullName: u.fullName || '' });
+                                } else {
+                                    const ex = users.get(k);
+                                    if (u.isHidden || u.isChecked) ex.isHidden = true;
+                                    if (!ex.pk && u.pk) ex.pk = u.pk;
+                                    if (u.photoUrl && u.photoUrl !== DEFAULT_AVATAR) ex.photoUrl = u.photoUrl;
+                                    if (u.fullName) ex.fullName = u.fullName;
+                                }
                             });
                         }
-                        for (let i = 0; i < changedUsers.length; i++) {
-                            if (isCancelled()) break;
-                            update(i + 1, changedUsers.length, "Aplicando alterações:");
-                            await toggleOfficialCheckbox(changedUsers[i].dataset.username);
-                            await new Promise(resolve => setTimeout(resolve, 2000));
-                            officialStates.set(changedUsers[i].dataset.username, changedUsers[i].checked);
-                            // Redesenha a página atual para refletir a mudança em tempo real
-                            toggleLoading(true, ((i + 1) / changedUsers.length) * 100, "Aplicando alterações...");
-                            renderList(currentPage);
+
+                        // C. Callback de rede em tempo real para paginações Bloks
+                        function networkCallback(capturedArray) {
+                            let added = false;
+                            capturedArray.forEach(u => {
+                                const k = (u.username || '').toLowerCase().trim();
+                                if (!k) return;
+                                if (!users.has(k)) {
+                                    users.set(k, { username: u.username, photoUrl: u.photoUrl, isHidden: !!(u.isHidden || u.isChecked), pk: u.pk, fullName: u.fullName || '' });
+                                    added = true;
+                                } else {
+                                    const ex = users.get(k);
+                                    if (u.isHidden || u.isChecked) ex.isHidden = true;
+                                    if (!ex.pk && u.pk) ex.pk = u.pk;
+                                    if (u.photoUrl && u.photoUrl !== DEFAULT_AVATAR) ex.photoUrl = u.photoUrl;
+                                    if (u.fullName) ex.fullName = u.fullName;
+                                }
+                            });
+                            if (added) {
+                                noNewUsersCount = 0;
+                                const curHidden = Array.from(users.values()).filter(u => u.isHidden).length;
+                                update(users.size, users.size, `Capturado(s) ${users.size} usuário(s) (${curHidden} com story ocultado)... Rolando...`);
+                            }
                         }
-                        bar.remove();
-                        isApplyingChangesStory = false;
+                        if (window._igHideStoryUsersCapture) {
+                            window._igHideStoryUsersCapture.callbacks.push(networkCallback);
+                        }
+
+                        function performScan() {
+                            const scanned = scanHideStoryDomRows(doc);
+                            scanned.forEach((u, k) => {
+                                if (!users.has(k)) {
+                                    users.set(k, u);
+                                } else {
+                                    const ex = users.get(k);
+                                    if (u.isHidden) ex.isHidden = true;
+                                    if (!ex.pk && u.pk) ex.pk = u.pk;
+                                    if (u.photoUrl && u.photoUrl !== DEFAULT_AVATAR) ex.photoUrl = u.photoUrl;
+                                    if (u.fullName) ex.fullName = u.fullName;
+                                }
+                            });
+                            const curHidden = Array.from(users.values()).filter(u => u.isHidden).length;
+                            update(users.size, users.size, `Mapeando contatos (${curHidden} com story ocultado)...`);
+                        }
+
+                        performScan();
+
+                        const scrollContainer = doc.querySelector('div[role="dialog"] ._aano') ||
+                            doc.querySelector('div[role="dialog"] div[style*="overflow-y: auto"]') ||
+                            doc.querySelector('main div[style*="overflow-y: auto"]') ||
+                            doc.querySelector('div[style*="overflow-y: auto"]') ||
+                            doc.querySelector('._aano') ||
+                            doc.documentElement;
+
+                        let lastCount = users.size;
+                        scrollInterval = setInterval(() => {
+                            if (cancelled) return;
+                            performScan();
+
+                            if (scrollContainer && scrollContainer !== doc.documentElement) {
+                                scrollContainer.scrollTop += 900;
+                            } else {
+                                window.scrollBy(0, 900);
+                            }
+
+                            if (users.size > lastCount) {
+                                noNewUsersCount = 0;
+                                lastCount = users.size;
+                            } else {
+                                noNewUsersCount++;
+                                if (noNewUsersCount >= maxIdleCount) {
+                                    finishExtraction();
+                                }
+                            }
+                        }, 400);
+
+                        setTimeout(() => finishExtraction(), 25000);
+                    });
+                }
+
+                // 2. Extração segura e instantânea de Ocultar Story (0ms DOM)
+                async function extractHideStoryFromCurrentDomOrFetch(forceFetch = false) {
+                    const resultUsers = scanHideStoryDomRows(document);
+                    const list = Array.from(resultUsers.values());
+                    const hiddenCount = list.filter(u => u.isHidden).length;
+                    console.log(`[IG Tools HideStory] Varredura instantânea mapeou ${list.length} usuários (${hiddenCount} ocultados).`);
+                    if (hiddenCount > 0 && !forceFetch) return list;
+
+                    const usersMap = new Map();
+                    list.forEach(u => usersMap.set(u.username.toLowerCase(), u));
+
+                    // Se não tiver usuários ocultados no DOM da página atual, busca em scripts SSR locais
+                    try {
+                        const scripts = Array.from(document.querySelectorAll('script[type="application/json"], script'));
+                        for (const script of scripts) {
+                            const text = script.textContent || '';
+                            if (!text.includes('hide_story') && !text.includes('should_unhide') && !text.includes('username')) continue;
+                            const fromScript = parseHideStoryBloksText(text);
+                            if (Array.isArray(fromScript)) {
+                                fromScript.forEach(u => {
+                                    const k = (u.username || '').toLowerCase().trim();
+                                    if (!k) return;
+                                    if (!usersMap.has(k)) {
+                                        usersMap.set(k, u);
+                                    } else if (u.isHidden || u.isChecked) {
+                                        usersMap.get(k).isHidden = true;
+                                    }
+                                });
+                            }
+                        }
+                    } catch (_) { }
+
+                    // Se ainda não encontrou contas ocultadas e não está na rota, faz fetch na rota oficial
+                    const curHiddenCount = Array.from(usersMap.values()).filter(u => u.isHidden).length;
+                    if (curHiddenCount === 0 && !window.location.pathname.includes('/accounts/hide_story_and_live_from/')) {
+                        try {
+                            const pageResp = await fetch('https://www.instagram.com/accounts/hide_story_and_live_from/', {
+                                credentials: 'include',
+                                cache: 'no-store'
+                            });
+                            if (pageResp.ok) {
+                                const html = await pageResp.text();
+                                const fromHtml = parseHideStoryBloksText(html);
+                                if (Array.isArray(fromHtml) && fromHtml.length > 0) {
+                                    fromHtml.forEach(u => {
+                                        const k = (u.username || '').toLowerCase().trim();
+                                        if (!k) return;
+                                        if (!usersMap.has(k)) {
+                                            usersMap.set(k, u);
+                                        } else if (u.isHidden || u.isChecked) {
+                                            usersMap.get(k).isHidden = true;
+                                        }
+                                    });
+                                }
+                            }
+                        } catch (_) { }
+                    }
+
+                    // Tenta WBloks tela inicial se ainda 0
+                    if (Array.from(usersMap.values()).filter(u => u.isHidden).length === 0) {
+                        try {
+                            const initialUsers = await fetchHideStoryInitialScreen();
+                            if (Array.isArray(initialUsers) && initialUsers.length > 0) {
+                                initialUsers.forEach(u => {
+                                    const k = (u.username || '').toLowerCase().trim();
+                                    if (!k) return;
+                                    if (!usersMap.has(k)) {
+                                        usersMap.set(k, u);
+                                    } else if (u.isHidden || u.isChecked) {
+                                        usersMap.get(k).isHidden = true;
+                                    }
+                                });
+                            }
+                        } catch (_) { }
+                    }
+
+                    if (window._igHideStoryUsersCapture?.users) {
+                        window._igHideStoryUsersCapture.users.forEach((u, k) => {
+                            if (!usersMap.has(k)) {
+                                usersMap.set(k, u);
+                            } else if (u.isHidden || u.isChecked) {
+                                usersMap.get(k).isHidden = true;
+                            }
+                        });
+                    }
+
+                    return Array.from(usersMap.values());
+                }
+
+                // 2.1. Requisição direta oficial da Tela Inicial (WBloks com.instagram.portable_settings.privacy.hide_story_from_screen.hide_story_from)
+                async function fetchHideStoryInitialScreen() {
+                    const live = getMainWorldTokens();
+                    const fbDtsg = live.dtsg || getDtsgToken() || '';
+                    const jazoest = computeJazoest(fbDtsg);
+                    const lsd = live.lsd || getLsdToken() || '';
+                    const spin = getSpinParams();
+                    const viewerId = getCookie('ds_user_id') || getActorId() || '';
+
+                    // 1. TENTATIVA DIRETA WBLOKS
+                    const url = 'https://www.instagram.com/async/wbloks/fetch/?appid=com.instagram.portable_settings.privacy.hide_story_from_screen.hide_story_from&type=action&__bkv=bebad2b121ef373e1847b0445ffd0ce996417496c088e54f6b5d2f5c6501842d';
+
+                    const dyn = live.dyn || getInstagramFormToken('__dyn') || '7xeUjG1mxu1syaxG4Vp41twpUnwgU7SbzEdF8vyUco2qwJyEiw50x609vCwjE1EEc87m0yE462mcw5Mx62G5UswoEcE7O2l0Fwqo5W1yw9O1lwxwQzXwae4UaEW2G0AEco5G0zK5o4q0HU1wEbUGdwtUeo9UaQ0Lo6-bwHwKG6Ufk0zU8oC1IwjUpwlAcwBwUQp1yU426V8aUuwm8jxK1mwa6bBK4o16UeUGq2Kq11whE984O0XEdoCQ1jw';
+                    const csr = live.csr || getInstagramFormToken('__csr') || 'iMB0FNX5N22j9eUHPWl8iGkV-eGXT8G5OPdP8VIzehP8KBh9pV9cNGWnip9Wh4BGfld8Dif4W4au9Irs8F4l9JbhAF4gJ7l95AFagBBBAkDiq9uVdppZDJykAch9QvAKiXjAV4HgzDBoLaaGh3Q68K9zGzay9pUC8yEj-dyWxe9zEGK9zXBzWzWyuQmbyWxaZ3KFEgxjhj1ycBzk5uVoGdgK8Ax3AAHV8K5GgG22maG1UUK1sweq7okw5ww08Ha00Y8EcU0vn2UKkMoQ18xgE0h1opw6yCtw2TU0hyS0Koqguw8Z0BwiUdK0qW5Eo6jw4dU3HwbWq3G8wTg1iV2By84iUy8guGywqodE2YrRrw1s2i1lG5o06KC02qu2K9g6rw0E5weS0fcw';
+                    const spinR = live.spin_r || spin.spin_r || spin._spin_r || '1049106301';
+                    const spinT = live.spin_t || spin.spin_t || spin._spin_t || String(Math.floor(Date.now() / 1000));
+
+                    const bodyParams = new URLSearchParams({
+                        __d: 'www',
+                        __user: viewerId || '0',
+                        __a: '1',
+                        __req: '7',
+                        dpr: '2',
+                        __ccg: 'EXCELLENT',
+                        __rev: spinR,
+                        __dyn: dyn,
+                        __csr: csr,
+                        _comet_req: '7',
+                        __comet_req: '7',
+                        server_timestamps: 'true',
+                        _spin_r: spinR,
+                        __spin_r: spinR,
+                        _spin_b: 'trunk',
+                        __spin_b: 'trunk',
+                        _spin_t: spinT,
+                        __spin_t: spinT,
+                        params: '{}'
+                    });
+
+                    if (viewerId) {
+                        bodyParams.set('av', viewerId);
+                        bodyParams.set('__user', viewerId);
+                    }
+                    if (fbDtsg) bodyParams.set('fb_dtsg', fbDtsg);
+                    if (jazoest) bodyParams.set('jazoest', jazoest);
+                    if (lsd) bodyParams.set('lsd', lsd);
+
+                    try {
+                        console.log('[IG Tools HideStory] Solicitando tela oficial via WBloks...', { viewerId, hasDtsg: !!fbDtsg, hasLsd: !!lsd, jazoest });
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                ...getApiHeaders(true),
+                                'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                                'x-fb-lsd': lsd,
+                                'x-csrftoken': getCookie('csrftoken') || '',
+                                'x-instagram-ajax': '1',
+                                'x-requested-with': 'XMLHttpRequest'
+                            },
+                            body: bodyParams.toString(),
+                            credentials: 'include',
+                            cache: 'no-store'
+                        });
+
+                        if (response.ok) {
+                            const text = await response.text();
+                            if (text.includes('"error":1357001') || text.includes('Entre para continuar')) {
+                                console.warn('[IG Tools HideStory] WBloks retornou 1357001 (sessão/token inválido). Limpando cache fb_dtsg.');
+                                try { localStorage.removeItem('ig_tools_fb_dtsg'); } catch (_) { }
+                            } else {
+                                console.log(`[IG Tools HideStory] fetchHideStoryInitialScreen recebeu ${text.length} bytes.`);
+                                const extracted = parseHideStoryBloksText(text);
+                                if (extracted.length > 0) return extracted;
+                            }
+                        }
+                    } catch (err) {
+                        console.warn('[IG Tools HideStory] Erro ao buscar tela inicial via WBloks POST:', err);
+                    }
+
+                    // 2. TENTATIVA FALLBACK: GET DIRETO NA URL OFICIAL (/accounts/hide_story_and_live_from/)
+                    try {
+                        console.log('[IG Tools HideStory] Tentando extração via GET na rota oficial /accounts/hide_story_and_live_from/...');
+                        const pageResp = await fetch('https://www.instagram.com/accounts/hide_story_and_live_from/', {
+                            credentials: 'include',
+                            cache: 'no-store'
+                        });
+                        if (pageResp.ok) {
+                            const html = await pageResp.text();
+                            console.log(`[IG Tools HideStory] HTML oficial recebido: ${html.length} bytes.`);
+                            const mDtsg = html.match(/\["DTSGInitialData",\s*\[\],\s*\{"token"\s*:\s*"([^"]+)"/i) || html.match(/"async_get_token"\s*:\s*"([^"]+)"/i);
+                            if (mDtsg && mDtsg[1]) {
+                                window.__fb_dtsg = mDtsg[1];
+                                try { localStorage.setItem('ig_tools_fb_dtsg', mDtsg[1]); } catch (_) { }
+                            }
+                            const extractedFromHtml = parseHideStoryBloksText(html);
+                            if (extractedFromHtml.length > 0) {
+                                console.log(`[IG Tools HideStory] Sucesso! ${extractedFromHtml.length} usuários extraídos do HTML oficial.`);
+                                return extractedFromHtml;
+                            }
+                        }
+                    } catch (errHtml) {
+                        console.warn('[IG Tools HideStory] Erro no fallback GET HTML:', errHtml);
+                    }
+
+                    return [];
+                }
+
+                // 2.2. Requisição direta oficial de Paginação (WBloks com.instagram.pagination.async)
+                async function fetchHideStoryPagination(cursor, containerId = "1178138719", loadingId = "1178138721") {
+                    if (!cursor) return { users: [], nextCursor: null };
+
+                    const live = getMainWorldTokens();
+                    const fbDtsg = live.dtsg || getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
+                    const jazoest = computeJazoest(fbDtsg) || '25994';
+                    const lsd = live.lsd || getLsdToken() || getInstagramFormToken('lsd') || '';
+                    const spin = getSpinParams();
+                    const spinR = live.spin_r || spin.spin_r || spin._spin_r || '1049106301';
+                    const spinT = live.spin_t || spin.spin_t || spin._spin_t || String(Math.floor(Date.now() / 1000));
+
+                    const url = 'https://www.instagram.com/async/wbloks/fetch/?appid=com.instagram.pagination.async&type=action&__bkv=bebad2b121ef373e1847b0445ffd0ce996417496c088e54f6b5d2f5c6501842d';
+
+                    const paramsObj = {
+                        container_id: String(containerId),
+                        loading_component_id: String(loadingId),
+                        app_id: "com.instagram.portable_settings.privacy.selection_list_component.unselected_users",
+                        autoload_params: JSON.stringify({
+                            query: "",
+                            container_id: String(containerId),
+                            cursor: cursor,
+                            selection_type: "1"
+                        })
                     };
-                    let isApplyingChangesStory = false;
-                    setTimeout(() => {
-                        const flexboxes = Array.from(document.querySelectorAll('div.wbloks_1, [data-bloks-name="bk.components.Flexbox"]'));
-                        flexboxes.forEach(flex => {
-                            const officialCheckboxContainer = Array.from(flex.querySelectorAll('div[tabindex="0"][role="button"], div[aria-label*="caixa de seleção"]')).find(el => el.getAttribute('aria-label')?.includes('Alternar caixa de seleção') || el.getAttribute('role') === 'button');
-                            if (!officialCheckboxContainer) return;
-                            if (officialCheckboxContainer._customSyncListenerStory) return;
-                            officialCheckboxContainer._customSyncListenerStory = true;
-                            officialCheckboxContainer.addEventListener("click", function () {
-                                if (isApplyingChangesStory) return;
-                                const spans = Array.from(flex.querySelectorAll('span'));
-                                const userText = spans.length > 0 ? spans[0].innerText.trim() : (flex.innerText && flex.innerText.trim().split('\n')[0]);
-                                const customCheckbox = document.querySelector(`.hideStoryCheckbox[data-username="${userText}"]`);
-                                if (customCheckbox) {
-                                    const iconDiv = officialCheckboxContainer.querySelector('[data-bloks-name="ig.components.Icon"], div.wbloks_1') || officialCheckboxContainer;
-                                    let isChecked = false;
-                                    if (iconDiv) {
-                                        const style = window.getComputedStyle(iconDiv);
-                                        const mask = style.maskImage || style.webkitMaskImage;
-                                        const bgImg = style.backgroundImage;
-                                        isChecked = (style.backgroundColor === 'rgb(0, 149, 246)' || style.backgroundColor === 'rgb(74, 93, 249)' || (bgImg && bgImg.includes('circle-check__filled')) || (mask && mask.includes('circle-check__filled')));
+
+                    const bodyParams = new URLSearchParams();
+                    bodyParams.append('params', JSON.stringify(paramsObj));
+                    bodyParams.append('__comet_req', '7');
+                    if (fbDtsg) bodyParams.append('fb_dtsg', fbDtsg);
+                    if (jazoest) bodyParams.append('jazoest', jazoest);
+                    if (lsd) bodyParams.append('lsd', lsd);
+                    bodyParams.append('_spin_r', spinR);
+                    bodyParams.append('_spin_b', 'trunk');
+                    bodyParams.append('_spin_t', spinT);
+                    bodyParams.append('__crn', 'comet.igweb.PolarisSettingsHideStoryAndLiveFromRoute');
+
+                    const dyn = getInstagramFormToken('__dyn');
+                    if (dyn) bodyParams.append('__dyn', dyn);
+                    const hblp = getInstagramFormToken('__hblp');
+                    if (hblp) bodyParams.append('__hblp', hblp);
+                    const sjsp = getInstagramFormToken('__sjsp');
+                    if (sjsp) bodyParams.append('__sjsp', sjsp);
+
+                    try {
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                                'x-csrftoken': getCookie('csrftoken') || '',
+                                'x-instagram-ajax': '1',
+                                'x-requested-with': 'XMLHttpRequest'
+                            },
+                            body: bodyParams.toString(),
+                            credentials: 'include'
+                        });
+
+                        if (!response.ok) return { users: [], nextCursor: null };
+                        const text = await response.text();
+                        const extracted = parseHideStoryBloksText(text);
+
+                        // Extrai o próximo cursor da resposta (robusto para qualquer nível de escape)
+                        const nextCursorMatch = text.match(/cursor\\*"\s*:\s*\\*"([^"\\\\]+)/);
+                        const nextCursor = (nextCursorMatch && nextCursorMatch[1] && nextCursorMatch[1] !== cursor) ? nextCursorMatch[1] : null;
+
+                        const nextContainerMatch = text.match(/container_id\\*"\s*:\s*\\*"(\d+)/);
+                        if (nextContainerMatch && nextContainerMatch[1]) window._igHideStoryContainerId = nextContainerMatch[1];
+
+                        const nextLoadingMatch = text.match(/loading_component_id\\*"\s*:\s*\\*"(\d+)/);
+                        if (nextLoadingMatch && nextLoadingMatch[1]) window._igHideStoryLoadingId = nextLoadingMatch[1];
+
+                        const cleanUsers = extracted.map(u => ({
+                            username: u.username,
+                            pk: u.pk || '',
+                            id: u.pk || '',
+                            fullName: u.fullName || '',
+                            photoUrl: (u.photoUrl && !u.photoUrl.includes('rsrc.php')) ? u.photoUrl : DEFAULT_AVATAR,
+                            isHidden: false // Usuários da paginação unselected são por definição não ocultados
+                        }));
+
+                        return { users: cleanUsers, nextCursor };
+                    } catch (err) {
+                        console.warn('[IG Tools HideStory] Erro na paginação:', err);
+                        return { users: [], nextCursor: null };
+                    }
+                }
+
+                // 3. MODAL INSTANTÂNEO (0ms) - GERENCIADOR DE OCULTAR STORIES
+                async function abrirModalOcultarStory(initialUsers = null) {
+                    if (modalAbertoStory) {
+                        const m = document.getElementById("hideStoryModal");
+                        if (m) { m.style.display = "block"; m.focus(); }
+                        return;
+                    }
+                    modalAbertoStory = true;
+
+                    // Helper inteligente para resolver fotos de perfil através de múltiplos caches e sessões
+                    function resolveUserPhoto(username, currentPhoto = null) {
+                        if (currentPhoto && currentPhoto !== DEFAULT_AVATAR && !currentPhoto.includes('rsrc.php') && !currentPhoto.includes('static.xx')) {
+                            return currentPhoto;
+                        }
+                        const clean = (username || '').toLowerCase().trim();
+                        if (!clean) return DEFAULT_AVATAR;
+
+                        if (typeof cachedData !== 'undefined' && cachedData?.userDetails) {
+                            const p = cachedData.userDetails.get(clean)?.photoUrl;
+                            if (p && p !== DEFAULT_AVATAR && !p.includes('rsrc.php') && !p.includes('static.xx')) return p;
+                        }
+                        if (dbHelper?._cache?.following && Array.isArray(dbHelper._cache.following)) {
+                            const item = dbHelper._cache.following.find(x => (x?.username || x)?.toLowerCase() === clean);
+                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
+                        }
+                        if (dbHelper?._cache?.followers && Array.isArray(dbHelper._cache.followers)) {
+                            const item = dbHelper._cache.followers.find(x => (x?.username || x)?.toLowerCase() === clean);
+                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
+                        }
+                        if (dbHelper?._cache?.hiddenStory && Array.isArray(dbHelper._cache.hiddenStory)) {
+                            const item = dbHelper._cache.hiddenStory.find(x => (x?.username || x)?.toLowerCase() === clean);
+                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
+                        }
+                        if (dbHelper?._cache?.hideStory && Array.isArray(dbHelper._cache.hideStory)) {
+                            const item = dbHelper._cache.hideStory.find(x => (x?.username || x)?.toLowerCase() === clean);
+                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
+                        }
+                        if (dbHelper?._cache?.closeFriends && Array.isArray(dbHelper._cache.closeFriends)) {
+                            const item = dbHelper._cache.closeFriends.find(x => (x?.username || x)?.toLowerCase() === clean);
+                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
+                        }
+                        if (typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                            const item = seguindoList.find(x => (typeof x === 'object' ? x?.username : x)?.toLowerCase() === clean);
+                            if (item && item.photoUrl && item.photoUrl !== DEFAULT_AVATAR && !item.photoUrl.includes('rsrc.php')) return item.photoUrl;
+                        }
+                        return DEFAULT_AVATAR;
+                    }
+
+                    // 1. CARREGAMENTO IMEDIATO DO CACHE (expurga qualquer rastro do usuário logado E resíduos inválidos)
+                    const myUname = (getLoggedInUsername() || '').toLowerCase().trim();
+                    const myUid = getCookie('ds_user_id') || getActorId() || '';
+                    const isOnHideStoryPage = window.location.pathname.includes('/accounts/hide_story_and_live_from/');
+                    let hideStoryList = [];
+
+                    // Carrega contas de Seguidores e Seguindo em paralelo para alimentar os filtros
+                    let followersAccounts = [];
+                    let followingAccounts = [];
+                    try {
+                        const [dbFollowers, dbFollowing] = await Promise.all([
+                            dbHelper.loadCache('followers') || dbHelper.getCache?.('followers'),
+                            dbHelper.loadCache('following') || dbHelper.getCache?.('following')
+                        ]);
+                        const unpackList = (cacheObj) => {
+                            if (!cacheObj) return [];
+                            if (Array.isArray(cacheObj)) return cacheObj;
+                            if (cacheObj.details instanceof Map) return Array.from(cacheObj.details.values());
+                            if (cacheObj instanceof Set) return Array.from(cacheObj).map(u => (typeof u === 'string' ? { username: u } : u));
+                            return [];
+                        };
+                        followersAccounts = unpackList(dbFollowers);
+                        followingAccounts = unpackList(dbFollowing);
+                    } catch (_) { }
+
+                    if (followersAccounts.length === 0 && dbHelper?._cache?.followers && Array.isArray(dbHelper._cache.followers)) {
+                        followersAccounts = dbHelper._cache.followers;
+                    }
+                    if (followingAccounts.length === 0 && dbHelper?._cache?.following && Array.isArray(dbHelper._cache.following)) {
+                        followingAccounts = dbHelper._cache.following;
+                    }
+                    if (followersAccounts.length === 0) {
+                        try {
+                            const raw = localStorage.getItem('ig_tools_cache_followers') || localStorage.getItem('ig_tools_cached_followers');
+                            if (raw) {
+                                const parsed = JSON.parse(raw);
+                                if (Array.isArray(parsed)) followersAccounts = parsed;
+                            }
+                        } catch (_) { }
+                    }
+                    if (followingAccounts.length === 0) {
+                        try {
+                            const raw = localStorage.getItem('ig_tools_cache_following') || localStorage.getItem('ig_tools_cached_following');
+                            if (raw) {
+                                const parsed = JSON.parse(raw);
+                                if (Array.isArray(parsed)) followingAccounts = parsed;
+                            }
+                        } catch (_) { }
+                    }
+                    if (followingAccounts.length === 0 && typeof seguindoList !== 'undefined' && Array.isArray(seguindoList) && seguindoList.length > 0) {
+                        followingAccounts = seguindoList;
+                    }
+                    if (followingAccounts.length === 0 && typeof cachedData !== 'undefined' && cachedData?.seguindo) {
+                        followingAccounts = Array.from(cachedData.seguindo).map(u => ({
+                            username: u,
+                            photoUrl: resolveUserPhoto(u),
+                            fullName: cachedData.userDetails?.get(u)?.fullName || ''
+                        }));
+                    }
+                    if (followersAccounts.length === 0 && typeof cachedData !== 'undefined' && cachedData?.seguidores) {
+                        followersAccounts = Array.from(cachedData.seguidores).map(u => ({
+                            username: u,
+                            photoUrl: resolveUserPhoto(u),
+                            fullName: cachedData.userDetails?.get(u)?.fullName || ''
+                        }));
+                    }
+
+                    followersAccounts.forEach(f => {
+                        if (typeof f === 'object' && f) f.photoUrl = resolveUserPhoto(f.username, f.photoUrl);
+                    });
+                    followingAccounts.forEach(f => {
+                        if (typeof f === 'object' && f) f.photoUrl = resolveUserPhoto(f.username, f.photoUrl);
+                    });
+
+                    const followersSet = new Set(
+                        followersAccounts.map(f => (typeof f === 'string' ? f : f.username || '').toLowerCase().trim()).filter(Boolean)
+                    );
+                    const followingSet = new Set(
+                        followingAccounts.map(f => (typeof f === 'string' ? f : f.username || '').toLowerCase().trim()).filter(Boolean)
+                    );
+
+                    // Detecção de contas com story ocultado oficial (verdade estrita)
+                    let officialHiddenSet = new Set();
+                    let officialHiddenList = [];
+                    let baseList = [];
+
+                    const addHiddenAccount = (u, isHidden = true) => {
+                        const uname = (typeof u === 'string' ? u : u.username || '').toLowerCase().trim();
+                        if (!uname || !isValidInstagramUsername(uname) || uname === myUname) return;
+                        const pk = (typeof u === 'object' && (u.pk || u.id)) ? String(u.pk || u.id) : (getCachedUserId(uname) || '');
+                        const photoUrl = resolveUserPhoto(uname, typeof u === 'object' ? u.photoUrl : null);
+                        const fullName = (typeof u === 'object' && u.fullName) ? u.fullName : '';
+                        const userObj = {
+                            username: uname,
+                            pk,
+                            id: pk,
+                            fullName,
+                            photoUrl,
+                            isHidden: !!isHidden
+                        };
+                        if (isHidden) {
+                            officialHiddenSet.add(uname);
+                            if (!officialHiddenList.some(x => x.username.toLowerCase() === uname)) {
+                                officialHiddenList.push(userObj);
+                            }
+                        }
+                        const existingBase = baseList.find(b => b.username.toLowerCase() === uname);
+                        if (!existingBase) {
+                            baseList.push(userObj);
+                        } else {
+                            if (isHidden) existingBase.isHidden = true;
+                            if (!existingBase.pk && pk) existingBase.pk = pk;
+                            if ((!existingBase.photoUrl || existingBase.photoUrl === DEFAULT_AVATAR) && photoUrl !== DEFAULT_AVATAR) {
+                                existingBase.photoUrl = photoUrl;
+                            }
+                        }
+                    };
+
+                    // 1. Carrega de userListCache.hiddenStory se já presente em memória
+                    if (userListCache.hiddenStory && userListCache.hiddenStory.size > 0) {
+                        userListCache.hiddenStory.forEach(u => addHiddenAccount(u, true));
+                    }
+
+                    // 2. Carrega dados salvos anteriormente em cache/IndexedDB / Google Drive
+                    try {
+                        const raw = localStorage.getItem('ig_tools_cached_hide_story') || localStorage.getItem('ig_tools_cache_hiddenStory') || localStorage.getItem('ig_tools_cache_hideStory');
+                        if (raw) {
+                            const parsed = JSON.parse(raw);
+                            if (Array.isArray(parsed) && parsed.length > 0) {
+                                parsed.forEach(u => {
+                                    addHiddenAccount(u, !!(u.isHidden || u.isChecked));
+                                });
+                            }
+                        }
+                    } catch (_) { }
+
+                    try {
+                        const [dbHidden, dbHide] = await Promise.all([
+                            dbHelper.loadCache('hiddenStory') || dbHelper.getCache?.('hiddenStory'),
+                            dbHelper.loadCache('hideStory') || dbHelper.getCache?.('hideStory')
+                        ]);
+                        const unpackDb = (dbRes) => {
+                            if (!dbRes) return [];
+                            if (Array.isArray(dbRes)) return dbRes;
+                            if (dbRes.details instanceof Map) return Array.from(dbRes.details.values());
+                            if (dbRes instanceof Set) return Array.from(dbRes).map(u => ({ username: u, isHidden: true }));
+                            return [];
+                        };
+                        const combinedDb = [...unpackDb(dbHidden), ...unpackDb(dbHide)];
+                        combinedDb.forEach(u => addHiddenAccount(u, true));
+                    } catch (_) { }
+
+                    if (dbHelper?._cache?.hiddenStory && Array.isArray(dbHelper._cache.hiddenStory)) {
+                        dbHelper._cache.hiddenStory.forEach(u => addHiddenAccount(u, true));
+                    }
+                    if (dbHelper?._cache?.hideStory && Array.isArray(dbHelper._cache.hideStory)) {
+                        dbHelper._cache.hideStory.forEach(u => addHiddenAccount(u, true));
+                    }
+
+                    // 3. Se estiver diretamente na tela de Ocultar Story, faz varredura imediata dos elementos já na tela (0ms)
+                    if (isOnHideStoryPage) {
+                        const liveMap = scanHideStoryDomRows(document);
+                        const liveArr = Array.from(liveMap.values());
+                        const liveHidden = liveArr.filter(u => u.isHidden);
+                        if (liveHidden.length > 0) {
+                            officialHiddenList = liveHidden.map(u => ({ ...u, photoUrl: resolveUserPhoto(u.username, u.photoUrl) }));
+                            officialHiddenSet = new Set(liveHidden.map(u => u.username.toLowerCase()));
+                            try {
+                                localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(liveHidden));
+                                dbHelper.saveCache('hiddenStory', liveHidden);
+                                dbHelper.saveCache('hideStory', liveHidden);
+                                if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
+                                userListCache.hiddenStory = new Set(liveHidden.map(u => u.username));
+                            } catch (_) { }
+                        }
+                        liveArr.forEach(u => addHiddenAccount(u, u.isHidden));
+                    }
+
+                    // 4. Se não estiver na tela oficial ou ainda não obteve a lista oficial, busca diretamente via WBloks / GET
+                    if (officialHiddenList.length === 0) {
+                        try {
+                            const initialScreenUsers = await fetchHideStoryInitialScreen();
+                            if (Array.isArray(initialScreenUsers) && initialScreenUsers.length > 0) {
+                                const hiddenUsers = initialScreenUsers.filter(u => u.isChecked || u.isHidden);
+                                if (hiddenUsers.length > 0) {
+                                    officialHiddenList = hiddenUsers.map(u => ({ ...u, isHidden: true, photoUrl: resolveUserPhoto(u.username, u.photoUrl) }));
+                                    officialHiddenSet = new Set(hiddenUsers.map(u => (u.username || '').toLowerCase()));
+                                    try {
+                                        localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(hiddenUsers));
+                                        dbHelper.saveCache('hiddenStory', hiddenUsers);
+                                        dbHelper.saveCache('hideStory', hiddenUsers);
+                                        if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
+                                        userListCache.hiddenStory = new Set(hiddenUsers.map(u => u.username));
+                                    } catch (_) { }
+                                }
+                                initialScreenUsers.forEach(u => addHiddenAccount(u, u.isChecked || u.isHidden));
+                            }
+                        } catch (err) {
+                            console.warn('[IG Tools HideStory] Falha ao carregar tela inicial:', err);
+                        }
+                    }
+
+                    // Complementa com initialUsers ou cachedHideStory se fornecidos
+                    if (Array.isArray(initialUsers) && initialUsers.length > 0) {
+                        initialUsers.forEach(u => addHiddenAccount(u, u.isHidden));
+                    } else if (Array.isArray(cachedHideStory) && cachedHideStory.length > 0) {
+                        cachedHideStory.forEach(u => addHiddenAccount(u, u.isHidden));
+                    }
+
+                    const cachedHiddenCount = baseList.filter(u => u.isHidden).length;
+                    const isCacheCorrupted = cachedHiddenCount > 80 && (officialHiddenSet.size > 0 || (window._igHideStoryTotalCount && window._igHideStoryTotalCount < 80) || baseList.length > 80);
+
+                    const mergedMap = new Map();
+
+                    // 1. Contas oficialmente com story ocultado
+                    officialHiddenList.forEach(u => {
+                        const k = (u.username || '').toLowerCase().trim();
+                        if (k && k !== myUname) {
+                            mergedMap.set(k, { ...u, photoUrl: resolveUserPhoto(u.username, u.photoUrl), isHidden: true });
+                        }
+                    });
+
+                    // 2. Base list
+                    baseList.forEach(u => {
+                        const uname = (u.username || '').toLowerCase().trim();
+                        if (!uname || !isValidInstagramUsername(uname) || uname === myUname) return;
+                        let isHid = u.isHidden;
+                        if (isCacheCorrupted) {
+                            isHid = officialHiddenSet.has(uname);
+                        }
+                        const p = resolveUserPhoto(uname, u.photoUrl);
+                        if (!mergedMap.has(uname)) {
+                            mergedMap.set(uname, {
+                                ...u,
+                                photoUrl: p,
+                                isHidden: isHid
+                            });
+                        } else {
+                            const existing = mergedMap.get(uname);
+                            if (isHid) existing.isHidden = true;
+                            if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && p !== DEFAULT_AVATAR) {
+                                existing.photoUrl = p;
+                            }
+                        }
+                    });
+
+                    // 3. Meus Seguidores
+                    followersAccounts.forEach(f => {
+                        const uname = typeof f === 'string' ? f : f.username;
+                        if (!uname || !isValidInstagramUsername(uname)) return;
+                        const k = uname.toLowerCase().trim();
+                        if (k === myUname) return;
+                        const pk = (typeof f === 'object' && (f.pk || f.id)) ? String(f.pk || f.id) : (getCachedUserId(uname) || '');
+                        const p = resolveUserPhoto(uname, (typeof f === 'object' && f.photoUrl) ? f.photoUrl : null);
+                        if (!mergedMap.has(k)) {
+                            mergedMap.set(k, {
+                                username: uname,
+                                pk: pk,
+                                id: pk,
+                                fullName: (typeof f === 'object' && f.fullName) ? f.fullName : '',
+                                photoUrl: p,
+                                isHidden: officialHiddenSet.has(k)
+                            });
+                        } else {
+                            const existing = mergedMap.get(k);
+                            if (!existing.pk && pk) existing.pk = pk;
+                            if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && p !== DEFAULT_AVATAR) {
+                                existing.photoUrl = p;
+                            }
+                        }
+                    });
+
+                    // 4. Meus Seguindo
+                    followingAccounts.forEach(f => {
+                        const uname = typeof f === 'string' ? f : f.username;
+                        if (!uname || !isValidInstagramUsername(uname)) return;
+                        const k = uname.toLowerCase().trim();
+                        if (k === myUname) return;
+                        const pk = (typeof f === 'object' && (f.pk || f.id)) ? String(f.pk || f.id) : (getCachedUserId(uname) || '');
+                        const p = resolveUserPhoto(uname, (typeof f === 'object' && f.photoUrl) ? f.photoUrl : null);
+                        if (!mergedMap.has(k)) {
+                            mergedMap.set(k, {
+                                username: uname,
+                                pk: pk,
+                                id: pk,
+                                fullName: (typeof f === 'object' && f.fullName) ? f.fullName : '',
+                                photoUrl: p,
+                                isHidden: officialHiddenSet.has(k)
+                            });
+                        } else {
+                            const existing = mergedMap.get(k);
+                            if (!existing.pk && pk) existing.pk = pk;
+                            if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && p !== DEFAULT_AVATAR) {
+                                existing.photoUrl = p;
+                            }
+                        }
+                    });
+
+                    hideStoryList = Array.from(mergedMap.values()).filter(u => {
+                        const uname = (u.username || '').toLowerCase().trim();
+                        const uid = String(u.pk || u.id || '');
+                        if (!uname || uname === myUname || (myUid && uid === myUid)) return false;
+                        return isValidInstagramUsername(uname);
+                    });
+                    cachedHideStory = hideStoryList;
+
+                    const selectedUsers = new Set();
+                    let currentPage = 1;
+                    let sortConfig = { key: 'isHidden', direction: 'descending' };
+
+                    // 2. MONTAGEM IMEDIATA DO MODAL (0ms - Padrão Amigos Próximos)
+                    const div = document.createElement("div");
+                    div.id = "hideStoryModal";
+                    div.className = "submenu-modal";
+                    div.style.cssText = `
+                        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                        width: 90%; max-width: 840px; max-height: 90vh; border: 1px solid #ccc;
+                        border-radius: 12px; padding: 20px; z-index: 10000; overflow: auto;
+                        box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+                    `;
+
+                    const hiddenCount = hideStoryList.filter(u => u.isHidden).length;
+                    const notHiddenCount = hideStoryList.filter(u => !u.isHidden).length;
+                    const followersCount = hideStoryList.filter(u => followersSet.has((u.username || '').toLowerCase().trim())).length;
+                    const followingCount = hideStoryList.filter(u => followingSet.has((u.username || '').toLowerCase().trim())).length;
+
+                    div.innerHTML = `
+                        <div class="modal-header">
+                            <span class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+                                <span>👁️‍🗨️ Gerenciador de Ocultar Stories</span>
+                                <span id="hsSelectedCount" style="font-size:12px; font-weight:normal; color:#0095f6;">(0 selecionados)</span>
+                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie quem não pode ver seus Stories e transmissões ao vivo. Oculte ou reexiba contatos individualmente ou em lote com 1 clique.</span></div>
+                            </span>
+                            <div class="modal-controls">
+                                <button id="hsMinimizarBtn" title="Minimizar">_</button>
+                                <button id="hsFecharBtn" title="Fechar">X</button>
+                            </div>
+                        </div>
+                        <div style="padding: 15px 0 10px 0;">
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                                    <button id="hsRefreshBtn" title="Ler e sincronizar dados oficiais via Instagram Web" style="background: #1abc9c; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">🔄 Sincronizar</button>
+                                    <button id="hsOpenOfficialPageBtn" title="Abre a tela nativa de Ocultar Stories do Instagram para sincronizar instantaneamente em 0ms" style="background: #34495e; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">🌐 Tela Oficial (0ms)</button>
+                                    <button id="hsImportJsonBtn" title="Importar arquivo JSON de usuários" style="background: #8e44ad; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">📥 Importar JSON</button>
+                                    <button id="hsHideSelectedBtn" title="Ocultar stories para os selecionados" style="background: #e67e22; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600;">👁️‍🗨️ Ocultar Selecionados</button>
+                                    <button id="hsUnhideSelectedBtn" title="Reexibir stories para os selecionados" style="background: #27ae60; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600;">👁️ Reexibir Selecionados</button>
+                                    <button id="hsSelectPageBtn" style="background: #0095f6; color: white; border: none; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 13px;">Selecionar Página</button>
+                                    <button id="hsDeselectAllBtn" style="background: #6c757d; color: white; border: none; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 13px;">Desmarcar Todos</button>
+                                    <input type="file" id="hsJsonFileInput" accept=".json" style="display: none;">
+                                </div>
+                                <div class="toggle-item" style="padding: 5px 10px; border-radius: 8px; gap: 10px; display: flex; align-items: center;">
+                                    <span style="font-size: 13px; font-weight: 500;">⚡ Usar API</span>
+                                    <label class="switch"><input type="checkbox" id="hsUseApiToggle" ${loadSettings().useApi ? 'checked' : ''}><span class="slider"></span></label>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap;">
+                            <input type="text" id="hsSearchInput" placeholder="Pesquisar por @usuário, nome ou ID..." style="flex: 2; min-width: 220px; padding: 8px 12px; height: 38px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; outline: none; box-sizing: border-box;">
+                            <select id="hsFilterSelect" style="flex: 1; min-width: 260px; padding: 0 10px; height: 38px; border-radius: 8px; border: 1px solid #dbdbdb; color: black; background: white; cursor: pointer; outline: none; box-sizing: border-box; font-weight: 500;">
+                                <option value="hidden" ${hiddenCount > 0 ? 'selected' : ''}>👁️ Stories Ocultados (${hiddenCount})</option>
+                                <option value="not_hidden" ${hiddenCount === 0 && notHiddenCount > 0 ? 'selected' : ''}>👁️ Stories Sem Ocultar (${notHiddenCount})</option>
+                                <option value="followers">👥 Meus Seguidores (${followersCount})</option>
+                                <option value="following">👤 Meus Seguindo (${followingCount})</option>
+                                <option value="all">🌐 Todos (${hideStoryList.length})</option>
+                            </select>
+                        </div>
+                        <div id="statusHideStory" style="font-weight: 600; font-size: 13px; color: #555; display: flex; justify-content: space-between; align-items: center;">
+                            <span>Total: <strong style="color: #e67e22;">${hiddenCount}</strong> contas com story ocultado | <strong style="color: #27ae60;">${notHiddenCount}</strong> contas sem ocultar.</span>
+                            <span id="hsSyncInfo" style="font-size: 11px; color: #888;"></span>
+                        </div>
+                        <div id="tabelaHideStoryContainer" style="display: block; margin-top: 12px; overflow-x: auto; width: 100%;"></div>
+                    `;
+
+                    document.body.appendChild(div);
+
+                    const container = document.getElementById("tabelaHideStoryContainer");
+
+                    const updateCounts = (paginatedUsers = []) => {
+                        const countEl = document.getElementById('hsSelectedCount');
+                        if (countEl) countEl.innerText = `(${selectedUsers.size} selecionados)`;
+
+                        const selectAllCb = document.getElementById('selectAllHsCheckbox');
+                        if (selectAllCb && paginatedUsers.length > 0) {
+                            selectAllCb.checked = paginatedUsers.every(u => selectedUsers.has(u.username));
+                        }
+
+                        const curHiddenCount = hideStoryList.filter(u => u.isHidden).length;
+                        const curNotHiddenCount = hideStoryList.filter(u => !u.isHidden).length;
+                        const curFollowersCount = hideStoryList.filter(u => followersSet.has((u.username || '').toLowerCase().trim())).length;
+                        const curFollowingCount = hideStoryList.filter(u => followingSet.has((u.username || '').toLowerCase().trim())).length;
+                        const curTotalCount = hideStoryList.length;
+
+                        const filterSelect = document.getElementById('hsFilterSelect');
+                        if (filterSelect && filterSelect.options.length >= 5) {
+                            filterSelect.options[0].text = `👁️ Stories Ocultados (${curHiddenCount})`;
+                            filterSelect.options[1].text = `👁️ Stories Sem Ocultar (${curNotHiddenCount})`;
+                            filterSelect.options[2].text = `👥 Meus Seguidores (${curFollowersCount})`;
+                            filterSelect.options[3].text = `👤 Meus Seguindo (${curFollowingCount})`;
+                            filterSelect.options[4].text = `🌐 Todos (${curTotalCount})`;
+                        }
+
+                        const statusEl = document.getElementById('statusHideStory');
+                        if (statusEl) {
+                            const totalSpan = statusEl.querySelector('span');
+                            if (totalSpan) {
+                                totalSpan.innerHTML = `Total: <strong style="color: #e67e22;">${curHiddenCount}</strong> stories ocultados | <strong style="color: #27ae60;">${curNotHiddenCount}</strong> sem ocultar.`;
+                            }
+                        }
+                    };
+
+                    const renderList = (page) => {
+                        const itemsPerPage = loadSettings().itemsPerPage || 10;
+                        const startIndex = (page - 1) * itemsPerPage;
+                        const endIndex = startIndex + itemsPerPage;
+
+                        const searchTerm = (document.getElementById('hsSearchInput')?.value || '').toLowerCase().trim();
+                        const filterValue = document.getElementById('hsFilterSelect')?.value || 'hidden';
+
+                        let filtered = hideStoryList.filter(u => {
+                            const uLower = (u.username || '').toLowerCase().trim();
+                            const fLower = (u.fullName || '').toLowerCase().trim();
+                            const pkStr = String(u.pk || u.id || '');
+
+                            const matchSearch = !searchTerm || uLower.includes(searchTerm) || fLower.includes(searchTerm) || pkStr.includes(searchTerm);
+                            if (!matchSearch) return false;
+
+                            if (filterValue === 'hidden') return u.isHidden;
+                            if (filterValue === 'not_hidden') return !u.isHidden;
+                            if (filterValue === 'followers') return followersSet.has(uLower);
+                            if (filterValue === 'following') return followingSet.has(uLower);
+                            return true; // 'all'
+                        });
+
+                        // Ordenação idêntica ao padrão Amigos Próximos
+                        filtered.sort((a, b) => {
+                            let valA = '';
+                            let valB = '';
+                            if (sortConfig.key === 'username') {
+                                valA = (a.username || '').toLowerCase();
+                                valB = (b.username || '').toLowerCase();
+                            } else if (sortConfig.key === 'pk') {
+                                valA = Number(a.pk) || 0;
+                                valB = Number(b.pk) || 0;
+                            } else if (sortConfig.key === 'isHidden') {
+                                valA = a.isHidden ? 1 : 0;
+                                valB = b.isHidden ? 1 : 0;
+                            }
+
+                            if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+                            if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
+                            return 0;
+                        });
+
+                        const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
+                        if (page > totalPages) page = totalPages;
+                        currentPage = page;
+                        const paginatedUsers = filtered.slice(startIndex, endIndex);
+
+                        let tableHtml = `
+                            <table style="width: 100%; min-width: 620px; border-collapse: collapse; margin-top: 5px;">
+                                <thead style="cursor: pointer;">
+                                    <tr style="text-align: left; border-bottom: 2px solid #dbdbdb;">
+                                        <th style="padding: 8px; width: 36px; text-align: center;"><input type="checkbox" id="selectAllHsCheckbox" title="Selecionar Todos da Página"></th>
+                                        <th style="padding: 8px;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                        <th style="padding: 8px; text-align: center; width: 110px;" data-sort-key="pk">ID (PK) ${sortConfig.key === 'pk' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                        <th style="padding: 8px; text-align: center; width: 140px;" data-sort-key="isHidden">Status ${sortConfig.key === 'isHidden' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                        <th style="padding: 8px; text-align: center; width: 120px;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                        `;
+
+                        if (paginatedUsers.length === 0) {
+                            tableHtml += `
+                                <tr>
+                                    <td colspan="5" style="text-align: center; padding: 30px 15px; color: #666;">
+                                        <div style="font-size: 15px; font-weight: 600; margin-bottom: 8px;">Nenhum usuário encontrado</div>
+                                        <div style="font-size: 13px; color: #888; max-width: 480px; margin: 0 auto; line-height: 1.5;">
+                                            Você pode clicar em <strong>🔄 Sincronizar</strong> para carregar sua lista de Stories Ocultados diretamente do Instagram Web ou clicar em <strong>📥 Importar JSON</strong>.
+                                        </div>
+                                    </td>
+                                </tr>
+                            `;
+                        } else {
+                            paginatedUsers.forEach(userObj => {
+                                const { username, photoUrl: currentPhotoUrl, pk, fullName, isHidden } = userObj;
+                                const isChecked = selectedUsers.has(username);
+                                const photoUrl = resolveUserPhoto(username, currentPhotoUrl);
+                                if (photoUrl !== currentPhotoUrl && photoUrl !== DEFAULT_AVATAR) {
+                                    userObj.photoUrl = photoUrl;
+                                }
+                                const uLower = (username || '').toLowerCase().trim();
+                                const isFollower = followersSet.has(uLower);
+                                const isFollowing = followingSet.has(uLower);
+
+                                let relBadge = '';
+                                if (isFollower && isFollowing) {
+                                    relBadge = `<span style="font-size: 10px; background: rgba(52, 152, 219, 0.15); color: #3498db; border: 1px solid rgba(52, 152, 219, 0.35); padding: 1px 6px; border-radius: 8px; font-weight: 600; white-space: nowrap;">Amigos Mútuos</span>`;
+                                } else if (isFollowing) {
+                                    relBadge = `<span style="font-size: 10px; background: rgba(155, 89, 182, 0.15); color: #9b59b6; border: 1px solid rgba(155, 89, 182, 0.35); padding: 1px 6px; border-radius: 8px; font-weight: 600; white-space: nowrap;">Seguindo</span>`;
+                                } else if (isFollower) {
+                                    relBadge = `<span style="font-size: 10px; background: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.35); padding: 1px 6px; border-radius: 8px; font-weight: 600; white-space: nowrap;">Seguidor</span>`;
+                                }
+
+                                tableHtml += `
+                                    <tr style="border-bottom: 1px solid #dbdbdb;" data-username="${username}">
+                                        <td style="padding: 8px; text-align: center;"><input type="checkbox" class="hs-user-checkbox" data-username="${username}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
+                                        <td style="padding: 8px; display: flex; align-items: center; gap: 10px;">
+                                            <img src="${photoUrl || DEFAULT_AVATAR}" crossorigin="anonymous" loading="lazy" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${username}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid #eee; flex-shrink: 0;">
+                                            <div style="display: flex; flex-direction: column; min-width: 0;">
+                                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                                    <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration: none; color: inherit; font-weight: 600;">${username}</a>
+                                                    ${relBadge}
+                                                </div>
+                                                ${fullName ? `<span style="font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${fullName}</span>` : ''}
+                                            </div>
+                                        </td>
+                                        <td style="text-align: center; padding: 8px; font-family: monospace; font-size: 12px; color: #888;">${pk || '-'}</td>
+                                        <td style="text-align: center; padding: 8px;">
+                                            ${isHidden
+                                        ? `<span class="badge-hs-hidden" style="background: rgba(230, 126, 34, 0.16); color: #f39c12 !important; border: 1px solid rgba(243, 156, 18, 0.45); padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">👁️‍🗨️ Story Ocultado</span>`
+                                        : `<span class="badge-hs-visible" style="background: rgba(39, 174, 96, 0.15); color: #27ae60 !important; border: 1px solid rgba(39, 174, 96, 0.4); padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">👁️ Sem Ocultar</span>`
                                     }
-                                    if (customCheckbox.checked !== isChecked) {
-                                        customCheckbox.checked = isChecked;
+                                        </td>
+                                        <td style="text-align: center; padding: 8px;">
+                                            ${isHidden
+                                        ? `<button class="btn-action-hs" data-username="${username}" data-uid="${pk}" data-action="unhide" style="background: #27ae60; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;">👁️ Reexibir</button>`
+                                        : `<button class="btn-action-hs" data-username="${username}" data-uid="${pk}" data-action="hide" style="background: #e67e22; color: white; border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;">👁️‍🗨️ Ocultar</button>`
                                     }
+                                        </td>
+                                    </tr>
+                                `;
+                            });
+                        }
+
+                        tableHtml += `</tbody></table>`;
+
+                        let paginationHtml = `<div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">`;
+                        if (page > 1) paginationHtml += `<button id="prevHsPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Anterior</button>`;
+                        paginationHtml += `<span style="font-size: 13px; font-weight: 600;">Página ${page} de ${totalPages}</span>`;
+                        if (page < totalPages) paginationHtml += `<button id="nextHsPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Próximo</button>`;
+                        paginationHtml += `</div>`;
+
+                        container.innerHTML = tableHtml + paginationHtml;
+
+                        // Busca assíncrona on-demand para preencher fotos que faltarem na página exibida
+                        const missingOnPage = paginatedUsers.filter(u => !u.photoUrl || u.photoUrl === DEFAULT_AVATAR || u.photoUrl.includes('rsrc.php'));
+                        if (missingOnPage.length > 0) {
+                            (async () => {
+                                for (const mUser of missingOnPage) {
+                                    try {
+                                        const clean = mUser.username.toLowerCase();
+                                        const res = await fetch(`https://www.instagram.com/api/v1/web/search/topsearch/?context=blended&query=${encodeURIComponent(mUser.username)}`, {
+                                            headers: getApiHeaders(),
+                                            credentials: 'include'
+                                        });
+                                        if (res.ok) {
+                                            const sData = await res.json();
+                                            const exact = sData.users?.find(item => item?.user?.username?.toLowerCase() === clean);
+                                            if (exact?.user) {
+                                                const pic = exact.user.profile_pic_url || exact.user.profile_pic_url_hd;
+                                                if (pic) {
+                                                    mUser.photoUrl = pic;
+                                                    if (exact.user.pk) mUser.pk = String(exact.user.pk);
+                                                    if (exact.user.full_name && !mUser.fullName) mUser.fullName = exact.user.full_name;
+
+                                                    // Atualiza diretamente no elemento visual da tabela
+                                                    const rowEl = container.querySelector(`tr[data-username="${mUser.username}"]`);
+                                                    if (rowEl) {
+                                                        const imgEl = rowEl.querySelector('img');
+                                                        if (imgEl) imgEl.src = pic;
+                                                        if (exact.user.full_name) {
+                                                            const nameEl = rowEl.querySelector('span[style*="font-size: 12px"]');
+                                                            if (nameEl) nameEl.innerText = exact.user.full_name;
+                                                        }
+                                                        const pkEl = rowEl.querySelectorAll('td')[2];
+                                                        if (pkEl && (pkEl.innerText === '-' || !pkEl.innerText) && exact.user.pk) {
+                                                            pkEl.innerText = String(exact.user.pk);
+                                                        }
+                                                    }
+
+                                                    // Salva no cache em memória
+                                                    if (typeof cachedData !== 'undefined' && cachedData?.userDetails) {
+                                                        cachedData.userDetails.set(clean, { username: mUser.username, photoUrl: pic, id: mUser.pk, fullName: mUser.fullName });
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } catch (_) { }
+                                    await new Promise(r => setTimeout(r, 120));
+                                }
+                            })();
+                        }
+
+                        // Checkbox individual listeners
+                        container.querySelectorAll('.hs-user-checkbox').forEach(cb => {
+                            cb.addEventListener('change', (e) => {
+                                const uname = e.target.dataset.username;
+                                if (e.target.checked) selectedUsers.add(uname);
+                                else selectedUsers.delete(uname);
+                                updateCounts(paginatedUsers);
+                            });
+                        });
+
+                        // Select all checkbox listener
+                        const selectAllCb = document.getElementById('selectAllHsCheckbox');
+                        if (selectAllCb) {
+                            selectAllCb.checked = paginatedUsers.length > 0 && paginatedUsers.every(u => selectedUsers.has(u.username));
+                            selectAllCb.onchange = (e) => {
+                                const isChecked = e.target.checked;
+                                paginatedUsers.forEach(u => {
+                                    if (isChecked) selectedUsers.add(u.username);
+                                    else selectedUsers.delete(u.username);
+                                });
+                                container.querySelectorAll('.hs-user-checkbox').forEach(cb => cb.checked = isChecked);
+                                updateCounts(paginatedUsers);
+                            };
+                        }
+
+                        // Sorting listeners
+                        container.querySelectorAll('th[data-sort-key]').forEach(th => {
+                            th.addEventListener('click', () => {
+                                const key = th.dataset.sortKey;
+                                if (sortConfig.key === key) {
+                                    sortConfig.direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+                                } else {
+                                    sortConfig.key = key;
+                                    sortConfig.direction = 'ascending';
+                                }
+                                renderList(currentPage);
+                            });
+                        });
+
+                        // Pagination button listeners
+                        const prevBtn = document.getElementById('prevHsPageBtn');
+                        if (prevBtn) prevBtn.onclick = () => renderList(currentPage - 1);
+                        const nextBtn = document.getElementById('nextHsPageBtn');
+                        if (nextBtn) nextBtn.onclick = () => renderList(currentPage + 1);
+
+                        // Botão individual Ocultar / Reexibir (1 clique via WBloks)
+                        container.querySelectorAll('.btn-action-hs').forEach(btn => {
+                            btn.addEventListener('click', async (e) => {
+                                const targetBtn = e.currentTarget;
+                                const uname = targetBtn.dataset.username;
+                                const action = targetBtn.dataset.action; // 'hide' ou 'unhide'
+                                let uid = targetBtn.dataset.uid || getCachedUserId(uname);
+
+                                targetBtn.disabled = true;
+                                targetBtn.textContent = 'Salvando...';
+
+                                if (!uid) {
+                                    uid = await getUserId(uname);
+                                }
+                                if (!uid) {
+                                    showToast(`Não foi possível obter o ID de @${uname}.`);
+                                    targetBtn.disabled = false;
+                                    targetBtn.textContent = action === 'hide' ? '👁️‍🗨️ Ocultar' : '👁️ Reexibir';
+                                    return;
+                                }
+
+                                try {
+                                    const res = await executeWbloksHideStory(uid, uname, action);
+                                    if (res && res.success) {
+                                        const userObj = hideStoryList.find(u => u.username.toLowerCase() === uname.toLowerCase());
+                                        if (userObj) {
+                                            userObj.isHidden = (action === 'hide');
+                                        }
+
+                                        if (action === 'hide') {
+                                            showToast(`👁️‍🗨️ Stories ocultados para @${uname}!`);
+                                        } else {
+                                            showToast(`👁️ Stories agora visíveis para @${uname}.`);
+                                        }
+
+                                        cachedHideStory = hideStoryList;
+                                        try {
+                                            localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(hideStoryList));
+                                            await dbHelper.saveCache('hideStory', hideStoryList.filter(u => u.isHidden));
+                                        } catch (_) { }
+
+                                        renderList(currentPage);
+                                        updateCounts();
+                                    } else {
+                                        showToast(`Erro ao atualizar @${uname}`);
+                                        targetBtn.disabled = false;
+                                        targetBtn.textContent = action === 'hide' ? '👁️‍🗨️ Ocultar' : '👁️ Reexibir';
+                                    }
+                                } catch (err) {
+                                    console.error('[IG Tools HideStory] Erro:', err);
+                                    showToast(`Erro ao comunicar com o Instagram.`);
+                                    targetBtn.disabled = false;
+                                    targetBtn.textContent = action === 'hide' ? '👁️‍🗨️ Ocultar' : '👁️ Reexibir';
                                 }
                             });
                         });
-                    }, 500);
-                    const aplicarBtn = document.getElementById("hideStoryAplicarBtn");
-                    if (aplicarBtn) {
-                        const originalHandler = aplicarBtn.onclick;
-                        aplicarBtn.onclick = async function () {
-                            isApplyingChangesStory = true;
-                            if (originalHandler) {
-                                await originalHandler.apply(this, arguments);
+                    };
+
+                    // Sincronização avançada: busca direta oficial via DOM, paginação WBloks e cache de seguidores/seguindo
+                    async function sincronizarHideStory(forceScroll = false) {
+                        const refreshBtn = document.getElementById("hsRefreshBtn");
+                        try {
+                            if (refreshBtn) {
+                                refreshBtn.disabled = true;
+                                refreshBtn.textContent = "🔄 Sincronizando...";
                             }
-                            toggleLoading(false);
-                            isApplyingChangesStory = false;
+
+                            const myUname = (getLoggedInUsername() || '').toLowerCase().trim();
+                            const myUid = getCookie('ds_user_id') || getActorId() || '';
+
+                            let extractedUsers = [];
+                            const isOnHideStoryPage = window.location.pathname.includes('/accounts/hide_story_and_live_from/');
+
+                            // 1. Se solicitada varredura profunda ou se já estiver na tela oficial de Ocultar Story
+                            if (forceScroll || isOnHideStoryPage) {
+                                if (!isOnHideStoryPage) {
+                                    // Navega transparentemente para a rota oficial sem descarregar o modal
+                                    history.pushState(null, null, '/accounts/hide_story_and_live_from/');
+                                    window.dispatchEvent(new Event('popstate'));
+                                    await new Promise(r => setTimeout(r, 1200));
+                                }
+                                if (refreshBtn) refreshBtn.textContent = "🔄 Mapeando tela oficial...";
+                                extractedUsers = await extractHideStoryUsernames(document);
+                            } else {
+                                extractedUsers = await extractHideStoryFromCurrentDomOrFetch();
+                            }
+
+                            // 2. Busca tela oficial via WBloks (contém as contas ocultadas e o cursor de paginação) como garantia
+                            if (extractedUsers.length === 0 || !window._igHideStoryLastCursor) {
+                                try {
+                                    if (refreshBtn) refreshBtn.textContent = "🔄 Buscando WBloks...";
+                                    const wbloksUsers = await fetchHideStoryInitialScreen();
+                                    if (Array.isArray(wbloksUsers) && wbloksUsers.length > 0) {
+                                        wbloksUsers.forEach(u => {
+                                            if (!extractedUsers.some(x => x.username.toLowerCase() === u.username.toLowerCase())) {
+                                                extractedUsers.push({
+                                                    username: u.username,
+                                                    pk: u.pk || '',
+                                                    id: u.pk || '',
+                                                    fullName: u.fullName || '',
+                                                    photoUrl: (u.photoUrl && !u.photoUrl.includes('rsrc.php')) ? u.photoUrl : DEFAULT_AVATAR,
+                                                    isHidden: !!(u.isChecked || u.isHidden)
+                                                });
+                                            }
+                                        });
+                                    }
+                                } catch (werr) {
+                                    console.warn('[IG Tools HideStory] Falha no fetchHideStoryInitialScreen:', werr);
+                                }
+                            }
+
+                            const map = new Map();
+
+                            // As contas detectadas como ocultadas são a verdade estrita
+                            const hiddenUsernames = new Set(
+                                extractedUsers.filter(u => u.isHidden).map(u => u.username.toLowerCase())
+                            );
+
+                            // Popula contas ocultadas prioritariamente com resolução inteligente de fotos
+                            if (Array.isArray(extractedUsers) && extractedUsers.length > 0) {
+                                extractedUsers.forEach(u => {
+                                    if (!u.username || !isValidInstagramUsername(u.username)) return;
+                                    const k = u.username.toLowerCase().trim();
+                                    const uidStr = String(u.pk || u.id || '');
+                                    if (k === myUname || (myUid && uidStr === myUid)) return;
+
+                                    const photo = resolveUserPhoto(u.username, u.photoUrl);
+                                    map.set(k, {
+                                        username: u.username,
+                                        pk: u.pk || getCachedUserId(u.username) || '',
+                                        id: u.pk || getCachedUserId(u.username) || '',
+                                        fullName: u.fullName || '',
+                                        photoUrl: photo,
+                                        isHidden: hiddenUsernames.has(k)
+                                    });
+                                    if (u.pk) setCachedUserId(u.username, u.pk);
+                                });
+                            }
+
+                            // Renderiza imediatamente os dados iniciais obtidos
+                            hideStoryList = Array.from(map.values()).filter(u => {
+                                const k = (u.username || '').toLowerCase().trim();
+                                const uidStr = String(u.pk || u.id || '');
+                                return k && isValidInstagramUsername(k) && k !== myUname && (!myUid || uidStr !== myUid);
+                            });
+                            cachedHideStory = hideStoryList;
+                            renderList(currentPage);
+                            updateCounts();
+
+                            // 3. Paginação WBloks oficial (com.instagram.pagination.async) para puxar contas adicionais
+                            if (window._igHideStoryLastCursor) {
+                                let curCursor = window._igHideStoryLastCursor;
+                                let containerId = window._igHideStoryContainerId || "1178138719";
+                                let loadingId = window._igHideStoryLoadingId || "1178138721";
+                                let pagesLoaded = 0;
+                                const maxPages = 15;
+
+                                while (curCursor && pagesLoaded < maxPages) {
+                                    pagesLoaded++;
+                                    if (refreshBtn) refreshBtn.textContent = `🔄 Paginação (${pagesLoaded})...`;
+                                    const syncInfo = document.getElementById("hsSyncInfo");
+                                    if (syncInfo) syncInfo.innerText = `Carregando página ${pagesLoaded} de contas...`;
+
+                                    const pageRes = await fetchHideStoryPagination(curCursor, containerId, loadingId);
+                                    if (pageRes && Array.isArray(pageRes.users) && pageRes.users.length > 0) {
+                                        pageRes.users.forEach(u => {
+                                            const k = (u.username || '').toLowerCase().trim();
+                                            if (!k || k === myUname || (myUid && String(u.pk) === String(myUid))) return;
+                                            if (!map.has(k)) {
+                                                const photo = resolveUserPhoto(u.username, u.photoUrl);
+                                                map.set(k, {
+                                                    username: u.username,
+                                                    pk: u.pk || '',
+                                                    id: u.pk || '',
+                                                    fullName: u.fullName || '',
+                                                    photoUrl: photo,
+                                                    isHidden: hiddenUsernames.has(k)
+                                                });
+                                                if (u.pk) setCachedUserId(u.username, u.pk);
+                                            }
+                                        });
+                                        curCursor = pageRes.nextCursor;
+                                        window._igHideStoryLastCursor = curCursor;
+
+                                        hideStoryList = Array.from(map.values()).filter(u => {
+                                            const k = (u.username || '').toLowerCase().trim();
+                                            const uidStr = String(u.pk || u.id || '');
+                                            return k && isValidInstagramUsername(k) && k !== myUname && (!myUid || uidStr !== myUid);
+                                        });
+                                        cachedHideStory = hideStoryList;
+                                        renderList(currentPage);
+                                        updateCounts();
+
+                                        if (!curCursor) break;
+                                        await new Promise(r => setTimeout(r, 250));
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // 4. Carrega lista de Seguidores e Seguindo para compor os filtros
+                            let followersAccounts = [];
+                            let followingAccounts = [];
+                            try {
+                                const [dbFollowers, dbFollowing] = await Promise.all([
+                                    dbHelper.loadCache('followers') || dbHelper.getCache('followers'),
+                                    dbHelper.loadCache('following') || dbHelper.getCache('following')
+                                ]);
+                                if (Array.isArray(dbFollowers)) followersAccounts = dbFollowers;
+                                else if (dbFollowers?.details) followersAccounts = Array.from(dbFollowers.details.values());
+
+                                if (Array.isArray(dbFollowing)) followingAccounts = dbFollowing;
+                                else if (dbFollowing?.details) followingAccounts = Array.from(dbFollowing.details.values());
+                            } catch (_) { }
+
+                            if (followersAccounts.length === 0) {
+                                try {
+                                    const raw = localStorage.getItem('ig_tools_cache_followers') || localStorage.getItem('ig_tools_cached_followers');
+                                    if (raw) {
+                                        const parsed = JSON.parse(raw);
+                                        if (Array.isArray(parsed)) followersAccounts = parsed;
+                                    }
+                                } catch (_) { }
+                            }
+                            if (followingAccounts.length === 0) {
+                                try {
+                                    const raw = localStorage.getItem('ig_tools_cache_following') || localStorage.getItem('ig_tools_cached_following');
+                                    if (raw) {
+                                        const parsed = JSON.parse(raw);
+                                        if (Array.isArray(parsed)) followingAccounts = parsed;
+                                    }
+                                } catch (_) { }
+                            }
+                            if (followingAccounts.length === 0 && typeof cachedData !== 'undefined' && cachedData?.seguindo) {
+                                followingAccounts = Array.from(cachedData.seguindo).map(u => ({
+                                    username: u,
+                                    photoUrl: resolveUserPhoto(u, cachedData.userDetails?.get(u)?.photoUrl),
+                                    fullName: cachedData.userDetails?.get(u)?.fullName || ''
+                                }));
+                            }
+                            if (followersAccounts.length === 0 && typeof cachedData !== 'undefined' && cachedData?.seguidores) {
+                                followersAccounts = Array.from(cachedData.seguidores).map(u => ({
+                                    username: u,
+                                    photoUrl: resolveUserPhoto(u, cachedData.userDetails?.get(u)?.photoUrl),
+                                    fullName: cachedData.userDetails?.get(u)?.fullName || ''
+                                }));
+                            }
+
+                            followersAccounts.forEach(f => {
+                                const uname = typeof f === 'string' ? f : f.username;
+                                if (!uname || !isValidInstagramUsername(uname)) return;
+                                const k = uname.toLowerCase().trim();
+                                followersSet.add(k);
+                                const uidStr = String((typeof f === 'object' && (f.pk || f.id)) ? (f.pk || f.id) : '');
+                                if (k === myUname || (myUid && uidStr === myUid)) return;
+                                const photo = resolveUserPhoto(uname, (typeof f === 'object' && f.photoUrl) ? f.photoUrl : null);
+                                if (!map.has(k)) {
+                                    const pk = uidStr || (getCachedUserId(uname) || '');
+                                    map.set(k, {
+                                        username: uname,
+                                        pk: pk,
+                                        id: pk,
+                                        fullName: (typeof f === 'object' && f.fullName) ? f.fullName : '',
+                                        photoUrl: photo,
+                                        isHidden: hiddenUsernames.has(k)
+                                    });
+                                } else {
+                                    const existing = map.get(k);
+                                    if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && photo !== DEFAULT_AVATAR) {
+                                        existing.photoUrl = photo;
+                                    }
+                                    if (!existing.fullName && typeof f === 'object' && f.fullName) {
+                                        existing.fullName = f.fullName;
+                                    }
+                                }
+                            });
+
+                            followingAccounts.forEach(f => {
+                                const uname = typeof f === 'string' ? f : f.username;
+                                if (!uname || !isValidInstagramUsername(uname)) return;
+                                const k = uname.toLowerCase().trim();
+                                followingSet.add(k);
+                                const uidStr = String((typeof f === 'object' && (f.pk || f.id)) ? (f.pk || f.id) : '');
+                                if (k === myUname || (myUid && uidStr === myUid)) return;
+                                const photo = resolveUserPhoto(uname, (typeof f === 'object' && f.photoUrl) ? f.photoUrl : null);
+                                if (!map.has(k)) {
+                                    const pk = uidStr || (getCachedUserId(uname) || '');
+                                    map.set(k, {
+                                        username: uname,
+                                        pk: pk,
+                                        id: pk,
+                                        fullName: (typeof f === 'object' && f.fullName) ? f.fullName : '',
+                                        photoUrl: photo,
+                                        isHidden: hiddenUsernames.has(k)
+                                    });
+                                } else {
+                                    const existing = map.get(k);
+                                    if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && photo !== DEFAULT_AVATAR) {
+                                        existing.photoUrl = photo;
+                                    }
+                                    if (!existing.fullName && typeof f === 'object' && f.fullName) {
+                                        existing.fullName = f.fullName;
+                                    }
+                                }
+                            });
+
+                            hideStoryList = Array.from(map.values()).filter(u => {
+                                const k = (u.username || '').toLowerCase().trim();
+                                const uidStr = String(u.pk || u.id || '');
+                                return k && isValidInstagramUsername(k) && k !== myUname && (!myUid || uidStr !== myUid);
+                            });
+                            cachedHideStory = hideStoryList;
+
+                            try {
+                                localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(hideStoryList));
+                                const hiddenOnly = hideStoryList.filter(u => u.isHidden);
+                                await dbHelper.saveCache('hiddenStory', hiddenOnly);
+                                await dbHelper.saveCache('hideStory', hiddenOnly);
+                                if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
+                                userListCache.hiddenStory = new Set(hiddenOnly.map(u => u.username));
+                            } catch (_) { }
+
+                            const syncInfo = document.getElementById("hsSyncInfo");
+                            if (syncInfo) {
+                                syncInfo.innerText = `Sincronizado às ${new Date().toLocaleTimeString()}`;
+                            }
+
+                            // Se houver contas ocultadas e o filtro estava em "não ocultar", muda para "ocultados"
+                            const hiddenTotal = hideStoryList.filter(u => u.isHidden).length;
+                            const notHiddenTotal = hideStoryList.filter(u => !u.isHidden).length;
+                            const filterSelect = document.getElementById('hsFilterSelect');
+                            if (filterSelect && hiddenTotal > 0 && filterSelect.value === 'not_hidden') {
+                                filterSelect.value = 'hidden';
+                            }
+
+                            renderList(1);
+                            updateCounts();
+                            showToast(`Sincronização concluída! ${hiddenTotal} stories ocultados | ${notHiddenTotal} sem ocultar.`);
+                        } catch (err) {
+                            console.error('[IG Tools HideStory] Erro ao sincronizar:', err);
+                            showToast("Falha ao sincronizar Ocultar Story.");
+                        } finally {
+                            if (refreshBtn) {
+                                refreshBtn.disabled = false;
+                                refreshBtn.textContent = "🔄 Sincronizar";
+                            }
+                        }
+                    }
+
+
+                    // Ação do botão Sincronizar
+                    document.getElementById("hsRefreshBtn").onclick = () => {
+                        sincronizarHideStory(true);
+                    };
+
+                    // Ação do botão Tela Oficial (0ms)
+                    const openOfficialBtn = document.getElementById("hsOpenOfficialPageBtn");
+                    if (openOfficialBtn) {
+                        openOfficialBtn.onclick = async () => {
+                            if (!window.location.pathname.includes('/accounts/hide_story_and_live_from/')) {
+                                history.pushState(null, null, '/accounts/hide_story_and_live_from/');
+                                window.dispatchEvent(new Event('popstate'));
+                                await new Promise(r => setTimeout(r, 1000));
+                            }
+                            await sincronizarHideStory(true);
                         };
                     }
 
-                    // Inicializa a lista
+                    // Modal de Importação JSON
+                    const jsonFileInput = document.getElementById("hsJsonFileInput");
+                    document.getElementById("hsImportJsonBtn").onclick = () => {
+                        const importModal = document.createElement("div");
+                        importModal.className = "submenu-modal";
+                        importModal.style.cssText = `
+                            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                            width: 90%; max-width: 520px; border-radius: 12px; padding: 20px;
+                            z-index: 10002; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+                            background: white; color: black; border: 1px solid #ccc;
+                        `;
+                        if (loadSettings().rgbBorder) importModal.classList.add('rgb-border-effect');
+
+                        importModal.innerHTML = `
+                            <div class="modal-header" style="margin-bottom: 12px;">
+                                <h3 style="margin: 0; font-size: 16px;">📥 Importar Lista de Ocultar Story (JSON)</h3>
+                                <button id="closeHsImportModal" style="background: none; border: none; font-size: 16px; cursor: pointer; color: inherit;">✖</button>
+                            </div>
+                            <p style="font-size: 13px; color: #666; margin: 0 0 10px 0;">
+                                Cole o JSON abaixo ou selecione um arquivo <code>.json</code> exportado do Instagram ou do assistente.
+                            </p>
+                            <textarea id="hsJsonTextInput" placeholder='Exemplo: ["usuario1", "usuario2"] ou [{"username": "usuario1"}]' style="width: 100%; height: 160px; box-sizing: border-box; border-radius: 8px; border: 1px solid #ccc; padding: 10px; font-family: monospace; font-size: 12px; resize: vertical;"></textarea>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+                                <button id="hsUploadFileBtn" style="background: #34495e; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-size: 13px;">📁 Escolher Arquivo</button>
+                                <div style="display: flex; gap: 8px;">
+                                    <button id="cancelHsImportBtn" style="background: #e74c3c; color: white; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-size: 13px;">Cancelar</button>
+                                    <button id="confirmHsImportBtn" style="background: #8e44ad; color: white; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-weight: 600; font-size: 13px;">Processar JSON</button>
+                                </div>
+                            </div>
+                        `;
+
+                        document.body.appendChild(importModal);
+
+                        const closeImport = () => importModal.remove();
+                        document.getElementById("closeHsImportModal").onclick = closeImport;
+                        document.getElementById("cancelHsImportBtn").onclick = closeImport;
+
+                        document.getElementById("hsUploadFileBtn").onclick = () => jsonFileInput.click();
+
+                        jsonFileInput.onchange = (e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = (re) => {
+                                const area = document.getElementById("hsJsonTextInput");
+                                if (area) area.value = re.target.result;
+                            };
+                            reader.readAsText(file);
+                        };
+
+                        document.getElementById("confirmHsImportBtn").onclick = async () => {
+                            const raw = document.getElementById("hsJsonTextInput").value.trim();
+                            if (!raw) return alert("Por favor, cole o conteúdo do JSON ou faça upload de um arquivo.");
+
+                            try {
+                                const parsed = JSON.parse(raw);
+                                const importedUsers = [];
+
+                                function parseEntry(item) {
+                                    if (typeof item === 'string') return item.trim();
+                                    if (typeof item === 'object' && item !== null) {
+                                        if (item.username) return item.username.trim();
+                                        if (item.string_list_data && Array.isArray(item.string_list_data) && item.string_list_data[0]?.value) {
+                                            return item.string_list_data[0].value.trim();
+                                        }
+                                        if (item.title && typeof item.title === 'string' && !item.title.includes(' ')) {
+                                            return item.title.trim();
+                                        }
+                                    }
+                                    return null;
+                                }
+
+                                if (Array.isArray(parsed)) {
+                                    parsed.forEach(p => {
+                                        const u = parseEntry(p);
+                                        if (u) importedUsers.push(u);
+                                    });
+                                } else if (typeof parsed === 'object' && parsed !== null) {
+                                    const candidateArrays = [
+                                        parsed.relationships_hide_stories_from,
+                                        parsed.story_settings,
+                                        parsed.hide_story,
+                                        parsed.users
+                                    ];
+                                    for (const arr of candidateArrays) {
+                                        if (Array.isArray(arr)) {
+                                            arr.forEach(p => {
+                                                const u = parseEntry(p);
+                                                if (u) importedUsers.push(u);
+                                            });
+                                        }
+                                    }
+                                }
+
+                                if (importedUsers.length === 0) {
+                                    alert("Não foi possível identificar nomes de usuário válidos no JSON fornecido.");
+                                    return;
+                                }
+
+                                const map = new Map();
+                                hideStoryList.forEach(u => map.set(u.username.toLowerCase(), u));
+
+                                let newAdditions = 0;
+                                importedUsers.forEach(uname => {
+                                    const k = uname.toLowerCase();
+                                    if (map.has(k)) {
+                                        map.get(k).isHidden = true;
+                                    } else {
+                                        map.set(k, {
+                                            username: uname,
+                                            pk: getCachedUserId(uname) || '',
+                                            id: getCachedUserId(uname) || '',
+                                            fullName: '',
+                                            photoUrl: DEFAULT_AVATAR,
+                                            isHidden: true
+                                        });
+                                        newAdditions++;
+                                    }
+                                });
+
+                                hideStoryList = Array.from(map.values());
+                                cachedHideStory = hideStoryList;
+
+                                try {
+                                    localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(hideStoryList));
+                                    await dbHelper.saveCache('hideStory', hideStoryList.filter(u => u.isHidden));
+                                } catch (_) { }
+
+                                closeImport();
+                                renderList(1);
+                                updateCounts();
+                                alert(`Importação realizada com sucesso! ${importedUsers.length} usuários processados (+${newAdditions} novos adicionados).`);
+                            } catch (e) {
+                                alert("Erro ao interpretar arquivo JSON. Verifique a sintaxe: " + e.message);
+                            }
+                        };
+                    };
+
+                    // Seleção rápida da página atual
+                    document.getElementById("hsSelectPageBtn").onclick = () => {
+                        const itemsPerPage = loadSettings().itemsPerPage || 10;
+                        const startIndex = (currentPage - 1) * itemsPerPage;
+                        const searchTerm = (document.getElementById('hsSearchInput')?.value || '').toLowerCase().trim();
+                        const filterValue = document.getElementById('hsFilterSelect')?.value || 'hidden';
+
+                        let listToSelect = hideStoryList.filter(u => {
+                            const uLower = (u.username || '').toLowerCase().trim();
+                            const fLower = (u.fullName || '').toLowerCase().trim();
+                            const pkStr = String(u.pk || u.id || '');
+                            const matchSearch = !searchTerm || uLower.includes(searchTerm) || fLower.includes(searchTerm) || pkStr.includes(searchTerm);
+                            if (!matchSearch) return false;
+
+                            if (filterValue === 'hidden') return u.isHidden;
+                            if (filterValue === 'not_hidden') return !u.isHidden;
+                            if (filterValue === 'followers') return followersSet.has(uLower);
+                            if (filterValue === 'following') return followingSet.has(uLower);
+                            return true;
+                        });
+
+                        const pageUsers = listToSelect.slice(startIndex, startIndex + itemsPerPage);
+                        pageUsers.forEach(u => selectedUsers.add(u.username));
+                        container.querySelectorAll('.hs-user-checkbox').forEach(cb => cb.checked = true);
+                        updateCounts(pageUsers);
+                    };
+
+                    document.getElementById("hsDeselectAllBtn").onclick = () => {
+                        selectedUsers.clear();
+                        container.querySelectorAll('.hs-user-checkbox').forEach(cb => cb.checked = false);
+                        updateCounts();
+                    };
+
+                    const searchInput = document.getElementById("hsSearchInput");
+                    if (searchInput) {
+                        searchInput.addEventListener("input", () => renderList(1));
+                    }
+
+                    const filterSelect = document.getElementById("hsFilterSelect");
+                    if (filterSelect) {
+                        filterSelect.addEventListener("change", () => {
+                            currentPage = 1;
+                            renderList(1);
+                            updateCounts();
+                        });
+                    }
+
+                    const apiToggle = document.getElementById("hsUseApiToggle");
+                    if (apiToggle) {
+                        apiToggle.addEventListener("change", (e) => {
+                            const s = loadSettings();
+                            s.useApi = e.target.checked;
+                            saveSettings(s);
+                            showToast(`Modo API ${s.useApi ? 'ativado' : 'desativado'}.`);
+                        });
+                    }
+
+                    // AÇÃO EM LOTE: Ocultar Selecionados
+                    document.getElementById("hsHideSelectedBtn").onclick = async () => {
+                        if (selectedUsers.size === 0) {
+                            alert("Nenhum usuário selecionado.");
+                            return;
+                        }
+
+                        const usersToHide = Array.from(selectedUsers).filter(uname => {
+                            const u = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                            return u && !u.isHidden;
+                        });
+
+                        if (usersToHide.length === 0) {
+                            alert("Todos os usuários selecionados já estão com seus stories ocultados.");
+                            return;
+                        }
+
+                        if (!confirm(`Deseja ocultar seus stories para ${usersToHide.length} usuário(s)?`)) return;
+
+                        const hideBtn = document.getElementById("hsHideSelectedBtn");
+                        hideBtn.disabled = true;
+                        hideBtn.textContent = "Ocultando...";
+                        toggleLoading(true, 0, "Obtendo IDs e ocultando stories...");
+
+                        let successCount = 0;
+                        for (let i = 0; i < usersToHide.length; i++) {
+                            const uname = usersToHide[i];
+                            toggleLoading(true, i + 1, usersToHide.length, `Ocultando @${uname} (${i + 1}/${usersToHide.length})...`);
+
+                            let uid = getCachedUserId(uname);
+                            if (!uid) {
+                                const u = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                                if (u && u.pk) uid = u.pk;
+                            }
+                            if (!uid) uid = await getUserId(uname);
+
+                            if (uid) {
+                                try {
+                                    const res = await executeWbloksHideStory(uid, uname, 'hide');
+                                    if (res && res.success) {
+                                        successCount++;
+                                        const u = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                                        if (u) u.isHidden = true;
+                                    }
+                                } catch (_) { }
+                            }
+                            await new Promise(r => setTimeout(r, 250));
+                        }
+
+                        toggleLoading(false);
+                        hideBtn.disabled = false;
+                        hideBtn.textContent = "👁️‍🗨️ Ocultar Selecionados";
+
+                        cachedHideStory = hideStoryList;
+                        try {
+                            localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(hideStoryList));
+                            await dbHelper.saveCache('hideStory', hideStoryList.filter(u => u.isHidden));
+                        } catch (_) { }
+
+                        selectedUsers.clear();
+                        renderList(currentPage);
+                        updateCounts();
+                        alert(`Sucesso! ${successCount} de ${usersToHide.length} usuário(s) foram atualizados com story ocultado.`);
+                    };
+
+                    // AÇÃO EM LOTE: Reexibir Selecionados
+                    document.getElementById("hsUnhideSelectedBtn").onclick = async () => {
+                        if (selectedUsers.size === 0) {
+                            alert("Nenhum usuário selecionado.");
+                            return;
+                        }
+
+                        const usersToUnhide = Array.from(selectedUsers).filter(uname => {
+                            const u = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                            return u && u.isHidden;
+                        });
+
+                        if (usersToUnhide.length === 0) {
+                            alert("Nenhum dos usuários selecionados está com o story ocultado.");
+                            return;
+                        }
+
+                        if (!confirm(`Deseja reexibir seus stories para ${usersToUnhide.length} usuário(s)?`)) return;
+
+                        const unhideBtn = document.getElementById("hsUnhideSelectedBtn");
+                        unhideBtn.disabled = true;
+                        unhideBtn.textContent = "Reexibindo...";
+                        toggleLoading(true, 0, "Obtendo IDs e reexibindo stories...");
+
+                        let successCount = 0;
+                        for (let i = 0; i < usersToUnhide.length; i++) {
+                            const uname = usersToUnhide[i];
+                            toggleLoading(true, i + 1, usersToUnhide.length, `Reexibindo @${uname} (${i + 1}/${usersToUnhide.length})...`);
+
+                            let uid = getCachedUserId(uname);
+                            if (!uid) {
+                                const u = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                                if (u && u.pk) uid = u.pk;
+                            }
+                            if (!uid) uid = await getUserId(uname);
+
+                            if (uid) {
+                                try {
+                                    const res = await executeWbloksHideStory(uid, uname, 'unhide');
+                                    if (res && res.success) {
+                                        successCount++;
+                                        const u = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                                        if (u) u.isHidden = false;
+                                    }
+                                } catch (_) { }
+                            }
+                            await new Promise(r => setTimeout(r, 250));
+                        }
+
+                        toggleLoading(false);
+                        unhideBtn.disabled = false;
+                        unhideBtn.textContent = "👁️ Reexibir Selecionados";
+
+                        cachedHideStory = hideStoryList;
+                        try {
+                            localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(hideStoryList));
+                            await dbHelper.saveCache('hideStory', hideStoryList.filter(u => u.isHidden));
+                        } catch (_) { }
+
+                        selectedUsers.clear();
+                        renderList(currentPage);
+                        updateCounts();
+                        alert(`Sucesso! ${successCount} de ${usersToUnhide.length} usuário(s) agora podem ver seus stories novamente.`);
+                    };
+
+                    // Real-time listener para novos usuários capturados via rolagem na página nativa
+                    const captureCallback = (newUsers) => {
+                        let added = 0;
+                        newUsers.forEach(u => {
+                            const uname = (u.username || '').toLowerCase().trim();
+                            if (!uname || uname === myUname || (myUid && String(u.pk) === String(myUid))) return;
+                            const existing = hideStoryList.find(x => x.username.toLowerCase() === uname);
+                            const photo = resolveUserPhoto(u.username, u.photoUrl);
+                            const isHid = !!(u.isHidden || u.isChecked);
+                            if (!existing) {
+                                hideStoryList.push({
+                                    username: u.username,
+                                    pk: u.pk || '',
+                                    id: u.pk || '',
+                                    fullName: u.fullName || '',
+                                    photoUrl: photo,
+                                    isHidden: isHid
+                                });
+                                added++;
+                            } else {
+                                if (isHid && !existing.isHidden) {
+                                    existing.isHidden = true;
+                                    added++;
+                                }
+                                if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && photo !== DEFAULT_AVATAR) {
+                                    existing.photoUrl = photo;
+                                }
+                                if (!existing.fullName && u.fullName) existing.fullName = u.fullName;
+                            }
+                        });
+                        if (added > 0) {
+                            updateCounts();
+                            renderList(currentPage);
+                        }
+                    };
+                    if (window._igHideStoryUsersCapture) {
+                        window._igHideStoryUsersCapture.callbacks.push(captureCallback);
+                    }
+
+                    // Controles da janela
+                    document.getElementById("hsFecharBtn").onclick = () => {
+                        if (window._igHideStoryUsersCapture) {
+                            const idx = window._igHideStoryUsersCapture.callbacks.indexOf(captureCallback);
+                            if (idx !== -1) window._igHideStoryUsersCapture.callbacks.splice(idx, 1);
+                        }
+                        div.remove();
+                        modalAbertoStory = false;
+                    };
+
+                    let isHsMinimized = false;
+                    document.getElementById("hsMinimizarBtn").onclick = () => {
+                        const contentElements = div.querySelectorAll('div:not(.modal-header)');
+                        isHsMinimized = !isHsMinimized;
+                        contentElements.forEach(el => el.style.display = isHsMinimized ? 'none' : '');
+                        div.style.height = isHsMinimized ? 'auto' : '';
+                        div.style.width = isHsMinimized ? '320px' : '90%';
+                        document.getElementById("hsMinimizarBtn").textContent = isHsMinimized ? '+' : '_';
+                    };
+
+                    makeDraggable(div);
+
+                    // Inicialização imediata da lista
                     renderList(1);
+                    updateCounts();
+
+                    // Dispara sincronização silenciosa em segundo plano para garantir captura de histórias ocultadas e sugestões
+                    if (hideStoryList.length === 0 || !hideStoryList.some(u => u.isHidden) || hideStoryList.length < 50) {
+                        sincronizarHideStory(false).then(() => {
+                            renderList(currentPage);
+                            updateCounts();
+                        });
+                    }
                 }
 
                 function showUnmuteOptionsModal(onConfirm) {
@@ -4465,7 +7597,6 @@
                     document.getElementById('optCancel').onclick = close;
                 }
 
-                let modalAbertoStory = false;
                 // --- FIM DO MENU OCULTAR STORY ---
 
                 // --- NOVO MENU: CONTAS SILENCIADAS ---
@@ -7316,7 +10447,16 @@
                                         if (apiData && Array.isArray(apiData.users)) {
                                             const cfUsernames = apiData.users.map(u => u.username);
                                             userListCache.closeFriends = new Set(cfUsernames);
-                                            const objectsToSave = apiData.users.map(u => ({ username: u.username, photoUrl: u.profile_pic_url }));
+                                            apiData.users.forEach(u => {
+                                                const pk = String(u.pk || u.id || '');
+                                                if (pk) setCachedUserId(u.username, pk);
+                                            });
+                                            const objectsToSave = apiData.users.map(u => ({
+                                                username: u.username,
+                                                photoUrl: u.profile_pic_url,
+                                                pk: String(u.pk || u.id || ''),
+                                                id: String(u.pk || u.id || '')
+                                            }));
                                             await dbHelper.saveCache('closeFriends', objectsToSave);
                                             console.log(`[IG Tools] Close Friends atualizado via API: ${cfUsernames.length} usuário(s).`);
                                             updateStatus(step, true);
@@ -7668,7 +10808,6 @@
                                     userListCache.mutedDetails = new Map();
                                     // Assuming each item in data is { username, status }
                                     data.forEach(item => userListCache.mutedDetails.set(item.username, item.status));
-                                    data.details.forEach((u, username) => userListCache.mutedDetails.set(username, u.status));
                                 }
                             } else { userListCache[key] = new Set(); }
                         } catch (e) { userListCache[key] = new Set(); }

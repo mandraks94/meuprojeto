@@ -1,7 +1,7 @@
 # Script para gerar os ícones da extensão IG Tools Pro em diferentes resoluções
 Add-Type -AssemblyName System.Drawing
 
-$srcPath = "C:\Users\je-md\.gemini\antigravity-ide\brain\f6815751-77aa-43c3-96eb-e02eedbd2c6d\ig_tools_pro_logo_1791084297440.jpg"
+$srcPath = "C:\Users\je-md\.gemini\antigravity-ide\brain\08191e00-6bb4-4c39-9b28-d6475044e91c\.user_uploaded\media_1791161946694.png"
 $destDir = Join-Path $PSScriptRoot "icons"
 
 if (!(Test-Path $destDir)) {

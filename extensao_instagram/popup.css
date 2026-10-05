@@ -1,0 +1,683 @@
+/* ========================================================
+   IG Tools Pro - iPhone 18 Pro Interface (Titanium Chassis)
+   ======================================================== */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+html, body {
+  width: 382px;
+  height: 590px;
+  max-width: 382px;
+  max-height: 590px;
+  background: #000000;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #ffffff;
+  overflow: hidden !important;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 1. Container do Aparelho (com espaço para botões laterais) */
+.iphone-device {
+  position: relative;
+  width: 366px;
+  height: 578px;
+}
+
+/* Botões Físicos Laterais de Titânio */
+.side-btn {
+  position: absolute;
+  z-index: 5;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.btn-action {
+  left: -2.5px;
+  top: 92px;
+  width: 3px;
+  height: 20px;
+  border-radius: 2px 0 0 2px;
+  background: linear-gradient(to right, #9c9ca3, #5a5a62);
+}
+
+.btn-vol-up {
+  left: -2.5px;
+  top: 122px;
+  width: 3px;
+  height: 42px;
+  border-radius: 2px 0 0 2px;
+  background: linear-gradient(to right, #9c9ca3, #5a5a62);
+}
+
+.btn-vol-down {
+  left: -2.5px;
+  top: 172px;
+  width: 3px;
+  height: 42px;
+  border-radius: 2px 0 0 2px;
+  background: linear-gradient(to right, #9c9ca3, #5a5a62);
+}
+
+.btn-power {
+  right: -2.5px;
+  top: 135px;
+  width: 3px;
+  height: 60px;
+  border-radius: 0 2px 2px 0;
+  background: linear-gradient(to left, #9c9ca3, #5a5a62);
+}
+
+/* 2. Chassis de Titânio Escovado (Borda Metálica Realista) */
+.iphone-chassis {
+  width: 100%;
+  height: 100%;
+  border-radius: 46px;
+  padding: 4px;
+  background: linear-gradient(135deg, #a4a4ab 0%, #686870 18%, #2f2f34 45%, #56565e 65%, #8d8d94 85%, #b2b2b8 100%);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.7),
+              inset 0 -1px 1px rgba(0, 0, 0, 0.7),
+              0 12px 35px rgba(0, 0, 0, 0.95);
+  display: flex;
+}
+
+/* 3. Bezel Interno Preto Ultrafino da Tela OLED */
+.iphone-bezel {
+  width: 100%;
+  height: 100%;
+  background: #000000;
+  border-radius: 42px;
+  padding: 2.5px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden !important;
+}
+
+/* Alto-falante Superior Slit */
+.ios-earpiece {
+  position: absolute;
+  top: 3.5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 42px;
+  height: 2.5px;
+  background: #18181f;
+  border-radius: 2px;
+  z-index: 50;
+  box-shadow: inset 0 0.5px 1px rgba(0, 0, 0, 0.8);
+}
+
+/* 4. Tela OLED com Wallpaper Cósmico */
+.iphone-screen {
+  width: 100%;
+  height: 100%;
+  border-radius: 39px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden !important;
+  position: relative;
+  background: radial-gradient(circle at 85% 15%, rgba(131, 58, 180, 0.38) 0%, transparent 50%),
+              radial-gradient(circle at 15% 85%, rgba(225, 48, 108, 0.32) 0%, transparent 55%),
+              radial-gradient(circle at 50% 50%, rgba(64, 93, 230, 0.22) 0%, transparent 60%),
+              #08060f;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/* 5. Barra de Status iOS 18 */
+.ios-status-bar {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 15px;
+  position: relative;
+  z-index: 30;
+}
+
+.ios-time {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: #ffffff;
+  width: 48px;
+}
+
+/* Dynamic Island */
+.dynamic-island {
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  transform: translateX(-50%);
+  width: 108px;
+  height: 25px;
+  background: #000000;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 9px;
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.12),
+              0 4px 10px rgba(0, 0, 0, 0.6);
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  cursor: pointer;
+  z-index: 40;
+}
+
+.dynamic-island:hover {
+  width: 130px;
+  height: 28px;
+  top: 5px;
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.25),
+              0 6px 16px rgba(0, 0, 0, 0.7);
+}
+
+.island-camera {
+  width: 8.5px;
+  height: 8.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #0c1a30 30%, #03060c 100%);
+  box-shadow: inset 0 0 2px #00d2ff;
+}
+
+.island-sensor {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #0a0a0f;
+}
+
+.island-pill-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.island-dot {
+  width: 5.5px;
+  height: 5.5px;
+  border-radius: 50%;
+  background: #2ecc71;
+  box-shadow: 0 0 6px #2ecc71;
+  animation: pulseDot 2s infinite ease-in-out;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 0.6; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+.island-text {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  background: linear-gradient(45deg, #fd1d1d, #fcb045);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Ícones de Rede e Bateria */
+.ios-icons {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 62px;
+  justify-content: flex-end;
+}
+
+.ios-signal-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 9.5px;
+}
+
+.ios-signal-bars .bar {
+  width: 2.5px;
+  background: #ffffff;
+  border-radius: 0.5px;
+}
+
+.ios-signal-bars .b1 { height: 2.5px; }
+.ios-signal-bars .b2 { height: 4.5px; }
+.ios-signal-bars .b3 { height: 6.5px; }
+.ios-signal-bars .b4 { height: 9.5px; }
+
+.ios-network {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.3px;
+}
+
+.ios-battery {
+  width: 20px;
+  height: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 3px;
+  padding: 1px;
+  position: relative;
+}
+
+.ios-battery::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  top: 2px;
+  width: 2px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 0 1px 1px 0;
+}
+
+.battery-level {
+  width: 100%;
+  height: 100%;
+  background: #2ecc71;
+  border-radius: 1px;
+}
+
+/* 6. Cabeçalho da Central de Controle */
+.iphone-header {
+  padding: 1px 15px 5px 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-subtitle {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: rgba(255, 255, 255, 0.45);
+  display: block;
+}
+
+.header-title {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  background: linear-gradient(90deg, #ffffff 0%, #d8d8d8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.drive-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 4.5px;
+  padding: 3.5px 9px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  backdrop-filter: blur(10px);
+}
+
+.drive-status-pill:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e74c3c;
+  box-shadow: 0 0 6px rgba(231, 76, 60, 0.8);
+}
+
+.status-dot.connected {
+  background: #2ecc71;
+  box-shadow: 0 0 6px rgba(46, 204, 113, 0.8);
+}
+
+/* 7. Grade de Apps (4 Colunas x 3 Linhas) */
+.ios-grid {
+  flex: 1;
+  padding: 3px 12px 3px 12px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: max-content;
+  gap: 9px 6px;
+  align-content: start;
+  overflow: hidden !important;
+}
+
+.app-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3.5px;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.app-item:hover {
+  transform: translateY(-2px);
+}
+
+.app-item:active {
+  transform: scale(0.9);
+}
+
+/* Ícone do App no formato Squircle iOS */
+.app-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4),
+              inset 0 1px 1px rgba(255, 255, 255, 0.38);
+  transition: all 0.2s ease;
+}
+
+.app-emoji {
+  font-size: 22px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+.app-label {
+  font-size: 9.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.92);
+  text-align: center;
+  line-height: 1.15;
+  max-width: 58px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.2px;
+}
+
+/* Gradientes Temáticos dos Ícones iOS */
+.icon-darkmode {
+  background: linear-gradient(135deg, #222233 0%, #12121c 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.icon-rgb {
+  background: linear-gradient(135deg, #ff0844 0%, #ffb199 50%, #00f2fe 100%);
+}
+
+.icon-ghost {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.icon-api {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.icon-privacy {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.icon-gdrive {
+  background: linear-gradient(135deg, #4285F4 0%, #34A853 50%, #FBBC05 100%);
+}
+
+.icon-voice {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+.icon-categories {
+  background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+}
+
+.icon-shortcuts {
+  background: linear-gradient(135deg, #5ee7df 0%, #b490ca 100%);
+}
+
+.icon-params {
+  background: linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%);
+}
+
+.icon-lang {
+  background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+}
+
+.icon-monitor {
+  background: linear-gradient(135deg, #f857a6 0%, #ff5858 100%);
+}
+
+/* Indicador de Toggle no Ícone (ON/OFF) */
+.app-toggle-indicator {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
+  transition: all 0.2s;
+}
+
+.app-toggle-indicator.active {
+  background: #2ecc71;
+  box-shadow: 0 0 8px #2ecc71, 0 0 2px #fff;
+}
+
+/* Badges de Contagem e Pill */
+.app-badge-count {
+  position: absolute;
+  top: -3.5px;
+  right: -3.5px;
+  background: #e74c3c;
+  color: white;
+  font-size: 9px;
+  font-weight: 800;
+  min-width: 15px;
+  height: 15px;
+  border-radius: 7.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+.app-badge-pill {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 7px;
+  font-weight: 700;
+  padding: 1px 3px;
+  border-radius: 4px;
+  letter-spacing: -0.2px;
+}
+
+.app-badge-pill.connected {
+  background: #27ae60;
+  color: #fff;
+}
+
+/* 8. Widget Estilo iOS 18: Live Activity & Monitor */
+.ios-widget-card {
+  margin: 1px 12px 6px 12px;
+  padding: 7px 11px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 15px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ios-widget-card:hover {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.ios-widget-card:active {
+  transform: scale(0.98);
+}
+
+.widget-icon-pill {
+  width: 29px;
+  height: 29px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #ff0844, #ffb199);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.widget-pulse {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 6.5px;
+  height: 6.5px;
+  border-radius: 50%;
+  background: #2ecc71;
+  box-shadow: 0 0 6px #2ecc71;
+}
+
+.widget-emoji {
+  font-size: 15px;
+}
+
+.widget-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.widget-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.widget-title {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+}
+
+.widget-time {
+  font-size: 8.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.widget-desc {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 9. Banner Toast no iPhone */
+.ios-banner {
+  position: absolute;
+  bottom: 70px;
+  left: 50%;
+  transform: translateX(-50%) translateY(30px);
+  background: rgba(20, 20, 30, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  padding: 5px 12px;
+  border-radius: 18px;
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  z-index: 50;
+  white-space: nowrap;
+}
+
+.ios-banner.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+/* 10. Dock Flutuante do iOS 18 */
+.ios-dock {
+  margin: 0 12px 3px 12px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(35px) saturate(200%);
+  -webkit-backdrop-filter: blur(35px) saturate(200%);
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.dock-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+
+.dock-btn img {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.dock-emoji {
+  font-size: 18px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+.dock-btn:hover {
+  transform: translateY(-2px);
+}
+
+.dock-btn:active {
+  transform: scale(0.85);
+}
+
+/* 11. Home Indicator */
+.ios-home-indicator {
+  width: 110px;
+  height: 3.5px;
+  background: rgba(255, 255, 255, 0.65);
+  border-radius: 10px;
+  margin: 2px auto 4px auto;
+}

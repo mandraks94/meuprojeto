@@ -16,14 +16,18 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "IG Tools Pro"
+    "default_title": "IG Tools Pro",
+    "default_popup": "popup.html"
   },
   "permissions": [
     "storage",
     "declarativeNetRequest",
     "alarms",
     "notifications",
-    "cookies"
+    "cookies",
+    "tabs",
+    "activeTab",
+    "scripting"
   ],
   "host_permissions": [
     "https://*.instagram.com/*",

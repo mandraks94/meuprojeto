@@ -150,5 +150,19 @@
         }
     });
 
-    console.log('[IG Tools Bridge] Ponte de comunicação ativa (Proxy HTTP + Monitor de Segundo Plano).');
+    // Ouve comandos vindos do Popup do iPhone e repassa para a página (MAIN world)
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message && (message.type === 'IG_POPUP_TOGGLE' || message.type === 'IG_POPUP_OPEN_MODAL')) {
+            console.log('[IG Tools Bridge] Comando recebido do popup iPhone:', message);
+            window.postMessage({
+                source: 'IG_TOOLS_BRIDGE',
+                action: message.type,
+                payload: message
+            }, '*');
+            sendResponse({ success: true });
+            return true;
+        }
+    });
+
+    console.log('[IG Tools Bridge] Ponte de comunicação ativa (Proxy HTTP + Monitor + iPhone Popup).');
 })();

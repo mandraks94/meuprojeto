@@ -3272,6 +3272,71 @@
                 }
             }
 
+            // --- LISTENER PARA AÇÕES VINDAS DO POPUP DO IPHONE ---
+            window.addEventListener('message', (event) => {
+                if (!event.data || event.data.source !== 'IG_TOOLS_BRIDGE') return;
+
+                console.log("[IG Tools] Mensagem do popup iPhone recebida no Instagram:", event.data);
+
+                if (event.data.action === 'IG_POPUP_TOGGLE' && event.data.payload) {
+                    const { setting, value } = event.data.payload;
+                    if (setting === 'darkMode') toggleDarkMode(value);
+                    if (setting === 'rgbBorder') toggleRgbBorder(value);
+                    if (setting === 'anonymousStories') toggleAnonymousStories(value);
+                    if (setting === 'useApi') toggleUseApi(value);
+                    if (setting === 'validateProfileStatus') {
+                        saveSettings({ validateProfileStatus: value });
+                        if (value && typeof validateCurrentPagePrivacy === 'function') validateCurrentPagePrivacy();
+                        else {
+                            document.querySelectorAll('.ig-privacy-badge').forEach(b => b.remove());
+                            document.querySelectorAll('[data-privacy-processed]').forEach(el => el.removeAttribute('data-privacy-processed'));
+                        }
+                    }
+                    saveSettings({ [setting]: value });
+                }
+
+                if (event.data.action === 'IG_POPUP_OPEN_MODAL' && event.data.payload) {
+                    const { modal } = event.data.payload;
+                    console.log("[IG Tools] Abrindo modal:", modal);
+
+                    document.querySelectorAll('.submenu-modal').forEach(m => m.remove());
+                    ['settingsModal', 'manageCategoriesModal', 'shortcutsModal', 'paramsModal', 'langModal', 'naoSegueDeVoltaDiv', 'closeFriendsModal', 'hideStoryModal'].forEach(id => {
+                        document.getElementById(id)?.remove();
+                    });
+
+                    if (typeof injectMenu === 'function') injectMenu();
+                    const modals = window.__igToolsModals || {};
+
+                    if (modal === 'settings' && modals.openSettings) modals.openSettings();
+                    else if (modal === 'voice' && modals.openVoice) modals.openVoice();
+                    else if (modal === 'categories' && modals.openCategories) modals.openCategories();
+                    else if (modal === 'shortcuts' && modals.openShortcuts) modals.openShortcuts();
+                    else if (modal === 'parameters' && modals.openParameters) modals.openParameters();
+                    else if (modal === 'language' && modals.openLanguage) modals.openLanguage();
+                    else if (modal === 'notFollowingBack' && modals.openNotFollowingBack) modals.openNotFollowingBack('tabNaoSegueDeVolta');
+                    else if (modal === 'unfollowHistory' && modals.openNotFollowingBack) modals.openNotFollowingBack('tabHistorico');
+                    else if (modal === 'closeFriends' && modals.openCloseFriends) modals.openCloseFriends();
+                    else if (modal === 'hideStory' && modals.openHideStory) modals.openHideStory();
+                    else if (modal === 'muted' && modals.openMuted) modals.openMuted();
+                    else if (modal === 'interactions' && modals.openInteractions) modals.openInteractions();
+                    else if (modal === 'reels' && modals.openReels) modals.openReels();
+                    else if (modal === 'following' && modals.openFollowing) modals.openFollowing();
+                    else if (modal === 'blocked' && modals.openBlocked) modals.openBlocked();
+                    else {
+                        // Fallback direto
+                        if (modal === 'settings' && typeof abrirModalConfiguracoes === 'function') abrirModalConfiguracoes();
+                        if (modal === 'voice' && typeof abrirModalComandosVoz === 'function') abrirModalComandosVoz();
+                        if (modal === 'categories' && typeof abrirModalGerenciarCategorias === 'function') abrirModalGerenciarCategorias();
+                        if (modal === 'shortcuts' && typeof abrirModalAtalhos === 'function') abrirModalAtalhos();
+                        if (modal === 'parameters' && typeof abrirModalParametros === 'function') abrirModalParametros();
+                        if (modal === 'language' && typeof abrirModalIdioma === 'function') abrirModalIdioma();
+                        if (modal === 'notFollowingBack' && typeof iniciarProcessoNaoSegueDeVolta === 'function') iniciarProcessoNaoSegueDeVolta('tabNaoSegueDeVolta');
+                        if (modal === 'unfollowHistory' && typeof iniciarProcessoNaoSegueDeVolta === 'function') iniciarProcessoNaoSegueDeVolta('tabHistorico');
+                        if (modal === 'closeFriends' && typeof abrirModalAmigosProximos === 'function') abrirModalAmigosProximos();
+                    }
+                }
+            });
+
             // --- LÓGICA PARA ATALHOS ---
             function getShortcuts() {
                 try {
@@ -3349,6 +3414,76 @@
             }
 
             function injectMenu() {
+                // Expõe os gerenciadores de modais globalmente para acesso imediato via popup do iPhone, atalhos, etc.
+                window.__igToolsModals = {
+                    openSettings: () => {
+                        document.getElementById("settingsModal")?.remove();
+                        document.querySelectorAll('.submenu-modal').forEach(m => m.remove());
+                        if (typeof abrirModalConfiguracoes === 'function') abrirModalConfiguracoes();
+                    },
+                    openVoice: () => {
+                        document.getElementById("voiceCommandsModal")?.remove();
+                        document.querySelectorAll('.submenu-modal').forEach(m => m.remove());
+                        if (typeof abrirModalComandosVoz === 'function') abrirModalComandosVoz();
+                    },
+                    openCategories: () => {
+                        document.getElementById("manageCategoriesModal")?.remove();
+                        document.querySelectorAll('.submenu-modal').forEach(m => m.remove());
+                        if (typeof abrirModalGerenciarCategorias === 'function') abrirModalGerenciarCategorias();
+                    },
+                    openShortcuts: () => {
+                        document.getElementById("shortcutsModal")?.remove();
+                        document.querySelectorAll('.submenu-modal').forEach(m => m.remove());
+                        if (typeof abrirModalAtalhos === 'function') abrirModalAtalhos();
+                    },
+                    openParameters: () => {
+                        document.getElementById("paramsModal")?.remove();
+                        document.querySelectorAll('.submenu-modal').forEach(m => m.remove());
+                        if (typeof abrirModalParametros === 'function') abrirModalParametros();
+                    },
+                    openLanguage: () => {
+                        document.getElementById("langModal")?.remove();
+                        document.querySelectorAll('.submenu-modal').forEach(m => m.remove());
+                        if (typeof abrirModalIdioma === 'function') abrirModalIdioma();
+                    },
+                    openNotFollowingBack: (tab) => {
+                        document.getElementById("naoSegueDeVoltaDiv")?.remove();
+                        document.querySelectorAll('.submenu-modal').forEach(m => m.remove());
+                        if (typeof iniciarProcessoNaoSegueDeVolta === 'function') iniciarProcessoNaoSegueDeVolta(tab || 'tabNaoSegueDeVolta');
+                    },
+                    openCloseFriends: () => {
+                        document.getElementById("closeFriendsModal")?.remove();
+                        document.querySelectorAll('.submenu-modal').forEach(m => m.remove());
+                        if (typeof abrirModalAmigosProximos === 'function') abrirModalAmigosProximos();
+                    },
+                    openHideStory: () => {
+                        document.getElementById("hideStoryModal")?.remove();
+                        document.querySelectorAll('.submenu-modal').forEach(m => m.remove());
+                        if (typeof abrirModalOcultarStory === 'function') abrirModalOcultarStory();
+                    },
+                    openMuted: () => {
+                        document.getElementById("mutedAccountsModal")?.remove();
+                        document.querySelectorAll('.submenu-modal').forEach(m => m.remove());
+                        if (typeof abrirModalContasSilenciadas === 'function') abrirModalContasSilenciadas();
+                    },
+                    openInteractions: () => {
+                        document.getElementById("interacoesModal")?.remove();
+                        document.querySelectorAll('.submenu-modal').forEach(m => m.remove());
+                        if (typeof abrirModalInteracoes === 'function') abrirModalInteracoes();
+                    },
+                    openReels: () => {
+                        document.getElementById("reelsModal")?.remove();
+                        document.querySelectorAll('.submenu-modal').forEach(m => m.remove());
+                        if (typeof abrirModalReels === 'function') abrirModalReels();
+                    },
+                    openBlocked: () => {
+                        if (typeof iniciarProcessoBloqueados === 'function') iniciarProcessoBloqueados();
+                    },
+                    openFollowing: () => {
+                        if (typeof iniciarProcessoSeguindo === 'function') iniciarProcessoSeguindo();
+                    }
+                };
+
                 if (document.getElementById("assistiveTouchMenu")) return;
                 if (document.getElementById("instagramToolsSidebarBtn")) return;
 
@@ -3497,10 +3632,6 @@
                     }
                     return null;
                 }
-
-                // Tenta encontrar o container da sidebar oficial usando o seletor fornecido
-                const sidebarContainer = findSidebarContainer();
-                if (!sidebarContainer) return; // Aguarda o carregamento da sidebar
 
                 // Add dynamic styles
                 if (!document.getElementById("dynamicMenuStyle")) {
@@ -3975,6 +4106,10 @@
                     });
                     document.body.dataset.menuClickListenerAttached = 'true';
                 }
+
+                // Tenta encontrar o container da sidebar oficial usando o seletor fornecido
+                const sidebarContainer = findSidebarContainer();
+                if (!sidebarContainer) return; // Aguarda o carregamento da sidebar
 
                 const homeLink = sidebarContainer.querySelector('a[href="/"]');
                 const itemToClone = findItemToClone(sidebarContainer, homeLink);
@@ -10801,8 +10936,8 @@
                             'tabHistorico': listHistorico
                         };
 
-                        currentTabId = 'tabNaoSegueDeVolta';
-                        let currentList = lists[currentTabId];
+                        currentTabId = initialTab || 'tabNaoSegueDeVolta';
+                        let currentList = lists[currentTabId] || lists['tabNaoSegueDeVolta'];
 
                         async function renderCurrentTab() {
                             // Atualiza classe active

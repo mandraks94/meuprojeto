@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>IG Tools Pro - iPhone 18</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Container do Aparelho iPhone 18 Pro -->
+  <div class="iphone-device">
+
+    <!-- Botões Físicos Laterais de Titânio -->
+    <div class="side-btn btn-action" title="Botão de Ação"></div>
+    <div class="side-btn btn-vol-up" title="Aumentar Volume"></div>
+    <div class="side-btn btn-vol-down" title="Diminuir Volume"></div>
+    <div class="side-btn btn-power" title="Botão Liga/Desliga"></div>
+
+    <!-- Chassis de Titânio do iPhone 18 Pro -->
+    <div class="iphone-chassis">
+      
+      <!-- Bezel Interno Preto da Tela OLED -->
+      <div class="iphone-bezel">
+
+        <!-- Alto-falante Superior Slit do iPhone -->
+        <div class="ios-earpiece"></div>
+
+        <!-- Tela OLED -->
+        <div class="iphone-screen">
+          
+          <!-- 1. Barra de Status iOS + Dynamic Island -->
+          <div class="ios-status-bar">
+            <div class="ios-time" id="iosTime">09:41</div>
+            
+            <!-- Dynamic Island -->
+            <div class="dynamic-island" id="dynamicIsland" title="Dynamic Island • IG Tools Pro">
+              <div class="island-camera"></div>
+              <div class="island-sensor"></div>
+              <div class="island-pill-content">
+                <span class="island-dot"></span>
+                <span class="island-text">IG Tools Pro</span>
+              </div>
+            </div>
+
+            <div class="ios-icons">
+              <div class="ios-signal-bars" title="Sinal Máximo">
+                <span class="bar b1"></span>
+                <span class="bar b2"></span>
+                <span class="bar b3"></span>
+                <span class="bar b4"></span>
+              </div>
+              <span class="ios-network">5G</span>
+              <div class="ios-battery" title="Bateria 100%">
+                <div class="battery-level"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Cabeçalho iOS: Central de Controle & Nuvem -->
+          <div class="iphone-header">
+            <div class="header-titles">
+              <span class="header-subtitle">CENTRAL DE CONTROLE</span>
+              <h1 class="header-title">Configurações</h1>
+            </div>
+            <div class="drive-status-pill" id="drivePill" title="Status do Google Drive">
+              <span class="status-dot"></span>
+              <span id="drivePillText">Google Drive</span>
+            </div>
+          </div>
+
+          <!-- 3. Grade de Apps / Ícones do iPhone -->
+          <div class="ios-grid">
+            <!-- 1. Modo Escuro -->
+            <div class="app-item" id="appDarkMode" role="button" title="Alternar Modo Escuro">
+              <div class="app-icon icon-darkmode">
+                <span class="app-emoji">🌙</span>
+                <div class="app-toggle-indicator" id="indDarkMode"></div>
+              </div>
+              <span class="app-label">Modo Escuro</span>
+            </div>
+
+            <!-- 2. Borda RGB -->
+            <div class="app-item" id="appRgbBorder" role="button" title="Borda RGB Dinâmica">
+              <div class="app-icon icon-rgb">
+                <span class="app-emoji">🌈</span>
+                <div class="app-toggle-indicator" id="indRgbBorder"></div>
+              </div>
+              <span class="app-label">Borda RGB</span>
+            </div>
+
+            <!-- 3. Stories Anônimo -->
+            <div class="app-item" id="appAnonymousStories" role="button" title="Ver Stories Sem Ser Visto">
+              <div class="app-icon icon-ghost">
+                <span class="app-emoji">👻</span>
+                <div class="app-toggle-indicator" id="indAnonymousStories"></div>
+              </div>
+              <span class="app-label">Modo Stealth</span>
+            </div>
+
+            <!-- 4. Usar API Rápido -->
+            <div class="app-item" id="appUseApi" role="button" title="Turbo API">
+              <div class="app-icon icon-api">
+                <span class="app-emoji">⚡</span>
+                <div class="app-toggle-indicator" id="indUseApi"></div>
+              </div>
+              <span class="app-label">Turbo API</span>
+            </div>
+
+            <!-- 5. Validar Status P/A -->
+            <div class="app-item" id="appValidateProfile" role="button" title="Validar Contas Públicas/Privadas">
+              <div class="app-icon icon-privacy">
+                <span class="app-emoji">👁️</span>
+                <div class="app-toggle-indicator" id="indValidateProfile"></div>
+              </div>
+              <span class="app-label">Status P/A</span>
+            </div>
+
+            <!-- 6. Google Drive -->
+            <div class="app-item" id="appGoogleDrive" role="button" title="Nuvem Google Drive">
+              <div class="app-icon icon-gdrive">
+                <span class="app-emoji">☁️</span>
+                <div class="app-badge-pill" id="badgeDrive">Conectar</div>
+              </div>
+              <span class="app-label">Drive Backup</span>
+            </div>
+
+            <!-- 7. Comandos de Voz -->
+            <div class="app-item" id="appVoice" role="button" title="Abrir Comandos de Voz">
+              <div class="app-icon icon-voice">
+                <span class="app-emoji">🎙️</span>
+              </div>
+              <span class="app-label">Voz & Siri</span>
+            </div>
+
+            <!-- 8. Gerenciar Categorias -->
+            <div class="app-item" id="appCategories" role="button" title="Gerenciar Categorias de Usuários">
+              <div class="app-icon icon-categories">
+                <span class="app-emoji">📁</span>
+              </div>
+              <span class="app-label">Categorias</span>
+            </div>
+
+            <!-- 9. Atalhos -->
+            <div class="app-item" id="appShortcuts" role="button" title="Configurar Atalhos de Teclado">
+              <div class="app-icon icon-shortcuts">
+                <span class="app-emoji">⌨️</span>
+              </div>
+              <span class="app-label">Atalhos</span>
+            </div>
+
+            <!-- 10. Parâmetros -->
+            <div class="app-item" id="appParams" role="button" title="Ajustes Avançados e Delays">
+              <div class="app-icon icon-params">
+                <span class="app-emoji">🔧</span>
+              </div>
+              <span class="app-label">Parâmetros</span>
+            </div>
+
+            <!-- 11. Idioma -->
+            <div class="app-item" id="appLanguage" role="button" title="Alterar Idioma da Extensão">
+              <div class="app-icon icon-lang">
+                <span class="app-emoji">🌐</span>
+              </div>
+              <span class="app-label">Idioma</span>
+            </div>
+
+            <!-- 12. Unfollow Monitor -->
+            <div class="app-item" id="appUnfollowMonitor" role="button" title="Status do Monitor em Segundo Plano">
+              <div class="app-icon icon-monitor">
+                <span class="app-emoji">🔔</span>
+                <div class="app-badge-count" id="badgeUnfollowCount" style="display:none;">0</div>
+              </div>
+              <span class="app-label">Unfollows</span>
+            </div>
+          </div>
+
+          <!-- 4. Widget Estilo iOS 18: Live Activity & Monitor Status -->
+          <div class="ios-widget-card" id="widgetMonitor" role="button" title="Monitor de Perda de Seguidores">
+            <div class="widget-icon-pill">
+              <span class="widget-pulse"></span>
+              <span class="widget-emoji">🛡️</span>
+            </div>
+            <div class="widget-content">
+              <div class="widget-topline">
+                <span class="widget-title">MONITOR PRO ATIVO</span>
+                <span class="widget-time">Hoje</span>
+              </div>
+              <span class="widget-desc">Verificação periódica silenciosa no Instagram</span>
+            </div>
+          </div>
+
+          <!-- 5. Banner Toast no iPhone -->
+          <div class="ios-banner" id="iosBanner">
+            <span id="iosBannerText">Configuração atualizada!</span>
+          </div>
+
+          <!-- 6. Dock do iOS no Rodapé -->
+          <div class="ios-dock">
+            <button class="dock-btn dock-btn-ig" id="dockInstagram" title="Ir para o Instagram">
+              <img src="icons/icon48.png" alt="IG Tools">
+            </button>
+            <button class="dock-btn" id="dockUnfollow" title="Escanear Quem Não Segue de Volta">
+              <span class="dock-emoji">💔</span>
+            </button>
+            <button class="dock-btn" id="dockCloseFriends" title="Melhores Amigos">
+              <span class="dock-emoji">⭐</span>
+            </button>
+            <button class="dock-btn" id="dockOpenSettingsModal" title="Abrir Menu Configurações Completo">
+              <span class="dock-emoji">⚙️</span>
+            </button>
+          </div>
+
+          <!-- 7. Barra Indicadora de Início (Home Indicator) -->
+          <div class="ios-home-indicator"></div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

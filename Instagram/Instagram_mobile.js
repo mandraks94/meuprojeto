@@ -89,8 +89,31 @@
             };
 
             const googleAuth = {
-                getAccessToken: () => storage.get('gdrive_token'),
-                setAccessToken: (token) => storage.set('gdrive_token', token),
+                getAccessToken: () => {
+                    const token = storage.get('gdrive_token');
+                    if (!token) return null;
+                    const savedTime = Number(localStorage.getItem('ig_tools_gdrive_token_timestamp')) || 0;
+                    const expiresIn = Number(localStorage.getItem('ig_tools_gdrive_expires_in')) || 3600;
+                    if (savedTime && (Date.now() - savedTime > (expiresIn - 60) * 1000)) {
+                        console.log("[IG Tools] Sessão do Google Drive expirada.");
+                        googleAuth.setAccessToken(null);
+                        return null;
+                    }
+                    return token;
+                },
+                isConnected: function () {
+                    return !!this.getAccessToken();
+                },
+                setAccessToken: (token) => {
+                    storage.set('gdrive_token', token);
+                    if (!token) {
+                        try {
+                            localStorage.removeItem('ig_tools_gdrive_token');
+                            localStorage.removeItem('ig_tools_gdrive_token_timestamp');
+                            localStorage.removeItem('ig_tools_gdrive_expires_in');
+                        } catch (_) { }
+                    }
+                },
 
                 login: function () {
                     if (GDRIVE_CONFIG.clientId.includes('SEU_CLIENT_ID')) {
@@ -108,46 +131,31 @@
                         console.log("[IG Tools] Hash detectado após login.");
                         const params = new URLSearchParams(hash.substring(1));
                         const token = params.get('access_token');
-                        console.log("[IG Tools] Sucesso! Token recebido.");
+                        const expiresIn = Number(params.get('expires_in')) || 3600;
+                        console.log("[IG Tools] Sucesso! Token Google Drive recebido.");
                         this.setAccessToken(token);
-                        localStorage.setItem('ig_tools_gdrive_token', token); // Garantia extra
-                        showToast("✅ Logado no Google Drive!");
+                        try {
+                            localStorage.setItem('ig_tools_gdrive_token', token);
+                            localStorage.setItem('ig_tools_gdrive_token_timestamp', String(Date.now()));
+                            localStorage.setItem('ig_tools_gdrive_expires_in', String(expiresIn));
+                        } catch (_) { }
+                        showToast("✅ Google Drive conectado com sucesso!");
                         window.location.hash = ''; // Limpa a URL apenas após salvar
                     }
                 }
             };
             googleAuth.checkUrlToken();
 
-            // --- BLOQUEIO DE ACESSO: SÓ CONTINUA SE ESTIVER LOGADO ---
-            if (!googleAuth.getAccessToken()) {
-                console.log("[IG Tools] Acesso negado: Login Google necessário.");
-
-                const showAuthGate = () => {
-                    if (document.getElementById('ig-tools-auth-gate')) return;
-                    const gate = document.createElement('div');
-                    gate.id = 'ig-tools-auth-gate';
-
-                    // Estilo responsivo: centralizado no mobile, canto no desktop
-                    const isMobile = window.innerWidth <= 768;
-                    const mobilePos = 'top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px;';
-                    const desktopPos = 'bottom: 20px; right: 20px; max-width: 280px;';
-
-                    gate.style.cssText = `position: fixed; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; font-family: -apple-system, system-ui, sans-serif; ${isMobile ? mobilePos : desktopPos}`;
-                    gate.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 2147483647; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid #dbdbdb; display: flex; flex-direction: column; gap: 12px; align-items: center; max-width: 280px; font-family: -apple-system, system-ui, sans-serif;';
-                    gate.innerHTML = `
-                        <div style="font-size: 24px;">🛠️</div>
-                        <span style="color: black; font-weight: bold; font-size: 16px; text-align: center;">IG Tools Protegido</span>
-                        <p style="color: #666; font-size: 12px; text-align: center; margin: 0;">Faça login com sua conta Google para ativar as ferramentas de download e análise.</p>
-                        <button id="authGateLoginBtn" style="background: #4285F4; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; transition: background 0.2s;">Login com Google</button>
-                    `;
-                    document.body.appendChild(gate);
-                    document.getElementById('authGateLoginBtn').onclick = () => googleAuth.login();
-                };
-
-                if (document.body) showAuthGate();
-                else document.addEventListener('DOMContentLoaded', showAuthGate);
-
-                return; // INTERROMPE TODO O RESTO DO SCRIPT
+            // Alerta discreto no carregamento caso o Google Drive não esteja conectado
+            if (!googleAuth.isConnected()) {
+                console.log("[IG Tools] Google Drive desconectado. Operando com armazenamento local.");
+                const hasWarnedThisSession = sessionStorage.getItem('ig_tools_gdrive_warned');
+                if (!hasWarnedThisSession) {
+                    sessionStorage.setItem('ig_tools_gdrive_warned', 'true');
+                    setTimeout(() => {
+                        showToast("☁️ Google Drive desconectado. Conecte nas Configurações para sincronizar seu backup.");
+                    }, 4000);
+                }
             }
 
             const gDriveApi = {
@@ -13426,6 +13434,7 @@
                     }
 
                     const settings = loadSettings();
+                    const isGDriveConnected = googleAuth.isConnected();
 
                     div.innerHTML = `
                             <div class="modal-header">
@@ -13459,9 +13468,28 @@
                                                 <span>👁️‍🗨️ ${getText('validateProfileStatus')}</span>
                                                 <label class="switch"><input type="checkbox" id="settingsValidateProfileToggle" ${settings.validateProfileStatus ? 'checked' : ''}><span class="slider"></span></label>
                                             </div>
-                                            <div class="toggle-item">
-                                                <span>☁️ Google Drive</span>
-                                                <button id="googleLoginBtn" style="padding: 5px 10px; border-radius: 5px; cursor: pointer;">Login</button>
+
+                                            ${!isGDriveConnected ? `
+                                            <div style="background: rgba(231, 76, 60, 0.12); border: 1px solid rgba(231, 76, 60, 0.35); border-radius: 8px; padding: 8px 10px; font-size: 12px; color: #e74c3c; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 2px 0;">
+                                                <span>⚠️ <b>Google Drive desconectado:</b> Backup em nuvem inativo.</span>
+                                                <button id="googleBannerLoginBtn" style="background: #4285F4; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; white-space: nowrap;">Conectar</button>
+                                            </div>
+                                            ` : `
+                                            <div style="background: rgba(39, 174, 96, 0.12); border: 1px solid rgba(39, 174, 96, 0.35); border-radius: 8px; padding: 6px 10px; font-size: 12px; color: #27ae60; display: flex; align-items: center; gap: 6px; margin: 2px 0;">
+                                                <span>☁️ <b>Google Drive conectado:</b> Sincronização em nuvem ativa.</span>
+                                            </div>
+                                            `}
+
+                                            <div class="toggle-item" style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                                                <div style="display: flex; align-items: center; gap: 8px;">
+                                                    <span>☁️ Google Drive</span>
+                                                    <span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; ${isGDriveConnected ? 'background: rgba(39, 174, 96, 0.18); color: #27ae60; border: 1px solid rgba(39, 174, 96, 0.4);' : 'background: rgba(231, 76, 60, 0.18); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.4);'}">
+                                                        ${isGDriveConnected ? '🟢 Conectado' : '🔴 Desconectado'}
+                                                    </span>
+                                                </div>
+                                                <button id="googleLoginBtn" style="padding: 5px 12px; border-radius: 6px; cursor: pointer; border: none; font-size: 12px; font-weight: 600; ${isGDriveConnected ? 'background: rgba(231, 76, 60, 0.15); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.3);' : 'background: #4285F4; color: white;'}">
+                                                    ${isGDriveConnected ? 'Desconectar' : '🔑 Conectar'}
+                                                </button>
                                             </div>
                                     <button id="settingsVoiceBtn" class="menu-item-button">🎙️ Comandos de Voz</button>
                                             <button id="settingsManageCategoriesBtn" class="menu-item-button">📁 Gerenciar Categorias</button>
@@ -13475,7 +13503,23 @@
 
                     document.getElementById("fecharSettingsBtn").onclick = () => div.remove();
 
-                    document.getElementById("googleLoginBtn").onclick = () => googleAuth.login();
+                    const googleLoginBtn = document.getElementById("googleLoginBtn");
+                    if (googleLoginBtn) {
+                        googleLoginBtn.onclick = () => {
+                            if (googleAuth.isConnected()) {
+                                googleAuth.setAccessToken(null);
+                                showToast("Google Drive desconectado.");
+                                div.remove();
+                                abrirModalConfiguracoes();
+                            } else {
+                                googleAuth.login();
+                            }
+                        };
+                    }
+                    const googleBannerLoginBtn = document.getElementById("googleBannerLoginBtn");
+                    if (googleBannerLoginBtn) {
+                        googleBannerLoginBtn.onclick = () => googleAuth.login();
+                    }
 
                     document.getElementById("settingsDarkModeToggle").onchange = (e) => {
                         toggleDarkMode(e.target.checked);

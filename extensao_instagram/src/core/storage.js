@@ -100,7 +100,6 @@ window.IGTools = window.IGTools || {};
                         console.log("[IG Tools] Dados carregados com sucesso.");
                     }
                 } catch (e) {
-                    console.error("[IG Tools] Erro ao carregar dados da nuvem:", e);
                     this._cache = {};
                 }
             }
@@ -124,6 +123,13 @@ window.IGTools = window.IGTools || {};
             try {
                 localStorage.setItem('ig_tools_cache_' + storeName, JSON.stringify(formattedData));
                 await window.IGTools.GDriveApi.saveData(this._cache);
+                
+                // Se for a lista de seguidores, sincroniza automaticamente com o Service Worker em background
+                if (storeName === 'followers' && formattedData.length > 0) {
+                    sendBridgeMessage('SYNC_FOLLOWERS_BASELINE', { followers: formattedData }).catch(e => {
+                        console.warn('[IG Tools] Aviso ao sincronizar baseline com background:', e);
+                    });
+                }
             } catch (errSync) {
                 console.warn(`[IG Tools] Aviso: Dados salvos localmente, sincronização em nuvem pendente (${storeName}):`, errSync);
             }
@@ -208,11 +214,39 @@ window.IGTools = window.IGTools || {};
         }
     };
 
+    function sendBridgeMessage(action, payload = {}) {
+        return new Promise((resolve) => {
+            const id = 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+            const handler = (event) => {
+                if (event.source !== window || !event.data || event.data.source !== 'IG_TOOLS_BRIDGE' || event.data.id !== id) {
+                    return;
+                }
+                window.removeEventListener('message', handler);
+                resolve(event.data);
+            };
+            window.addEventListener('message', handler);
+            window.postMessage({
+                source: 'IG_TOOLS_MAIN',
+                action: action,
+                id: id,
+                ...payload
+            }, '*');
+        });
+    }
+
     window.IGTools.Storage = {
         raw: rawStorage,
         loadSettings,
         saveSettings,
         googleAuth,
         dbHelper
+    };
+
+    window.IGTools.BackgroundMonitor = {
+        syncFollowers: (followers) => sendBridgeMessage('SYNC_FOLLOWERS_BASELINE', { followers }),
+        checkNow: () => sendBridgeMessage('CHECK_NOW'),
+        getStatus: () => sendBridgeMessage('GET_MONITOR_STATUS'),
+        updateSettings: (settings) => sendBridgeMessage('UPDATE_SETTINGS', { settings }),
+        testNotification: (username = 'usuario_teste') => sendBridgeMessage('TEST_NOTIFICATION', { username })
     };
 })();

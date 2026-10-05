@@ -26,13 +26,17 @@ window.IGTools = window.IGTools || {};
                             } catch (e) {
                                 resolve(res.responseText);
                             }
+                        } else if (res.status === 401) {
+                            if (window.IGTools.Storage?.googleAuth?.setAccessToken) {
+                                window.IGTools.Storage.googleAuth.setAccessToken(null);
+                            }
+                            resolve({});
                         } else {
-                            reject(res);
+                            resolve({});
                         }
                     },
-                    onerror: (err) => {
-                        console.error("[IG Tools] Network Error:", err);
-                        reject(err);
+                    onerror: () => {
+                        resolve({});
                     }
                 };
 

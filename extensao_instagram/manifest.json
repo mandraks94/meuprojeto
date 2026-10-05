@@ -20,7 +20,10 @@
   },
   "permissions": [
     "storage",
-    "declarativeNetRequest"
+    "declarativeNetRequest",
+    "alarms",
+    "notifications",
+    "cookies"
   ],
   "host_permissions": [
     "https://*.instagram.com/*",

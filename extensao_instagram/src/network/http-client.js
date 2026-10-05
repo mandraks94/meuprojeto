@@ -25,19 +25,24 @@ window.IGTools = window.IGTools || {};
                 headers: headers || {}
             };
 
-            if (success && status >= 200 && status < 300) {
+            if (success) {
+                // Em GM_xmlhttpRequest, qualquer resposta HTTP (mesmo 401, 404, etc) chama onload com o status
                 if (options.onload) options.onload(responseObj);
                 resolve(responseObj);
             } else {
-                // Se a extensão foi recarregada no navegador (context invalidated) ou a ponte falhou, executa fallback fetch nativo direto
+                // Se a extensão foi recarregada no navegador (context invalidated) ou a ponte falhou
                 const isContextError = !success && (
                     String(error).includes('context invalidated') ||
                     String(error).includes('message port closed') ||
                     status === 0
                 );
 
-                if (isContextError) {
-                    console.warn('[IG Tools HttpClient] Contexto da extensão reiniciado. Acionando fallback direto via fetch...');
+                const url = options.url || '';
+                const isInstagramUrl = url.includes('instagram.com') || url.startsWith('/');
+
+                // Só tenta fallback direto se for na própria origem do Instagram (evita violar CSP com Google APIs)
+                if (isContextError && isInstagramUrl) {
+                    console.warn('[IG Tools HttpClient] Contexto reiniciado. Acionando fallback direto seguro via fetch...');
                     fallbackFetch(options, resolve, reject);
                     return;
                 }

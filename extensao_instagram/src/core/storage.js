@@ -207,6 +207,27 @@ window.IGTools = window.IGTools || {};
             this._cache.userCategories = Object.fromEntries(categoryMap);
             await window.IGTools.GDriveApi.saveData(this._cache);
         },
+        saveUnblockedAccounts: async function (accounts) {
+            await this._init();
+            this._cache.unblockedAccounts = accounts;
+            try {
+                localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(accounts));
+                await window.IGTools.GDriveApi.saveData(this._cache);
+            } catch (errSync) {
+                console.warn('[IG Tools] Erro ao sincronizar contas desbloqueadas com Drive:', errSync);
+            }
+        },
+        loadUnblockedAccounts: async function () {
+            await this._init();
+            if (Array.isArray(this._cache.unblockedAccounts)) {
+                return this._cache.unblockedAccounts;
+            }
+            try {
+                const local = JSON.parse(localStorage.getItem('ig_tools_cached_unblocked'));
+                if (Array.isArray(local)) return local;
+            } catch (_) { }
+            return [];
+        },
         clearCache: async function (storeName) {
             await this._init();
             delete this._cache[storeName];

@@ -212,14 +212,58 @@ window.IGTools = window.IGTools || {};
             this._cache.unblockedAccounts = accounts;
             try {
                 localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(accounts));
-                await window.IGTools.GDriveApi.saveData(this._cache);
-            } catch (errSync) {
-                console.warn('[IG Tools] Erro ao sincronizar contas desbloqueadas com Drive:', errSync);
+            } catch (_) { }
+
+            if (googleAuth.isConnected()) {
+                try {
+                    let cloudData = {};
+                    try {
+                        cloudData = await window.IGTools.GDriveApi.loadData();
+                        if (!cloudData || typeof cloudData !== 'object') cloudData = {};
+                    } catch (_) { }
+
+                    const cloudUnblocked = Array.isArray(cloudData.unblockedAccounts) ? cloudData.unblockedAccounts : [];
+                    const map = new Map();
+                    cloudUnblocked.forEach(u => {
+                        if (u && u.username) map.set(u.username.toLowerCase(), u);
+                    });
+                    accounts.forEach(u => {
+                        if (u && u.username) map.set(u.username.toLowerCase(), u);
+                    });
+                    const merged = Array.from(map.values());
+                    this._cache = { ...(this._cache || {}), ...cloudData, unblockedAccounts: merged };
+                    await window.IGTools.GDriveApi.saveData(this._cache);
+                    return merged;
+                } catch (errSync) {
+                    console.warn('[IG Tools] Erro ao sincronizar contas desbloqueadas com Drive:', errSync);
+                    throw errSync;
+                }
+            } else {
+                console.warn('[IG Tools] Google Drive desconectado. Contas salvas apenas localmente.');
+                throw new Error("Google Drive não conectado.");
             }
         },
-        loadUnblockedAccounts: async function () {
-            await this._init();
-            if (Array.isArray(this._cache.unblockedAccounts)) {
+        loadUnblockedAccounts: async function (forceRefresh = false) {
+            if (googleAuth.isConnected()) {
+                if (forceRefresh || !this._cache || !Array.isArray(this._cache.unblockedAccounts)) {
+                    try {
+                        console.log("[IG Tools] Buscando contas desbloqueadas mais recentes do Google Drive...");
+                        const cloudData = await window.IGTools.GDriveApi.loadData();
+                        if (cloudData && typeof cloudData === 'object') {
+                            this._cache = { ...(this._cache || {}), ...cloudData };
+                        }
+                    } catch (e) {
+                        console.error("[IG Tools] Erro ao recarregar contas da nuvem:", e);
+                    }
+                }
+                if (this._cache && Array.isArray(this._cache.unblockedAccounts)) {
+                    try {
+                        localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(this._cache.unblockedAccounts));
+                    } catch (_) { }
+                    return this._cache.unblockedAccounts;
+                }
+            }
+            if (this._cache && Array.isArray(this._cache.unblockedAccounts)) {
                 return this._cache.unblockedAccounts;
             }
             try {

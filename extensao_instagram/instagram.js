@@ -3107,14 +3107,58 @@
                     this._cache.unblockedAccounts = accounts;
                     try {
                         localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(accounts));
-                        await gDriveApi.saveData(this._cache);
-                    } catch (errSync) {
-                        console.warn('[IG Tools] Erro ao sincronizar contas desbloqueadas com Drive:', errSync);
+                    } catch (_) { }
+
+                    if (googleAuth.isConnected()) {
+                        try {
+                            let cloudData = {};
+                            try {
+                                cloudData = await gDriveApi.loadData();
+                                if (!cloudData || typeof cloudData !== 'object') cloudData = {};
+                            } catch (_) { }
+
+                            const cloudUnblocked = Array.isArray(cloudData.unblockedAccounts) ? cloudData.unblockedAccounts : [];
+                            const map = new Map();
+                            cloudUnblocked.forEach(u => {
+                                if (u && u.username) map.set(u.username.toLowerCase(), u);
+                            });
+                            accounts.forEach(u => {
+                                if (u && u.username) map.set(u.username.toLowerCase(), u);
+                            });
+                            const merged = Array.from(map.values());
+                            this._cache = { ...(this._cache || {}), ...cloudData, unblockedAccounts: merged };
+                            await gDriveApi.saveData(this._cache);
+                            return merged;
+                        } catch (errSync) {
+                            console.warn('[IG Tools] Erro ao sincronizar contas desbloqueadas com Drive:', errSync);
+                            throw errSync;
+                        }
+                    } else {
+                        console.warn('[IG Tools] Google Drive desconectado. Contas salvas apenas localmente.');
+                        throw new Error("Google Drive não conectado. Faça login nas Configurações para sincronizar com outros dispositivos.");
                     }
                 },
-                loadUnblockedAccounts: async function () {
-                    await this._init();
-                    if (Array.isArray(this._cache.unblockedAccounts)) {
+                loadUnblockedAccounts: async function (forceRefresh = false) {
+                    if (googleAuth.isConnected()) {
+                        if (forceRefresh || !this._cache || !Array.isArray(this._cache.unblockedAccounts)) {
+                            try {
+                                console.log("[IG Tools] Buscando contas desbloqueadas mais recentes do Google Drive...");
+                                const cloudData = await gDriveApi.loadData();
+                                if (cloudData && typeof cloudData === 'object') {
+                                    this._cache = { ...(this._cache || {}), ...cloudData };
+                                }
+                            } catch (e) {
+                                console.error("[IG Tools] Erro ao recarregar contas da nuvem:", e);
+                            }
+                        }
+                        if (this._cache && Array.isArray(this._cache.unblockedAccounts)) {
+                            try {
+                                localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(this._cache.unblockedAccounts));
+                            } catch (_) { }
+                            return this._cache.unblockedAccounts;
+                        }
+                    }
+                    if (this._cache && Array.isArray(this._cache.unblockedAccounts)) {
                         return this._cache.unblockedAccounts;
                     }
                     try {
@@ -10068,32 +10112,34 @@
                     let currentPage = 1;
                     let sortConfig = { key: 'username', direction: 'ascending' };
 
-                    // Sincronização em segundo plano com o Google Drive para a lista de desbloqueados
-                    dbHelper.loadUnblockedAccounts().then(driveList => {
-                        if (Array.isArray(driveList) && driveList.length > 0) {
-                            const map = new Map();
-                            driveList.forEach(u => {
-                                if (u && u.username) map.set(u.username.toLowerCase(), u);
-                            });
-                            unblockedList.forEach(u => {
-                                if (u && u.username && !map.has(u.username.toLowerCase())) {
-                                    map.set(u.username.toLowerCase(), u);
-                                }
-                            });
-                            unblockedList = Array.from(map.values());
-                            cachedUnblockedAccounts = unblockedList;
-                            try {
-                                localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(unblockedList));
-                            } catch (_) { }
+                    // Sincronização em segundo plano com o Google Drive para a lista de desbloqueados (busca fresca da nuvem)
+                    if (googleAuth.isConnected()) {
+                        dbHelper.loadUnblockedAccounts(true).then(driveList => {
+                            if (Array.isArray(driveList) && driveList.length > 0) {
+                                const map = new Map();
+                                driveList.forEach(u => {
+                                    if (u && u.username) map.set(u.username.toLowerCase(), u);
+                                });
+                                unblockedList.forEach(u => {
+                                    if (u && u.username && !map.has(u.username.toLowerCase())) {
+                                        map.set(u.username.toLowerCase(), u);
+                                    }
+                                });
+                                unblockedList = Array.from(map.values());
+                                cachedUnblockedAccounts = unblockedList;
+                                try {
+                                    localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(unblockedList));
+                                } catch (_) { }
 
-                            updateCounts();
-                            if (currentTab === 'unblocked') {
-                                renderList(currentPage);
+                                updateCounts();
+                                if (currentTab === 'unblocked') {
+                                    renderList(currentPage);
+                                }
                             }
-                        }
-                    }).catch(err => {
-                        console.warn('[IG Tools] Sincronização silenciosa de desbloqueados do Drive pendente:', err);
-                    });
+                        }).catch(err => {
+                            console.warn('[IG Tools] Sincronização silenciosa de desbloqueados do Drive pendente:', err);
+                        });
+                    }
 
                     // 2. MONTAGEM IMEDIATA DO MODAL NA TELA
                     const div = document.createElement("div");
@@ -10161,6 +10207,10 @@
                             </select>
                         </div>
                         <div id="statusBloqueados" style="margin-top: 5px; font-weight: bold; font-size: 13px; color: #555;">Total: ${blockedList.length} contas bloqueadas.</div>
+
+                        <!-- CONTAINER DE ALERTA DE STATUS DO GOOGLE DRIVE -->
+                        <div id="unblockedDriveAlertContainer" style="display: none; margin: 10px 0 6px 0;"></div>
+
                         <div id="tabelaBloqueadosContainer" style="display: block; margin-top: 15px;"></div>
                     `;
 
@@ -10181,7 +10231,7 @@
                             if (showFeedback) showToast("☁️ Desbloqueados salvos no Google Drive!");
                         } catch (errSync) {
                             console.warn('[IG Tools] Falha ao sincronizar com Google Drive:', errSync);
-                            if (showFeedback) showToast("⚠️ Salvo localmente. Conecte o Google Drive para backup em nuvem.");
+                            if (showFeedback) showToast("⚠️ Salvo localmente. Conecte o Google Drive para sincronizar.");
                         }
                         updateCounts();
                     };
@@ -10225,6 +10275,7 @@
                         const syncDriveBtn = document.getElementById('unblockedSyncDriveBtn');
                         const bloquearBtn = document.getElementById('unblockedBloquearBtn');
                         const filterSelect = document.getElementById('blockedFilterSelect');
+                        const driveAlertEl = document.getElementById('unblockedDriveAlertContainer');
 
                         if (currentTab === 'blocked') {
                             if (tabBlockedBtn) {
@@ -10242,6 +10293,7 @@
                             if (desbloquearBtn) desbloquearBtn.style.display = 'inline-block';
                             if (syncDriveBtn) syncDriveBtn.style.display = 'none';
                             if (bloquearBtn) bloquearBtn.style.display = 'none';
+                            if (driveAlertEl) driveAlertEl.style.display = 'none';
 
                             if (filterSelect) {
                                 filterSelect.innerHTML = `
@@ -10266,6 +10318,28 @@
                             if (desbloquearBtn) desbloquearBtn.style.display = 'none';
                             if (syncDriveBtn) syncDriveBtn.style.display = 'inline-block';
                             if (bloquearBtn) bloquearBtn.style.display = 'inline-block';
+
+                            if (driveAlertEl) {
+                                driveAlertEl.style.display = 'block';
+                                if (googleAuth.isConnected()) {
+                                    driveAlertEl.innerHTML = `
+                                        <div style="background: rgba(46, 204, 113, 0.12); border: 1px solid rgba(46, 204, 113, 0.35); border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; color: #27ae60;">
+                                            <span>☁️ <b>Google Drive conectado:</b> Backup em nuvem sincronizado com seus outros dispositivos.</span>
+                                            <span style="color: #666; font-size: 11px;">Clique em <b>☁️ Sincronizar Drive</b> para atualizar</span>
+                                        </div>
+                                    `;
+                                } else {
+                                    driveAlertEl.innerHTML = `
+                                        <div style="background: rgba(231, 76, 60, 0.12); border: 1px solid rgba(231, 76, 60, 0.35); border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                                            <div style="font-size: 12px; color: #e74c3c;">
+                                                <b>⚠️ Google Drive desconectado neste navegador.</b> Conecte sua conta Google para sincronizar o backup com outros dispositivos.
+                                            </div>
+                                            <button id="unblockedConnectDriveBannerBtn" type="button" style="background: #4285F4; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap;">🔑 Conectar Google Drive</button>
+                                        </div>
+                                    `;
+                                    document.getElementById("unblockedConnectDriveBannerBtn")?.addEventListener('click', () => googleAuth.login());
+                                }
+                            }
 
                             if (filterSelect) {
                                 filterSelect.innerHTML = `
@@ -10701,13 +10775,21 @@
 
                     // Botão Sincronizar Google Drive (Aba Desbloqueados)
                     document.getElementById("unblockedSyncDriveBtn").onclick = async () => {
+                        if (!googleAuth.isConnected()) {
+                            if (confirm("O Google Drive não está conectado neste navegador.\n\nDeseja fazer login na sua conta Google agora para sincronizar os usuários desbloqueados no PC?")) {
+                                googleAuth.login();
+                            }
+                            return;
+                        }
+
                         const syncBtn = document.getElementById("unblockedSyncDriveBtn");
                         if (syncBtn) {
                             syncBtn.disabled = true;
-                            syncBtn.textContent = "☁️ Sincronizando...";
+                            syncBtn.textContent = "☁️ Buscando da Nuvem...";
                         }
                         try {
-                            const driveList = await dbHelper.loadUnblockedAccounts();
+                            // forceRefresh = true para puxar a versão fresca da nuvem do Google Drive
+                            const driveList = await dbHelper.loadUnblockedAccounts(true);
                             if (Array.isArray(driveList)) {
                                 const map = new Map();
                                 driveList.forEach(u => {
@@ -10719,14 +10801,20 @@
                                     }
                                 });
                                 unblockedList = Array.from(map.values());
-                                await salvarDesbloqueadosNoDrive(unblockedList, true);
+                                cachedUnblockedAccounts = unblockedList;
+                                try {
+                                    localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(unblockedList));
+                                } catch (_) { }
+
+                                updateCounts();
                                 renderList(currentPage);
+                                showToast(`☁️ Sincronizado! ${driveList.length} contas carregadas do Google Drive.`);
                             } else {
                                 showToast("☁️ Conectado ao Google Drive.");
                             }
                         } catch (errDrive) {
                             console.error('[IG Tools] Erro ao sincronizar Google Drive:', errDrive);
-                            showToast("⚠️ Verifique sua conexão com o Google Drive nas Configurações.");
+                            showToast("⚠️ Erro ao acessar o Google Drive: " + (errDrive.message || errDrive));
                         } finally {
                             if (syncBtn) {
                                 syncBtn.disabled = false;

@@ -74,5 +74,11 @@
       "run_at": "document_start",
       "world": "MAIN"
     }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*"],
+      "matches": ["*://*.instagram.com/*"]
+    }
   ]
 }

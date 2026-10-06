@@ -34,6 +34,109 @@
                 }, 3000);
             }
 
+            // Som sutil de notificação estilo iOS
+            function playAlertSound() {
+                try {
+                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+                    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12);
+                    gain.gain.setValueAtTime(0.18, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + 0.35);
+                } catch (_) {}
+            }
+
+            // POP-UP FLUTUANTE VISUAL NA TELA DO INSTAGRAM
+            function showUnfollowFloatingPopup(data = {}) {
+                if (!document.body) return;
+                document.getElementById('igToolsUnfollowFloatingPopup')?.remove();
+
+                playAlertSound();
+
+                const popup = document.createElement('div');
+                popup.id = 'igToolsUnfollowFloatingPopup';
+                popup.style.cssText = `
+                    position: fixed;
+                    top: 24px;
+                    right: 24px;
+                    width: 360px;
+                    max-width: 90vw;
+                    background: rgba(18, 18, 28, 0.96);
+                    backdrop-filter: blur(25px) saturate(180%);
+                    -webkit-backdrop-filter: blur(25px) saturate(180%);
+                    border: 1px solid rgba(255, 75, 43, 0.55);
+                    border-radius: 18px;
+                    padding: 14px 16px;
+                    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 25px rgba(255, 75, 43, 0.25);
+                    z-index: 2147483647;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    color: #ffffff;
+                    transform: translateY(-30px);
+                    opacity: 0;
+                    transition: all 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+                `;
+
+                const title = data.title || 'Alerta de Unfollow';
+                const message = data.message || 'Alguem deixou de seguir, entra no menu não segue de volta para descobrir.';
+                const detail = data.detail || '';
+
+                popup.innerHTML = `
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span style="font-size:20px;filter:drop-shadow(0 2px 4px rgba(255,75,43,0.5));">💔</span>
+                            <span style="font-size:12px;font-weight:700;color:#ff7675;letter-spacing:0.3px;text-transform:uppercase;">${title}</span>
+                        </div>
+                        <button id="closeFloatingUnfollowPopup" style="background:rgba(255,255,255,0.14);border:none;color:#ffffff;width:22px;height:22px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;transition:background 0.2s;">✕</button>
+                    </div>
+                    <div style="font-size:13px;font-weight:600;line-height:1.4;color:#f1f2f6;">${message}</div>
+                    ${detail ? `<div style="font-size:11px;color:rgba(255,255,255,0.6);">${detail}</div>` : ''}
+                    <div style="display:flex;gap:8px;margin-top:4px;">
+                        <button id="btnFloatingGoUnfollow" style="flex:1;background:linear-gradient(135deg,#ff416c,#ff4b2b);border:none;border-radius:10px;padding:8px 12px;color:#ffffff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(255,65,108,0.4);display:flex;align-items:center;justify-content:center;gap:6px;transition:transform 0.2s;">
+                            <span>💔 Abrir Não Segue de Volta</span>
+                        </button>
+                    </div>
+                `;
+
+                document.body.appendChild(popup);
+
+                requestAnimationFrame(() => {
+                    popup.style.transform = 'translateY(0)';
+                    popup.style.opacity = '1';
+                });
+
+                const closePopup = () => {
+                    popup.style.transform = 'translateY(-20px)';
+                    popup.style.opacity = '0';
+                    setTimeout(() => popup.remove(), 380);
+                };
+
+                popup.querySelector('#closeFloatingUnfollowPopup').onclick = closePopup;
+
+                popup.querySelector('#btnFloatingGoUnfollow').onclick = () => {
+                    closePopup();
+                    const modals = window.__igToolsModals || {};
+                    if (modals.openNotFollowingBack) {
+                        modals.openNotFollowingBack('tabNaoSegueDeVolta');
+                    } else if (typeof iniciarProcessoNaoSegueDeVolta === 'function') {
+                        iniciarProcessoNaoSegueDeVolta('tabNaoSegueDeVolta');
+                    }
+                };
+
+                // Fecha automaticamente após 14 segundos
+                setTimeout(() => {
+                    if (document.body.contains(popup)) closePopup();
+                }, 14000);
+            }
+
             // Helper para Loading (Centralizado para evitar erros de redeclaração)
             function toggleLoading(isLoading, progress = null, message = "Carregando...") {
                 const modal = document.querySelector('.submenu-modal'); // Detecta o modal ativo
@@ -3277,6 +3380,54 @@
                 if (!event.data || event.data.source !== 'IG_TOOLS_BRIDGE') return;
 
                 console.log("[IG Tools] Mensagem do popup iPhone recebida no Instagram:", event.data);
+
+                // Consulta ultra-rápida de contagem de seguidores via GraphQL HoverCard oficial (Sem 429)
+                if (event.data.action === 'GET_FOLLOWERS_COUNT_FROM_MAIN') {
+                    const uid = event.data.userId;
+                    const reqId = event.data.id;
+                    (async () => {
+                        let count = null;
+                        try {
+                            if (typeof executeGraphqlUserHoverCard === 'function') {
+                                const stats = await executeGraphqlUserHoverCard(uid);
+                                if (stats && typeof stats.followers === 'number') {
+                                    count = stats.followers;
+                                    console.log(`[IG Tools] Contagem oficial obtida via GraphQL HoverCard: ${count}`);
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('[IG Tools] Falha no GraphQL HoverCard:', e);
+                        }
+
+                        if (count === null) {
+                            const headerLinks = document.querySelectorAll('header a, header span');
+                            for (const el of headerLinks) {
+                                const text = el.innerText || '';
+                                if (text.toLowerCase().includes('seguidor') || text.toLowerCase().includes('follower')) {
+                                    const numMatch = text.match(/[\d.,]+/);
+                                    if (numMatch) {
+                                        const parsed = parseInt(numMatch[0].replace(/\D/g, ''), 10);
+                                        if (parsed > 0) { count = parsed; break; }
+                                    }
+                                }
+                            }
+                        }
+
+                        window.postMessage({
+                            source: 'IG_TOOLS_MAIN',
+                            action: 'RESPONSE_FOLLOWERS_COUNT',
+                            id: reqId,
+                            count: count
+                        }, '*');
+                    })();
+                    return;
+                }
+
+                // Disparo de Pop-up Visual de Unfollow na tela do Instagram
+                if (event.data.action === 'SHOW_UNFOLLOW_POPUP') {
+                    showUnfollowFloatingPopup(event.data.payload || {});
+                    return;
+                }
 
                 if (event.data.action === 'IG_POPUP_TOGGLE' && event.data.payload) {
                     const { setting, value } = event.data.payload;
@@ -13910,6 +14061,10 @@
                                     <input type="number" id="itemsPerPageInput" value="${settings.itemsPerPage}" style="width: 80px; color: black;">
                                 </div>
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <label for="backgroundMonitorIntervalInput">Intervalo Monitor de Seguidores (min)</label>
+                                    <input type="number" id="backgroundMonitorIntervalInput" min="1" max="1440" value="${settings.backgroundMonitorInterval || 15}" style="width: 80px; color: black;">
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <label for="languageSelect">Idioma</label>
                                     <select id="languageSelect" style="width: 120px; color: black;">
                                         <option value="pt-BR" ${settings.language === 'pt-BR' ? 'selected' : ''}>🇧🇷 Português</option>
@@ -13997,6 +14152,7 @@
                     };
 
                     document.getElementById("saveParamsBtn").onclick = () => {
+                        const monitorInterval = parseInt(document.getElementById("backgroundMonitorIntervalInput")?.value, 10) || 15;
                         const newSettings = {
                             unfollowDelay: parseInt(document.getElementById("unfollowDelayInput").value, 10),
                             requestDelay: parseInt(document.getElementById("requestDelayInput").value, 10),
@@ -14004,11 +14160,18 @@
                             maxRequests: parseInt(document.getElementById("maxRequestsInput").value, 10),
                             itemsPerPage: parseInt(document.getElementById("itemsPerPageInput").value, 10),
                             language: document.getElementById("languageSelect").value,
+                            backgroundMonitorInterval: monitorInterval,
                             unfollowEmailEnabled: document.getElementById("unfollowEmailEnabledToggle").checked,
                             unfollowEmailRecipient: document.getElementById("unfollowEmailRecipientInput").value.trim(),
                             unfollowEmailWebhookUrl: document.getElementById("unfollowEmailWebhookInput").value.trim()
                         };
                         saveSettings(newSettings);
+                        // Notifica o Service Worker para atualizar o alarme imediatamente
+                        window.postMessage({
+                            source: 'IG_TOOLS_MAIN',
+                            action: 'UPDATE_SETTINGS',
+                            settings: { backgroundMonitorInterval: monitorInterval }
+                        }, '*');
                         alert("Parâmetros salvos!");
                         div.remove();
                     };

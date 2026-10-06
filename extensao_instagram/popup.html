@@ -171,6 +171,15 @@
               </div>
               <span class="app-label">Unfollows</span>
             </div>
+
+            <!-- 13. Central de Alertas (Posição indicada pelo usuário) -->
+            <div class="app-item" id="appAlertsCenter" role="button" title="Abrir Central de Alertas">
+              <div class="app-icon icon-alerts">
+                <span class="app-emoji">🚨</span>
+                <div class="app-badge-count" id="badgeAlertsCount" style="display:none;">0</div>
+              </div>
+              <span class="app-label">Alertas</span>
+            </div>
           </div>
 
           <!-- 4. Widget Estilo iOS 18: Live Activity & Monitor Status -->
@@ -211,6 +220,101 @@
 
           <!-- 7. Barra Indicadora de Início (Home Indicator) -->
           <div class="ios-home-indicator"></div>
+
+          <!-- 8. Painel Central de Alertas (iOS 18 Notification Sheet) -->
+          <div class="ios-alerts-sheet" id="alertsSheet">
+            <div class="alerts-drag-handle"></div>
+            <div class="alerts-header-row">
+              <div class="alerts-title-box">
+                <span class="alerts-sub">CENTRAL DE NOTIFICAÇÕES</span>
+                <h2 class="alerts-title">Alertas Salvos</h2>
+              </div>
+              <div class="alerts-header-actions">
+                <button class="btn-alerts-test" id="btnTestAlert" title="Disparar notificação de teste">🧪 Testar</button>
+                <button class="btn-alerts-clear" id="btnClearAllAlerts" title="Limpar todos os alertas">Limpar</button>
+                <button class="btn-alerts-close" id="btnCloseAlertsSheet" title="Fechar">✕</button>
+              </div>
+            </div>
+
+            <div class="alerts-body" id="alertsBody">
+              <!-- Conteúdo dinâmico via popup.js -->
+            </div>
+          </div>
+
+          <!-- 9. Painel de Parâmetros do Monitor Pro (iOS 18 Sheet) -->
+          <div class="ios-params-sheet" id="paramsSheet">
+            <div class="alerts-drag-handle"></div>
+            <div class="alerts-header-row">
+              <div class="alerts-title-box">
+                <span class="alerts-sub">MONITOR PRO ATIVO</span>
+                <h2 class="alerts-title">Parâmetros</h2>
+              </div>
+              <div class="alerts-header-actions">
+                <button class="btn-alerts-close" id="btnCloseParamsSheet" title="Fechar">✕</button>
+              </div>
+            </div>
+
+            <div class="params-body">
+              <!-- Card Informativo de Status -->
+              <div class="params-card">
+                <div class="params-card-top">
+                  <div class="params-status-badge">
+                    <span class="widget-pulse"></span>
+                    <span>Monitor Ativo</span>
+                  </div>
+                  <span class="params-last-check" id="paramsLastCheckTime">Verificando...</span>
+                </div>
+                <div class="params-stat-row">
+                  <div class="params-stat-box">
+                    <span class="params-stat-num" id="paramsFollowersCountDisplay">---</span>
+                    <span class="params-stat-label">Seguidores Atuais</span>
+                  </div>
+                  <div class="params-stat-box">
+                    <span class="params-stat-num" id="paramsActiveIntervalDisplay">15 min</span>
+                    <span class="params-stat-label">Intervalo Atual</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Seção de Intervalo de Tempo -->
+              <div class="params-section">
+                <div class="params-section-header">
+                  <span class="params-section-icon">⏱️</span>
+                  <div>
+                    <h3 class="params-section-title">Intervalo de Verificação</h3>
+                    <p class="params-section-desc">De quanto em quanto tempo validar o número de seguidores?</p>
+                  </div>
+                </div>
+
+                <div class="interval-pills-grid" id="intervalPillsGrid">
+                  <button type="button" class="interval-pill" data-interval="5">5 min</button>
+                  <button type="button" class="interval-pill" data-interval="10">10 min</button>
+                  <button type="button" class="interval-pill active" data-interval="15">15 min ⭐</button>
+                  <button type="button" class="interval-pill" data-interval="30">30 min</button>
+                  <button type="button" class="interval-pill" data-interval="60">60 min</button>
+                </div>
+
+                <div class="custom-interval-row">
+                  <label for="customIntervalInput">Ou digite o tempo personalizado:</label>
+                  <div class="custom-interval-input-box">
+                    <input type="number" id="customIntervalInput" min="1" max="1440" value="15" placeholder="15">
+                    <span class="unit">minutos</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Explicação do Funcionamento -->
+              <div class="params-info-box">
+                <span class="info-icon">💡</span>
+                <p>O monitor valida <strong>apenas o número de seguidores</strong> de forma 100% silenciosa e sem sobrecarregar sua conta. Se o número diminuir, você recebe o alerta no pop-up: <em>"Alguem deixou de seguir, entra no menu não segue de volta para descobrir."</em></p>
+              </div>
+
+              <!-- Botão Salvar -->
+              <button class="btn-save-params" id="btnSaveParams">
+                <span>💾 Salvar Intervalo</span>
+              </button>
+            </div>
+          </div>
 
         </div>
       </div>

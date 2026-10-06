@@ -2,49 +2,54 @@
 // Gerencia requisições cross-origin e monitoramento periódico de unfollowers em segundo plano.
 
 const ALARM_NAME = 'IG_TOOLS_CHECK_UNFOLLOWERS';
-const DEFAULT_INTERVAL_MINUTES = 30;
+const DEFAULT_INTERVAL_MINUTES = 15; // EXATOS 15 MINUTOS AUTOMÁTICOS
 const IG_APP_ID = '936619743392459';
 
 // Inicialização ao instalar/atualizar
 chrome.runtime.onInstalled.addListener((details) => {
     console.log('[IG Tools Background] Extensão instalada/atualizada:', details.reason);
-    setupUnfollowerAlarm();
+    setupUnfollowerAlarm(15);
+
+    // Realiza a primeira captura da Lista Base após 3 segundos automaticamente
+    setTimeout(() => {
+        console.log('[IG Tools Background] Capturando Lista Base inicial de seguidores...');
+        checkUnfollowersInBackground();
+    }, 3000);
 });
 
 // Inicialização ao ligar o navegador
 chrome.runtime.onStartup.addListener(() => {
-    console.log('[IG Tools Background] Navegador iniciado. Configurando monitor...');
-    setupUnfollowerAlarm();
+    console.log('[IG Tools Background] Navegador iniciado. Ativando monitor de 15 minutos...');
+    setupUnfollowerAlarm(15);
 });
 
-// Configuração do Alarme em Segundo Plano
+// Configuração do Alarme em Segundo Plano (Intervalo dinâmico configurável)
 async function setupUnfollowerAlarm(customInterval = null) {
     try {
         const stored = await chrome.storage.local.get(['ig_tools_settings']);
-        const settings = stored.ig_tools_settings || {};
-        const interval = customInterval || settings.backgroundMonitorInterval || DEFAULT_INTERVAL_MINUTES;
-        const enabled = settings.backgroundMonitorEnabled !== false;
+        const savedInterval = stored?.ig_tools_settings?.backgroundMonitorInterval;
+        const interval = customInterval || savedInterval || DEFAULT_INTERVAL_MINUTES;
+        const validInterval = Math.max(1, parseInt(interval, 10) || 15);
 
         chrome.alarms.clear(ALARM_NAME, () => {
-            if (enabled) {
-                chrome.alarms.create(ALARM_NAME, {
-                    delayInMinutes: 1, // Primeira checagem 1 minuto após ligar
-                    periodInMinutes: Math.max(15, Number(interval)) // Mínimo seguro de 15 minutos
-                });
-                console.log(`[IG Tools Background] Alarme agendado a cada ${interval} minutos.`);
-            } else {
-                console.log('[IG Tools Background] Monitor de segundo plano desativado nas configurações.');
-            }
+            chrome.alarms.create(ALARM_NAME, {
+                delayInMinutes: 1, // Primeira checagem 1 minuto após ligar
+                periodInMinutes: validInterval // Repete no intervalo configurado pelo usuário
+            });
+            console.log(`[IG Tools Background] Monitor 100% automático ATIVO: checagem a cada ${validInterval} minutos.`);
         });
     } catch (err) {
         console.error('[IG Tools Background] Erro ao configurar alarme:', err);
     }
 }
 
+// Inicializa alarme dinâmico
+setupUnfollowerAlarm();
+
 // Listener do Alarme Periódico
 chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === ALARM_NAME) {
-        console.log('[IG Tools Background] Alarme disparado. Verificando unfollowers em segundo plano...');
+        console.log('[IG Tools Background] Alarme disparado. Validando contagem de seguidores...');
         await checkUnfollowersInBackground();
     }
 });
@@ -54,11 +59,12 @@ chrome.notifications.onClicked.addListener((notificationId) => {
     console.log('[IG Tools Background] Usuário clicou na notificação:', notificationId);
     chrome.notifications.clear(notificationId);
     
-    // Abre ou foca a aba do Instagram
+    // Abre ou foca a aba do Instagram e já abre o menu "Não Segue de Volta"
     chrome.tabs.query({ url: '*://*.instagram.com/*' }, (tabs) => {
         if (tabs && tabs.length > 0) {
             chrome.tabs.update(tabs[0].id, { active: true });
             chrome.windows.update(tabs[0].windowId, { focused: true });
+            chrome.tabs.sendMessage(tabs[0].id, { type: 'IG_POPUP_OPEN_MODAL', modal: 'notFollowingBack' });
         } else {
             chrome.tabs.create({ url: 'https://www.instagram.com/' });
         }
@@ -68,164 +74,196 @@ chrome.notifications.onClicked.addListener((notificationId) => {
     chrome.action.setBadgeText({ text: '' });
 });
 
-// Função principal de verificação em segundo plano
+// Função principal de verificação: VALIDA APENAS O NÚMERO DE SEGUIDORES
 async function checkUnfollowersInBackground() {
     try {
         // 1. Obter cookies de autenticação do Instagram
-        const cookies = await chrome.cookies.getAll({ domain: '.instagram.com' });
+        let cookies = await chrome.cookies.getAll({ url: 'https://www.instagram.com' });
+        if (!cookies || cookies.length === 0) {
+            cookies = await chrome.cookies.getAll({ domain: '.instagram.com' });
+        }
+        if (!cookies || cookies.length === 0) {
+            cookies = await chrome.cookies.getAll({ domain: 'instagram.com' });
+        }
+
         const dsUserIdCookie = cookies.find(c => c.name === 'ds_user_id');
         const sessionCookie = cookies.find(c => c.name === 'sessionid');
         const csrfCookie = cookies.find(c => c.name === 'csrftoken');
 
         if (!dsUserIdCookie || !sessionCookie) {
-            console.log('[IG Tools Background] Nenhuma sessão ativa do Instagram encontrada. Abortando verificação.');
+            console.log('[IG Tools Background] Nenhuma sessão ativa do Instagram encontrada nos cookies. Aguardando login...');
             return;
         }
 
         const userId = dsUserIdCookie.value;
         const csrfToken = csrfCookie ? csrfCookie.value : '';
 
-        console.log(`[IG Tools Background] Sessão ativa detectada para UID: ${userId}. Coletando seguidores...`);
+        console.log(`[IG Tools Background] Monitor Pro Ativo para UID: ${userId}. Validando número de seguidores...`);
 
-        // 2. Coletar a lista atual de seguidores via API interna do Instagram
-        let currentFollowers = [];
-        let nextMaxId = null;
-        let hasMore = true;
-        let pageCount = 0;
-        const MAX_PAGES = 50; // Limite de proteção por ciclo
+        let currentCount = null;
 
-        while (hasMore && pageCount < MAX_PAGES) {
-            pageCount++;
-            let url = `https://www.instagram.com/api/v1/friendships/${userId}/followers/?count=100`;
-            if (nextMaxId) {
-                url += `&max_id=${encodeURIComponent(nextMaxId)}`;
-            }
-
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'X-CSRFToken': csrfToken,
-                    'X-IG-App-ID': IG_APP_ID,
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': '*/*'
-                }
-            });
-
-            if (!response.ok) {
-                console.warn(`[IG Tools Background] Falha na requisição da página ${pageCount}: status ${response.status}`);
-                break;
-            }
-
-            const data = await response.json();
-            const users = data.users || [];
-
-            for (const u of users) {
-                currentFollowers.push({
-                    username: u.username,
-                    id: String(u.pk || u.id || ''),
-                    fullName: u.full_name || '',
-                    photoUrl: u.profile_pic_url || ''
+        // 2. Método 1: Busca ultrarrápida Same-Origin através de aba aberta no Instagram
+        try {
+            const igTabs = await chrome.tabs.query({ url: '*://*.instagram.com/*' });
+            if (igTabs && igTabs.length > 0) {
+                const tabResponse = await new Promise((resolve) => {
+                    chrome.tabs.sendMessage(igTabs[0].id, {
+                        type: 'IG_TOOLS_GET_FOLLOWERS_COUNT',
+                        userId: userId
+                    }, (res) => {
+                        if (chrome.runtime.lastError || !res) {
+                            resolve(null);
+                        } else {
+                            resolve(res);
+                        }
+                    });
                 });
+
+                if (tabResponse && tabResponse.success && typeof tabResponse.count === 'number') {
+                    currentCount = tabResponse.count;
+                    console.log(`[IG Tools Background] Contagem obtida via aba ativa: ${currentCount} seguidores.`);
+                }
             }
+        } catch (tabErr) {
+            console.warn('[IG Tools Background] Falha na consulta via aba:', tabErr);
+        }
 
-            nextMaxId = data.next_max_id;
-            hasMore = !!nextMaxId;
+        // 3. Método 2: Fallback direto via API oficial do usuário se não houver aba aberta
+        if (currentCount === null) {
+            try {
+                const response = await fetch(`https://www.instagram.com/api/v1/users/${userId}/info/`, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                        'X-IG-App-ID': IG_APP_ID,
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                });
 
-            // Pausa respeitosa de 1.2 segundos entre páginas para evitar throttling
-            if (hasMore) {
-                await new Promise(r => setTimeout(r, 1200));
+                if (response.ok) {
+                    const text = await response.text();
+                    if (!text.trim().startsWith('<')) {
+                        const data = JSON.parse(text);
+                        const num = data?.user?.follower_count ?? data?.data?.user?.edge_followed_by?.count;
+                        if (typeof num === 'number') {
+                            currentCount = num;
+                            console.log(`[IG Tools Background] Contagem obtida via API direta: ${currentCount} seguidores.`);
+                        }
+                    }
+                }
+            } catch (fetchErr) {
+                console.warn('[IG Tools Background] Erro na consulta de contagem via API direta:', fetchErr);
             }
         }
 
-        if (currentFollowers.length === 0) {
-            console.log('[IG Tools Background] Nenhum seguidor retornado ou erro temporário de conexão.');
+        if (currentCount === null) {
+            console.log('[IG Tools Background] Não foi possível obter o número de seguidores neste ciclo.');
             return;
         }
-
-        console.log(`[IG Tools Background] Coletados ${currentFollowers.length} seguidores atuais.`);
-
-        // 3. Comparar com o baseline anterior salvo
-        const stored = await chrome.storage.local.get(['ig_tools_followers_baseline', 'ig_tools_unfollow_history']);
-        const previousFollowers = stored.ig_tools_followers_baseline || [];
-
-        // Se for a primeira execução, apenas salva o baseline inicial
-        if (!previousFollowers || previousFollowers.length === 0) {
-            console.log('[IG Tools Background] Primeiro scan. Definindo baseline de seguidores...');
-            await chrome.storage.local.set({
-                ig_tools_followers_baseline: currentFollowers,
-                ig_tools_last_check: new Date().toISOString()
-            });
-            return;
-        }
-
-        // Criar mapa para busca rápida O(1)
-        const currentSet = new Set(currentFollowers.map(u => (u.username || '').toLowerCase()));
-        
-        // Identificar quem estava na lista anterior e não está mais na atual
-        const unfollowers = previousFollowers.filter(u => {
-            const uname = (u.username || '').toLowerCase();
-            return uname && !currentSet.has(uname);
-        });
 
         const nowIso = new Date().toISOString();
 
-        if (unfollowers.length > 0) {
-            console.log(`[IG Tools Background] 🚨 ${unfollowers.length} novo(s) unfollow(s) detectado(s):`, unfollowers);
+        // 4. Comparação da contagem de seguidores com o valor anterior salvo
+        const stored = await chrome.storage.local.get(['ig_tools_followers_count', 'ig_tools_alerts']);
+        const previousCount = stored.ig_tools_followers_count;
 
-            // Atualiza o histórico de unfollows
-            const history = stored.ig_tools_unfollow_history || [];
-            const newEntries = unfollowers.map(u => ({
-                username: u.username,
-                id: u.id || '',
-                photoUrl: u.photoUrl || null,
-                unfollowDate: nowIso,
-                detectedInBackground: true
-            }));
+        // Se for a primeira execução, apenas salva o número de referência inicial
+        if (typeof previousCount !== 'number') {
+            console.log(`[IG Tools Background] Primeira execução: número de seguidores salvo como referência inicial: ${currentCount}`);
+            await chrome.storage.local.set({
+                ig_tools_followers_count: currentCount,
+                ig_tools_last_check: nowIso
+            });
+            return;
+        }
 
-            // Adiciona novos registros no topo sem duplicatas recentes
-            const combinedHistory = [...newEntries, ...history].slice(0, 1000);
+        console.log(`[IG Tools Background] Comparando: Anterior = ${previousCount} | Atual = ${currentCount}`);
+
+        // 5. Se o número de seguidores DIMINUIU: Dispara o Alerta!
+        if (currentCount < previousCount) {
+            const lost = previousCount - currentCount;
+            console.log(`[IG Tools Background] 🚨 Unfollow detectado! Perda de ${lost} seguidor(es) (${previousCount} ➔ ${currentCount}).`);
+
+            const alertMsg = 'Alguem deixou de seguir, entra no menu não segue de volta para descobrir.';
+
+            // Salva na Central de Alertas
+            const storedAlerts = stored.ig_tools_alerts || [];
+            const newAlert = {
+                id: 'alert_' + Date.now(),
+                type: 'unfollow',
+                title: 'Alerta de Unfollow',
+                message: alertMsg,
+                detail: `Contagem caiu de ${previousCount} para ${currentCount} (-${lost} seguidor${lost > 1 ? 'es' : ''})`,
+                previousCount: previousCount,
+                currentCount: currentCount,
+                date: nowIso,
+                read: false
+            };
+
+            const updatedAlerts = [newAlert, ...storedAlerts].slice(0, 100);
+            const unreadCount = updatedAlerts.filter(a => !a.read).length;
 
             await chrome.storage.local.set({
-                ig_tools_followers_baseline: currentFollowers,
-                ig_tools_unfollow_history: combinedHistory,
-                ig_tools_last_check: nowIso,
-                ig_tools_last_unfollowers: unfollowers
+                ig_tools_followers_count: currentCount,
+                ig_tools_alerts: updatedAlerts,
+                ig_tools_last_check: nowIso
             });
 
             // Atualiza o Badge do ícone da extensão (+N)
-            chrome.action.setBadgeText({ text: String(unfollowers.length) });
+            chrome.action.setBadgeText({ text: unreadCount > 0 ? String(unreadCount) : '' });
             chrome.action.setBadgeBackgroundColor({ color: '#e74c3c' });
 
-            // Dispara Notificação Nativa do Sistema Operacional
-            let notifMessage = '';
-            if (unfollowers.length === 1) {
-                notifMessage = `@${unfollowers[0].username} acabou de deixar de te seguir!`;
-            } else if (unfollowers.length <= 3) {
-                notifMessage = `${unfollowers.map(u => '@' + u.username).join(', ')} deixaram de te seguir!`;
-            } else {
-                notifMessage = `${unfollowers.length} pessoas deixaram de te seguir (incluindo @${unfollowers[0].username}, @${unfollowers[1].username}...)`;
-            }
-
-            chrome.notifications.create('ig_tools_unfollow_' + Date.now(), {
-                type: 'basic',
-                iconUrl: 'icons/icon128.png',
-                title: '⚠️ Instagram Tools - Alerta de Unfollow',
-                message: notifMessage,
-                contextMessage: 'Clique para abrir o Instagram',
-                priority: 2,
-                requireInteraction: true
+            // 1. Dispara Pop-up Visual diretamente na tela do Instagram
+            chrome.tabs.query({ url: '*://*.instagram.com/*' }, (tabs) => {
+                tabs?.forEach(tab => {
+                    chrome.tabs.sendMessage(tab.id, {
+                        type: 'IG_SHOW_UNFOLLOW_POPUP',
+                        title: 'Alerta de Unfollow',
+                        message: alertMsg,
+                        detail: `Contagem caiu de ${previousCount} para ${currentCount} (-${drop} seguidor${drop > 1 ? 'es' : ''})`
+                    }).catch(() => {});
+                });
             });
 
-        } else {
-            console.log('[IG Tools Background] ✅ Nenhum novo unfollow detectado. Lista estável.');
+            // 2. Dispara Notificação Nativa do Windows/Chrome Desktop
+            try {
+                chrome.notifications.create('ig_tools_unfollow_' + Date.now(), {
+                    type: 'basic',
+                    iconUrl: chrome.runtime.getURL('icons/icon48.png'),
+                    title: '⚠️ Instagram Tools - Alerta de Unfollow',
+                    message: alertMsg,
+                    contextMessage: `De ${previousCount} para ${currentCount} seguidores`,
+                    priority: 2
+                }, (notifId) => {
+                    if (chrome.runtime.lastError) {
+                        console.warn('[IG Tools Background] Aviso na notificação desktop:', chrome.runtime.lastError.message);
+                    } else {
+                        console.log('[IG Tools Background] Notificação Desktop exibida:', notifId);
+                    }
+                });
+            } catch (nErr) {
+                console.warn('[IG Tools Background] Falha ao criar notificação nativa:', nErr);
+            }
+
+        } else if (currentCount > previousCount) {
+            // A conta ganhou seguidores! Atualiza a referência sem disparar alerta
+            const gained = currentCount - previousCount;
+            console.log(`[IG Tools Background] 🎉 Novos seguidores! Ganhou +${gained} (${previousCount} ➔ ${currentCount}). Referência atualizada.`);
             await chrome.storage.local.set({
-                ig_tools_followers_baseline: currentFollowers,
+                ig_tools_followers_count: currentCount,
+                ig_tools_last_check: nowIso
+            });
+        } else {
+            // Número idêntico e estável
+            console.log(`[IG Tools Background] ✅ Contagem estável: ${currentCount} seguidores. Nenhum unfollow.`);
+            await chrome.storage.local.set({
                 ig_tools_last_check: nowIso
             });
         }
-
     } catch (err) {
-        console.error('[IG Tools Background] Erro ao verificar unfollowers:', err);
+        console.error('[IG Tools Background] Erro ao verificar contagem de seguidores:', err);
     }
 }
 
@@ -334,21 +372,83 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // 6. Teste de notificação sob demanda
     if (message.type === 'IG_TOOLS_TEST_NOTIFICATION') {
-        const testUser = message.username || 'usuario_teste';
-        chrome.notifications.create('ig_tools_test_' + Date.now(), {
-            type: 'basic',
-            iconUrl: 'icons/icon128.png',
-            title: '⚠️ Instagram Tools - Alerta de Unfollow',
-            message: `@${testUser} acabou de deixar de te seguir!`,
-            contextMessage: 'Clique para abrir o Instagram (Modo Teste)',
-            priority: 2,
-            requireInteraction: true
+        const nowIso = new Date().toISOString();
+        const alertMsg = 'Alguem deixou de seguir, entra no menu não segue de volta para descobrir.';
+
+        chrome.storage.local.get(['ig_tools_alerts'], (stored) => {
+            const list = stored.ig_tools_alerts || [];
+            const newAlert = {
+                id: 'alert_' + Date.now(),
+                type: 'unfollow',
+                title: 'Alerta de Unfollow',
+                message: alertMsg,
+                detail: 'Modo Teste do Monitor Pro Ativo',
+                date: nowIso,
+                read: false
+            };
+            const updated = [newAlert, ...list].slice(0, 100);
+            const unreadCount = updated.filter(a => !a.read).length;
+
+            chrome.storage.local.set({ ig_tools_alerts: updated }, () => {
+                chrome.action.setBadgeText({ text: String(unreadCount) });
+                chrome.action.setBadgeBackgroundColor({ color: '#e74c3c' });
+            });
         });
 
-        chrome.action.setBadgeText({ text: '1' });
-        chrome.action.setBadgeBackgroundColor({ color: '#e74c3c' });
+        // 1. Envia Pop-up flutuante para as abas abertas do Instagram
+        chrome.tabs.query({ url: '*://*.instagram.com/*' }, (tabs) => {
+            tabs?.forEach(tab => {
+                chrome.tabs.sendMessage(tab.id, {
+                    type: 'IG_SHOW_UNFOLLOW_POPUP',
+                    title: 'Alerta de Unfollow (Teste)',
+                    message: alertMsg,
+                    detail: 'Modo Teste do Monitor Pro Ativo'
+                }).catch(() => {});
+            });
+        });
+
+        // 2. Dispara notificação nativa do Windows/Desktop
+        try {
+            chrome.notifications.create('ig_tools_test_' + Date.now(), {
+                type: 'basic',
+                iconUrl: chrome.runtime.getURL('icons/icon48.png'),
+                title: '⚠️ Instagram Tools - Alerta de Unfollow',
+                message: alertMsg,
+                contextMessage: 'Clique para abrir o menu Não Segue de Volta (Modo Teste)',
+                priority: 2
+            }, (notifId) => {
+                if (chrome.runtime.lastError) {
+                    console.warn('[IG Tools Background] Aviso na notificação desktop de teste:', chrome.runtime.lastError.message);
+                } else {
+                    console.log('[IG Tools Background] Notificação de teste desktop criada:', notifId);
+                }
+            });
+        } catch (e) {
+            console.warn('[IG Tools Background] Erro ao criar notificação de teste:', e);
+        }
 
         sendResponse({ success: true, message: 'Notificação de teste disparada com sucesso!' });
+        return true;
+    }
+
+    // 7. Limpar alertas ou marcar como lidos
+    if (message.type === 'IG_TOOLS_CLEAR_ALERTS') {
+        chrome.storage.local.set({ ig_tools_alerts: [] }, () => {
+            chrome.action.setBadgeText({ text: '' });
+            sendResponse({ success: true });
+        });
+        return true;
+    }
+
+    if (message.type === 'IG_TOOLS_MARK_ALERTS_READ') {
+        chrome.storage.local.get(['ig_tools_alerts'], (stored) => {
+            const list = stored.ig_tools_alerts || [];
+            const updated = list.map(a => ({ ...a, read: true }));
+            chrome.storage.local.set({ ig_tools_alerts: updated }, () => {
+                chrome.action.setBadgeText({ text: '' });
+                sendResponse({ success: true });
+            });
+        });
         return true;
     }
 });

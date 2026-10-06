@@ -185,6 +185,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             badgeCount.style.display = 'flex';
         }
 
+        // Badge da Central de Alertas
+        const alerts = stored.ig_tools_alerts || [];
+        const unreadAlerts = alerts.filter(a => !a.read).length;
+        const badgeAlerts = document.getElementById('badgeAlertsCount');
+        if (badgeAlerts) {
+            if (unreadAlerts > 0) {
+                badgeAlerts.textContent = unreadAlerts > 99 ? '99+' : unreadAlerts;
+                badgeAlerts.style.display = 'flex';
+            } else {
+                badgeAlerts.style.display = 'none';
+            }
+        }
+
     } catch (e) {
         console.warn("[IG Tools Popup] Erro ao ler storage:", e);
     }
@@ -304,10 +317,103 @@ document.addEventListener('DOMContentLoaded', async () => {
         await sendToActiveInstagramTab({ type: 'IG_POPUP_OPEN_MODAL', modal: 'shortcuts' });
     });
 
-    // Parâmetros
-    document.getElementById('appParams')?.addEventListener('click', async () => {
-        showIosBanner("Abrindo Parâmetros 🔧");
-        await sendToActiveInstagramTab({ type: 'IG_POPUP_OPEN_MODAL', modal: 'parameters' });
+    // 10. Parâmetros (Abre o Sheet de Parâmetros do Monitor Pro)
+    const paramsSheet = document.getElementById('paramsSheet');
+    const customIntervalInput = document.getElementById('customIntervalInput');
+    const intervalPills = document.querySelectorAll('.interval-pill');
+
+    document.getElementById('appParams')?.addEventListener('click', () => {
+        openParamsSheet();
+    });
+
+    document.getElementById('btnCloseParamsSheet')?.addEventListener('click', () => {
+        paramsSheet?.classList.remove('open');
+    });
+
+    async function openParamsSheet() {
+        if (!paramsSheet) return;
+        paramsSheet.classList.add('open');
+
+        try {
+            const stored = await chrome.storage.local.get([
+                'ig_tools_settings',
+                'ig_tools_followers_count',
+                'ig_tools_last_check'
+            ]);
+
+            const currentInterval = stored?.ig_tools_settings?.backgroundMonitorInterval || 15;
+            const currentFollowers = stored?.ig_tools_followers_count;
+            const lastCheck = stored?.ig_tools_last_check;
+
+            // Atualiza inputs e displays
+            if (customIntervalInput) {
+                customIntervalInput.value = currentInterval;
+            }
+
+            selectIntervalPill(currentInterval);
+
+            const displayCount = document.getElementById('paramsFollowersCountDisplay');
+            if (displayCount) {
+                displayCount.textContent = (typeof currentFollowers === 'number') 
+                    ? currentFollowers.toLocaleString('pt-BR') 
+                    : 'Aguardando...';
+            }
+
+            const displayInterval = document.getElementById('paramsActiveIntervalDisplay');
+            if (displayInterval) {
+                displayInterval.textContent = `${currentInterval} min`;
+            }
+
+            const displayLastCheck = document.getElementById('paramsLastCheckTime');
+            if (displayLastCheck) {
+                displayLastCheck.textContent = lastCheck ? `Última: ${formatRelativeTime(lastCheck)}` : 'Verificando...';
+            }
+        } catch (e) {
+            console.warn('[IG Tools Popup] Erro ao carregar parâmetros:', e);
+        }
+    }
+
+    function selectIntervalPill(value) {
+        intervalPills.forEach(pill => {
+            const val = parseInt(pill.getAttribute('data-interval'), 10);
+            if (val === parseInt(value, 10)) {
+                pill.classList.add('active');
+            } else {
+                pill.classList.remove('active');
+            }
+        });
+    }
+
+    // Clique nos pills rápidos
+    intervalPills.forEach(pill => {
+        pill.addEventListener('click', () => {
+            const val = parseInt(pill.getAttribute('data-interval'), 10);
+            selectIntervalPill(val);
+            if (customIntervalInput) customIntervalInput.value = val;
+        });
+    });
+
+    // Input customizado
+    customIntervalInput?.addEventListener('input', () => {
+        const val = parseInt(customIntervalInput.value, 10);
+        selectIntervalPill(val);
+    });
+
+    // Salvar Parâmetros
+    document.getElementById('btnSaveParams')?.addEventListener('click', () => {
+        const newInterval = Math.max(1, parseInt(customIntervalInput?.value, 10) || 15);
+        showIosBanner(`Intervalo salvo: a cada ${newInterval} min! ⏱️`);
+
+        chrome.runtime.sendMessage({
+            type: 'IG_TOOLS_UPDATE_SETTINGS',
+            settings: { backgroundMonitorInterval: newInterval }
+        }, () => {
+            const displayInterval = document.getElementById('paramsActiveIntervalDisplay');
+            if (displayInterval) displayInterval.textContent = `${newInterval} min`;
+            setTimeout(() => {
+                paramsSheet?.classList.remove('open');
+            }, 600);
+        });
     });
 
     // Idioma
@@ -322,9 +428,177 @@ document.addEventListener('DOMContentLoaded', async () => {
         await sendToActiveInstagramTab({ type: 'IG_POPUP_OPEN_MODAL', modal: 'unfollowHistory' });
     });
     document.getElementById('widgetMonitor')?.addEventListener('click', async () => {
-        showIosBanner("Abrindo Monitor Pro 🛡️");
-        await sendToActiveInstagramTab({ type: 'IG_POPUP_OPEN_MODAL', modal: 'unfollowHistory' });
+        showIosBanner("Verificando Seguidores Agora ⚡...");
+        chrome.runtime.sendMessage({ type: 'IG_TOOLS_CHECK_NOW' }, (res) => {
+            console.log("[IG Tools Popup] Checagem manual disparada:", res);
+        });
+        await sendToActiveInstagramTab({ type: 'IG_POPUP_OPEN_MODAL', modal: 'notFollowingBack' });
     });
+
+    // 13. Central de Alertas (Abre a Notification Sheet)
+    const alertsSheet = document.getElementById('alertsSheet');
+    const alertsBody = document.getElementById('alertsBody');
+
+    document.getElementById('appAlertsCenter')?.addEventListener('click', () => {
+        openAlertsCenter();
+    });
+
+    document.getElementById('btnCloseAlertsSheet')?.addEventListener('click', () => {
+        alertsSheet?.classList.remove('open');
+    });
+
+    document.getElementById('btnClearAllAlerts')?.addEventListener('click', async () => {
+        chrome.runtime.sendMessage({ type: 'IG_TOOLS_CLEAR_ALERTS' }, () => {
+            renderAlertsList([]);
+            const badgeAlerts = document.getElementById('badgeAlertsCount');
+            if (badgeAlerts) badgeAlerts.style.display = 'none';
+            showIosBanner("Central de Alertas Limpa! 🧹");
+        });
+    });
+
+    document.getElementById('btnTestAlert')?.addEventListener('click', async () => {
+        showIosBanner("🚨 Disparando Notificação de Teste...");
+        
+        // 1. Pop-up visual na tela do Instagram
+        sendToActiveInstagramTab({
+            type: 'IG_SHOW_UNFOLLOW_POPUP',
+            title: 'Alerta de Unfollow (Teste)',
+            message: 'Alguem deixou de seguir, entra no menu não segue de volta para descobrir.'
+        });
+
+        // 2. Pop-up nativo do Chrome / Windows Desktop
+        try {
+            chrome.notifications.create('popup_test_' + Date.now(), {
+                type: 'basic',
+                iconUrl: chrome.runtime.getURL('icons/icon48.png'),
+                title: '⚠️ Instagram Tools - Alerta de Unfollow',
+                message: 'Alguem deixou de seguir, entra no menu não segue de volta para descobrir.',
+                priority: 2
+            }, (id) => {
+                if (chrome.runtime.lastError) {
+                    console.warn('[Popup] Erro na notificação Chrome:', chrome.runtime.lastError.message);
+                } else {
+                    console.log('[Popup] Notificação nativa criada:', id);
+                }
+            });
+        } catch (e) {
+            console.warn('[Popup] Erro ao disparar notificação:', e);
+        }
+
+        // 3. Salva na Central de Alertas e atualiza badge
+        chrome.runtime.sendMessage({ type: 'IG_TOOLS_TEST_NOTIFICATION', username: 'usuario_teste' }, async () => {
+            setTimeout(async () => {
+                const stored = await chrome.storage.local.get(['ig_tools_alerts']);
+                renderAlertsList(stored.ig_tools_alerts || []);
+            }, 300);
+        });
+    });
+
+    async function openAlertsCenter() {
+        if (!alertsSheet) return;
+        alertsSheet.classList.add('open');
+
+        const stored = await chrome.storage.local.get(['ig_tools_alerts']);
+        const alerts = stored.ig_tools_alerts || [];
+        renderAlertsList(alerts);
+
+        // Marca todos como lidos e zera o badge vermelho
+        chrome.runtime.sendMessage({ type: 'IG_TOOLS_MARK_ALERTS_READ' }, () => {
+            const badgeAlerts = document.getElementById('badgeAlertsCount');
+            if (badgeAlerts) badgeAlerts.style.display = 'none';
+        });
+    }
+
+    function renderAlertsList(alerts) {
+        if (!alertsBody) return;
+        if (!alerts || alerts.length === 0) {
+            alertsBody.innerHTML = `
+                <div class="alerts-empty">
+                    <span class="alerts-empty-icon">🔔</span>
+                    <h3>Nenhum Alerta Salvo</h3>
+                    <p>Quando alguém deixar de te seguir ou houver notificações, os avisos ficarão guardados aqui.</p>
+                </div>
+            `;
+            return;
+        }
+
+        alertsBody.innerHTML = '';
+        alerts.forEach((alert) => {
+            const card = document.createElement('div');
+            card.className = `alert-card ${alert.read ? '' : 'unread'}`;
+            card.id = `card_${alert.id}`;
+
+            const timeStr = formatRelativeTime(alert.date);
+            const isUnfollow = alert.type === 'unfollow';
+
+            card.innerHTML = `
+                <div class="alert-card-header">
+                    <div class="alert-card-type">
+                        <span>${isUnfollow ? '💔' : '🔔'}</span>
+                        <span>${escapeHtml(alert.title || 'Alerta')}</span>
+                    </div>
+                    <span class="alert-card-time">${timeStr}</span>
+                </div>
+                <div class="alert-card-msg">${escapeHtml(alert.message || '')}</div>
+                ${alert.detail ? `<div class="alert-card-detail" style="font-size:10.5px;color:rgba(255,255,255,0.6);margin-top:2px;">${escapeHtml(alert.detail)}</div>` : ''}
+                <div class="alert-card-footer">
+                    <button class="btn-alert-link btn-alert-goto-unfollow" title="Descobrir quem não te segue">💔 Não Segue de Volta</button>
+                    <button class="btn-alert-delete" data-id="${escapeHtml(alert.id)}" title="Excluir este alerta">🗑️</button>
+                </div>
+            `;
+            alertsBody.appendChild(card);
+        });
+
+        // Listeners para botões dentro dos cards
+        alertsBody.querySelectorAll('.btn-alert-goto-unfollow').forEach(btn => {
+            btn.onclick = async (e) => {
+                e.stopPropagation();
+                showIosBanner("Abrindo 'Não Segue de Volta' 💔");
+                await sendToActiveInstagramTab({ type: 'IG_POPUP_OPEN_MODAL', modal: 'notFollowingBack' });
+            };
+        });
+
+        alertsBody.querySelectorAll('.btn-alert-delete').forEach(btn => {
+            btn.onclick = async (e) => {
+                e.stopPropagation();
+                const alertId = btn.getAttribute('data-id');
+                const stored = await chrome.storage.local.get(['ig_tools_alerts']);
+                const currentAlerts = (stored.ig_tools_alerts || []).filter(a => a.id !== alertId);
+                await chrome.storage.local.set({ ig_tools_alerts: currentAlerts });
+                renderAlertsList(currentAlerts);
+            };
+        });
+    }
+
+    function formatRelativeTime(isoString) {
+        if (!isoString) return '';
+        try {
+            const date = new Date(isoString);
+            const now = new Date();
+            const diffSeconds = Math.floor((now - date) / 1000);
+            if (diffSeconds < 60) return 'Agora';
+            if (diffSeconds < 3600) return `Há ${Math.floor(diffSeconds / 60)} min`;
+            if (diffSeconds < 86400) {
+                const hours = date.getHours().toString().padStart(2, '0');
+                const mins = date.getMinutes().toString().padStart(2, '0');
+                return `Hoje às ${hours}:${mins}`;
+            }
+            return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/[&<>"']/g, (m) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        })[m]);
+    }
 
     // 7. Botões do Dock iOS
     document.getElementById('dockInstagram')?.addEventListener('click', () => {
@@ -346,9 +620,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         await sendToActiveInstagramTab({ type: 'IG_POPUP_OPEN_MODAL', modal: 'settings' });
     });
 
-    // Dynamic Island Click Fun
+    // Dynamic Island Click Fun & Teste Rápido de Notificação
     document.getElementById('dynamicIsland')?.addEventListener('click', () => {
         showIosBanner("✨ IG Tools Pro v1.1.0 • iPhone 18 OS");
+    });
+
+    document.getElementById('dynamicIsland')?.addEventListener('dblclick', () => {
+        showIosBanner("🚨 Disparando Alerta de Teste...");
+        sendToActiveInstagramTab({
+            type: 'IG_SHOW_UNFOLLOW_POPUP',
+            title: 'Alerta de Unfollow (Teste)',
+            message: 'Alguem deixou de seguir, entra no menu não segue de volta para descobrir.'
+        });
+        chrome.runtime.sendMessage({ type: 'IG_TOOLS_TEST_NOTIFICATION', username: 'usuario_teste' }, () => {
+            const badgeAlerts = document.getElementById('badgeAlertsCount');
+            if (badgeAlerts) {
+                badgeAlerts.textContent = '1';
+                badgeAlerts.style.display = 'flex';
+            }
+        });
     });
 
     async function saveCurrentSettings() {

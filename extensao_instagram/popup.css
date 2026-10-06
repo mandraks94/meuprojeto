@@ -453,6 +453,11 @@ html, body {
   background: linear-gradient(135deg, #f857a6 0%, #ff5858 100%);
 }
 
+.icon-alerts {
+  background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+  box-shadow: 0 4px 12px rgba(255, 65, 108, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.38);
+}
+
 /* Indicador de Toggle no Ícone (ON/OFF) */
 .app-toggle-indicator {
   position: absolute;
@@ -680,4 +685,524 @@ html, body {
   background: rgba(255, 255, 255, 0.65);
   border-radius: 10px;
   margin: 2px auto 4px auto;
+}
+
+/* 12. Painel Central de Alertas (iOS 18 Notification Sheet) */
+.ios-alerts-sheet {
+  position: absolute;
+  inset: 0;
+  background: rgba(12, 10, 20, 0.96);
+  backdrop-filter: blur(30px) saturate(190%);
+  -webkit-backdrop-filter: blur(30px) saturate(190%);
+  border-radius: 39px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  padding: 8px 14px 16px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.2);
+}
+
+.ios-alerts-sheet.open {
+  transform: translateY(0);
+}
+
+.alerts-drag-handle {
+  width: 36px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  margin: 4px auto 10px;
+}
+
+.alerts-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.alerts-sub {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: rgba(255, 255, 255, 0.45);
+  display: block;
+}
+
+.alerts-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.3px;
+}
+
+.alerts-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-alerts-clear {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #ff6b6b;
+  padding: 3.5px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-alerts-test {
+  padding: 4px 9px;
+  background: rgba(0, 122, 255, 0.2);
+  border: 1px solid rgba(0, 122, 255, 0.4);
+  color: #60a5fa;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-alerts-test:hover {
+  background: rgba(0, 122, 255, 0.35);
+  color: #ffffff;
+  transform: scale(1.04);
+}
+
+.btn-alerts-clear:hover {
+  background: rgba(255, 82, 82, 0.25);
+  color: #ffffff;
+}
+
+.btn-alerts-close {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  border: none;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-alerts-close:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.alerts-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 2px 10px;
+  scrollbar-width: none;
+}
+
+.alerts-body::-webkit-scrollbar {
+  display: none;
+}
+
+/* Card de Alerta Individual */
+.alert-card {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.alert-card.unread {
+  background: rgba(255, 75, 43, 0.14);
+  border-color: rgba(255, 75, 43, 0.4);
+}
+
+.alert-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.alert-card-type {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ff7675;
+}
+
+.alert-card-time {
+  font-size: 9.5px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.alert-card-msg {
+  font-size: 12px;
+  color: #ffffff;
+  line-height: 1.35;
+  font-weight: 500;
+}
+
+.alert-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.btn-alert-link {
+  background: rgba(0, 149, 246, 0.2);
+  border: 1px solid rgba(0, 149, 246, 0.45);
+  color: #3897f0;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-alert-link:hover {
+  background: rgba(0, 149, 246, 0.45);
+  color: #ffffff;
+}
+
+.btn-alert-delete {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: color 0.2s;
+}
+
+.btn-alert-delete:hover {
+  color: #ff5252;
+}
+
+/* Estado Vazio */
+.alerts-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 25px 20px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.alerts-empty-icon {
+  font-size: 38px;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+}
+
+.alerts-empty h3 {
+  font-size: 14.5px;
+  color: #ffffff;
+  margin-bottom: 4px;
+  font-weight: 700;
+}
+
+.alerts-empty p {
+  font-size: 11px;
+  line-height: 1.4;
+  max-width: 220px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* 12. Painel de Parâmetros do Monitor Pro (iOS 18 Sheet) */
+.ios-params-sheet {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 94%;
+  background: rgba(18, 18, 28, 0.94);
+  backdrop-filter: blur(35px) saturate(200%);
+  -webkit-backdrop-filter: blur(35px) saturate(200%);
+  border-top-left-radius: 28px;
+  border-top-right-radius: 28px;
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.7);
+  z-index: 100;
+  padding: 10px 14px 20px;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(102%);
+  transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+  box-sizing: border-box;
+}
+
+.ios-params-sheet.open {
+  transform: translateY(0);
+}
+
+.params-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 2px 10px;
+  scrollbar-width: none;
+}
+
+.params-body::-webkit-scrollbar {
+  display: none;
+}
+
+/* Card de Status */
+.params-card {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.params-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.params-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(46, 204, 113, 0.15);
+  border: 1px solid rgba(46, 204, 113, 0.3);
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #2ecc71;
+}
+
+.params-last-check {
+  font-size: 9.5px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.params-stat-row {
+  display: flex;
+  gap: 8px;
+}
+
+.params-stat-box {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.params-stat-num {
+  font-size: 18px;
+  font-weight: 800;
+  color: #60a5fa;
+  letter-spacing: -0.3px;
+}
+
+.params-stat-label {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 2px;
+}
+
+/* Seção de Intervalo */
+.params-section {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.params-section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.params-section-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.params-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+}
+
+.params-section-desc {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 2px 0 0;
+}
+
+/* Grade de Botões Pills */
+.interval-pills-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.interval-pill {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  padding: 7px 4px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  text-align: center;
+}
+
+.interval-pill:hover {
+  background: rgba(255, 255, 255, 0.16);
+  transform: scale(1.02);
+}
+
+.interval-pill.active {
+  background: linear-gradient(135deg, #007aff, #00c6ff);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.45);
+}
+
+/* Custom Interval */
+.custom-interval-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.custom-interval-row label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 600;
+}
+
+.custom-interval-input-box {
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 0 10px;
+  height: 34px;
+}
+
+.custom-interval-input-box input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.custom-interval-input-box .unit {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Info Box */
+.params-info-box {
+  background: rgba(0, 122, 255, 0.12);
+  border: 1px solid rgba(0, 122, 255, 0.25);
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.params-info-box .info-icon {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.params-info-box p {
+  font-size: 10px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0;
+}
+
+.params-info-box strong {
+  color: #60a5fa;
+}
+
+.params-info-box em {
+  color: #fca5a5;
+  font-style: normal;
+  font-weight: 600;
+}
+
+/* Botão Salvar Parâmetros */
+.btn-save-params {
+  width: 100%;
+  padding: 11px;
+  background: linear-gradient(135deg, #007aff, #0056b3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 6px 20px rgba(0, 122, 255, 0.4);
+  margin-top: 4px;
+}
+
+.btn-save-params:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(0, 122, 255, 0.55);
+}
+
+.btn-save-params:active {
+  transform: translateY(1px);
 }

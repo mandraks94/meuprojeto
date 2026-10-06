@@ -1002,6 +1002,24 @@
                 }
             }
 
+            async function executeApiBlock(uid, username = '') {
+                if (!uid) return { success: false, error: 'no_uid' };
+
+                // Mutação oficial Polaris GraphQL do Instagram (usePolarisBlockManyMutation)
+                try {
+                    const gqlRes = await executeGraphqlBlockMany([uid]);
+                    if (gqlRes.success) {
+                        console.log(`[IG Tools Block] Sucesso via Polaris GraphQL para UID ${uid} (@${username})`);
+                        return { success: true, data: gqlRes.data, method: 'graphql' };
+                    }
+                    console.warn(`[IG Tools Block] Falha na mutação Polaris GraphQL para @${username}:`, gqlRes);
+                    return { success: false, error: 'graphql_failed', data: gqlRes.data };
+                } catch (e) {
+                    console.error(`[IG Tools Block] Erro no Polaris GraphQL para @${username}:`, e);
+                    return { success: false, error: String(e) };
+                }
+            }
+
             async function executeGraphqlUserHoverCard(userId) {
                 if (!userId) return null;
                 const uid = String(userId);
@@ -3008,6 +3026,27 @@
                     await this._init();
                     this._cache.userCategories = Object.fromEntries(categoryMap);
                     await gDriveApi.saveData(this._cache);
+                },
+                saveUnblockedAccounts: async function (accounts) {
+                    await this._init();
+                    this._cache.unblockedAccounts = accounts;
+                    try {
+                        localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(accounts));
+                        await gDriveApi.saveData(this._cache);
+                    } catch (errSync) {
+                        console.warn('[IG Tools] Erro ao sincronizar contas desbloqueadas com Drive:', errSync);
+                    }
+                },
+                loadUnblockedAccounts: async function () {
+                    await this._init();
+                    if (Array.isArray(this._cache.unblockedAccounts)) {
+                        return this._cache.unblockedAccounts;
+                    }
+                    try {
+                        const local = JSON.parse(localStorage.getItem('ig_tools_cached_unblocked'));
+                        if (Array.isArray(local)) return local;
+                    } catch (_) { }
+                    return [];
                 },
                 clearCache: async function (storeName) {
                     await this._init();
@@ -9646,6 +9685,18 @@
                     }
                 } catch (_) { }
 
+                // Cache persistente de contas desbloqueadas (sincronizado com Google Drive)
+                let cachedUnblockedAccounts = [];
+                try {
+                    const savedUnblocked = localStorage.getItem('ig_tools_cached_unblocked');
+                    if (savedUnblocked) {
+                        const parsedUnblocked = JSON.parse(savedUnblocked);
+                        if (Array.isArray(parsedUnblocked) && parsedUnblocked.length > 0) {
+                            cachedUnblockedAccounts = parsedUnblocked;
+                        }
+                    }
+                } catch (_) { }
+
                 async function fetchBlockedAccountsWbloks() {
                     try {
                         const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
@@ -9981,7 +10032,8 @@
                     });
                 }
 
-                let blockedList = []; // Declarado no escopo compartilhado para unblockUsers
+                let blockedList = []; // Declarado no escopo compartilhado para unblockUsers/blockUsers
+                let unblockedList = []; // Declarado no escopo compartilhado para gerenciar desbloqueados no Google Drive
                 let modalAbertoBlocked = false;
 
                 async function iniciarProcessoBloqueados() {
@@ -9997,9 +10049,41 @@
                         ? [...cachedBlockedAccounts]
                         : [];
 
+                    unblockedList = (Array.isArray(cachedUnblockedAccounts) && cachedUnblockedAccounts.length > 0)
+                        ? [...cachedUnblockedAccounts]
+                        : [];
+
+                    let currentTab = 'blocked'; // 'blocked' | 'unblocked'
                     const selectedUsers = new Set();
                     let currentPage = 1;
                     let sortConfig = { key: 'username', direction: 'ascending' };
+
+                    // Sincronização em segundo plano com o Google Drive para a lista de desbloqueados
+                    dbHelper.loadUnblockedAccounts().then(driveList => {
+                        if (Array.isArray(driveList) && driveList.length > 0) {
+                            const map = new Map();
+                            driveList.forEach(u => {
+                                if (u && u.username) map.set(u.username.toLowerCase(), u);
+                            });
+                            unblockedList.forEach(u => {
+                                if (u && u.username && !map.has(u.username.toLowerCase())) {
+                                    map.set(u.username.toLowerCase(), u);
+                                }
+                            });
+                            unblockedList = Array.from(map.values());
+                            cachedUnblockedAccounts = unblockedList;
+                            try {
+                                localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(unblockedList));
+                            } catch (_) { }
+
+                            updateCounts();
+                            if (currentTab === 'unblocked') {
+                                renderList(currentPage);
+                            }
+                        }
+                    }).catch(err => {
+                        console.warn('[IG Tools Safari] Sincronização silenciosa de desbloqueados do Drive pendente:', err);
+                    });
 
                     // 2. MONTAGEM IMEDIATA DO MODAL NA TELA (Sem tela cheia de carregamento)
                     const div = document.createElement("div");
@@ -10007,28 +10091,48 @@
                     div.className = "submenu-modal";
                     div.style.cssText = `
                         position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                        width: 90%; max-width: 800px; max-height: 90vh; border: 1px solid #ccc;
+                        width: 90%; max-width: 840px; max-height: 90vh; border: 1px solid #ccc;
                         border-radius: 10px; padding: 20px; z-index: 10000; overflow: auto;
                     `;
 
                     div.innerHTML = `
                         <div class="modal-header">
                             <span class="modal-title">
-                                Gerenciador de Contas Bloqueadas <span id="blockedSelectedCount" style="font-size:12px; font-weight:normal; color:#e74c3c;">(0 selecionados)</span>
-                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie as contas que você bloqueou no Instagram. Filtre, pesquise, importe do backup oficial e desbloqueie em lote ou individualmente.</span></div>
+                                Gerenciador de Contas <span id="blockedSelectedCount" style="font-size:12px; font-weight:normal; color:#e74c3c;">(0 selecionados)</span>
+                                <div class="info-tooltip">${infoIcon}<span class="tooltip-text">Gerencie as contas bloqueadas e desbloqueadas. Os desbloqueados são salvos no Google Drive e podem ser bloqueados novamente com 1 clique via Polaris GraphQL.</span></div>
                             </span>
                             <div class="modal-controls">
                                 <button id="blockedMinimizarBtn" title="Minimizar">_</button>
                                 <button id="blockedFecharBtn" title="Fechar">X</button>
                             </div>
                         </div>
-                        <div style="padding: 15px 0 10px 0;">
+
+                        <!-- BARRA DE ABAS: BLOQUEADOS & DESBLOQUEADOS -->
+                        <div class="blocked-tabs-bar" style="display: flex; gap: 8px; margin: 15px 0 12px 0; border-bottom: 2px solid #2e2e2e; padding-bottom: 10px;">
+                            <button id="tabBlockedBtn" type="button" class="blocked-tab-btn active" style="background: #0095f6; color: white; border: none; border-radius: 8px; padding: 9px 18px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; font-size: 13px; transition: all 0.2s;">
+                                <span>🔒 Bloqueados</span>
+                                <span id="tabBlockedBadge" style="background: rgba(255,255,255,0.25); border-radius: 12px; padding: 2px 8px; font-size: 11px; font-weight: 700;">${blockedList.length}</span>
+                            </button>
+                            <button id="tabUnblockedBtn" type="button" class="blocked-tab-btn" style="background: #262626; color: #a8a8a8; border: 1px solid #383838; border-radius: 8px; padding: 9px 18px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; font-size: 13px; transition: all 0.2s;">
+                                <span>🔓 Desbloqueados</span>
+                                <span id="tabUnblockedBadge" style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 2px 8px; font-size: 11px; font-weight: 700;">${unblockedList.length}</span>
+                            </button>
+                        </div>
+
+                        <div style="padding: 5px 0 10px 0;">
                             <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                                 <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+                                    <!-- Botões exclusivos da aba Bloqueados -->
                                     <button id="blockedRefreshBtn" title="Atualizar dados do Instagram" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">🔄 Atualizar</button>
                                     <button id="blockedImportJsonBtn" title="Importar arquivo JSON de dados baixados da Meta/Instagram" style="background: #34495e; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer; font-weight: 600;">📥 Importar JSON</button>
                                     <input type="file" id="blockedJsonFileInput" accept=".json" style="display: none;">
                                     <button id="blockedDesbloquearBtn" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">🔓 Desbloquear Selecionados</button>
+
+                                    <!-- Botões exclusivos da aba Desbloqueados -->
+                                    <button id="unblockedSyncDriveBtn" title="Sincronizar dados com o Google Drive" style="display: none; background: #4285F4; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">☁️ Sincronizar Drive</button>
+                                    <button id="unblockedBloquearBtn" title="Bloquear novamente os usuários selecionados" style="display: none; background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">🔒 Bloquear Selecionados</button>
+
+                                    <!-- Botões compartilhados -->
                                     <button id="blockedMarcarTodosBtn" style="background: #0095f6; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">Selecionar Página</button>
                                     <button id="blockedDesmarcarTodosBtn" style="background: #6c757d; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">Desmarcar Todos</button>
                                 </div>
@@ -10074,9 +10178,33 @@
                         };
                     }
 
+                    // Salva lista de desbloqueados localmente e no Google Drive
+                    const salvarDesbloqueadosNoDrive = async (lista, showFeedback = false) => {
+                        unblockedList = lista;
+                        cachedUnblockedAccounts = unblockedList;
+                        try {
+                            localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(unblockedList));
+                        } catch (_) { }
+
+                        try {
+                            await dbHelper.saveUnblockedAccounts(unblockedList);
+                            if (showFeedback) showToast("☁️ Desbloqueados salvos no Google Drive!");
+                        } catch (errSync) {
+                            console.warn('[IG Tools Safari] Falha ao sincronizar com Google Drive:', errSync);
+                            if (showFeedback) showToast("⚠️ Salvo localmente. Conecte o Google Drive para backup em nuvem.");
+                        }
+                        updateCounts();
+                    };
+
                     const updateCounts = (paginatedUsers = []) => {
                         const countEl = document.getElementById('blockedSelectedCount');
                         if (countEl) countEl.innerText = `(${selectedUsers.size} selecionados)`;
+
+                        const tabBlockedBadge = document.getElementById('tabBlockedBadge');
+                        if (tabBlockedBadge) tabBlockedBadge.innerText = blockedList.length;
+
+                        const tabUnblockedBadge = document.getElementById('tabUnblockedBadge');
+                        if (tabUnblockedBadge) tabUnblockedBadge.innerText = unblockedList.length;
 
                         const selectAllCb = document.getElementById('selectAllBlockedCheckbox');
                         if (selectAllCb && paginatedUsers.length > 0) {
@@ -10085,8 +10213,79 @@
 
                         const filterSelect = document.getElementById('blockedFilterSelect');
                         if (filterSelect && filterSelect.options.length > 0) {
-                            filterSelect.options[0].text = `Todos (${blockedList.length})`;
+                            if (currentTab === 'blocked') {
+                                filterSelect.options[0].text = `Todos (${blockedList.length})`;
+                            } else {
+                                filterSelect.options[0].text = `Todos (${unblockedList.length})`;
+                            }
                         }
+                    };
+
+                    const switchTab = (newTab) => {
+                        if (currentTab === newTab) return;
+                        currentTab = newTab;
+                        selectedUsers.clear();
+                        currentPage = 1;
+
+                        const tabBlockedBtn = document.getElementById('tabBlockedBtn');
+                        const tabUnblockedBtn = document.getElementById('tabUnblockedBtn');
+                        const refreshBtn = document.getElementById('blockedRefreshBtn');
+                        const importJsonBtn = document.getElementById('blockedImportJsonBtn');
+                        const desbloquearBtn = document.getElementById('blockedDesbloquearBtn');
+                        const syncDriveBtn = document.getElementById('unblockedSyncDriveBtn');
+                        const bloquearBtn = document.getElementById('unblockedBloquearBtn');
+                        const filterSelect = document.getElementById('blockedFilterSelect');
+
+                        if (currentTab === 'blocked') {
+                            if (tabBlockedBtn) {
+                                tabBlockedBtn.style.background = '#0095f6';
+                                tabBlockedBtn.style.color = 'white';
+                                tabBlockedBtn.style.border = 'none';
+                            }
+                            if (tabUnblockedBtn) {
+                                tabUnblockedBtn.style.background = '#262626';
+                                tabUnblockedBtn.style.color = '#a8a8a8';
+                                tabUnblockedBtn.style.border = '1px solid #383838';
+                            }
+                            if (refreshBtn) refreshBtn.style.display = 'inline-block';
+                            if (importJsonBtn) importJsonBtn.style.display = 'inline-block';
+                            if (desbloquearBtn) desbloquearBtn.style.display = 'inline-block';
+                            if (syncDriveBtn) syncDriveBtn.style.display = 'none';
+                            if (bloquearBtn) bloquearBtn.style.display = 'none';
+
+                            if (filterSelect) {
+                                filterSelect.innerHTML = `
+                                    <option value="all">Todos (${blockedList.length})</option>
+                                    <option value="auto_blocked">🔒 Inclui novas contas (Auto-bloqueio)</option>
+                                    <option value="standard">👤 Bloqueio padrão</option>
+                                `;
+                            }
+                        } else {
+                            if (tabUnblockedBtn) {
+                                tabUnblockedBtn.style.background = '#0095f6';
+                                tabUnblockedBtn.style.color = 'white';
+                                tabUnblockedBtn.style.border = 'none';
+                            }
+                            if (tabBlockedBtn) {
+                                tabBlockedBtn.style.background = '#262626';
+                                tabBlockedBtn.style.color = '#a8a8a8';
+                                tabBlockedBtn.style.border = '1px solid #383838';
+                            }
+                            if (refreshBtn) refreshBtn.style.display = 'none';
+                            if (importJsonBtn) importJsonBtn.style.display = 'none';
+                            if (desbloquearBtn) desbloquearBtn.style.display = 'none';
+                            if (syncDriveBtn) syncDriveBtn.style.display = 'inline-block';
+                            if (bloquearBtn) bloquearBtn.style.display = 'inline-block';
+
+                            if (filterSelect) {
+                                filterSelect.innerHTML = `
+                                    <option value="all">Todos (${unblockedList.length})</option>
+                                `;
+                            }
+                        }
+
+                        updateCounts();
+                        renderList(1);
                     };
 
                     const renderList = (page) => {
@@ -10097,21 +10296,24 @@
                         const searchTerm = (document.getElementById('blockedSearchInput')?.value || '').toLowerCase().trim();
                         const filterValue = document.getElementById('blockedFilterSelect')?.value || 'all';
 
-                        let filteredUsers = blockedList;
+                        const currentSourceList = (currentTab === 'blocked') ? blockedList : unblockedList;
+                        let filteredUsers = currentSourceList;
 
                         if (searchTerm) {
                             filteredUsers = filteredUsers.filter(u =>
                                 (u.username && u.username.toLowerCase().includes(searchTerm)) ||
                                 (u.fullName && u.fullName.toLowerCase().includes(searchTerm)) ||
                                 (u.secondaryText && u.secondaryText.toLowerCase().includes(searchTerm)) ||
-                                (u.pk && u.pk.includes(searchTerm))
+                                (u.pk && String(u.pk).includes(searchTerm))
                             );
                         }
 
-                        if (filterValue === 'auto_blocked') {
-                            filteredUsers = filteredUsers.filter(u => u.isAutoBlocked);
-                        } else if (filterValue === 'standard') {
-                            filteredUsers = filteredUsers.filter(u => !u.isAutoBlocked);
+                        if (currentTab === 'blocked') {
+                            if (filterValue === 'auto_blocked') {
+                                filteredUsers = filteredUsers.filter(u => u.isAutoBlocked);
+                            } else if (filterValue === 'standard') {
+                                filteredUsers = filteredUsers.filter(u => !u.isAutoBlocked);
+                            }
                         }
 
                         const sortedUsers = [...filteredUsers].sort((a, b) => {
@@ -10126,6 +10328,9 @@
                             } else if (sortConfig.key === 'isAutoBlocked') {
                                 valA = a.isAutoBlocked ? 1 : 0;
                                 valB = b.isAutoBlocked ? 1 : 0;
+                            } else if (sortConfig.key === 'unblockedAt') {
+                                valA = a.unblockedAt || 0;
+                                valB = b.unblockedAt || 0;
                             }
 
                             if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
@@ -10141,8 +10346,15 @@
 
                         const statusEl = document.getElementById('statusBloqueados');
                         if (statusEl) {
-                            statusEl.innerText = `Mostrando ${filteredUsers.length} de ${blockedList.length} contas bloqueadas.`;
+                            if (currentTab === 'blocked') {
+                                statusEl.innerText = `Mostrando ${filteredUsers.length} de ${blockedList.length} contas bloqueadas.`;
+                            } else {
+                                statusEl.innerText = `Mostrando ${filteredUsers.length} de ${unblockedList.length} contas desbloqueadas (Salvo no Google Drive ☁️).`;
+                            }
                         }
+
+                        const colTypeTitle = (currentTab === 'blocked') ? 'Tipo de Bloqueio' : 'Status / Desbloqueado em';
+                        const sortKeyType = (currentTab === 'blocked') ? 'isAutoBlocked' : 'unblockedAt';
 
                         let tableHtml = `
                             <table style="width: 100%; min-width: 620px; border-collapse: collapse; margin-top: 10px;">
@@ -10151,19 +10363,42 @@
                                         <th style="padding: 8px 4px; width: 32px; text-align: center;"><input type="checkbox" id="selectAllBlockedCheckbox" title="Selecionar Todos da Página" style="width: 18px; height: 18px; cursor: pointer;"></th>
                                         <th style="padding: 8px;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
                                         <th style="padding: 8px; text-align: center;" data-sort-key="pk">ID (PK) ${sortConfig.key === 'pk' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                        <th style="padding: 8px; text-align: center;" data-sort-key="isAutoBlocked">Tipo de Bloqueio ${sortConfig.key === 'isAutoBlocked' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                        <th style="padding: 8px; text-align: center; width: 130px;">Ações</th>
+                                        <th style="padding: 8px; text-align: center;" data-sort-key="${sortKeyType}">${colTypeTitle} ${sortConfig.key === sortKeyType ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                        <th style="padding: 8px; text-align: center; width: 140px;">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                         `;
 
                         if (paginatedUsers.length === 0) {
-                            tableHtml += `<tr><td colspan="5" style="text-align: center; padding: 25px; color: #888;">Nenhum usuário encontrado com os filtros aplicados.</td></tr>`;
+                            const emptyMsg = (currentTab === 'blocked')
+                                ? 'Nenhum usuário encontrado com os filtros aplicados.'
+                                : 'Nenhuma conta desbloqueada salva no Google Drive ainda.';
+                            tableHtml += `<tr><td colspan="5" style="text-align: center; padding: 25px; color: #888;">${emptyMsg}</td></tr>`;
                         } else {
                             paginatedUsers.forEach(userObj => {
-                                const { username, photoUrl, pk, fullName, secondaryText, isAutoBlocked } = userObj;
+                                const { username, photoUrl, pk, fullName, secondaryText, isAutoBlocked, unblockedAt } = userObj;
                                 const isChecked = selectedUsers.has(username);
+
+                                let statusBadgeHtml = '';
+                                if (currentTab === 'blocked') {
+                                    statusBadgeHtml = isAutoBlocked
+                                        ? `<span class="badge-tipo-bloqueio badge-auto-blocked" style="background: #fde8e8; color: #b71c1c !important; border: 1px solid #f8b4b4; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">🔒 + Novas contas</span>`
+                                        : `<span class="badge-tipo-bloqueio badge-standard" style="background: #e8f4fd; color: #0d47a1 !important; border: 1px solid #90caf9; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">👤 Padrão</span>`;
+                                } else {
+                                    let dateInfo = '';
+                                    if (unblockedAt) {
+                                        try {
+                                            const d = new Date(unblockedAt);
+                                            dateInfo = ` (${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
+                                        } catch (_) { }
+                                    }
+                                    statusBadgeHtml = `<span class="badge-tipo-bloqueio" style="background: #e6f9ed; color: #27ae60 !important; border: 1px solid #a3e9c0; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">🔓 Desbloqueado${dateInfo}</span>`;
+                                }
+
+                                const actionBtnHtml = (currentTab === 'blocked')
+                                    ? `<button class="btn-unblock-row" data-username="${username}" data-uid="${pk || ''}" style="background: #2ecc71; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; touch-action: manipulation;">Desbloquear</button>`
+                                    : `<button class="btn-block-again-row" data-username="${username}" data-uid="${pk || ''}" style="background: #e74c3c; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; touch-action: manipulation;">Bloquear novamente</button>`;
 
                                 tableHtml += `
                                     <tr style="border-bottom: 1px solid #dbdbdb;" data-username="${username}">
@@ -10182,13 +10417,10 @@
                                         </td>
                                         <td style="text-align: center; padding: 8px; font-family: monospace; font-size: 12px; color: #555;">${pk || '-'}</td>
                                         <td style="text-align: center; padding: 8px;">
-                                            ${isAutoBlocked
-                                                ? `<span class="badge-tipo-bloqueio badge-auto-blocked" style="background: #fde8e8; color: #b71c1c !important; border: 1px solid #f8b4b4; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">🔒 + Novas contas</span>`
-                                                : `<span class="badge-tipo-bloqueio badge-standard" style="background: #e8f4fd; color: #0d47a1 !important; border: 1px solid #90caf9; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">👤 Padrão</span>`
-                                            }
+                                            ${statusBadgeHtml}
                                         </td>
                                         <td style="text-align: center; padding: 8px; white-space: nowrap;">
-                                            <button class="btn-unblock-row" data-username="${username}" data-uid="${pk}" style="background: #2ecc71; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; touch-action: manipulation;">Desbloquear</button>
+                                            ${actionBtnHtml}
                                         </td>
                                     </tr>
                                 `;
@@ -10250,7 +10482,7 @@
                         const nextBtn = document.getElementById('nextBlockedPageBtn');
                         if (nextBtn) nextBtn.onclick = () => renderList(currentPage + 1);
 
-                        // Individual unblock button listeners
+                        // Individual unblock button listeners (Aba Bloqueados)
                         container.querySelectorAll('.btn-unblock-row').forEach(btn => {
                             btn.addEventListener('click', async (e) => {
                                 const targetBtn = e.currentTarget;
@@ -10260,15 +10492,38 @@
                                 targetBtn.disabled = true;
                                 targetBtn.textContent = 'Processando...';
 
-                                await unblockUsers([uname], (unblocked) => {
+                                const userFound = blockedList.find(u => u.username.toLowerCase() === uname.toLowerCase()) || {
+                                    username: uname,
+                                    pk: targetBtn.dataset.uid || getCachedUserId(uname) || '',
+                                    fullName: '',
+                                    photoUrl: DEFAULT_AVATAR
+                                };
+
+                                await unblockUsers([uname], async (unblocked) => {
                                     if (unblocked && unblocked.includes(uname)) {
-                                        blockedList = blockedList.filter(u => u.username !== uname);
+                                        // 1. Remove de blockedList
+                                        blockedList = blockedList.filter(u => u.username.toLowerCase() !== uname.toLowerCase());
                                         cachedBlockedAccounts = blockedList;
                                         try {
                                             localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(blockedList));
                                         } catch (_) { }
                                         selectedUsers.delete(uname);
-                                        showToast(`Usuário @${uname} desbloqueado!`);
+
+                                        // 2. Adiciona em unblockedList e salva no Google Drive
+                                        const novoDesbloqueado = {
+                                            username: userFound.username,
+                                            pk: String(userFound.pk || userFound.id || getCachedUserId(userFound.username) || ''),
+                                            id: String(userFound.pk || userFound.id || getCachedUserId(userFound.username) || ''),
+                                            fullName: userFound.fullName || '',
+                                            secondaryText: userFound.secondaryText || '',
+                                            photoUrl: userFound.photoUrl || DEFAULT_AVATAR,
+                                            isAutoBlocked: !!userFound.isAutoBlocked,
+                                            unblockedAt: Date.now()
+                                        };
+                                        const novaListaDesbloqueados = [novoDesbloqueado, ...unblockedList.filter(u => u.username.toLowerCase() !== uname.toLowerCase())];
+                                        await salvarDesbloqueadosNoDrive(novaListaDesbloqueados, false);
+
+                                        showToast(`🔓 Usuário @${uname} desbloqueado e salvo no Google Drive!`);
                                         updateCounts();
                                         const visibleRows = container.querySelectorAll('tbody tr[data-username]');
                                         if (visibleRows.length <= 1 && currentPage > 1) {
@@ -10283,7 +10538,68 @@
                                 });
                             });
                         });
+
+                        // Individual block-again button listeners (Aba Desbloqueados)
+                        container.querySelectorAll('.btn-block-again-row').forEach(btn => {
+                            btn.addEventListener('click', async (e) => {
+                                const targetBtn = e.currentTarget;
+                                const uname = targetBtn.dataset.username;
+                                if (!confirm(`Deseja bloquear novamente o usuário @${uname}?`)) return;
+
+                                targetBtn.disabled = true;
+                                targetBtn.textContent = 'Processando...';
+
+                                const userFound = unblockedList.find(u => u.username.toLowerCase() === uname.toLowerCase()) || {
+                                    username: uname,
+                                    pk: targetBtn.dataset.uid || getCachedUserId(uname) || '',
+                                    fullName: '',
+                                    photoUrl: DEFAULT_AVATAR
+                                };
+
+                                await blockUsers([uname], async (blocked) => {
+                                    if (blocked && blocked.includes(uname)) {
+                                        // 1. Remove de unblockedList e sincroniza no Google Drive
+                                        const novaListaDesbloqueados = unblockedList.filter(u => u.username.toLowerCase() !== uname.toLowerCase());
+                                        await salvarDesbloqueadosNoDrive(novaListaDesbloqueados, false);
+
+                                        // 2. Adiciona de volta a blockedList
+                                        const uid = String(targetBtn.dataset.uid || userFound.pk || userFound.id || getCachedUserId(uname) || '');
+                                        const blockedItem = {
+                                            username: userFound.username,
+                                            pk: uid,
+                                            id: uid,
+                                            fullName: userFound.fullName || '',
+                                            secondaryText: 'Bloqueado novamente',
+                                            photoUrl: userFound.photoUrl || DEFAULT_AVATAR,
+                                            isAutoBlocked: false
+                                        };
+                                        blockedList = [blockedItem, ...blockedList.filter(u => u.username.toLowerCase() !== uname.toLowerCase())];
+                                        cachedBlockedAccounts = blockedList;
+                                        try {
+                                            localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(blockedList));
+                                        } catch (_) { }
+
+                                        selectedUsers.delete(uname);
+                                        showToast(`🔒 @${uname} bloqueado novamente com sucesso!`);
+                                        updateCounts();
+                                        const visibleRows = container.querySelectorAll('tbody tr[data-username]');
+                                        if (visibleRows.length <= 1 && currentPage > 1) {
+                                            renderList(currentPage - 1);
+                                        } else {
+                                            renderList(currentPage);
+                                        }
+                                    } else {
+                                        targetBtn.disabled = false;
+                                        targetBtn.textContent = 'Bloquear novamente';
+                                    }
+                                });
+                            });
+                        });
                     };
+
+                    // Listeners das Abas
+                    document.getElementById('tabBlockedBtn')?.addEventListener('click', () => switchTab('blocked'));
+                    document.getElementById('tabUnblockedBtn')?.addEventListener('click', () => switchTab('unblocked'));
 
                     // Função para buscar e sincronizar dados com a Meta em segundo plano
                     async function sincronizarBloqueados(showFeedback = false) {
@@ -10325,10 +10641,10 @@
                                     localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(blockedList));
                                 } catch (_) { }
 
-                                renderList(currentPage);
+                                if (currentTab === 'blocked') renderList(currentPage);
                                 updateCounts();
                                 if (showFeedback) showToast(`Sincronizado! ${blockedList.length} contas encontradas (+${addedCount} novas).`);
-                            } else if (blockedList.length === 0) {
+                            } else if (blockedList.length === 0 && currentTab === 'blocked') {
                                 container.innerHTML = `
                                     <div style="text-align: center; padding: 30px 15px; color: #666;">
                                         <div style="font-size: 15px; font-weight: 600; margin-bottom: 8px;">Nenhuma conta encontrada via requisição direta.</div>
@@ -10374,6 +10690,7 @@
                         const modal = document.getElementById('blockedAccountsModal');
                         if (!modal) return;
                         const contentToToggle = [
+                            modal.querySelector('.blocked-tabs-bar'),
                             modal.querySelector('#blockedSearchInput')?.parentElement,
                             modal.querySelector('#statusBloqueados'),
                             modal.querySelector('.blocked-mobile-scroll-controls'),
@@ -10393,6 +10710,42 @@
                     // Botão Atualizar (sincroniza sem fechar o modal)
                     document.getElementById("blockedRefreshBtn").onclick = () => {
                         sincronizarBloqueados(true);
+                    };
+
+                    // Botão Sincronizar Google Drive (Aba Desbloqueados)
+                    document.getElementById("unblockedSyncDriveBtn").onclick = async () => {
+                        const syncBtn = document.getElementById("unblockedSyncDriveBtn");
+                        if (syncBtn) {
+                            syncBtn.disabled = true;
+                            syncBtn.textContent = "☁️ Sincronizando...";
+                        }
+                        try {
+                            const driveList = await dbHelper.loadUnblockedAccounts();
+                            if (Array.isArray(driveList)) {
+                                const map = new Map();
+                                driveList.forEach(u => {
+                                    if (u && u.username) map.set(u.username.toLowerCase(), u);
+                                });
+                                unblockedList.forEach(u => {
+                                    if (u && u.username && !map.has(u.username.toLowerCase())) {
+                                        map.set(u.username.toLowerCase(), u);
+                                    }
+                                });
+                                unblockedList = Array.from(map.values());
+                                await salvarDesbloqueadosNoDrive(unblockedList, true);
+                                renderList(currentPage);
+                            } else {
+                                showToast("☁️ Conectado ao Google Drive.");
+                            }
+                        } catch (errDrive) {
+                            console.error('[IG Tools Safari] Erro ao sincronizar Google Drive:', errDrive);
+                            showToast("⚠️ Verifique sua conexão com o Google Drive nas Configurações.");
+                        } finally {
+                            if (syncBtn) {
+                                syncBtn.disabled = false;
+                                syncBtn.textContent = "☁️ Sincronizar Drive";
+                            }
+                        }
                     };
 
                     // Botão Importar JSON oficial do Instagram
@@ -10490,7 +10843,8 @@
                     document.getElementById("blockedMarcarTodosBtn").onclick = () => {
                         const itemsPerPage = loadSettings().itemsPerPage || 10;
                         const startIndex = (currentPage - 1) * itemsPerPage;
-                        const pageUsers = blockedList.slice(startIndex, startIndex + itemsPerPage);
+                        const activeSource = (currentTab === 'blocked') ? blockedList : unblockedList;
+                        const pageUsers = activeSource.slice(startIndex, startIndex + itemsPerPage);
                         pageUsers.forEach(u => selectedUsers.add(u.username));
                         container.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = true);
                         updateCounts(pageUsers);
@@ -10522,7 +10876,7 @@
                         });
                     }
 
-                    // Bulk unblock listener
+                    // Bulk unblock listener (Aba Bloqueados)
                     document.getElementById("blockedDesbloquearBtn").onclick = async () => {
                         if (selectedUsers.size === 0) {
                             alert("Nenhum usuário selecionado para desbloquear.");
@@ -10539,26 +10893,115 @@
 
                         const usersToUnblock = Array.from(selectedUsers);
 
-                        await unblockUsers(usersToUnblock, (unblocked) => {
+                        await unblockUsers(usersToUnblock, async (unblocked) => {
                             desbloquearBtn.disabled = false;
                             desbloquearBtn.textContent = "🔓 Desbloquear Selecionados";
                             toggleLoading(false);
 
                             if (unblocked && unblocked.length > 0) {
-                                const unblockedSet = new Set(unblocked);
-                                blockedList = blockedList.filter(u => !unblockedSet.has(u.username));
+                                const unblockedSet = new Set(unblocked.map(u => u.toLowerCase()));
+
+                                // Extrai os objetos das contas desbloqueadas
+                                const novosDesbloqueados = blockedList
+                                    .filter(u => unblockedSet.has(u.username.toLowerCase()))
+                                    .map(u => ({
+                                        username: u.username,
+                                        pk: String(u.pk || u.id || getCachedUserId(u.username) || ''),
+                                        id: String(u.pk || u.id || getCachedUserId(u.username) || ''),
+                                        fullName: u.fullName || '',
+                                        secondaryText: u.secondaryText || '',
+                                        photoUrl: u.photoUrl || DEFAULT_AVATAR,
+                                        isAutoBlocked: !!u.isAutoBlocked,
+                                        unblockedAt: Date.now()
+                                    }));
+
+                                // Remove de blockedList
+                                blockedList = blockedList.filter(u => !unblockedSet.has(u.username.toLowerCase()));
                                 cachedBlockedAccounts = blockedList;
                                 try {
                                     localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(blockedList));
                                 } catch (_) { }
+
+                                // Salva em unblockedList e Google Drive
+                                const mapUnblocked = new Map();
+                                unblockedList.forEach(u => mapUnblocked.set(u.username.toLowerCase(), u));
+                                novosDesbloqueados.forEach(u => mapUnblocked.set(u.username.toLowerCase(), u));
+                                const listaAtualizada = Array.from(mapUnblocked.values());
+                                await salvarDesbloqueadosNoDrive(listaAtualizada, false);
+
                                 unblocked.forEach(u => selectedUsers.delete(u));
-                                alert(`${unblocked.length} usuário(s) tiveram o bloqueio removido com sucesso.`);
+                                alert(`${unblocked.length} usuário(s) desbloqueado(s) e salvos no Google Drive com sucesso.`);
                             } else {
                                 alert("Nenhum usuário pôde ser desbloqueado.");
                             }
 
                             updateCounts();
                             const totalPages = Math.max(1, Math.ceil(blockedList.length / (loadSettings().itemsPerPage || 10)));
+                            if (currentPage > totalPages) currentPage = totalPages;
+                            renderList(currentPage);
+                        });
+                    };
+
+                    // Bulk block-again listener (Aba Desbloqueados)
+                    document.getElementById("unblockedBloquearBtn").onclick = async () => {
+                        if (selectedUsers.size === 0) {
+                            alert("Nenhum usuário selecionado para bloquear novamente.");
+                            return;
+                        }
+
+                        const count = selectedUsers.size;
+                        if (!confirm(`Deseja bloquear novamente os ${count} usuário(s) selecionado(s)?`)) return;
+
+                        const bloquearBtn = document.getElementById("unblockedBloquearBtn");
+                        bloquearBtn.disabled = true;
+                        bloquearBtn.textContent = "Processando...";
+                        toggleLoading(true, 0, "Bloqueando contas novamente...");
+
+                        const usersToBlock = Array.from(selectedUsers);
+
+                        await blockUsers(usersToBlock, async (blocked) => {
+                            bloquearBtn.disabled = false;
+                            bloquearBtn.textContent = "🔒 Bloquear Selecionados";
+                            toggleLoading(false);
+
+                            if (blocked && blocked.length > 0) {
+                                const blockedSet = new Set(blocked.map(u => u.toLowerCase()));
+
+                                // Extrai os itens bloqueados para re-adicionar a blockedList
+                                const itensBloqueados = unblockedList
+                                    .filter(u => blockedSet.has(u.username.toLowerCase()))
+                                    .map(u => ({
+                                        username: u.username,
+                                        pk: String(u.pk || u.id || getCachedUserId(u.username) || ''),
+                                        id: String(u.pk || u.id || getCachedUserId(u.username) || ''),
+                                        fullName: u.fullName || '',
+                                        secondaryText: 'Bloqueado novamente',
+                                        photoUrl: u.photoUrl || DEFAULT_AVATAR,
+                                        isAutoBlocked: false
+                                    }));
+
+                                // Remove de unblockedList e salva no Google Drive
+                                const novaListaDesbloqueados = unblockedList.filter(u => !blockedSet.has(u.username.toLowerCase()));
+                                await salvarDesbloqueadosNoDrive(novaListaDesbloqueados, false);
+
+                                // Adiciona de volta a blockedList
+                                const mapBlocked = new Map();
+                                blockedList.forEach(u => mapBlocked.set(u.username.toLowerCase(), u));
+                                itensBloqueados.forEach(u => mapBlocked.set(u.username.toLowerCase(), u));
+                                blockedList = Array.from(mapBlocked.values());
+                                cachedBlockedAccounts = blockedList;
+                                try {
+                                    localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(blockedList));
+                                } catch (_) { }
+
+                                blocked.forEach(u => selectedUsers.delete(u));
+                                alert(`${blocked.length} usuário(s) foram bloqueados novamente com sucesso.`);
+                            } else {
+                                alert("Nenhum usuário pôde ser bloqueado.");
+                            }
+
+                            updateCounts();
+                            const totalPages = Math.max(1, Math.ceil(unblockedList.length / (loadSettings().itemsPerPage || 10)));
                             if (currentPage > totalPages) currentPage = totalPages;
                             renderList(currentPage);
                         });
@@ -10573,7 +11016,7 @@
                         bar.remove();
                         showToast("Processo de desbloqueio interrompido.");
                     };
-                    toggleLoading(true, 0, "Desbloqueando contas via GraphQL...");
+                    toggleLoading(true, 0, "Desbloqueando contas via API...");
 
                     const delay = loadSettings().unfollowDelay || 1200;
                     const successfullyUnblocked = [];
@@ -10624,6 +11067,74 @@
                     toggleLoading(false);
 
                     if (onComplete) onComplete(successfullyUnblocked);
+                }
+
+                async function blockUsers(usersToBlock, onComplete) {
+                    let cancelled = false;
+                    const { bar, update, closeButton } = createCancellableProgressBar();
+                    closeButton.onclick = () => {
+                        cancelled = true;
+                        bar.remove();
+                        showToast("Processo de bloqueio interrompido.");
+                    };
+                    toggleLoading(true, 0, "Bloqueando contas via API...");
+
+                    const delay = loadSettings().unfollowDelay || 1200;
+                    const successfullyBlocked = [];
+
+                    for (let i = 0; i < usersToBlock.length; i++) {
+                        if (cancelled) break;
+                        const username = usersToBlock[i];
+                        const percent = Math.round(((i + 1) / usersToBlock.length) * 100);
+                        update(i + 1, usersToBlock.length, `Bloqueando @${username}...`);
+                        toggleLoading(true, percent, `Bloqueando @${username} (${i + 1}/${usersToBlock.length})...`);
+
+                        let uid = getCachedUserId(username);
+                        if (!uid && Array.isArray(unblockedList)) {
+                            const item = unblockedList.find(x => x?.username?.toLowerCase() === username.toLowerCase());
+                            if (item?.pk || item?.id) {
+                                uid = String(item.pk || item.id);
+                                setCachedUserId(username, uid);
+                            }
+                        }
+                        if (!uid && Array.isArray(blockedList)) {
+                            const item = blockedList.find(x => x?.username?.toLowerCase() === username.toLowerCase());
+                            if (item?.pk || item?.id) {
+                                uid = String(item.pk || item.id);
+                                setCachedUserId(username, uid);
+                            }
+                        }
+                        if (!uid) {
+                            uid = await getUserId(username);
+                        }
+
+                        if (!uid) {
+                            console.warn(`[IG Tools Block] ID não encontrado para @${username}`);
+                            showToast(`⚠️ ID de @${username} não encontrado`);
+                            continue;
+                        }
+
+                        const res = await executeApiBlock(uid, username);
+                        if (res.success) {
+                            successfullyBlocked.push(username);
+                            showToast(`🔒 Bloqueou @${username}`);
+
+                            // Feedback visual imediato na tabela
+                            const rows = document.querySelectorAll(`tr[data-username="${username}"]`);
+                            rows.forEach(r => r.remove());
+                        } else {
+                            showToast(`❌ Falha ao bloquear @${username}`);
+                        }
+
+                        if (i < usersToBlock.length - 1) {
+                            await new Promise(r => setTimeout(r, delay));
+                        }
+                    }
+
+                    bar.remove();
+                    toggleLoading(false);
+
+                    if (onComplete) onComplete(successfullyBlocked);
                 }
 
                 // --- FIM DO MENU CONTAS BLOQUEADAS ---

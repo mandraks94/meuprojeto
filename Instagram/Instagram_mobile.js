@@ -3075,6 +3075,20 @@
                             const merged = Array.from(map.values());
                             this._cache = { ...(this._cache || {}), ...cloudData, unblockedAccounts: merged };
                             await gDriveApi.saveData(this._cache);
+
+                            // Reconciliação automática: remove contas desbloqueadas do cache de bloqueados
+                            try {
+                                const cachedBlocked = JSON.parse(localStorage.getItem('ig_tools_cached_blocked'));
+                                if (Array.isArray(cachedBlocked) && cachedBlocked.length > 0) {
+                                    const unblockedSet = new Set(merged.map(u => (u.username || '').toLowerCase()));
+                                    const filteredBlocked = cachedBlocked.filter(u => !unblockedSet.has((u.username || '').toLowerCase()));
+                                    if (filteredBlocked.length !== cachedBlocked.length) {
+                                        localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(filteredBlocked));
+                                        if (typeof cachedBlockedAccounts !== 'undefined') cachedBlockedAccounts = filteredBlocked;
+                                    }
+                                }
+                            } catch (_) { }
+
                             return merged;
                         } catch (errSync) {
                             console.warn('[IG Tools Safari] Erro ao sincronizar contas desbloqueadas com Drive:', errSync);
@@ -3120,6 +3134,20 @@
                             try {
                                 localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(merged));
                             } catch (_) { }
+
+                            // Reconciliação automática ao carregar da nuvem
+                            try {
+                                const cachedBlocked = JSON.parse(localStorage.getItem('ig_tools_cached_blocked'));
+                                if (Array.isArray(cachedBlocked) && cachedBlocked.length > 0) {
+                                    const unblockedSet = new Set(merged.map(u => (u.username || '').toLowerCase()));
+                                    const filteredBlocked = cachedBlocked.filter(u => !unblockedSet.has((u.username || '').toLowerCase()));
+                                    if (filteredBlocked.length !== cachedBlocked.length) {
+                                        localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(filteredBlocked));
+                                        if (typeof cachedBlockedAccounts !== 'undefined') cachedBlockedAccounts = filteredBlocked;
+                                    }
+                                }
+                            } catch (_) { }
+
                             if (addedFromLocal) {
                                 gDriveApi.saveData(this._cache).catch(err => console.warn('[IG Tools] Sync back to drive failed:', err));
                             }
@@ -9798,6 +9826,7 @@
 
                         const url = 'https://www.instagram.com/async/wbloks/fetch/?appid=com.instagram.portable_settings.blocked_accounts.blocked_accounts_reloader&type=action&__bkv=62077fc559de123afe03ebeb18194a88ba5d4e6874d9a07873752f3792adb8a0';
 
+                        const viewerId = window._sharedData?.config?.viewerId || getCookie('ds_user_id') || getCookie('sessionid')?.split('%')[0] || '0';
                         const body = new URLSearchParams({
                             params: JSON.stringify({
                                 container_id_of_list: "2073224587",
@@ -9807,17 +9836,18 @@
                             __comet_req: '7',
                             server_timestamps: 'true',
                             __d: 'www',
-                            __user: '0',
+                            __user: viewerId,
+                            av: viewerId,
                             __a: '1',
                             __req: '7',
-                            __hs: hs,
+                            __hs: hs || '20550.HYP:instagram_web_pkg.2.1..0.0',
                             dpr: String(window.devicePixelRatio || 1),
                             __ccg: 'EXCELLENT',
                             __rev: spin.spin_r || '1048608279',
                             __s: sParam,
                             __hsi: hsi,
-                            __dyn: dyn,
-                            __csr: csr,
+                            __dyn: dyn || '7xeUMWS2e5U4-1twp142w4vwKxW4E462m12wUwtU662W0CEbo1nEhw2nVE4W0om78687e2l0F86C1mw5ux615x60Vo1upE4W0OE2ZwrU6C072e',
+                            __csr: csr || 'gE0B5B',
                             __hsdp: hsdp,
                             __hblp: hblp,
                             __sjsp: sjsp,
@@ -9843,7 +9873,8 @@
                             headers,
                             body: body.toString(),
                             credentials: 'include',
-                            cache: 'no-store'
+                            cache: 'no-store',
+                            signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined
                         });
 
                         if (!response.ok) {
@@ -10138,6 +10169,19 @@
                         ? [...cachedUnblockedAccounts]
                         : [];
 
+                    // Reconciliação imediata: contas que já estão na lista de desbloqueados NÃO PODEM constar como bloqueadas
+                    const initialUnblockedNames = new Set(unblockedList.map(u => (u.username || '').toLowerCase()));
+                    if (initialUnblockedNames.size > 0 && blockedList.length > 0) {
+                        const prevLen = blockedList.length;
+                        blockedList = blockedList.filter(u => !initialUnblockedNames.has((u.username || '').toLowerCase()));
+                        if (blockedList.length !== prevLen) {
+                            cachedBlockedAccounts = blockedList;
+                            try {
+                                localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(blockedList));
+                            } catch (_) { }
+                        }
+                    }
+
                     let currentTab = 'blocked'; // 'blocked' | 'unblocked'
                     const selectedUsers = new Set();
                     let currentPage = 1;
@@ -10161,6 +10205,20 @@
                                 try {
                                     localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(unblockedList));
                                 } catch (_) { }
+
+                                // Reconciliação em tempo real: remove contas desbloqueadas da lista de bloqueados
+                                const driveUnblockedSet = new Set(unblockedList.map(u => (u.username || '').toLowerCase()));
+                                const prevBlockedLen = blockedList.length;
+                                blockedList = blockedList.filter(u => !driveUnblockedSet.has((u.username || '').toLowerCase()));
+                                if (blockedList.length !== prevBlockedLen) {
+                                    cachedBlockedAccounts = blockedList;
+                                    try {
+                                        localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(blockedList));
+                                    } catch (_) { }
+                                    if (currentTab === 'blocked') {
+                                        renderList(currentPage);
+                                    }
+                                }
 
                                 updateCounts();
                                 if (currentTab === 'unblocked') {
@@ -10240,7 +10298,10 @@
                                 <option value="standard">👤 Bloqueio padrão</option>
                             </select>
                         </div>
-                        <div id="statusBloqueados" style="margin-top: 5px; font-weight: bold; font-size: 13px; color: #555;">Total: ${blockedList.length} contas bloqueadas.</div>
+                        <div id="statusBloqueados" style="margin-top: 5px; font-weight: bold; font-size: 13px; color: #555;">
+                            Total: ${blockedList.length} contas bloqueadas.
+                            <span id="blockedSyncStatusIndicator" style="font-size: 11px; font-weight: normal; color: #0095f6; margin-left: 10px; display: inline-block;"></span>
+                        </div>
 
                         <!-- CONTAINER DE ALERTA DE STATUS DO GOOGLE DRIVE -->
                         <div id="unblockedDriveAlertContainer" style="display: none; margin: 10px 0 6px 0;"></div>
@@ -10470,10 +10531,12 @@
 
                         const statusEl = document.getElementById('statusBloqueados');
                         if (statusEl) {
+                            const syncIndicator = document.getElementById('blockedSyncStatusIndicator');
+                            const indicatorHtml = syncIndicator ? syncIndicator.outerHTML : '<span id="blockedSyncStatusIndicator" style="font-size: 11px; font-weight: normal; color: #0095f6; margin-left: 10px; display: inline-block;"></span>';
                             if (currentTab === 'blocked') {
-                                statusEl.innerText = `Mostrando ${filteredUsers.length} de ${blockedList.length} contas bloqueadas.`;
+                                statusEl.innerHTML = `Mostrando ${filteredUsers.length} de ${blockedList.length} contas bloqueadas. ${indicatorHtml}`;
                             } else {
-                                statusEl.innerText = `Mostrando ${filteredUsers.length} de ${unblockedList.length} contas desbloqueadas (Salvo no Google Drive ☁️).`;
+                                statusEl.innerHTML = `Mostrando ${filteredUsers.length} de ${unblockedList.length} contas desbloqueadas (Salvo no Google Drive ☁️).`;
                             }
                         }
 
@@ -10725,13 +10788,18 @@
                     document.getElementById('tabBlockedBtn')?.addEventListener('click', () => switchTab('blocked'));
                     document.getElementById('tabUnblockedBtn')?.addEventListener('click', () => switchTab('unblocked'));
 
-                    // Função para buscar e sincronizar dados com a Meta em segundo plano
+                    // Função para buscar e sincronizar dados com a Meta em tempo real
                     async function sincronizarBloqueados(showFeedback = false) {
                         const refreshBtn = document.getElementById("blockedRefreshBtn");
+                        const syncIndicator = document.getElementById("blockedSyncStatusIndicator");
                         try {
                             if (showFeedback && refreshBtn) {
                                 refreshBtn.disabled = true;
                                 refreshBtn.textContent = "🔄 Buscando...";
+                            }
+                            if (syncIndicator) {
+                                syncIndicator.textContent = "🔄 Sincronizando com o Instagram...";
+                                syncIndicator.style.color = "#0095f6";
                             }
 
                             let wbloksUsers = await fetchBlockedAccountsWbloks();
@@ -10741,25 +10809,46 @@
                             }
 
                             if (wbloksUsers && wbloksUsers.length > 0) {
-                                const map = new Map();
-                                blockedList.forEach(u => map.set(u.username.toLowerCase(), u));
+                                const previousMap = new Map();
+                                blockedList.forEach(u => {
+                                    if (u && u.username) previousMap.set(u.username.toLowerCase(), u);
+                                });
 
-                                let addedCount = 0;
+                                const unblockedSet = new Set(
+                                    (unblockedList || []).map(u => (u.username || '').toLowerCase()).filter(Boolean)
+                                );
+
+                                const liveMap = new Map();
+
+                                // 1. O que a API do Instagram retornou agora é a fonte viva da verdade
+                                // Exclui contas que já foram registradas como desbloqueadas
                                 wbloksUsers.forEach(u => {
+                                    if (!u || !u.username) return;
                                     const k = u.username.toLowerCase();
-                                    if (map.has(k)) {
-                                        const cur = map.get(k);
-                                        if (u.pk) cur.pk = u.pk;
-                                        if (u.isAutoBlocked) cur.isAutoBlocked = true;
-                                        if (u.secondaryText) cur.secondaryText = u.secondaryText;
-                                        if (u.photoUrl && u.photoUrl !== DEFAULT_AVATAR) cur.photoUrl = u.photoUrl;
+                                    if (unblockedSet.has(k)) return; // Já foi desbloqueado
+
+                                    const prev = previousMap.get(k);
+                                    if (prev) {
+                                        liveMap.set(k, {
+                                            ...prev,
+                                            ...u,
+                                            photoUrl: (u.photoUrl && u.photoUrl !== DEFAULT_AVATAR) ? u.photoUrl : (prev.photoUrl || u.photoUrl)
+                                        });
                                     } else {
-                                        map.set(k, u);
-                                        addedCount++;
+                                        liveMap.set(k, u);
                                     }
                                 });
 
-                                blockedList = Array.from(map.values());
+                                // 2. Preserva contas importadas manualmente via JSON (se houver e não estiverem desbloqueadas)
+                                previousMap.forEach((prev, k) => {
+                                    if (!liveMap.has(k) && !unblockedSet.has(k)) {
+                                        if (prev.secondaryText && prev.secondaryText.includes('Importado')) {
+                                            liveMap.set(k, prev);
+                                        }
+                                    }
+                                });
+
+                                blockedList = Array.from(liveMap.values());
                                 cachedBlockedAccounts = blockedList;
                                 try {
                                     localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(blockedList));
@@ -10767,8 +10856,18 @@
 
                                 if (currentTab === 'blocked') renderList(currentPage);
                                 updateCounts();
-                                if (showFeedback) showToast(`Sincronizado! ${blockedList.length} contas encontradas (+${addedCount} novas).`);
+
+                                if (syncIndicator) {
+                                    syncIndicator.textContent = "✓ Atualizado em tempo real";
+                                    syncIndicator.style.color = "#4ade80";
+                                }
+
+                                if (showFeedback) showToast(`Sincronizado! ${blockedList.length} contas bloqueadas ativas.`);
                             } else if (blockedList.length === 0 && currentTab === 'blocked') {
+                                if (syncIndicator) {
+                                    syncIndicator.textContent = "⚠️ Nenhuma conta retornada";
+                                    syncIndicator.style.color = "#f87171";
+                                }
                                 container.innerHTML = `
                                     <div style="text-align: center; padding: 30px 15px; color: #666;">
                                         <div style="font-size: 15px; font-weight: 600; margin-bottom: 8px;">Nenhuma conta encontrada via requisição direta.</div>
@@ -10777,9 +10876,28 @@
                                         </div>
                                     </div>
                                 `;
+                            } else {
+                                if (syncIndicator) {
+                                    syncIndicator.textContent = "✓ Sincronizado";
+                                    syncIndicator.style.color = "#4ade80";
+                                }
                             }
                         } catch (err) {
                             console.error('[IG Tools Bloqueados] Erro na sincronização:', err);
+                            if (syncIndicator) {
+                                syncIndicator.textContent = "⚠️ Erro na sincronização";
+                                syncIndicator.style.color = "#f87171";
+                            }
+                            if (blockedList.length === 0 && currentTab === 'blocked') {
+                                container.innerHTML = `
+                                    <div style="text-align: center; padding: 30px 15px; color: #666;">
+                                        <div style="font-size: 15px; font-weight: 600; margin-bottom: 8px; color: #ef4444;">Não foi possível carregar a lista no momento.</div>
+                                        <div style="font-size: 13px; color: #888; max-width: 520px; margin: 0 auto 15px;">
+                                            Clique em <b>🔄 Atualizar</b> para tentar novamente ou importe o JSON exportado do Instagram.
+                                        </div>
+                                    </div>
+                                `;
+                            }
                             if (showFeedback) showToast('Erro ao sincronizar contas com o Instagram.');
                         } finally {
                             if (refreshBtn) {
@@ -10869,9 +10987,19 @@
                                     localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(unblockedList));
                                 } catch (_) { }
 
+                                // Reconciliação imediata: remove dos bloqueados qualquer usuário que conste como desbloqueado
+                                const unblockedSet = new Set(unblockedList.map(u => (u.username || '').toLowerCase()).filter(Boolean));
+                                const countBefore = blockedList.length;
+                                blockedList = blockedList.filter(u => u && u.username && !unblockedSet.has(u.username.toLowerCase()));
+                                cachedBlockedAccounts = blockedList;
+                                try {
+                                    localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(blockedList));
+                                } catch (_) { }
+
                                 updateCounts();
                                 renderList(currentPage);
-                                showToast(`☁️ Sincronizado! ${driveList.length} contas carregadas do Google Drive.`);
+                                const removedCount = countBefore - blockedList.length;
+                                showToast(`☁️ Sincronizado! ${driveList.length} contas do Drive.${removedCount > 0 ? ` (${removedCount} removidas dos bloqueados)` : ''}`);
                             } else {
                                 showToast("☁️ Conectado ao Google Drive.");
                             }

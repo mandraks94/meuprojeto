@@ -102,6 +102,28 @@ window.IGTools = window.IGTools || {};
                 } catch (e) {
                     this._cache = {};
                 }
+
+                // Merge inteligente na inicialização para nunca perder dados locais do localStorage
+                try {
+                    const localUnblocked = JSON.parse(localStorage.getItem('ig_tools_cached_unblocked'));
+                    if (Array.isArray(localUnblocked) && localUnblocked.length > 0) {
+                        const cloudUnblocked = Array.isArray(this._cache.unblockedAccounts) ? this._cache.unblockedAccounts : [];
+                        const map = new Map();
+                        cloudUnblocked.forEach(u => { if (u && u.username) map.set(u.username.toLowerCase(), u); });
+                        let addedFromLocal = false;
+                        localUnblocked.forEach(u => {
+                            if (u && u.username && !map.has(u.username.toLowerCase())) {
+                                map.set(u.username.toLowerCase(), u);
+                                addedFromLocal = true;
+                            }
+                        });
+                        this._cache.unblockedAccounts = Array.from(map.values());
+                        localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(this._cache.unblockedAccounts));
+                        if (addedFromLocal && googleAuth.isConnected()) {
+                            window.IGTools.GDriveApi.saveData(this._cache).catch(err => console.warn('[IG Tools] Auto-sync local unblocked to Drive failed:', err));
+                        }
+                    }
+                } catch (_) { }
             }
             return this._cache;
         },
@@ -233,6 +255,19 @@ window.IGTools = window.IGTools || {};
                     const merged = Array.from(map.values());
                     this._cache = { ...(this._cache || {}), ...cloudData, unblockedAccounts: merged };
                     await window.IGTools.GDriveApi.saveData(this._cache);
+
+                    // Reconciliação automática: remove contas desbloqueadas do cache de bloqueados
+                    try {
+                        const cachedBlocked = JSON.parse(localStorage.getItem('ig_tools_cached_blocked'));
+                        if (Array.isArray(cachedBlocked) && cachedBlocked.length > 0) {
+                            const unblockedSet = new Set(merged.map(u => (u.username || '').toLowerCase()));
+                            const filteredBlocked = cachedBlocked.filter(u => !unblockedSet.has((u.username || '').toLowerCase()));
+                            if (filteredBlocked.length !== cachedBlocked.length) {
+                                localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(filteredBlocked));
+                            }
+                        }
+                    } catch (_) { }
+
                     return merged;
                 } catch (errSync) {
                     console.warn('[IG Tools] Erro ao sincronizar contas desbloqueadas com Drive:', errSync);
@@ -244,6 +279,12 @@ window.IGTools = window.IGTools || {};
             }
         },
         loadUnblockedAccounts: async function (forceRefresh = false) {
+            let localList = [];
+            try {
+                const local = JSON.parse(localStorage.getItem('ig_tools_cached_unblocked'));
+                if (Array.isArray(local)) localList = local;
+            } catch (_) { }
+
             if (googleAuth.isConnected()) {
                 if (forceRefresh || !this._cache || !Array.isArray(this._cache.unblockedAccounts)) {
                     try {
@@ -256,21 +297,45 @@ window.IGTools = window.IGTools || {};
                         console.error("[IG Tools] Erro ao recarregar contas da nuvem:", e);
                     }
                 }
-                if (this._cache && Array.isArray(this._cache.unblockedAccounts)) {
+                const cloudUnblocked = (this._cache && Array.isArray(this._cache.unblockedAccounts)) ? this._cache.unblockedAccounts : [];
+                const map = new Map();
+                cloudUnblocked.forEach(u => { if (u && u.username) map.set(u.username.toLowerCase(), u); });
+                let addedFromLocal = false;
+                localList.forEach(u => {
+                    if (u && u.username && !map.has(u.username.toLowerCase())) {
+                        map.set(u.username.toLowerCase(), u);
+                        addedFromLocal = true;
+                    }
+                });
+                const merged = Array.from(map.values());
+                if (merged.length > 0) {
+                    this._cache.unblockedAccounts = merged;
                     try {
-                        localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(this._cache.unblockedAccounts));
+                        localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(merged));
                     } catch (_) { }
-                    return this._cache.unblockedAccounts;
+
+                    // Reconciliação automática: remove contas desbloqueadas do cache de bloqueados
+                    try {
+                        const cachedBlocked = JSON.parse(localStorage.getItem('ig_tools_cached_blocked'));
+                        if (Array.isArray(cachedBlocked) && cachedBlocked.length > 0) {
+                            const unblockedSet = new Set(merged.map(u => (u.username || '').toLowerCase()));
+                            const filteredBlocked = cachedBlocked.filter(u => !unblockedSet.has((u.username || '').toLowerCase()));
+                            if (filteredBlocked.length !== cachedBlocked.length) {
+                                localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(filteredBlocked));
+                            }
+                        }
+                    } catch (_) { }
+
+                    if (addedFromLocal) {
+                        window.IGTools.GDriveApi.saveData(this._cache).catch(err => console.warn('[IG Tools] Sync back to drive failed:', err));
+                    }
+                    return merged;
                 }
             }
-            if (this._cache && Array.isArray(this._cache.unblockedAccounts)) {
+            if (this._cache && Array.isArray(this._cache.unblockedAccounts) && this._cache.unblockedAccounts.length > 0) {
                 return this._cache.unblockedAccounts;
             }
-            try {
-                const local = JSON.parse(localStorage.getItem('ig_tools_cached_unblocked'));
-                if (Array.isArray(local)) return local;
-            } catch (_) { }
-            return [];
+            return localList;
         },
         clearCache: async function (storeName) {
             await this._init();

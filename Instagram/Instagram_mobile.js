@@ -2914,6 +2914,28 @@
                             console.error("[IG Tools] Erro ao carregar dados da nuvem:", e);
                             this._cache = {};
                         }
+
+                        // Merge inteligente na inicialização para nunca perder dados locais do localStorage
+                        try {
+                            const localUnblocked = JSON.parse(localStorage.getItem('ig_tools_cached_unblocked'));
+                            if (Array.isArray(localUnblocked) && localUnblocked.length > 0) {
+                                const cloudUnblocked = Array.isArray(this._cache.unblockedAccounts) ? this._cache.unblockedAccounts : [];
+                                const map = new Map();
+                                cloudUnblocked.forEach(u => { if (u && u.username) map.set(u.username.toLowerCase(), u); });
+                                let addedFromLocal = false;
+                                localUnblocked.forEach(u => {
+                                    if (u && u.username && !map.has(u.username.toLowerCase())) {
+                                        map.set(u.username.toLowerCase(), u);
+                                        addedFromLocal = true;
+                                    }
+                                });
+                                this._cache.unblockedAccounts = Array.from(map.values());
+                                localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(this._cache.unblockedAccounts));
+                                if (addedFromLocal && googleAuth.isConnected()) {
+                                    gDriveApi.saveData(this._cache).catch(err => console.warn('[IG Tools] Auto-sync local unblocked to Drive failed:', err));
+                                }
+                            }
+                        } catch (_) { }
                     }
                     return this._cache;
                 },
@@ -3064,6 +3086,12 @@
                     }
                 },
                 loadUnblockedAccounts: async function (forceRefresh = false) {
+                    let localList = [];
+                    try {
+                        const local = JSON.parse(localStorage.getItem('ig_tools_cached_unblocked'));
+                        if (Array.isArray(local)) localList = local;
+                    } catch (_) { }
+
                     if (googleAuth.isConnected()) {
                         if (forceRefresh || !this._cache || !Array.isArray(this._cache.unblockedAccounts)) {
                             try {
@@ -3076,21 +3104,32 @@
                                 console.error("[IG Tools Safari] Erro ao recarregar contas da nuvem:", e);
                             }
                         }
-                        if (this._cache && Array.isArray(this._cache.unblockedAccounts)) {
+                        const cloudUnblocked = (this._cache && Array.isArray(this._cache.unblockedAccounts)) ? this._cache.unblockedAccounts : [];
+                        const map = new Map();
+                        cloudUnblocked.forEach(u => { if (u && u.username) map.set(u.username.toLowerCase(), u); });
+                        let addedFromLocal = false;
+                        localList.forEach(u => {
+                            if (u && u.username && !map.has(u.username.toLowerCase())) {
+                                map.set(u.username.toLowerCase(), u);
+                                addedFromLocal = true;
+                            }
+                        });
+                        const merged = Array.from(map.values());
+                        if (merged.length > 0) {
+                            this._cache.unblockedAccounts = merged;
                             try {
-                                localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(this._cache.unblockedAccounts));
+                                localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(merged));
                             } catch (_) { }
-                            return this._cache.unblockedAccounts;
+                            if (addedFromLocal) {
+                                gDriveApi.saveData(this._cache).catch(err => console.warn('[IG Tools] Sync back to drive failed:', err));
+                            }
+                            return merged;
                         }
                     }
-                    if (this._cache && Array.isArray(this._cache.unblockedAccounts)) {
+                    if (this._cache && Array.isArray(this._cache.unblockedAccounts) && this._cache.unblockedAccounts.length > 0) {
                         return this._cache.unblockedAccounts;
                     }
-                    try {
-                        const local = JSON.parse(localStorage.getItem('ig_tools_cached_unblocked'));
-                        if (Array.isArray(local)) return local;
-                    } catch (_) { }
-                    return [];
+                    return localList;
                 },
                 clearCache: async function (storeName) {
                     await this._init();
@@ -10088,6 +10127,8 @@
                     if (modalAbertoBlocked) return;
                     modalAbertoBlocked = true;
 
+                    const DEFAULT_AVATAR = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 24 24'><defs><linearGradient id='ig' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%23833ab4'/><stop offset='50%25' stop-color='%23fd1d1d'/><stop offset='100%25' stop-color='%23fcb045'/></linearGradient></defs><circle cx='12' cy='12' r='11' fill='url(%23ig)'/><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z' fill='%23ffffff'/></svg>";
+
                     // 1. CARREGAMENTO INSTANTÂNEO VIA CACHE (0ms)
                     blockedList = (Array.isArray(cachedBlockedAccounts) && cachedBlockedAccounts.length > 0)
                         ? [...cachedBlockedAccounts]
@@ -10176,7 +10217,10 @@
 
                                     <!-- Botões exclusivos da aba Desbloqueados -->
                                     <button id="unblockedSyncDriveBtn" title="Sincronizar dados com o Google Drive" style="display: none; background: #4285F4; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">☁️ Sincronizar Drive</button>
+                                    <button id="unblockedExportCsvBtn" title="Exportar contas desbloqueadas em formato CSV" style="display: none; background: #2ecc71; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">📥 Baixar .CSV</button>
                                     <button id="unblockedBloquearBtn" title="Bloquear novamente os usuários selecionados" style="display: none; background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">🔒 Bloquear Selecionados</button>
+                                    <button id="unblockedImportPhotosBtn" title="Carregar arquivo CSV/Excel de fotos e salvar no Google Drive" style="display: none; background: #8e44ad; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">🖼️ Carregar Fotos (Excel)</button>
+                                    <input type="file" id="unblockedPhotosFileInput" accept=".csv, text/csv, .txt" style="display: none;">
 
                                     <!-- Botões compartilhados -->
                                     <button id="blockedMarcarTodosBtn" style="background: #0095f6; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">Selecionar Página</button>
@@ -10283,7 +10327,9 @@
                         const importJsonBtn = document.getElementById('blockedImportJsonBtn');
                         const desbloquearBtn = document.getElementById('blockedDesbloquearBtn');
                         const syncDriveBtn = document.getElementById('unblockedSyncDriveBtn');
+                        const exportCsvBtn = document.getElementById('unblockedExportCsvBtn');
                         const bloquearBtn = document.getElementById('unblockedBloquearBtn');
+                        const importPhotosBtn = document.getElementById('unblockedImportPhotosBtn');
                         const filterSelect = document.getElementById('blockedFilterSelect');
                         const driveAlertEl = document.getElementById('unblockedDriveAlertContainer');
 
@@ -10302,7 +10348,9 @@
                             if (importJsonBtn) importJsonBtn.style.display = 'inline-block';
                             if (desbloquearBtn) desbloquearBtn.style.display = 'inline-block';
                             if (syncDriveBtn) syncDriveBtn.style.display = 'none';
+                            if (exportCsvBtn) exportCsvBtn.style.display = 'none';
                             if (bloquearBtn) bloquearBtn.style.display = 'none';
+                            if (importPhotosBtn) importPhotosBtn.style.display = 'none';
                             if (driveAlertEl) driveAlertEl.style.display = 'none';
 
                             if (filterSelect) {
@@ -10327,7 +10375,9 @@
                             if (importJsonBtn) importJsonBtn.style.display = 'none';
                             if (desbloquearBtn) desbloquearBtn.style.display = 'none';
                             if (syncDriveBtn) syncDriveBtn.style.display = 'inline-block';
+                            if (exportCsvBtn) exportCsvBtn.style.display = 'inline-block';
                             if (bloquearBtn) bloquearBtn.style.display = 'inline-block';
+                            if (importPhotosBtn) importPhotosBtn.style.display = 'inline-block';
 
                             if (driveAlertEl) {
                                 driveAlertEl.style.display = 'block';
@@ -10479,7 +10529,7 @@
                                         <td style="padding: 8px 4px; text-align: center;"><input type="checkbox" class="user-checkbox" data-username="${username}" style="cursor: pointer; width: 18px; height: 18px;" ${isChecked ? 'checked' : ''}></td>
                                         <td style="padding: 8px 6px;">
                                             <div style="display: flex; align-items: center; gap: 8px;">
-                                                <img src="${photoUrl || DEFAULT_AVATAR}" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${username}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid #eee;">
+                                                <img src="${photoUrl || DEFAULT_AVATAR}" alt="${username}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: #262626;" loading="lazy">
                                                 <div style="display: flex; flex-direction: column; min-width: 0;">
                                                     <div style="display: flex; align-items: center; gap: 6px;">
                                                         <a href="https://www.instagram.com/${username}" target="_blank" style="text-decoration: none; color: inherit; font-weight: 600; font-size: 14px; word-break: break-all;">${username}</a>
@@ -10835,6 +10885,128 @@
                             }
                         }
                     };
+
+                    // Botão Exportar CSV (Aba Desbloqueados)
+                    const exportCsvBtnEl = document.getElementById("unblockedExportCsvBtn");
+                    if (exportCsvBtnEl) {
+                        exportCsvBtnEl.onclick = () => {
+                            let listToExport = (Array.isArray(unblockedList) && unblockedList.length > 0) ? unblockedList : [];
+                            if (listToExport.length === 0) {
+                                try {
+                                    const local = JSON.parse(localStorage.getItem('ig_tools_cached_unblocked'));
+                                    if (Array.isArray(local) && local.length > 0) listToExport = local;
+                                } catch (_) { }
+                            }
+                            if (listToExport.length === 0 && dbHelper._cache && Array.isArray(dbHelper._cache.unblockedAccounts)) {
+                                listToExport = dbHelper._cache.unblockedAccounts;
+                            }
+                            if (listToExport.length === 0) {
+                                return alert("Nenhum usuário desbloqueado para exportar.");
+                            }
+                            const headers = ['username', 'fullName', 'pk', 'unblockedAt'];
+                            const csvContent = [
+                                headers.join(','),
+                                ...listToExport.map(u => headers.map(h => {
+                                    let val = u[h] || '';
+                                    if (h === 'unblockedAt' && val) val = new Date(val).toLocaleString();
+                                    return `"${String(val).replace(/"/g, '""')}"`;
+                                }).join(','))
+                            ].join('\n');
+
+                            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement("a");
+                            link.href = url;
+                            link.download = `desbloqueados_instagram_${Date.now()}.csv`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                        };
+                    }
+
+                    // Botão Importar Fotos (Aba Desbloqueados) e Salvar no Google Drive
+                    const importPhotosBtnEl = document.getElementById("unblockedImportPhotosBtn");
+                    const photosFileInputEl = document.getElementById("unblockedPhotosFileInput");
+                    if (importPhotosBtnEl && photosFileInputEl) {
+                        importPhotosBtnEl.onclick = () => photosFileInputEl.click();
+                        photosFileInputEl.onchange = async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+
+                            importPhotosBtnEl.disabled = true;
+                            importPhotosBtnEl.textContent = "⏳ Processando...";
+
+                            try {
+                                const text = await file.text();
+                                const lines = text.split(/\r?\n/).filter(Boolean);
+
+                                const photoMap = new Map();
+                                lines.forEach((line, idx) => {
+                                    if (idx === 0 && (line.toLowerCase().includes('username') || line.toLowerCase().includes('ordem'))) return;
+                                    const cols = line.split(/[;,\t]/).map(c => c.trim().replace(/^"|"$/g, ''));
+                                    if (cols.length >= 2) {
+                                        const username = cols.find(c => c && !c.startsWith('http') && !/^\d+$/.test(c) && /^[a-zA-Z0-9._]+$/.test(c.replace('@', '')))?.replace('@', '').toLowerCase();
+                                        const photoUrl = cols.find(c => c && (c.startsWith('http://') || c.startsWith('https://')) && (c.includes('fbcdn.net') || c.includes('cdninstagram.com') || c.includes('instagram.f') || c.includes('data:image')));
+                                        if (username && photoUrl) {
+                                            photoMap.set(username, photoUrl);
+                                        }
+                                    }
+                                });
+
+                                if (photoMap.size === 0) {
+                                    alert("Nenhuma URL de foto válida encontrada no arquivo. Certifique-se de que o arquivo contém colunas com o @usuário e a URL da foto.");
+                                    return;
+                                }
+
+                                let matchedCount = 0;
+                                unblockedList.forEach(user => {
+                                    const u = (user.username || '').toLowerCase();
+                                    if (photoMap.has(u)) {
+                                        user.photoUrl = photoMap.get(u);
+                                        matchedCount++;
+                                    }
+                                });
+
+                                cachedUnblockedAccounts = unblockedList;
+                                try {
+                                    localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify(unblockedList));
+                                } catch (_) { }
+
+                                if (dbHelper && dbHelper._cache) {
+                                    dbHelper._cache.unblockedAccounts = unblockedList;
+                                }
+
+                                renderList(currentPage);
+
+                                // Salvar no Google Drive se conectado
+                                let driveSaved = false;
+                                if (googleAuth.isConnected()) {
+                                    importPhotosBtnEl.textContent = "☁️ Gravando no Drive...";
+                                    try {
+                                        await dbHelper.saveUnblockedAccounts(unblockedList);
+                                        driveSaved = true;
+                                    } catch (driveErr) {
+                                        console.warn("[IG Tools] Erro ao salvar fotos no Drive:", driveErr);
+                                    }
+                                }
+
+                                if (driveSaved) {
+                                    showToast(`🎉 ${matchedCount} fotos aplicadas e salvas no Google Drive com sucesso!`);
+                                    alert(`🎉 SUCESSO!\n\n${matchedCount} fotos foram vinculadas aos usuários desbloqueados e salvas permanentemente no Google Drive!`);
+                                } else {
+                                    showToast(`🖼️ ${matchedCount} fotos aplicadas localmente.`);
+                                    alert(`🖼️ ${matchedCount} fotos foram aplicadas localmente!\n\nNota: Para sincronizar com a nuvem, conecte o Google Drive.`);
+                                }
+                            } catch (err) {
+                                console.error("[IG Tools] Erro ao carregar fotos:", err);
+                                alert("Ocorreu um erro ao processar o arquivo de fotos: " + (err.message || err));
+                            } finally {
+                                importPhotosBtnEl.disabled = false;
+                                importPhotosBtnEl.textContent = "🖼️ Carregar Fotos (Excel)";
+                                photosFileInputEl.value = '';
+                            }
+                        };
+                    }
 
                     // Botão Importar JSON oficial do Instagram
                     const importBtn = document.getElementById("blockedImportJsonBtn");
@@ -14791,7 +14963,26 @@
                         if (!storeName) return alert("Selecione uma tabela.");
 
                         await dbHelper.openDB(); // Ensure cache is loaded
-                        const result = dbHelper._cache[storeName];
+                        let result = dbHelper._cache[storeName];
+
+                        // Fallback inteligente para localStorage caso o cache esteja vazio
+                        if (!result || (Array.isArray(result) && result.length === 0)) {
+                            if (storeName === 'unblockedAccounts') {
+                                try {
+                                    const local = JSON.parse(localStorage.getItem('ig_tools_cached_unblocked'));
+                                    if (Array.isArray(local) && local.length > 0) {
+                                        result = local;
+                                        dbHelper._cache.unblockedAccounts = local;
+                                    }
+                                } catch (_) { }
+                            } else {
+                                try {
+                                    const local = JSON.parse(localStorage.getItem('ig_tools_cache_' + storeName) || localStorage.getItem('ig_tools_cached_' + storeName));
+                                    if (Array.isArray(local) && local.length > 0) result = local;
+                                } catch (_) { }
+                            }
+                        }
+
                         if (!result || (Array.isArray(result) && result.length === 0)) return alert("Tabela vazia.");
 
                         const dataToExport = Array.isArray(result) ? result : [result];

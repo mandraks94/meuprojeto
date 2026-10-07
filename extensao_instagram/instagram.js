@@ -49,7 +49,7 @@
                     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
                     osc.start(ctx.currentTime);
                     osc.stop(ctx.currentTime + 0.35);
-                } catch (_) {}
+                } catch (_) { }
             }
 
             // POP-UP FLUTUANTE VISUAL NA TELA DO INSTAGRAM
@@ -3691,8 +3691,10 @@
                         if (typeof abrirModalAmigosProximos === 'function') abrirModalAmigosProximos();
                     },
                     openHideStory: () => {
-                        document.getElementById("hideStoryModal")?.remove();
+                        document.querySelectorAll("#hideStoryModal").forEach(m => m.remove());
                         document.querySelectorAll('.submenu-modal').forEach(m => m.remove());
+                        modalAbertoStory = false;
+                        window.__isOpeningHideStoryModal = false;
                         if (typeof abrirModalOcultarStory === 'function') abrirModalOcultarStory();
                     },
                     openMuted: () => {
@@ -3718,8 +3720,7 @@
                     }
                 };
 
-                if (document.getElementById("assistiveTouchMenu")) return;
-                if (document.getElementById("instagramToolsSidebarBtn")) return;
+                if ((document.getElementById("assistiveTouchMenu") || document.querySelector('.assistive-menu')) && document.getElementById("instagramToolsSidebarBtn")) return;
 
                 // --- LÓGICA DE COMANDOS DE VOZ ---
                 const voiceControl = {
@@ -4147,6 +4148,35 @@
                             .dark-mode #googleLoginBtn:hover {
                                 background: #333333 !important;
                             }
+
+                            /* Estilo da fonte e fundo dos botões de paginação em todos os modais */
+                            #prevCfPageBtn, #nextCfPageBtn,
+                            #prevHsPageBtn, #nextHsPageBtn,
+                            #prevMutedPageBtn, #nextMutedPageBtn,
+                            #prevBlockedPageBtn, #nextBlockedPageBtn,
+                            #prevPageBtn, #nextPageBtn,
+                            #paginationControls button {
+                                color: #111111 !important;
+                                background: #f8f9fa !important;
+                                border: 1px solid #dbdbdb !important;
+                                font-weight: 600 !important;
+                                font-size: 13px !important;
+                                cursor: pointer !important;
+                                line-height: 1.4 !important;
+                            }
+                            #prevCfPageBtn:hover, #nextCfPageBtn:hover,
+                            #prevHsPageBtn:hover, #nextHsPageBtn:hover,
+                            #prevMutedPageBtn:hover, #nextMutedPageBtn:hover,
+                            #prevBlockedPageBtn:hover, #nextBlockedPageBtn:hover,
+                            #prevPageBtn:hover, #nextPageBtn:hover,
+                            #paginationControls button:hover:not(:disabled) {
+                                background: #e9ecef !important;
+                                color: #000000 !important;
+                            }
+                            #paginationControls button:disabled {
+                                opacity: 0.4 !important;
+                                cursor: not-allowed !important;
+                            }
                             .tab-container {
                                 display: flex;
                                 border-bottom: 1px solid #dbdbdb;
@@ -4263,9 +4293,10 @@
                 }
 
                 // Create menu
-                let menu = document.querySelector('.assistive-menu');
+                let menu = document.querySelector('.assistive-menu') || document.getElementById("assistiveTouchMenu");
                 if (!menu) {
                     menu = document.createElement("div");
+                    menu.id = "assistiveTouchMenu";
                     menu.className = "assistive-menu";
                     menu.innerHTML = `
                         <div class="menu-item">
@@ -4631,80 +4662,85 @@
                     return { bar, update, closeButton };
                 }
 
-                document
-                    .getElementById("curtidasBtn")
-                    .addEventListener("click", (e) => {
-                        e.preventDefault();
-                        history.pushState(null, null, "/your_activity/interactions/likes/");
-                        window.dispatchEvent(new Event("popstate"));
-                    });
+                const elCurtidas = document.getElementById("curtidasBtn");
+                if (elCurtidas) elCurtidas.onclick = (e) => {
+                    e.preventDefault();
+                    history.pushState(null, null, "/your_activity/interactions/likes/");
+                    window.dispatchEvent(new Event("popstate"));
+                };
 
-                document
-                    .getElementById("comentariosBtn")
-                    .addEventListener("click", (e) => {
-                        e.preventDefault();
-                        history.pushState(null, null, "/your_activity/interactions/comments/");
-                        window.dispatchEvent(new Event("popstate"));
-                    });
+                const elComentarios = document.getElementById("comentariosBtn");
+                if (elComentarios) elComentarios.onclick = (e) => {
+                    e.preventDefault();
+                    history.pushState(null, null, "/your_activity/interactions/comments/");
+                    window.dispatchEvent(new Event("popstate"));
+                };
 
-                document
-                    .getElementById("mensagensBtn")
-                    .addEventListener("click", (e) => {
-                        e.preventDefault();
-                        history.pushState(null, null, "/direct/inbox/");
-                        window.dispatchEvent(new Event("popstate"));
-                    });
+                const elMensagens = document.getElementById("mensagensBtn");
+                if (elMensagens) elMensagens.onclick = (e) => {
+                    e.preventDefault();
+                    history.pushState(null, null, "/direct/inbox/");
+                    window.dispatchEvent(new Event("popstate"));
+                };
 
-                document
-                    .getElementById("bloqueadosBtn")
-                    .addEventListener("click", (e) => {
-                        closeMenu();
-                        iniciarProcessoBloqueados();
-                    });
+                const elBloqueados = document.getElementById("bloqueadosBtn");
+                if (elBloqueados) elBloqueados.onclick = () => {
+                    closeMenu();
+                    iniciarProcessoBloqueados();
+                };
 
-                document.getElementById("naoSegueDeVoltaBtn").addEventListener("click", () => {
+                const elNaoSegue = document.getElementById("naoSegueDeVoltaBtn");
+                if (elNaoSegue) elNaoSegue.onclick = () => {
                     closeMenu();
                     iniciarProcessoNaoSegueDeVolta();
-                });
+                };
 
-                document.getElementById("seguindoBtn").addEventListener("click", () => {
+                const elSeguindo = document.getElementById("seguindoBtn");
+                if (elSeguindo) elSeguindo.onclick = () => {
                     closeMenu();
                     iniciarProcessoSeguindo();
-                });
+                };
 
                 // --- NOVO MENU: AMIGOS PRÓXIMOS ---
-                document.getElementById("closeFriendsBtn").addEventListener("click", () => {
+                const elCloseFriends = document.getElementById("closeFriendsBtn");
+                if (elCloseFriends) elCloseFriends.onclick = () => {
                     closeMenu();
                     abrirModalAmigosProximos();
-                });
+                };
 
                 // --- NOVO MENU: OCULTAR STORY ---
-                document.getElementById("hideStoryBtn").addEventListener("click", () => {
+                const elHideStory = document.getElementById("hideStoryBtn");
+                if (elHideStory) elHideStory.onclick = () => {
                     closeMenu();
                     abrirModalOcultarStory();
-                });
+                };
 
-                document.getElementById("mutedAccountsBtn").addEventListener("click", () => {
+                const elMuted = document.getElementById("mutedAccountsBtn");
+                if (elMuted) elMuted.onclick = () => {
                     closeMenu();
                     abrirModalContasSilenciadas();
-                });
+                };
 
-                document.getElementById("interacoesBtn").addEventListener("click", () => {
+                const elInteracoes = document.getElementById("interacoesBtn");
+                if (elInteracoes) elInteracoes.onclick = () => {
                     closeMenu();
                     abrirModalInteracoes();
-                });
+                };
 
                 // --- NOVO MENU: REELS ---
-                document.getElementById("reelsMenuBtn").addEventListener("click", () => {
+                const elReels = document.getElementById("reelsMenuBtn");
+                if (elReels) elReels.onclick = () => {
                     closeMenu();
                     abrirModalReels();
-                });
-                document.getElementById("baixarStoryBtn").addEventListener("click", () => { baixarStoryAtual(); });
+                };
+                const elBaixarStory = document.getElementById("baixarStoryBtn");
+                if (elBaixarStory) elBaixarStory.onclick = () => { baixarStoryAtual(); };
 
-                document.getElementById("settingsBtn").addEventListener("click", () => {
+                const elSettings = document.getElementById("settingsBtn");
+                if (elSettings) elSettings.onclick = () => {
                     closeMenu();
                     abrirModalConfiguracoes();
-                });
+                };
 
                 // --- GERENCIADOR DE AMIGOS PRÓXIMOS (INSTANTÂNEO & MODERNO) ---
                 let cachedCloseFriends = [];
@@ -5429,9 +5465,9 @@
                         tableHtml += `</tbody></table>`;
 
                         let paginationHtml = `<div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">`;
-                        if (page > 1) paginationHtml += `<button id="prevCfPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Anterior</button>`;
+                        if (page > 1) paginationHtml += `<button id="prevCfPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; color: #111111 !important; font-weight: 600; font-size: 13px; cursor: pointer;">Anterior</button>`;
                         paginationHtml += `<span style="font-size: 13px; font-weight: 600;">Página ${page} de ${totalPages}</span>`;
-                        if (page < totalPages) paginationHtml += `<button id="nextCfPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Próximo</button>`;
+                        if (page < totalPages) paginationHtml += `<button id="nextCfPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; color: #111111 !important; font-weight: 600; font-size: 13px; cursor: pointer;">Próximo</button>`;
                         paginationHtml += `</div>`;
 
                         container.innerHTML = tableHtml + paginationHtml;
@@ -6729,12 +6765,21 @@
 
                 // 3. MODAL INSTANTÂNEO (0ms) - GERENCIADOR DE OCULTAR STORIES
                 async function abrirModalOcultarStory(initialUsers = null) {
-                    if (modalAbertoStory) {
-                        const m = document.getElementById("hideStoryModal");
-                        if (m) { m.style.display = "block"; m.focus(); }
+                    if (window.__isOpeningHideStoryModal) return;
+
+                    const existingModal = document.getElementById("hideStoryModal");
+                    if (existingModal) {
+                        existingModal.style.display = "block";
+                        existingModal.focus();
+                        modalAbertoStory = true;
                         return;
                     }
+                    if (modalAbertoStory) return;
+
+                    window.__isOpeningHideStoryModal = true;
                     modalAbertoStory = true;
+
+                    document.querySelectorAll("#hideStoryModal").forEach(m => m.remove());
 
                     // Helper inteligente para resolver fotos de perfil através de múltiplos caches e sessões
                     function resolveUserPhoto(username, currentPhoto = null) {
@@ -7148,10 +7193,12 @@
                         </div>
                     `;
 
+                    // Garante instância estritamente única no DOM antes de anexar
+                    document.querySelectorAll("#hideStoryModal").forEach(m => m.remove());
                     document.body.appendChild(div);
 
                     // Controles da janela vinculados imediatamente (garante que fechar e minimizar funcionem sempre)
-                    const hsCloseBtn = document.getElementById("hsFecharBtn");
+                    const hsCloseBtn = div.querySelector("#hsFecharBtn");
                     if (hsCloseBtn) {
                         hsCloseBtn.onclick = () => {
                             if (window._igHideStoryUsersCapture && typeof captureCallback !== 'undefined') {
@@ -7159,15 +7206,17 @@
                                 if (idx !== -1) window._igHideStoryUsersCapture.callbacks.splice(idx, 1);
                             }
                             div.remove();
+                            document.querySelectorAll("#hideStoryModal").forEach(m => m.remove());
                             modalAbertoStory = false;
+                            window.__isOpeningHideStoryModal = false;
                         };
                     }
 
                     let isHsMinimized = false;
-                    const hsMinBtn = document.getElementById("hsMinimizarBtn");
+                    const hsMinBtn = div.querySelector("#hsMinimizarBtn");
                     if (hsMinBtn) {
                         hsMinBtn.onclick = () => {
-                            const bodyEl = document.getElementById("hsModalBody");
+                            const bodyEl = div.querySelector("#hsModalBody");
                             isHsMinimized = !isHsMinimized;
                             if (bodyEl) bodyEl.style.display = isHsMinimized ? 'none' : 'block';
                             div.style.height = isHsMinimized ? 'auto' : '';
@@ -7185,14 +7234,14 @@
                         makeDraggable(div);
                     } catch (_) { }
 
-                    const container = document.getElementById("tabelaHideStoryContainer");
+                    const container = div.querySelector("#tabelaHideStoryContainer");
 
                     const updateCounts = (paginatedUsers = []) => {
                         try {
-                            const countEl = document.getElementById('hsSelectedCount');
+                            const countEl = div.querySelector('#hsSelectedCount');
                             if (countEl) countEl.innerText = `(${selectedUsers.size} selecionados)`;
 
-                            const selectAllCb = document.getElementById('selectAllHsCheckbox');
+                            const selectAllCb = div.querySelector('#selectAllHsCheckbox');
                             if (selectAllCb && paginatedUsers.length > 0) {
                                 selectAllCb.checked = paginatedUsers.every(u => selectedUsers.has(typeof u === 'string' ? u : u.username));
                             }
@@ -7203,7 +7252,7 @@
                             const curFollowingCount = hideStoryList.filter(u => u && followingSet.has((u.username || '').toLowerCase().trim())).length;
                             const curTotalCount = hideStoryList.length;
 
-                            const filterSelect = document.getElementById('hsFilterSelect');
+                            const filterSelect = div.querySelector('#hsFilterSelect');
                             if (filterSelect && filterSelect.options && filterSelect.options.length >= 5) {
                                 filterSelect.options[0].text = `🌐 Todos (${curTotalCount})`;
                                 filterSelect.options[1].text = `👁️ Stories Ocultados (${curHiddenCount})`;
@@ -7212,7 +7261,7 @@
                                 filterSelect.options[4].text = `👤 Meus Seguindo (${curFollowingCount})`;
                             }
 
-                            const statusEl = document.getElementById('statusHideStory');
+                            const statusEl = div.querySelector('#statusHideStory');
                             if (statusEl) {
                                 const totalSpan = statusEl.querySelector('span');
                                 if (totalSpan) {
@@ -7230,8 +7279,8 @@
                             const startIndex = (page - 1) * itemsPerPage;
                             const endIndex = startIndex + itemsPerPage;
 
-                            const searchTerm = (document.getElementById('hsSearchInput')?.value || '').toLowerCase().trim();
-                            const filterValue = document.getElementById('hsFilterSelect')?.value || 'all';
+                            const searchTerm = (div.querySelector('#hsSearchInput')?.value || '').toLowerCase().trim();
+                            const filterValue = div.querySelector('#hsFilterSelect')?.value || 'all';
 
                             let filtered = hideStoryList.filter(u => {
                                 if (!u) return false;
@@ -7362,9 +7411,9 @@
                             tableHtml += `</tbody></table>`;
 
                             let paginationHtml = `<div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">`;
-                            if (page > 1) paginationHtml += `<button id="prevHsPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Anterior</button>`;
+                            if (page > 1) paginationHtml += `<button id="prevHsPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; color: #111111 !important; font-weight: 600; font-size: 13px; cursor: pointer;">Anterior</button>`;
                             paginationHtml += `<span style="font-size: 13px; font-weight: 600;">Página ${page} de ${totalPages}</span>`;
-                            if (page < totalPages) paginationHtml += `<button id="nextHsPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Próximo</button>`;
+                            if (page < totalPages) paginationHtml += `<button id="nextHsPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; color: #111111 !important; font-weight: 600; font-size: 13px; cursor: pointer;">Próximo</button>`;
                             paginationHtml += `</div>`;
 
                             container.innerHTML = tableHtml + paginationHtml;
@@ -7380,7 +7429,7 @@
                             });
 
                             // Select all checkbox listener
-                            const selectAllCb = document.getElementById('selectAllHsCheckbox');
+                            const selectAllCb = div.querySelector('#selectAllHsCheckbox');
                             if (selectAllCb) {
                                 selectAllCb.checked = paginatedUsers.length > 0 && paginatedUsers.every(u => selectedUsers.has(typeof u === 'string' ? u : u.username));
                                 selectAllCb.onchange = (e) => {
@@ -7410,9 +7459,9 @@
                             });
 
                             // Pagination button listeners
-                            const prevBtn = document.getElementById('prevHsPageBtn');
+                            const prevBtn = div.querySelector('#prevHsPageBtn');
                             if (prevBtn) prevBtn.onclick = () => renderList(currentPage - 1);
-                            const nextBtn = document.getElementById('nextHsPageBtn');
+                            const nextBtn = div.querySelector('#nextHsPageBtn');
                             if (nextBtn) nextBtn.onclick = () => renderList(currentPage + 1);
 
                             // Individual action buttons
@@ -7473,7 +7522,7 @@
 
                     // Sincronização avançada: busca direta oficial via DOM, paginação WBloks e cache de seguidores/seguindo
                     async function sincronizarHideStory(forceScroll = false) {
-                        const refreshBtn = document.getElementById("hsRefreshBtn");
+                        const refreshBtn = div.querySelector("#hsRefreshBtn") || document.getElementById("hsRefreshBtn");
                         try {
                             if (refreshBtn) {
                                 refreshBtn.disabled = true;
@@ -7736,7 +7785,7 @@
                                 userListCache.hiddenStory = new Set(hiddenOnly.map(u => u.username));
                             } catch (_) { }
 
-                            const syncInfo = document.getElementById("hsSyncInfo");
+                            const syncInfo = div.querySelector("#hsSyncInfo");
                             if (syncInfo) {
                                 syncInfo.innerText = `Sincronizado às ${new Date().toLocaleTimeString()}`;
                             }
@@ -7760,12 +7809,15 @@
 
 
                     // Ação do botão Sincronizar
-                    document.getElementById("hsRefreshBtn").onclick = () => {
-                        sincronizarHideStory(true);
-                    };
+                    const btnRefresh = div.querySelector("#hsRefreshBtn");
+                    if (btnRefresh) {
+                        btnRefresh.onclick = () => {
+                            sincronizarHideStory(true);
+                        };
+                    }
 
                     // Ação do botão Tela Oficial (0ms)
-                    const openOfficialBtn = document.getElementById("hsOpenOfficialPageBtn");
+                    const openOfficialBtn = div.querySelector("#hsOpenOfficialPageBtn");
                     if (openOfficialBtn) {
                         openOfficialBtn.onclick = async () => {
                             if (!window.location.pathname.includes('/accounts/hide_story_and_live_from/')) {
@@ -7778,8 +7830,10 @@
                     }
 
                     // Modal de Importação JSON
-                    const jsonFileInput = document.getElementById("hsJsonFileInput");
-                    document.getElementById("hsImportJsonBtn").onclick = () => {
+                    const jsonFileInput = div.querySelector("#hsJsonFileInput");
+                    const btnImportJson = div.querySelector("#hsImportJsonBtn");
+                    if (btnImportJson) {
+                        btnImportJson.onclick = () => {
                         const importModal = document.createElement("div");
                         importModal.className = "submenu-modal";
                         importModal.style.cssText = `
@@ -7914,46 +7968,54 @@
                             }
                         };
                     };
+                    }
+
 
                     // Seleção rápida da página atual
-                    document.getElementById("hsSelectPageBtn").onclick = () => {
-                        const itemsPerPage = loadSettings().itemsPerPage || 10;
-                        const startIndex = (currentPage - 1) * itemsPerPage;
-                        const searchTerm = (document.getElementById('hsSearchInput')?.value || '').toLowerCase().trim();
-                        const filterValue = document.getElementById('hsFilterSelect')?.value || 'all';
+                    const btnSelectPage = div.querySelector("#hsSelectPageBtn");
+                    if (btnSelectPage) {
+                        btnSelectPage.onclick = () => {
+                            const itemsPerPage = loadSettings().itemsPerPage || 10;
+                            const startIndex = (currentPage - 1) * itemsPerPage;
+                            const searchTerm = (div.querySelector('#hsSearchInput')?.value || '').toLowerCase().trim();
+                            const filterValue = div.querySelector('#hsFilterSelect')?.value || 'all';
 
-                        let listToSelect = hideStoryList.filter(u => {
-                            const uLower = (u.username || '').toLowerCase().trim();
-                            const fLower = (u.fullName || '').toLowerCase().trim();
-                            const pkStr = String(u.pk || u.id || '');
-                            const matchSearch = !searchTerm || uLower.includes(searchTerm) || fLower.includes(searchTerm) || pkStr.includes(searchTerm);
-                            if (!matchSearch) return false;
+                            let listToSelect = hideStoryList.filter(u => {
+                                const uLower = (u.username || '').toLowerCase().trim();
+                                const fLower = (u.fullName || '').toLowerCase().trim();
+                                const pkStr = String(u.pk || u.id || '');
+                                const matchSearch = !searchTerm || uLower.includes(searchTerm) || fLower.includes(searchTerm) || pkStr.includes(searchTerm);
+                                if (!matchSearch) return false;
 
-                            if (filterValue === 'hidden') return u.isHidden;
-                            if (filterValue === 'not_hidden') return !u.isHidden;
-                            if (filterValue === 'followers') return followersSet.has(uLower);
-                            if (filterValue === 'following') return followingSet.has(uLower);
-                            return true;
-                        });
+                                if (filterValue === 'hidden') return u.isHidden;
+                                if (filterValue === 'not_hidden') return !u.isHidden;
+                                if (filterValue === 'followers') return followersSet.has(uLower);
+                                if (filterValue === 'following') return followingSet.has(uLower);
+                                return true;
+                            });
 
-                        const pageUsers = listToSelect.slice(startIndex, startIndex + itemsPerPage);
-                        pageUsers.forEach(u => selectedUsers.add(u.username));
-                        container.querySelectorAll('.hs-user-checkbox').forEach(cb => cb.checked = true);
-                        updateCounts(pageUsers);
-                    };
+                            const pageUsers = listToSelect.slice(startIndex, startIndex + itemsPerPage);
+                            pageUsers.forEach(u => selectedUsers.add(u.username));
+                            container.querySelectorAll('.hs-user-checkbox').forEach(cb => cb.checked = true);
+                            updateCounts(pageUsers);
+                        };
+                    }
 
-                    document.getElementById("hsDeselectAllBtn").onclick = () => {
-                        selectedUsers.clear();
-                        container.querySelectorAll('.hs-user-checkbox').forEach(cb => cb.checked = false);
-                        updateCounts();
-                    };
+                    const btnDeselectAll = div.querySelector("#hsDeselectAllBtn");
+                    if (btnDeselectAll) {
+                        btnDeselectAll.onclick = () => {
+                            selectedUsers.clear();
+                            container.querySelectorAll('.hs-user-checkbox').forEach(cb => cb.checked = false);
+                            updateCounts();
+                        };
+                    }
 
-                    const searchInput = document.getElementById("hsSearchInput");
+                    const searchInput = div.querySelector("#hsSearchInput");
                     if (searchInput) {
                         searchInput.addEventListener("input", () => renderList(1));
                     }
 
-                    const filterSelect = document.getElementById("hsFilterSelect");
+                    const filterSelect = div.querySelector("#hsFilterSelect");
                     if (filterSelect) {
                         filterSelect.addEventListener("change", () => {
                             currentPage = 1;
@@ -7962,7 +8024,7 @@
                         });
                     }
 
-                    const apiToggle = document.getElementById("hsUseApiToggle");
+                    const apiToggle = div.querySelector("#hsUseApiToggle");
                     if (apiToggle) {
                         apiToggle.addEventListener("change", (e) => {
                             const s = loadSettings();
@@ -7973,148 +8035,154 @@
                     }
 
                     // AÇÃO EM LOTE: Ocultar Selecionados
-                    document.getElementById("hsHideSelectedBtn").onclick = async () => {
-                        if (selectedUsers.size === 0) {
-                            alert("Nenhum usuário selecionado.");
-                            return;
-                        }
+                    const btnHideSelected = div.querySelector("#hsHideSelectedBtn");
+                    if (btnHideSelected) {
+                        btnHideSelected.onclick = async () => {
+                            if (selectedUsers.size === 0) {
+                                alert("Nenhum usuário selecionado.");
+                                return;
+                            }
 
-                        const usersToHide = Array.from(selectedUsers).filter(uname => {
-                            const u = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
-                            return u && !u.isHidden;
-                        });
+                            const usersToHide = Array.from(selectedUsers).filter(uname => {
+                                const u = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                                return u && !u.isHidden;
+                            });
 
-                        if (usersToHide.length === 0) {
-                            alert("Todos os usuários selecionados já estão com seus stories ocultados.");
-                            return;
-                        }
+                            if (usersToHide.length === 0) {
+                                alert("Todos os usuários selecionados já estão com seus stories ocultados.");
+                                return;
+                            }
 
-                        if (!confirm(`Deseja ocultar seus stories para ${usersToHide.length} usuário(s)?`)) return;
+                            if (!confirm(`Deseja ocultar seus stories para ${usersToHide.length} usuário(s)?`)) return;
 
-                        const hideBtn = document.getElementById("hsHideSelectedBtn");
-                        if (hideBtn) {
-                            hideBtn.disabled = true;
-                            hideBtn.textContent = "Processando...";
-                        }
+                            const hideBtn = div.querySelector("#hsHideSelectedBtn") || btnHideSelected;
+                            if (hideBtn) {
+                                hideBtn.disabled = true;
+                                hideBtn.textContent = "Processando...";
+                            }
 
-                        let successCount = 0;
-                        const delayMs = loadSettings().requestDelay || 350;
+                            let successCount = 0;
+                            const delayMs = loadSettings().requestDelay || 350;
 
-                        for (let i = 0; i < usersToHide.length; i++) {
-                            const uname = usersToHide[i];
-                            const uObj = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
-                            const uid = uObj?.pk || uObj?.id || getCachedUserId(uname) || '';
-                            if (hideBtn) hideBtn.textContent = `Processando (${i + 1}/${usersToHide.length})...`;
+                            for (let i = 0; i < usersToHide.length; i++) {
+                                const uname = usersToHide[i];
+                                const uObj = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                                const uid = uObj?.pk || uObj?.id || getCachedUserId(uname) || '';
+                                if (hideBtn) hideBtn.textContent = `Processando (${i + 1}/${usersToHide.length})...`;
 
-                            try {
-                                const res = await executeWbloksHideStory(uid, uname, 'hide');
-                                if (res && res.success) {
-                                    if (uObj) uObj.isHidden = true;
-                                    if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
-                                    userListCache.hiddenStory.add(uname.toLowerCase());
-                                    successCount++;
+                                try {
+                                    const res = await executeWbloksHideStory(uid, uname, 'hide');
+                                    if (res && res.success) {
+                                        if (uObj) uObj.isHidden = true;
+                                        if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
+                                        userListCache.hiddenStory.add(uname.toLowerCase());
+                                        successCount++;
+                                    }
+                                } catch (e) {
+                                    console.warn(`[IG Tools HideStory] Falha ao ocultar @${uname}:`, e);
                                 }
-                            } catch (e) {
-                                console.warn(`[IG Tools HideStory] Falha ao ocultar @${uname}:`, e);
+
+                                if (i < usersToHide.length - 1) {
+                                    await new Promise(r => setTimeout(r, delayMs));
+                                }
                             }
 
-                            if (i < usersToHide.length - 1) {
-                                await new Promise(r => setTimeout(r, delayMs));
+                            cachedHideStory = hideStoryList;
+                            try {
+                                localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(hideStoryList));
+                                dbHelper.saveCache('hideStory', hideStoryList.filter(u => u.isHidden));
+                                if (userListCache.hiddenStory) {
+                                    dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
+                                }
+                            } catch (_) { }
+
+                            selectedUsers.clear();
+                            renderList(currentPage);
+                            updateCounts();
+
+                            if (hideBtn) {
+                                hideBtn.disabled = false;
+                                hideBtn.textContent = "👁️‍🗨️ Ocultar Selecionados";
                             }
-                        }
 
-                        cachedHideStory = hideStoryList;
-                        try {
-                            localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(hideStoryList));
-                            dbHelper.saveCache('hideStory', hideStoryList.filter(u => u.isHidden));
-                            if (userListCache.hiddenStory) {
-                                dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
-                            }
-                        } catch (_) { }
-
-                        selectedUsers.clear();
-                        renderList(currentPage);
-                        updateCounts();
-
-                        if (hideBtn) {
-                            hideBtn.disabled = false;
-                            hideBtn.textContent = "👁️‍🗨️ Ocultar Selecionados";
-                        }
-
-                        showToast(`Sucesso! Stories ocultados para ${successCount} usuário(s).`);
-                    };
+                            showToast(`Sucesso! Stories ocultados para ${successCount} usuário(s).`);
+                        };
+                    }
 
                     // AÇÃO EM LOTE: Reexibir Selecionados
-                    document.getElementById("hsUnhideSelectedBtn").onclick = async () => {
-                        if (selectedUsers.size === 0) {
-                            alert("Nenhum usuário selecionado.");
-                            return;
-                        }
+                    const btnUnhideSelected = div.querySelector("#hsUnhideSelectedBtn");
+                    if (btnUnhideSelected) {
+                        btnUnhideSelected.onclick = async () => {
+                            if (selectedUsers.size === 0) {
+                                alert("Nenhum usuário selecionado.");
+                                return;
+                            }
 
-                        const usersToUnhide = Array.from(selectedUsers).filter(uname => {
-                            const u = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
-                            return u && u.isHidden;
-                        });
+                            const usersToUnhide = Array.from(selectedUsers).filter(uname => {
+                                const u = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                                return u && u.isHidden;
+                            });
 
-                        if (usersToUnhide.length === 0) {
-                            alert("Nenhum dos usuários selecionados está com o story ocultado.");
-                            return;
-                        }
+                            if (usersToUnhide.length === 0) {
+                                alert("Nenhum dos usuários selecionados está com o story ocultado.");
+                                return;
+                            }
 
-                        if (!confirm(`Deseja reexibir seus stories para ${usersToUnhide.length} usuário(s)?`)) return;
+                            if (!confirm(`Deseja reexibir seus stories para ${usersToUnhide.length} usuário(s)?`)) return;
 
-                        const unhideBtn = document.getElementById("hsUnhideSelectedBtn");
-                        if (unhideBtn) {
-                            unhideBtn.disabled = true;
-                            unhideBtn.textContent = "Processando...";
-                        }
+                            const unhideBtn = div.querySelector("#hsUnhideSelectedBtn") || btnUnhideSelected;
+                            if (unhideBtn) {
+                                unhideBtn.disabled = true;
+                                unhideBtn.textContent = "Processando...";
+                            }
 
-                        let successCount = 0;
-                        const delayMs = loadSettings().requestDelay || 350;
+                            let successCount = 0;
+                            const delayMs = loadSettings().requestDelay || 350;
 
-                        for (let i = 0; i < usersToUnhide.length; i++) {
-                            const uname = usersToUnhide[i];
-                            const uObj = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
-                            const uid = uObj?.pk || uObj?.id || getCachedUserId(uname) || '';
-                            if (unhideBtn) unhideBtn.textContent = `Processando (${i + 1}/${usersToUnhide.length})...`;
+                            for (let i = 0; i < usersToUnhide.length; i++) {
+                                const uname = usersToUnhide[i];
+                                const uObj = hideStoryList.find(x => x.username.toLowerCase() === uname.toLowerCase());
+                                const uid = uObj?.pk || uObj?.id || getCachedUserId(uname) || '';
+                                if (unhideBtn) unhideBtn.textContent = `Processando (${i + 1}/${usersToUnhide.length})...`;
 
-                            try {
-                                const res = await executeWbloksHideStory(uid, uname, 'unhide');
-                                if (res && res.success) {
-                                    if (uObj) uObj.isHidden = false;
-                                    if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
-                                    userListCache.hiddenStory.delete(uname.toLowerCase());
-                                    successCount++;
+                                try {
+                                    const res = await executeWbloksHideStory(uid, uname, 'unhide');
+                                    if (res && res.success) {
+                                        if (uObj) uObj.isHidden = false;
+                                        if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
+                                        userListCache.hiddenStory.delete(uname.toLowerCase());
+                                        successCount++;
+                                    }
+                                } catch (e) {
+                                    console.warn(`[IG Tools HideStory] Falha ao reexibir @${uname}:`, e);
                                 }
-                            } catch (e) {
-                                console.warn(`[IG Tools HideStory] Falha ao reexibir @${uname}:`, e);
+
+                                if (i < usersToUnhide.length - 1) {
+                                    await new Promise(r => setTimeout(r, delayMs));
+                                }
                             }
 
-                            if (i < usersToUnhide.length - 1) {
-                                await new Promise(r => setTimeout(r, delayMs));
+                            cachedHideStory = hideStoryList;
+                            try {
+                                localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(hideStoryList));
+                                dbHelper.saveCache('hideStory', hideStoryList.filter(u => u.isHidden));
+                                if (userListCache.hiddenStory) {
+                                    dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
+                                }
+                            } catch (_) { }
+
+                            selectedUsers.clear();
+                            renderList(currentPage);
+                            updateCounts();
+
+                            if (unhideBtn) {
+                                unhideBtn.disabled = false;
+                                unhideBtn.textContent = "👁️ Reexibir Selecionados";
                             }
-                        }
 
-                        cachedHideStory = hideStoryList;
-                        try {
-                            localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(hideStoryList));
-                            dbHelper.saveCache('hideStory', hideStoryList.filter(u => u.isHidden));
-                            if (userListCache.hiddenStory) {
-                                dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
-                            }
-                        } catch (_) { }
-
-                        selectedUsers.clear();
-                        renderList(currentPage);
-                        updateCounts();
-
-                        if (unhideBtn) {
-                            unhideBtn.disabled = false;
-                            unhideBtn.textContent = "👁️ Reexibir Selecionados";
-                        }
-
-                        showToast(`Sucesso! Stories reexibidos para ${successCount} usuário(s).`);
-                    };
+                            showToast(`Sucesso! Stories reexibidos para ${successCount} usuário(s).`);
+                        };
+                    }
 
                     // Real-time listener para novos usuários capturados via rolagem na página nativa
                     const captureCallback = (newUsers) => {
@@ -8166,6 +8234,7 @@
                             updateCounts();
                         });
                     }
+                    window.__isOpeningHideStoryModal = false;
                 }
 
                 function showMuteOptionsModal(actionType = 'mute', onConfirm) {
@@ -9084,9 +9153,9 @@
                             tableHtml += `</tbody></table>`;
 
                             let paginationHtml = `<div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">`;
-                            if (page > 1) paginationHtml += `<button id="prevMutedPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Anterior</button>`;
+                            if (page > 1) paginationHtml += `<button id="prevMutedPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; color: #111111 !important; font-weight: 600; font-size: 13px; cursor: pointer;">Anterior</button>`;
                             paginationHtml += `<span style="font-size: 13px; font-weight: 600;">Página ${page} de ${totalPages}</span>`;
-                            if (page < totalPages) paginationHtml += `<button id="nextMutedPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Próximo</button>`;
+                            if (page < totalPages) paginationHtml += `<button id="nextMutedPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; color: #111111 !important; font-weight: 600; font-size: 13px; cursor: pointer;">Próximo</button>`;
                             paginationHtml += `</div>`;
 
                             container.innerHTML = tableHtml + paginationHtml;
@@ -10492,9 +10561,9 @@
                         tableHtml += `</tbody></table>`;
 
                         let paginationHtml = `<div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px;">`;
-                        if (page > 1) paginationHtml += `<button id="prevBlockedPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Anterior</button>`;
+                        if (page > 1) paginationHtml += `<button id="prevBlockedPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; color: #111111 !important; font-weight: 600; font-size: 13px; cursor: pointer;">Anterior</button>`;
                         paginationHtml += `<span style="font-size: 13px; font-weight: 600;">Página ${page} de ${totalPages}</span>`;
-                        if (page < totalPages) paginationHtml += `<button id="nextBlockedPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; cursor: pointer;">Próximo</button>`;
+                        if (page < totalPages) paginationHtml += `<button id="nextBlockedPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; color: #111111 !important; font-weight: 600; font-size: 13px; cursor: pointer;">Próximo</button>`;
                         paginationHtml += `</div>`;
 
                         container.innerHTML = tableHtml + paginationHtml;
@@ -13289,9 +13358,9 @@
 
                             const totalPages = Math.ceil(sortedUsers.length / itemsPerPage);
                             let paginationHtml = `<div style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:20px;">`;
-                            if (page > 1) paginationHtml += `<button id="prevPageBtn" style="padding:5px 10px;">Anterior</button>`;
+                            if (page > 1) paginationHtml += `<button id="prevPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; color: #111111 !important; font-weight: 600; font-size: 13px; cursor: pointer;">Anterior</button>`;
                             paginationHtml += `<span>Página ${page} de ${totalPages}</span>`;
-                            if (page < totalPages) paginationHtml += `<button id="nextPageBtn" style="padding:5px 10px;">Próximo</button>`;
+                            if (page < totalPages) paginationHtml += `<button id="nextPageBtn" style="padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; color: #111111 !important; font-weight: 600; font-size: 13px; cursor: pointer;">Próximo</button>`;
                             paginationHtml += `</div>`;
 
                             container.innerHTML = tableHtml + paginationHtml;
@@ -16933,7 +17002,8 @@
                         const prevButton = document.createElement("button");
                         prevButton.textContent = "Anterior";
                         prevButton.disabled = currentPage === 1;
-                        prevButton.style.marginRight = "10px";
+                        prevButton.style.cssText = "padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; color: #111111 !important; font-weight: 600; cursor: " + (currentPage === 1 ? "not-allowed" : "pointer") + "; margin-right: 10px;";
+                        if (currentPage === 1) prevButton.style.opacity = "0.4";
                         prevButton.addEventListener("click", () => {
                             if (currentPage > 1) {
                                 currentPage--;
@@ -16946,8 +17016,9 @@
                         for (let i = startPage; i <= endPage; i++) {
                             const pageButton = document.createElement("button");
                             pageButton.textContent = i;
-                            pageButton.style.marginRight = "5px";
-                            pageButton.disabled = i === currentPage;
+                            const isActive = i === currentPage;
+                            pageButton.style.cssText = `padding: 5px 10px; border-radius: 5px; border: 1px solid ${isActive ? '#0095f6' : '#dbdbdb'}; background: ${isActive ? '#0095f6' : '#f8f9fa'}; color: ${isActive ? '#ffffff' : '#111111'} !important; font-weight: 600; cursor: ${isActive ? 'default' : 'pointer'}; margin-right: 5px;`;
+                            pageButton.disabled = isActive;
                             pageButton.addEventListener("click", () => {
                                 currentPage = i;
                                 renderTable(currentPage);
@@ -16959,7 +17030,8 @@
                         const nextButton = document.createElement("button");
                         nextButton.textContent = "Próximo";
                         nextButton.disabled = currentPage === totalPages;
-                        nextButton.style.marginLeft = "10px";
+                        nextButton.style.cssText = "padding: 5px 12px; border-radius: 5px; border: 1px solid #dbdbdb; background: #f8f9fa; color: #111111 !important; font-weight: 600; cursor: " + (currentPage === totalPages ? "not-allowed" : "pointer") + "; margin-left: 10px;";
+                        if (currentPage === totalPages) nextButton.style.opacity = "0.4";
                         nextButton.addEventListener("click", () => {
                             if (currentPage < totalPages) {
                                 currentPage++;
@@ -17253,9 +17325,9 @@
                 if (currentProfile === cleanUsername) {
                     const bodyText = (document.body && document.body.innerText) || '';
                     const isPrivateDom = bodyText.includes('Esta conta é privada') ||
-                                         bodyText.includes('This account is private') ||
-                                         bodyText.includes('Esta cuenta es privada') ||
-                                         Boolean(document.querySelector('svg[aria-label*="privad"], svg[aria-label*="Private"], svg[aria-label*="lock"]'));
+                        bodyText.includes('This account is private') ||
+                        bodyText.includes('Esta cuenta es privada') ||
+                        Boolean(document.querySelector('svg[aria-label*="privad"], svg[aria-label*="Private"], svg[aria-label*="lock"]'));
                     if (isPrivateDom) {
                         privacyCache.set(cleanUsername, true);
                         return Promise.resolve(true);

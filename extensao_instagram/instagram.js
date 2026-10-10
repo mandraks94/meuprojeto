@@ -2496,6 +2496,255 @@
                 }
                 window.parseHideStoryBloksText = parseHideStoryBloksText;
 
+                function extractBlockedPaginationParams(text) {
+                    if (!text || typeof text !== 'string') return null;
+                    let cursor = null;
+                    let containerId = null;
+                    let loadingId = null;
+                    let listId = null;
+                    let rowsId = null;
+
+                    const mCursor = text.match(/cursor\\*"\s*:\s*\\*"([^"\\\\]{15,500})/i) ||
+                        text.match(/"cursor"\s*:\s*"([^"]{15,500})"/i);
+                    if (mCursor && mCursor[1]) cursor = mCursor[1];
+
+                    const mContainer = text.match(/container_id\\*"\s*:\s*\\*"(\d+)/i) ||
+                        text.match(/"container_id"\s*:\s*"(\d+)"/i);
+                    if (mContainer && mContainer[1]) containerId = mContainer[1];
+
+                    const mLoading = text.match(/loading_component_id\\*"\s*:\s*\\*"(\d+)/i) ||
+                        text.match(/"loading_component_id"\s*:\s*"(\d+)"/i);
+                    if (mLoading && mLoading[1]) loadingId = mLoading[1];
+
+                    const mList = text.match(/container_id_of_list\\*"\s*:\s*\\*"(\d+)/i) ||
+                        text.match(/"container_id_of_list"\s*:\s*"(\d+)"/i);
+                    if (mList && mList[1]) listId = mList[1];
+
+                    const mRows = text.match(/container_id_of_rows\\*"\s*:\s*\\*"(\d+)/i) ||
+                        text.match(/"container_id_of_rows"\s*:\s*"(\d+)"/i);
+                    if (mRows && mRows[1]) rowsId = mRows[1];
+
+                    return { cursor, containerId, loadingId, listId, rowsId };
+                }
+                window.extractBlockedPaginationParams = extractBlockedPaginationParams;
+
+                function isForbiddenBlockedUsername(uname) {
+                    if (!uname || typeof uname !== 'string') return true;
+                    const clean = uname.toLowerCase().trim();
+                    const myUname = (typeof getLoggedInUsername === 'function' ? (getLoggedInUsername() || '') : '').toLowerCase().trim();
+                    const forbidden = [
+                        'destaques', 'novo', 'highlights', 'new', 'salvar', 'save',
+                        'concluído', 'done', 'editar', 'edit', 'cancelar', 'cancel',
+                        'pesquisar', 'search', 'configurações', 'settings', 'instagram',
+                        'threads', 'publicações', 'stories', 'reels', 'seguidores', 'seguindo'
+                    ];
+                    if (forbidden.includes(clean)) return true;
+                    if (myUname && clean === myUname) return true;
+                    if (typeof isValidInstagramUsername === 'function' && !isValidInstagramUsername(clean)) return true;
+                    return false;
+                }
+                window.isForbiddenBlockedUsername = isForbiddenBlockedUsername;
+
+                function parseBlockedBloksText(text) {
+                    if (!text) return [];
+                    if (typeof text !== 'string') {
+                        try { text = JSON.stringify(text); } catch (_) { return []; }
+                    }
+
+                    const usersMap = new Map();
+
+                    function processLispyString(lispyStr) {
+                        if (!lispyStr || typeof lispyStr !== 'string') return;
+
+                        // Regex 1: Tupla padrão Lispy com auto_blocked
+                        // (bk.action.array.Make, "1298329065", "_jenniferoj", "...", (bk.action.bool.Const, false), "https://...", (bk.action.bool.Const, true))
+                        const r1 = /\(bk\.action\.array\.Make,\s*"(\d+)",\s*"([a-zA-Z0-9._]{1,40})",\s*"((?:\\.|[^"\\])*)",\s*\(bk\.action\.bool\.Const,\s*(?:true|false)\),\s*"([^"]*)",\s*\(bk\.action\.bool\.Const,\s*(true|false)\)/g;
+                        let m;
+                        while ((m = r1.exec(lispyStr)) !== null) {
+                            const pk = m[1];
+                            const uname = m[2];
+                            let rawSec = m[3] || '';
+                            let picUrl = (m[4] || '').replace(/\\/g, '');
+                            const isAutoBlocked = m[5] === 'true';
+
+                            try { rawSec = JSON.parse(`"${rawSec}"`); } catch (_) { }
+
+                            if (uname && uname !== 'instagram' && uname !== 'threads' && !isForbiddenBlockedUsername(uname)) {
+                                const isAutoText = rawSec.toLowerCase().includes('outras contas') || rawSec.toLowerCase().includes('other accounts');
+                                const fullName = isAutoText ? '' : rawSec;
+                                const secondaryText = isAutoText ? 'Inclui outras contas que o usuário tiver ou criar' : rawSec;
+
+                                if (pk) setCachedUserId(uname, pk);
+
+                                usersMap.set(uname.toLowerCase(), {
+                                    username: uname,
+                                    pk: pk,
+                                    id: pk,
+                                    fullName: fullName,
+                                    secondaryText: secondaryText,
+                                    photoUrl: (picUrl && !picUrl.includes('rsrc.php')) ? picUrl : DEFAULT_AVATAR,
+                                    isAutoBlocked: isAutoBlocked || isAutoText
+                                });
+                            }
+                        }
+
+                        // Regex 2: Formato Lispy genérico de usuário com id, username e foto
+                        const r2 = /\(bk\.action\.array\.Make,\s*"(\d+)",\s*"([a-zA-Z0-9._]{1,40})",\s*"((?:\\.|[^"\\])*)"(?:,\s*\(bk\.action\.bool\.Const,\s*(?:true|false)\))?,\s*"([^"]*)"/g;
+                        let m2;
+                        while ((m2 = r2.exec(lispyStr)) !== null) {
+                            const pk = m2[1];
+                            const uname = m2[2];
+                            const key = uname.toLowerCase();
+                            if (!usersMap.has(key) && uname !== 'instagram' && uname !== 'threads' && !isForbiddenBlockedUsername(uname)) {
+                                let rawSec = m2[3] || '';
+                                let picUrl = (m2[4] || '').replace(/\\/g, '');
+                                try { rawSec = JSON.parse(`"${rawSec}"`); } catch (_) { }
+                                const isAutoText = rawSec.toLowerCase().includes('outras contas') || rawSec.toLowerCase().includes('other accounts');
+                                if (pk) setCachedUserId(uname, pk);
+                                usersMap.set(key, {
+                                    username: uname,
+                                    pk: pk,
+                                    id: pk,
+                                    fullName: isAutoText ? '' : rawSec,
+                                    secondaryText: rawSec,
+                                    photoUrl: (picUrl && !picUrl.includes('rsrc.php')) ? picUrl : DEFAULT_AVATAR,
+                                    isAutoBlocked: isAutoText
+                                });
+                            }
+                        }
+
+                        // Regex 3 (Altamente flexível e tolerante a escapes de build de produção):
+                        // Captura (bk.action.array.Make, "ID", "USERNAME"...) em qualquer contexto Lispy
+                        const rFlexible = /\(bk\.action\.array\.Make,\s*\\*"\s*(\d{4,25})\s*\\*",\s*\\*"\s*([a-zA-Z0-9._]{1,40})\s*\\*"/g;
+                        let mf;
+                        while ((mf = rFlexible.exec(lispyStr)) !== null) {
+                            const pk = mf[1];
+                            const uname = mf[2];
+                            const key = uname.toLowerCase();
+                            if (!usersMap.has(key) && uname !== 'instagram' && uname !== 'threads' && !isForbiddenBlockedUsername(uname)) {
+                                const chunk = lispyStr.slice(mf.index, mf.index + 800);
+                                let photoUrl = DEFAULT_AVATAR;
+                                const picMatch = chunk.match(/https?:\\?\/\\?\/[^"\s)]+(?:cdninstagram|fbcdn)[^"\s)]+/i);
+                                if (picMatch) {
+                                    photoUrl = picMatch[0].replace(/\\/g, '').replace(/\\u0026/g, '&');
+                                }
+
+                                const isAutoText = chunk.toLowerCase().includes('outras contas') ||
+                                    chunk.toLowerCase().includes('other accounts') ||
+                                    chunk.includes('is_auto_blocked');
+
+                                let fullName = '';
+                                const nameMatch = chunk.match(/\(bk\.action\.array\.Make,\s*\\*"\d+\\*",\s*\\*"[^"]+\\*",\s*\\*"((?:\\.|[^"\\])+)\\"/);
+                                if (nameMatch && nameMatch[1] && !isAutoText) {
+                                    try { fullName = JSON.parse(`"${nameMatch[1]}"`); } catch (_) { fullName = nameMatch[1]; }
+                                }
+
+                                if (pk) setCachedUserId(uname, pk);
+                                usersMap.set(key, {
+                                    username: uname,
+                                    pk: pk,
+                                    id: pk,
+                                    fullName: fullName || '',
+                                    secondaryText: isAutoText ? 'Inclui outras contas que o usuário tiver ou criar' : (fullName || ''),
+                                    photoUrl: (photoUrl && !photoUrl.includes('rsrc.php')) ? photoUrl : DEFAULT_AVATAR,
+                                    isAutoBlocked: isAutoText
+                                });
+                            }
+                        }
+                    }
+
+                    // 1. Tenta parsear como JSON para extrair campos initial_lispy nativos sem problemas de escape
+                    let parsedJson = null;
+                    let cleanText = text.trim();
+                    if (cleanText.startsWith('for (;;);')) {
+                        cleanText = cleanText.slice(9).trim();
+                    }
+
+                    try {
+                        parsedJson = JSON.parse(cleanText);
+                    } catch (_) {
+                        const lines = cleanText.split('\n');
+                        for (const l of lines) {
+                            try {
+                                const p = JSON.parse(l.replace(/^for \(;;\);/, '').trim());
+                                if (p?.payload || p?.data) { parsedJson = p; break; }
+                            } catch (_) { }
+                        }
+                    }
+
+                    if (parsedJson) {
+                        function collectLispy(val) {
+                            if (!val) return;
+                            if (typeof val === 'string') {
+                                if (val.includes('bk.action.array.Make')) {
+                                    processLispyString(val);
+                                }
+                            } else if (Array.isArray(val)) {
+                                val.forEach(collectLispy);
+                            } else if (typeof val === 'object') {
+                                if (val.initial_lispy && typeof val.initial_lispy === 'string') {
+                                    processLispyString(val.initial_lispy);
+                                }
+                                for (const k in val) {
+                                    collectLispy(val[k]);
+                                }
+                            }
+                        }
+                        collectLispy(parsedJson);
+                    }
+
+                    // 2. Processa também diretamente no texto cru e texto normalizado
+                    if (usersMap.size === 0) {
+                        processLispyString(cleanText);
+                        const normalized = cleanText
+                            .replace(/\\+"/g, '"')
+                            .replace(/\\\//g, '/');
+                        processLispyString(normalized);
+
+                        // Fallback para JSON tradicional no texto cru
+                        const jsonUserRegex = /"username"\s*:\s*"([a-zA-Z0-9._]{1,40})"/g;
+                        let mj;
+                        while ((mj = jsonUserRegex.exec(normalized)) !== null) {
+                            const uname = mj[1];
+                            const key = uname.toLowerCase();
+                            if (uname && !usersMap.has(key) && uname !== 'instagram' && uname !== 'threads' && !isForbiddenBlockedUsername(uname)) {
+                                const start = Math.max(0, mj.index - 350);
+                                const end = Math.min(normalized.length, mj.index + 500);
+                                const chunk = normalized.slice(start, end);
+
+                                const picMatch = chunk.match(/"profile_pic_url"\s*:\s*"([^"]+)"/);
+                                const photoUrl = picMatch ? picMatch[1].replace(/\\/g, '') : DEFAULT_AVATAR;
+
+                                const pkMatch = chunk.match(/"(?:pk|id|user_id)"\s*:\s*"?(\d+)"?/);
+                                const pk = pkMatch ? pkMatch[1] : (getCachedUserId(uname) || '');
+                                if (pk) setCachedUserId(uname, pk);
+
+                                usersMap.set(key, {
+                                    username: uname,
+                                    pk: pk,
+                                    id: pk,
+                                    fullName: '',
+                                    secondaryText: '',
+                                    photoUrl: (photoUrl && !photoUrl.includes('rsrc.php')) ? photoUrl : DEFAULT_AVATAR,
+                                    isAutoBlocked: false
+                                });
+                            }
+                        }
+                    }
+
+                    // 3. Salva cursor e container IDs globais se existirem
+                    const pInfo = extractBlockedPaginationParams(cleanText);
+                    if (pInfo && pInfo.cursor) {
+                        window._igBlockedCursorInfo = {
+                            ...(window._igBlockedCursorInfo || {}),
+                            ...pInfo
+                        };
+                    }
+
+                    return Array.from(usersMap.values());
+                }
+                window.parseBlockedBloksText = parseBlockedBloksText;
+
                 function handleBloksResponseText(urlString, text) {
                     if (!text || typeof text !== 'string') return;
                     try {
@@ -2504,6 +2753,7 @@
                             (path.includes('muted_accounts') && (urlString.includes('com.instagram.pagination.async') || urlString.includes('/async/wbloks/fetch/')));
 
                         const isBlockedContext = urlString.includes('blocked_accounts') ||
+                            text.includes('is_auto_blocked') ||
                             (path.includes('blocked_accounts') && (urlString.includes('com.instagram.pagination.async') || urlString.includes('/async/wbloks/fetch/')));
 
                         const isHideStoryContext = urlString.includes('hide_story') ||
@@ -2559,12 +2809,34 @@
                                 });
                             }
                         } else if (isBlockedContext) {
+                            let newCount = 0;
+                            // 1. Extração estruturada via parser Bloks Lispy oficial
+                            const parsed = parseBlockedBloksText(text);
+                            if (Array.isArray(parsed) && parsed.length > 0) {
+                                parsed.forEach(u => {
+                                    if (!u || !u.username || isForbiddenBlockedUsername(u.username)) return;
+                                    const uname = u.username;
+                                    if (!window._igBlockedUsersCapture.users.has(uname)) {
+                                        window._igBlockedUsersCapture.users.set(uname, u);
+                                        newCount++;
+                                    } else {
+                                        const existing = window._igBlockedUsersCapture.users.get(uname);
+                                        if (!existing.pk && u.pk) { existing.pk = u.pk; existing.id = u.pk; }
+                                        if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && u.photoUrl !== DEFAULT_AVATAR) {
+                                            existing.photoUrl = u.photoUrl;
+                                        }
+                                        if (u.isAutoBlocked) existing.isAutoBlocked = true;
+                                    }
+                                    if (u.pk) setCachedUserId(uname, u.pk);
+                                });
+                            }
+
+                            // 2. Fallback via regex de JSON tradicional
                             const userRegex = /"username":"([a-zA-Z0-9._]+)"/g;
                             let match;
-                            let newCount = 0;
                             while ((match = userRegex.exec(text)) !== null) {
                                 const uname = match[1];
-                                if (!uname || uname === 'instagram' || uname === 'threads') continue;
+                                if (!uname || uname === 'instagram' || uname === 'threads' || isForbiddenBlockedUsername(uname)) continue;
 
                                 const start = Math.max(0, match.index - 300);
                                 const end = Math.min(text.length, match.index + 500);
@@ -2578,14 +2850,15 @@
                                 if (pk) setCachedUserId(uname, pk);
 
                                 if (!window._igBlockedUsersCapture.users.has(uname)) {
-                                    window._igBlockedUsersCapture.users.set(uname, { username: uname, photoUrl, pk });
+                                    window._igBlockedUsersCapture.users.set(uname, { username: uname, photoUrl, pk, id: pk, isAutoBlocked: false });
                                     newCount++;
                                 } else {
                                     const existing = window._igBlockedUsersCapture.users.get(uname);
-                                    if (!existing.pk && pk) existing.pk = pk;
+                                    if (!existing.pk && pk) { existing.pk = pk; existing.id = pk; }
                                     if ((!existing.photoUrl || existing.photoUrl === DEFAULT_AVATAR) && photoUrl !== DEFAULT_AVATAR) existing.photoUrl = photoUrl;
                                 }
                             }
+
                             const usersArray = Array.from(window._igBlockedUsersCapture.users.values());
                             window._igBlockedUsersCapture.data = usersArray;
                             if (newCount > 0 || usersArray.length > 0) {
@@ -2812,18 +3085,35 @@
                                 }
                             }
 
-                            // Sniffer automático de queries GraphQL no console
-                            if ((urlString.includes('graphql') || urlString.includes('wbloks') || urlString.includes('friendships')) && bodyData) {
-                                try {
-                                    const params = new URLSearchParams(typeof bodyData === 'string' ? bodyData : '');
-                                    const qName = params.get('fb_api_req_friendly_name') || '';
-                                    const qDocId = params.get('doc_id') || '';
-                                    const qVars = params.get('variables') || '';
-                                    if (qName && !qName.includes('PolarisScreenTimeLogger')) {
-                                        console.log(`%c[IG Sniffer] ${qName} (doc_id: ${qDocId})`, 'color: #00ffaa; background: #003311; font-weight: bold; padding: 2px 6px; border-radius: 3px;', qVars);
+                            // Sniffer automático e completo de queries GraphQL (GET, POST, FormData, URLSearchParams, etc.)
+                            let snifferReqName = '';
+                            let snifferDocId = '';
+                            let snifferVars = '';
+                            try {
+                                if (urlString) {
+                                    try {
+                                        const parsedUrl = new URL(urlString, window.location.origin);
+                                        snifferDocId = parsedUrl.searchParams.get('doc_id') || parsedUrl.searchParams.get('query_hash') || '';
+                                        snifferVars = parsedUrl.searchParams.get('variables') || '';
+                                        snifferReqName = parsedUrl.searchParams.get('fb_api_req_friendly_name') || '';
+                                    } catch (_) { }
+                                }
+                                if (bodyData) {
+                                    if (typeof bodyData === 'string') {
+                                        const params = new URLSearchParams(bodyData);
+                                        snifferReqName = snifferReqName || params.get('fb_api_req_friendly_name') || '';
+                                        snifferDocId = snifferDocId || params.get('doc_id') || '';
+                                        snifferVars = snifferVars || params.get('variables') || '';
+                                    } else if (bodyData instanceof FormData || bodyData instanceof URLSearchParams) {
+                                        snifferReqName = snifferReqName || bodyData.get('fb_api_req_friendly_name') || '';
+                                        snifferDocId = snifferDocId || bodyData.get('doc_id') || '';
+                                        snifferVars = snifferVars || bodyData.get('variables') || '';
                                     }
-                                } catch (_) { }
-                            }
+                                }
+                                if ((snifferReqName || snifferDocId) && !snifferReqName.includes('PolarisScreenTimeLogger')) {
+                                    console.log(`%c[IG Sniffer] ${snifferReqName || 'GraphQL Query'} (doc_id: ${snifferDocId || 'N/A'})`, 'color: #00ffaa; background: #003311; font-weight: bold; padding: 2px 6px; border-radius: 3px;', snifferVars);
+                                }
+                            } catch (_) { }
                             // Verifica se é resposta Bloks de contas silenciadas, bloqueadas, ocultar story, amigos próximos ou paginação assíncrona
                             if (urlString.includes('com.instagram.pagination.async') ||
                                 urlString.includes('bloks/apps/com.instagram.interactions.privacy') ||
@@ -2839,6 +3129,49 @@
                                         const text = await clone.text();
                                         handleBloksResponseText(urlString, text);
                                     } catch (e) { /* silencia erros de parse */ }
+                                    return response;
+                                });
+                            }
+                            // Detector de respostas de Stories / Destaques via GraphQL ou Rotas Web (ignora posts do feed)
+                            const isProfilePostsReq = urlString.includes('PolarisProfilePostsTabContentQuery') ||
+                                                      snifferReqName.includes('PolarisProfilePosts') ||
+                                                      snifferReqName.includes('ProfilePosts') ||
+                                                      urlString.includes('/feed/user/');
+
+                            if (!isProfilePostsReq && (urlString.includes('graphql') || urlString.includes('stories') || urlString.includes('highlights')) && !urlString.includes('PolarisScreenTimeLogger')) {
+                                return originalFetch.apply(this, arguments).then(async response => {
+                                    try {
+                                        const clone = response.clone();
+                                        const text = await clone.text();
+                                        const isReelOrHighlightPayload = text.includes('xdt_api__v1__feed__reels_media') ||
+                                                                         text.includes('reels_media') ||
+                                                                         text.includes('highlight_reel') ||
+                                                                         text.includes('GraphHighlightReel') ||
+                                                                         (urlString.includes('/stories/') && (text.includes('story_like') || text.includes('viewer_has_liked') || text.includes('has_liked')));
+
+                                        if (isReelOrHighlightPayload) {
+                                            console.log(`%c[IG Sniffer STORY/DESTAQUE DETECTADO!]`, 'color: yellow; background: #660066; font-size: 13px; font-weight: bold;', { url: urlString, name: snifferReqName, docId: snifferDocId });
+                                            window._igRecentStoryItemsMap = window._igRecentStoryItemsMap || new Map();
+                                            try {
+                                                let cleanT = text.trim();
+                                                if (cleanT.startsWith('for (;;);')) cleanT = cleanT.slice(9).trim();
+                                                const parsed = JSON.parse(cleanT);
+                                                const extractDeep = (obj) => {
+                                                    if (!obj || typeof obj !== 'object') return;
+                                                    if (Array.isArray(obj)) { obj.forEach(extractDeep); return; }
+                                                    if ((obj.id || obj.pk) && ('story_like' in obj || 'viewer_has_liked' in obj || 'has_liked' in obj || obj.reel_type === 'highlight_reel' || obj.story_media_id)) {
+                                                        const mId = String(obj.id || obj.pk).split('_')[0];
+                                                        window._igRecentStoryItemsMap.set(mId, obj);
+                                                    }
+                                                    if (Array.isArray(obj.items)) obj.items.forEach(extractDeep);
+                                                    Object.keys(obj).forEach(k => {
+                                                        if (k !== 'items' && typeof obj[k] === 'object') extractDeep(obj[k]);
+                                                    });
+                                                };
+                                                extractDeep(parsed);
+                                            } catch (_) { }
+                                        }
+                                    } catch (_) { }
                                     return response;
                                 });
                             }
@@ -3237,7 +3570,28 @@
                 clearCache: async function (storeName) {
                     await this._init();
                     delete this._cache[storeName];
-                    await gDriveApi.saveData(this._cache);
+
+                    // Limpa chaves do localStorage associadas à tabela
+                    try {
+                        localStorage.removeItem('ig_tools_cache_' + storeName);
+                        localStorage.removeItem('ig_tools_cached_' + storeName);
+                    } catch (_) { }
+
+                    // Se for unblockedAccounts ou unblocked, garante limpeza completa
+                    if (storeName === 'unblockedAccounts' || storeName === 'unblocked') {
+                        this._cache.unblockedAccounts = [];
+                        try {
+                            localStorage.removeItem('ig_tools_cached_unblocked');
+                            localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify([]));
+                        } catch (_) { }
+                        if (typeof cachedUnblockedAccounts !== 'undefined') {
+                            cachedUnblockedAccounts = [];
+                        }
+                    }
+
+                    if (googleAuth.isConnected()) {
+                        await gDriveApi.saveData(this._cache);
+                    }
                 }
             };
 
@@ -9857,11 +10211,34 @@
 
                     history.pushState(null, null, originalPath);
                     window.dispatchEvent(new Event("popstate"));
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-
                     if (callback) callback();
                 }
                 // --- FIM DO MENU CONTAS SILENCIADAS ---
+
+                // Helper para filtrar nomes proibidos ou capturados incorretamente do DOM da tela de perfil/feed
+                function isForbiddenBlockedUsername(uname) {
+                    if (!uname || typeof uname !== 'string') return true;
+                    const clean = uname.toLowerCase().trim();
+                    const myUname = (getLoggedInUsername() || '').toLowerCase().trim();
+                    const forbidden = [
+                        'destaques', 'novo', 'highlights', 'new', 'salvar', 'save',
+                        'concluído', 'done', 'editar', 'edit', 'cancelar', 'cancel',
+                        'pesquisar', 'search', 'configurações', 'settings', 'instagram',
+                        'threads', 'publicações', 'stories', 'reels', 'seguidores', 'seguindo'
+                    ];
+                    if (forbidden.includes(clean)) return true;
+                    if (myUname && clean === myUname) return true;
+                    if (!isValidInstagramUsername(clean)) return true;
+                    return false;
+                }
+
+                function sanitizeBlockedList(list) {
+                    if (!Array.isArray(list)) return [];
+                    return list.filter(u => {
+                        if (!u || !u.username) return false;
+                        return !isForbiddenBlockedUsername(u.username);
+                    });
+                }
 
                 // Cache persistente de contas bloqueadas (permite abertura INSTANTÂNEA em 0ms)
                 let cachedBlockedAccounts = [];
@@ -9870,7 +10247,11 @@
                     if (saved) {
                         const parsed = JSON.parse(saved);
                         if (Array.isArray(parsed) && parsed.length > 0) {
-                            cachedBlockedAccounts = parsed;
+                            cachedBlockedAccounts = sanitizeBlockedList(parsed);
+                            // Purga imediatamente registros corrompidos/falsos do localStorage
+                            if (cachedBlockedAccounts.length !== parsed.length) {
+                                localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(cachedBlockedAccounts));
+                            }
                         }
                     }
                 } catch (_) { }
@@ -9889,43 +10270,45 @@
 
                 async function fetchBlockedAccountsWbloks() {
                     try {
-                        const viewerId = getCookie('ds_user_id') || (typeof getActorId === 'function' ? getActorId() : '') || '0';
                         const fbDtsg = getDtsgToken() || getInstagramFormToken('fb_dtsg') || '';
                         const jazoest = computeJazoest(fbDtsg) || '25862';
                         const lsd = getLsdToken() || getInstagramFormToken('lsd') || '';
                         const spin = getSpinParams();
 
-                        const dyn = getInstagramFormToken('__dyn') || '7xeUjG1mxu1syaxG4Vp41twpUnwgU7SbzEdF8vyUco2qwJyEiw50x609vCwjE1EEc87m0yE462mcw5Mx62G5UswoEcE7O2l0Fwqo5W1yw9O1lwxwQzXwae4UaEW2G0AEco5G0zK5o4q0HU1wEbUGdwtUeo9UaQ0Lo6-bwHwKG6Ufk0zU8oC1IwjUpwlAcwBwUQp1yU426V8aUuwm8jxK1mwa6bBK4o16UeUGq2Kq11whE984O0XEdoCQ1jw';
-                        const csr = getInstagramFormToken('__csr') || 'iMB0FNX5N22j9eUHPWl8iGkV-eGXT8G5OPdP8VIzehP8KBh9pV9cNGWnip9Wh4BGfld8Dif4W4au9Irs8F4l9JbhAF4gJ7l95AFagBBBAkDiq9uVdppZDJykAch9QvAKiXjAV4HgzDBoLaaGh3Q68K9zGzay9pUC8yEj-dyWxe9zEGK9zXBzWzWyuQmbyWxaZ3KFEgxjhj1ycBzk5uVoGdgK8Ax3AAHV8K5GgG22maG1UUK1sweq7okw5ww08Ha00Y8EcU0vn2UKkMoQ18xgE0h1opw6yCtw2TU0hyS0Koqguw8Z0BwiUdK0qW5Eo6jw4dU3HwbWq3G8wTg1iV2By84iUy8guGywqodE2YrRrw1s2i1lG5o06KC02qu2K9g6rw0E5weS0fcw';
-                        const hsdp = getInstagramFormToken('__hsdp') || 'gjMb_j1GkkCPcx4Pn9lEHV2NOEO99KXjQ3pyigsojx5AqI9xeGG48qx222boGwm9cwnoAV4A-FUK19gZ91G8woHuSHG4u7dChF4mmQ4B8fCK68G2GUC9wzz84e11wywkqwHxS3u6Ed98S19wDxedwm8qwk8szofoKU28wJwok32361dyUO0j-0pC2O0cPwpE0B20YEnwtE0mCw5Ywa20zi08-5o0Guew5fxvw2GA0gW09Iwww5GwmU887K0kO0BVk7nu';
-                        const hblp = getInstagramFormToken('__hblp') || getInstagramFormToken('_hblp') || '0CG7E5u10wxzEb9bK9wAxedy69G1lwFBGm5ECiCiqim8K8yEyi2W5GAHyXEyjRwrAAq4Vk1ACg-eHxa9VbhFbGmUW4oyqWxny8hxeiCmECqUObz9ohwEGbxPx7Gmqmm9wkqz8hz8twTy-cgO4UiAzoiwSwDxedxam3-UmwYxe59US2u5kaK2K1czQ2O1tig8ES363CubCAz81fU7uiaw4hwIw8a1Lwt82zwGxS2W1Lw_wpE4e0N89U17U3Oxu1Sw2Yo0Hi5o2bwOwau1ewJwzwm8O2swuJ4wkU7u0HE1GoW0NE28xvwRxvw24o4x04ew5twah0q88awvU3xBwDwPwwyU6-0w85K1sxa8x_wr9k7nu';
-                        const sjsp = getInstagramFormToken('__sjsp') || getInstagramFormToken('_sjsp') || 'gjMbXj2k4hhiragx4PmpmyLAb7az8ACXKjgdES8UA4M9S9wFwQx2226a1oswnoB4AijWwrAA6E2QS4Qfg5u2GUjwzw6cwl8';
-                        const sParam = getInstagramFormToken('__s') || 'z3nm3y:imx696:n7ke1q';
-                        const hsi = getInstagramFormToken('__hsi') || '7689958851794881797';
-                        const hs = getInstagramFormToken('__hs') || '20722.HYP:instagram_web_pkg.2.1...0';
+                        const dyn = getInstagramFormToken('__dyn') || '';
+                        const csr = getInstagramFormToken('__csr') || '';
+                        const hsdp = getInstagramFormToken('__hsdp') || '';
+                        const hblp = getInstagramFormToken('__hblp') || '';
+                        const sjsp = getInstagramFormToken('__sjsp') || getInstagramFormToken('_sjsp') || '';
+                        const sParam = getInstagramFormToken('__s') || '';
+                        const hsi = getInstagramFormToken('__hsi') || '';
+                        const hs = getInstagramFormToken('__hs') || '';
 
                         const url = 'https://www.instagram.com/async/wbloks/fetch/?appid=com.instagram.portable_settings.blocked_accounts.blocked_accounts_reloader&type=action&__bkv=62077fc559de123afe03ebeb18194a88ba5d4e6874d9a07873752f3792adb8a0';
 
+                        const viewerId = window._sharedData?.config?.viewerId || getCookie('ds_user_id') || getCookie('sessionid')?.split('%')[0] || '0';
+                        const cursorInfo = window._igBlockedCursorInfo || {};
                         const body = new URLSearchParams({
                             params: JSON.stringify({
-                                container_id_of_list: "2073224587",
-                                container_id_of_rows: "2073224588"
+                                container_id_of_list: cursorInfo.listId || cursorInfo.containerId || "2073224587",
+                                container_id_of_rows: cursorInfo.rowsId || "2073224588"
                             }),
                             __crn: 'comet.igweb.PolarisBlockedAccountsSettingsRoute',
                             __comet_req: '7',
                             server_timestamps: 'true',
                             __d: 'www',
                             __user: viewerId,
+                            av: viewerId,
                             __a: '1',
                             __req: '7',
-                            __hs: hs,
+                            __hs: hs || '20550.HYP:instagram_web_pkg.2.1..0.0',
                             dpr: String(window.devicePixelRatio || 1),
                             __ccg: 'EXCELLENT',
                             __rev: spin.spin_r || '1048608279',
                             __s: sParam,
                             __hsi: hsi,
-                            __dyn: dyn,
-                            __csr: csr,
+                            __dyn: dyn || '7xeUMWS2e5U4-1twp142w4vwKxW4E462m12wUwtU662W0CEbo1nEhw2nVE4W0om78687e2l0F86C1mw5ux615x60Vo1upE4W0OE2ZwrU6C072e',
+                            __csr: csr || 'gE0B5B',
                             __hsdp: hsdp,
                             __hblp: hblp,
                             __sjsp: sjsp,
@@ -9935,9 +10318,6 @@
                             __spin_t: spin.spin_t || String(Math.floor(Date.now() / 1000))
                         });
 
-                        if (viewerId && viewerId !== '0') {
-                            body.append('av', viewerId);
-                        }
                         if (fbDtsg) body.append('fb_dtsg', fbDtsg);
                         if (jazoest) body.append('jazoest', jazoest);
                         if (lsd) body.append('lsd', lsd);
@@ -9955,7 +10335,7 @@
                             body: body.toString(),
                             credentials: 'include',
                             cache: 'no-store',
-                            signal: AbortSignal.timeout(12000)
+                            signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined
                         });
 
                         if (!response.ok) {
@@ -9964,94 +10344,78 @@
                         }
 
                         const rawText = await response.text();
-                        let cleanedText = rawText.trim();
-                        if (cleanedText.startsWith('for (;;);')) {
-                            cleanedText = cleanedText.slice(9).trim();
-                        }
-
-                        let parsedJson = null;
-                        try {
-                            parsedJson = JSON.parse(cleanedText);
-                        } catch (e) {
-                            const lines = cleanedText.split('\n');
-                            for (const line of lines) {
-                                try {
-                                    const p = JSON.parse(line.replace(/^for \(;;\);/, '').trim());
-                                    if (p?.payload || p?.data) {
-                                        parsedJson = p;
-                                        break;
-                                    }
-                                } catch (_) { }
+                        if (typeof window.parseBlockedBloksText === 'function') {
+                            const parsed = window.parseBlockedBloksText(rawText);
+                            if (Array.isArray(parsed) && parsed.length > 0) {
+                                console.log(`[IG Tools Bloqueados] Extraídos ${parsed.length} usuários via Wbloks com sucesso.`);
+                                return sanitizeBlockedList(parsed);
                             }
                         }
 
-                        let lispyStr = '';
-                        if (parsedJson?.payload?.layout?.bloks_payload?.data) {
-                            const items = parsedJson.payload.layout.bloks_payload.data;
-                            for (const it of items) {
-                                if (it?.data?.initial_lispy) {
-                                    lispyStr = it.data.initial_lispy;
-                                    break;
-                                }
-                            }
-                        }
-
-                        const textToSearch = lispyStr || cleanedText;
-                        const users = [];
-                        const seen = new Set();
-
-                        // Regex para extrair usuários do Lispy do Wbloks:
-                        // (bk.action.array.Make, "user_id", "username", "secondary_text", (bk.action.bool.Const, false), "profile_pic_url", (bk.action.bool.Const, is_auto_blocked))
-                        const itemRegex = /\(bk\.action\.array\.Make,\s*"(\d+)",\s*"([^"]+)",\s*"((?:\\.|[^"\\])*)",\s*\(bk\.action\.bool\.Const,\s*(?:true|false)\),\s*"((?:\\.|[^"\\])+)",\s*\(bk\.action\.bool\.Const,\s*(true|false)\)/g;
-
-                        let match;
-                        while ((match = itemRegex.exec(textToSearch)) !== null) {
-                            const pk = match[1];
-                            const uname = match[2];
-                            let rawSec = match[3];
-                            let picUrl = match[4].replace(/\\/g, '');
-                            const isAutoBlocked = match[5] === 'true';
-
-                            try {
-                                rawSec = JSON.parse(`"${rawSec}"`);
-                            } catch (_) { }
-
-                            if (uname && !seen.has(uname)) {
-                                seen.add(uname);
-                                const isAutoText = rawSec.toLowerCase().includes('outras contas') || rawSec.toLowerCase().includes('other accounts');
-                                const fullName = isAutoText ? '' : rawSec;
-                                const secondaryText = isAutoText ? 'Inclui outras contas que o usuário tiver ou criar' : rawSec;
-
-                                if (pk) setCachedUserId(uname, pk);
-
-                                users.push({
-                                    username: uname,
-                                    pk: pk,
-                                    id: pk,
-                                    fullName: fullName,
-                                    secondaryText: secondaryText,
-                                    photoUrl: picUrl || DEFAULT_AVATAR,
-                                    isAutoBlocked: isAutoBlocked || isAutoText
-                                });
-                            }
-                        }
-
-                        console.log(`[IG Tools Bloqueados] Extraídos ${users.length} usuários via Wbloks com sucesso.`);
-                        return users.length > 0 ? users : null;
+                        console.log('[IG Tools Bloqueados] Wbloks endpoint retornou 0 usuários estruturados.');
+                        return null;
                     } catch (err) {
                         console.error('[IG Tools Bloqueados] Erro ao buscar Wbloks:', err);
                         return null;
                     }
                 }
 
+                async function fetchBlockedAccountsPageHtml() {
+                    try {
+                        console.log('[IG Tools Bloqueados] Tentando buscar página de contas bloqueadas via background fetch...');
+                        const response = await fetch('https://www.instagram.com/accounts/blocked_accounts/', {
+                            credentials: 'include',
+                            headers: {
+                                ...getApiHeaders(true),
+                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                            },
+                            cache: 'no-store'
+                        });
+                        if (!response.ok) return null;
+                        const html = await response.text();
+                        if (typeof window.parseBlockedBloksText === 'function') {
+                            const users = window.parseBlockedBloksText(html);
+                            if (Array.isArray(users) && users.length > 0) {
+                                console.log(`[IG Tools Bloqueados] Extraídos ${users.length} usuários via HTML oficial.`);
+                                return sanitizeBlockedList(users);
+                            }
+                        }
+                        return null;
+                    } catch (e) {
+                        console.warn('[IG Tools Bloqueados] Erro ao buscar HTML em segundo plano:', e);
+                        return null;
+                    }
+                }
+
                 function extractBlockedAccountsUsernames(doc = document) {
                     return new Promise(async (resolve) => {
+                        // 1. Tenta API Wbloks direta
                         const wbloksUsers = await fetchBlockedAccountsWbloks();
                         if (wbloksUsers && wbloksUsers.length > 0) {
-                            resolve(wbloksUsers);
+                            const clean = sanitizeBlockedList(wbloksUsers);
+                            if (clean.length > 0) {
+                                resolve(clean);
+                                return;
+                            }
+                        }
+
+                        // 2. Se NÃO estivermos na página oficial (/accounts/blocked_accounts/),
+                        // tenta buscar o HTML oficial em segundo plano.
+                        // CRÍTICO: NUNCA raspar o DOM ou scripts do document se não for a página oficial de contas bloqueadas!
+                        const isOnBlockedPage = window.location.pathname.startsWith('/accounts/blocked_accounts');
+                        if (!isOnBlockedPage) {
+                            console.log('[IG Tools Bloqueados] Fora de /accounts/blocked_accounts. Tentando background HTML fetch...');
+                            const bgUsers = await fetchBlockedAccountsPageHtml();
+                            if (bgUsers && bgUsers.length > 0) {
+                                resolve(bgUsers);
+                                return;
+                            }
+                            console.warn('[IG Tools Bloqueados] Não é seguro extrair contas bloqueadas fora da tela oficial. Retornando vazio para não capturar perfil/feed.');
+                            resolve([]);
                             return;
                         }
 
+                        // 3. Estando NA página oficial (/accounts/blocked_accounts/), realiza a extração e rolagem
                         const users = new Map();
                         let scrollInterval;
                         let noNewUsersCount = 0;
@@ -10076,70 +10440,77 @@
                             users.forEach(u => {
                                 if (u.username && u.pk) setCachedUserId(u.username, u.pk);
                             });
-                            resolve(cancelled ? [] : Array.from(users.values()));
+                            resolve(cancelled ? [] : sanitizeBlockedList(Array.from(users.values())));
                         }
 
                         function tryExtractFromSSRScripts() {
                             try {
-                                const scripts = Array.from(doc.querySelectorAll('script[type="application/json"]'));
+                                const scripts = Array.from(doc.querySelectorAll('script'));
                                 for (const script of scripts) {
                                     const text = script.textContent || '';
-                                    if (!text.includes('blocked') && !text.includes('username')) continue;
-                                    const userRegex = /"username":"([a-zA-Z0-9._]+)"/g;
-                                    let m;
-                                    while ((m = userRegex.exec(text)) !== null) {
-                                        const uname = m[1];
-                                        if (!uname || uname === 'instagram' || uname === 'threads') continue;
+                                    if (!text || text.length < 50) continue;
+                                    const isRelevant = text.includes('bk.action.array.Make') ||
+                                        text.includes('blocked_accounts') ||
+                                        text.includes('PolarisBlockedAccounts') ||
+                                        text.includes('is_auto_blocked') ||
+                                        text.includes('portable_settings.blocked_accounts');
+                                    if (!isRelevant) continue;
 
-                                        const start = Math.max(0, m.index - 300);
-                                        const end = Math.min(text.length, m.index + 500);
-                                        const chunk = text.slice(start, end);
-
-                                        const picMatch = chunk.match(/"profile_pic_url":"([^"]+)"/);
-                                        const photoUrl = picMatch ? picMatch[1].replace(/\\/g, '') : DEFAULT_AVATAR;
-
-                                        const pkMatch = chunk.match(/"pk":"?(\d+)"?/);
-                                        const pk = pkMatch ? pkMatch[1] : '';
-                                        if (pk) setCachedUserId(uname, pk);
-
-                                        if (!users.has(uname)) {
-                                            users.set(uname, { username: uname, photoUrl, pk, id: pk, fullName: '', secondaryText: '', isAutoBlocked: false });
+                                    if (typeof window.parseBlockedBloksText === 'function') {
+                                        const parsed = window.parseBlockedBloksText(text);
+                                        if (Array.isArray(parsed) && parsed.length > 0) {
+                                            parsed.forEach(u => {
+                                                if (u && u.username && !isForbiddenBlockedUsername(u.username) && !users.has(u.username.toLowerCase())) {
+                                                    users.set(u.username.toLowerCase(), u);
+                                                }
+                                            });
                                         }
                                     }
                                 }
                                 if (users.size > 0) {
+                                    console.log(`[IG Tools Bloqueados] Extraídos ${users.size} usuário(s) via SSR scripts da página.`);
                                     update(users.size, users.size, `Carregados ${users.size} usuário(s) iniciais...`);
                                 }
-                            } catch (e) { }
+                            } catch (e) {
+                                console.warn('[IG Tools Bloqueados] Erro ao extrair SSR scripts:', e);
+                            }
                         }
 
                         tryExtractFromSSRScripts();
 
                         if (window._igBlockedUsersCapture && window._igBlockedUsersCapture.users) {
                             window._igBlockedUsersCapture.users.forEach(u => {
-                                if (!users.has(u.username)) {
-                                    users.set(u.username, { username: u.username, photoUrl: u.photoUrl, pk: u.pk, id: u.pk, fullName: '', secondaryText: '', isAutoBlocked: false });
-                                } else {
-                                    const cur = users.get(u.username);
-                                    if (!cur.pk && u.pk) { cur.pk = u.pk; cur.id = u.pk; }
-                                    if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && u.photoUrl !== DEFAULT_AVATAR) cur.photoUrl = u.photoUrl;
+                                if (u && u.username && !isForbiddenBlockedUsername(u.username)) {
+                                    const k = u.username.toLowerCase();
+                                    if (!users.has(k)) {
+                                        users.set(k, { username: u.username, photoUrl: u.photoUrl, pk: u.pk, id: u.pk, fullName: u.fullName || '', secondaryText: u.secondaryText || '', isAutoBlocked: !!u.isAutoBlocked });
+                                    } else {
+                                        const cur = users.get(k);
+                                        if (!cur.pk && u.pk) { cur.pk = u.pk; cur.id = u.pk; }
+                                        if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && u.photoUrl !== DEFAULT_AVATAR) cur.photoUrl = u.photoUrl;
+                                        if (u.isAutoBlocked) cur.isAutoBlocked = true;
+                                    }
+                                    if (u.pk) setCachedUserId(u.username, u.pk);
                                 }
-                                if (u.pk) setCachedUserId(u.username, u.pk);
                             });
                         }
 
                         function networkCallback(capturedArray) {
                             let added = false;
                             capturedArray.forEach(u => {
-                                if (!users.has(u.username)) {
-                                    users.set(u.username, { username: u.username, photoUrl: u.photoUrl, pk: u.pk, id: u.pk, fullName: '', secondaryText: '', isAutoBlocked: false });
-                                    added = true;
-                                } else {
-                                    const cur = users.get(u.username);
-                                    if (!cur.pk && u.pk) { cur.pk = u.pk; cur.id = u.pk; }
-                                    if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && u.photoUrl !== DEFAULT_AVATAR) cur.photoUrl = u.photoUrl;
+                                if (u && u.username && !isForbiddenBlockedUsername(u.username)) {
+                                    const k = u.username.toLowerCase();
+                                    if (!users.has(k)) {
+                                        users.set(k, { username: u.username, photoUrl: u.photoUrl, pk: u.pk, id: u.pk, fullName: u.fullName || '', secondaryText: u.secondaryText || '', isAutoBlocked: !!u.isAutoBlocked });
+                                        added = true;
+                                    } else {
+                                        const cur = users.get(k);
+                                        if (!cur.pk && u.pk) { cur.pk = u.pk; cur.id = u.pk; }
+                                        if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && u.photoUrl !== DEFAULT_AVATAR) cur.photoUrl = u.photoUrl;
+                                        if (u.isAutoBlocked) cur.isAutoBlocked = true;
+                                    }
+                                    if (u.pk) setCachedUserId(u.username, u.pk);
                                 }
-                                if (u.pk) setCachedUserId(u.username, u.pk);
                             });
                             if (added) {
                                 noNewUsersCount = 0;
@@ -10154,15 +10525,110 @@
                             if (cancelled) return;
                             const initialUserCount = users.size;
 
+                            // A. Localiza linhas da tabela de bloqueados buscando botões "Desbloquear" / "Unblock"
+                            // (Critério infalível na tela de bloqueados: apenas usuários bloqueados possuem esse botão)
+                            const unblockKeywords = ['desbloquear', 'unblock', 'débloquer', 'sblocca', 'blockierung aufheben', 'desbloquea'];
+                            const allButtons = Array.from(doc.querySelectorAll('button, div[role="button"]'));
+                            const unblockButtons = allButtons.filter(b => {
+                                if (b.closest('#blockedAccountsModal') || b.id?.startsWith('blocked') || b.classList?.contains('btn-unblock-row')) return false;
+                                const txt = (b.innerText || b.textContent || b.getAttribute('aria-label') || '').trim().toLowerCase();
+                                return unblockKeywords.some(kw => txt === kw || txt.includes(kw));
+                            });
+
+                            unblockButtons.forEach(btn => {
+                                let row = btn.closest('div[role="listitem"], li');
+                                if (!row) {
+                                    let p = btn;
+                                    for (let depth = 0; depth < 5; depth++) {
+                                        if (p.parentElement && p.parentElement !== doc.body && p.parentElement.tagName !== 'MAIN') {
+                                            p = p.parentElement;
+                                            if (p.querySelector('img') || (p.innerText && p.innerText.includes('\n'))) {
+                                                row = p;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                if (!row) row = btn.parentElement?.parentElement || btn.parentElement;
+
+                                let username = '';
+                                let fullName = '';
+                                let isAutoBlocked = false;
+
+                                // 1. Tenta achar link de perfil <a>
+                                const link = row.querySelector('a[href^="/"]');
+                                if (link) {
+                                    const href = link.getAttribute('href') || '';
+                                    const m = href.match(/^\/([a-zA-Z0-9._]+)\/?$/);
+                                    if (m && !isForbiddenBlockedUsername(m[1])) {
+                                        username = m[1];
+                                    }
+                                }
+
+                                // 2. Se não achou em link, busca nos elementos de texto da linha
+                                if (!username) {
+                                    const textElements = Array.from(row.querySelectorAll('span, div, p'));
+                                    for (const el of textElements) {
+                                        const t = (el.innerText || el.textContent || '').trim();
+                                        if (/^[a-zA-Z0-9._]{1,30}$/.test(t) && !t.includes(' ') && !isForbiddenBlockedUsername(t)) {
+                                            if (!unblockKeywords.some(kw => t.toLowerCase().includes(kw))) {
+                                                username = t;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 3. Fallback: analisa o texto bruto da linha
+                                if (!username && row.innerText) {
+                                    const lines = row.innerText.split('\n').map(l => l.trim()).filter(Boolean);
+                                    for (const line of lines) {
+                                        if (/^[a-zA-Z0-9._]{1,30}$/.test(line) && !line.includes(' ') && !isForbiddenBlockedUsername(line)) {
+                                            if (!unblockKeywords.some(kw => line.toLowerCase().includes(kw))) {
+                                                username = line;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (username && !isForbiddenBlockedUsername(username)) {
+                                    const k = username.toLowerCase();
+                                    const imgTag = row.querySelector('img');
+                                    const photoUrl = (imgTag && imgTag.src && !imgTag.src.includes('rsrc.php')) ? imgTag.src : DEFAULT_AVATAR;
+                                    const rowText = (row.innerText || '').toLowerCase();
+                                    if (rowText.includes('outras contas') || rowText.includes('other accounts')) {
+                                        isAutoBlocked = true;
+                                    }
+
+                                    const pk = getCachedUserId(username) || '';
+                                    if (!users.has(k)) {
+                                        users.set(k, {
+                                            username,
+                                            photoUrl,
+                                            pk,
+                                            id: pk,
+                                            fullName,
+                                            secondaryText: isAutoBlocked ? 'Inclui outras contas que o usuário tiver ou criar' : fullName,
+                                            isAutoBlocked
+                                        });
+                                    } else {
+                                        const cur = users.get(k);
+                                        if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && photoUrl !== DEFAULT_AVATAR) {
+                                            cur.photoUrl = photoUrl;
+                                        }
+                                        if (!cur.pk && pk) { cur.pk = pk; cur.id = pk; }
+                                        if (isAutoBlocked) cur.isAutoBlocked = true;
+                                    }
+                                }
+                            });
+
+                            // B. Fallback para Bloks Flexbox caso presente no ambiente
                             const userElements = Array.from(doc.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')).filter(el =>
                                 el.querySelector('span[data-bloks-name="bk.components.Text"]') || (el.querySelector('img') && el.innerText && el.innerText.includes('\n'))
                             );
-                            const genericElements = userElements.length === 0
-                                ? Array.from(doc.querySelectorAll('ul > li, [role="listitem"], [role="list"] > div'))
-                                : [];
-                            const elements = userElements.length > 0 ? userElements : genericElements;
 
-                            elements.forEach(el => {
+                            userElements.forEach(el => {
                                 let username = '';
                                 const bloksSpan = el.querySelector('span[data-bloks-name="bk.components.Text"]');
                                 if (bloksSpan) {
@@ -10177,14 +10643,15 @@
                                     }
                                 }
 
-                                if (username && /^[a-zA-Z0-9_.]{3,30}$/.test(username)) {
+                                if (username && !isForbiddenBlockedUsername(username)) {
+                                    const k = username.toLowerCase();
                                     const imgTag = el.querySelector('img');
                                     const photoUrl = imgTag ? imgTag.src : DEFAULT_AVATAR;
                                     const pk = getCachedUserId(username) || '';
-                                    if (!users.has(username)) {
-                                        users.set(username, { username, photoUrl, pk, id: pk, fullName: '', secondaryText: '', isAutoBlocked: false });
+                                    if (!users.has(k)) {
+                                        users.set(k, { username, photoUrl, pk, id: pk, fullName: '', secondaryText: '', isAutoBlocked: false });
                                     } else {
-                                        const cur = users.get(username);
+                                        const cur = users.get(k);
                                         if ((!cur.photoUrl || cur.photoUrl === DEFAULT_AVATAR) && photoUrl !== DEFAULT_AVATAR) cur.photoUrl = photoUrl;
                                         if (!cur.pk && pk) { cur.pk = pk; cur.id = pk; }
                                     }
@@ -10199,7 +10666,9 @@
                                 noNewUsersCount = 0;
                             }
 
-                            if (noNewUsersCount >= (users.size > 0 ? maxIdleCount : 8)) {
+                            // Aguarda até 20 ciclos (8 segundos) se a lista ainda estiver com 0 usuários para dar tempo ao DOM
+                            const idleLimit = users.size > 0 ? maxIdleCount : 20;
+                            if (noNewUsersCount >= idleLimit) {
                                 finishExtraction();
                                 return;
                             }
@@ -10209,6 +10678,7 @@
                                 doc.querySelector('main div[style*="overflow-y: auto"]') ||
                                 doc.querySelector('div[style*="overflow-y: auto"]') ||
                                 doc.querySelector('._aano') ||
+                                doc.querySelector('main') ||
                                 doc.documentElement;
                             if (scrollContainer && scrollContainer !== doc.documentElement) {
                                 scrollContainer.scrollTop = scrollContainer.scrollHeight;
@@ -10223,7 +10693,7 @@
                             if (scrollInterval) {
                                 finishExtraction();
                             }
-                        }, 60000);
+                        }, 120000);
                     });
                 }
 
@@ -10231,7 +10701,7 @@
                 let unblockedList = []; // Declarado no escopo compartilhado para gerenciar desbloqueados no Google Drive
                 let modalAbertoBlocked = false;
 
-                async function iniciarProcessoBloqueados() {
+                async function iniciarProcessoBloqueados(autoExtractPolaris = false) {
                     const existingModal = document.getElementById("blockedAccountsModal") || document.getElementById("allBlockedAccountsDiv");
                     if (existingModal) {
                         existingModal.remove();
@@ -10242,8 +10712,12 @@
 
                     // 1. CARREGAMENTO INSTANTÂNEO VIA CACHE (0ms)
                     blockedList = (Array.isArray(cachedBlockedAccounts) && cachedBlockedAccounts.length > 0)
-                        ? [...cachedBlockedAccounts]
+                        ? sanitizeBlockedList([...cachedBlockedAccounts])
                         : [];
+                    cachedBlockedAccounts = blockedList;
+                    try {
+                        localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(blockedList));
+                    } catch (_) { }
 
                     unblockedList = (Array.isArray(cachedUnblockedAccounts) && cachedUnblockedAccounts.length > 0)
                         ? [...cachedUnblockedAccounts]
@@ -10349,8 +10823,10 @@
                                 <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
                                     <!-- Botões exclusivos da aba Bloqueados -->
                                     <button id="blockedRefreshBtn" title="Atualizar dados do Instagram" style="background: #1abc9c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">🔄 Atualizar</button>
+                                    <button id="blockedPolarisFullBtn" title="Carregar lista completa de contas bloqueadas (+1000) via Polaris oficial da Meta" style="background: #8e44ad; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">🌐 Carregar via Polaris</button>
                                     <button id="blockedImportJsonBtn" title="Importar arquivo JSON de dados baixados da Meta/Instagram" style="background: #34495e; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer; font-weight: 600;">📥 Importar JSON</button>
                                     <input type="file" id="blockedJsonFileInput" accept=".json" style="display: none;">
+                                    <button id="blockedClearCacheBtn" title="Limpar cache local de contas bloqueadas" style="background: #c0392b; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer; font-weight: 600;">🗑️ Limpar Cache</button>
                                     <button id="blockedDesbloquearBtn" style="background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">🔓 Desbloquear Selecionados</button>
 
                                     <!-- Botões exclusivos da aba Desbloqueados -->
@@ -10359,6 +10835,7 @@
                                     <button id="unblockedBloquearBtn" title="Bloquear novamente os usuários selecionados" style="display: none; background: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">🔒 Bloquear Selecionados</button>
                                     <button id="unblockedImportPhotosBtn" title="Carregar arquivo CSV/Excel de fotos e salvar no Google Drive" style="display: none; background: #8e44ad; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">🖼️ Carregar Fotos (Excel)</button>
                                     <input type="file" id="unblockedPhotosFileInput" accept=".csv, text/csv, .txt" style="display: none;">
+                                    <button id="unblockedClearBtn" title="Limpar todas as contas da tabela de desbloqueados" style="display: none; background: #c0392b; color: white; border: none; border-radius: 5px; padding: 8px 16px; cursor: pointer; font-weight: 600;">🗑️ Limpar Desbloqueados</button>
 
                                     <!-- Botões compartilhados -->
                                     <button id="blockedMarcarTodosBtn" style="background: #0095f6; color: white; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer;">Selecionar Página</button>
@@ -10445,12 +10922,15 @@
                         const tabBlockedBtn = document.getElementById('tabBlockedBtn');
                         const tabUnblockedBtn = document.getElementById('tabUnblockedBtn');
                         const refreshBtn = document.getElementById('blockedRefreshBtn');
+                        const polarisFullBtn = document.getElementById('blockedPolarisFullBtn');
                         const importJsonBtn = document.getElementById('blockedImportJsonBtn');
+                        const clearCacheBtn = document.getElementById('blockedClearCacheBtn');
                         const desbloquearBtn = document.getElementById('blockedDesbloquearBtn');
                         const syncDriveBtn = document.getElementById('unblockedSyncDriveBtn');
                         const exportCsvBtn = document.getElementById('unblockedExportCsvBtn');
                         const bloquearBtn = document.getElementById('unblockedBloquearBtn');
                         const importPhotosBtn = document.getElementById('unblockedImportPhotosBtn');
+                        const clearUnblockedBtn = document.getElementById('unblockedClearBtn');
                         const filterSelect = document.getElementById('blockedFilterSelect');
                         const driveAlertEl = document.getElementById('unblockedDriveAlertContainer');
 
@@ -10466,12 +10946,15 @@
                                 tabUnblockedBtn.style.border = '1px solid #383838';
                             }
                             if (refreshBtn) refreshBtn.style.display = 'inline-block';
+                            if (polarisFullBtn) polarisFullBtn.style.display = 'inline-block';
                             if (importJsonBtn) importJsonBtn.style.display = 'inline-block';
+                            if (clearCacheBtn) clearCacheBtn.style.display = 'inline-block';
                             if (desbloquearBtn) desbloquearBtn.style.display = 'inline-block';
                             if (syncDriveBtn) syncDriveBtn.style.display = 'none';
                             if (exportCsvBtn) exportCsvBtn.style.display = 'none';
                             if (bloquearBtn) bloquearBtn.style.display = 'none';
                             if (importPhotosBtn) importPhotosBtn.style.display = 'none';
+                            if (clearUnblockedBtn) clearUnblockedBtn.style.display = 'none';
                             if (driveAlertEl) driveAlertEl.style.display = 'none';
 
                             if (filterSelect) {
@@ -10493,12 +10976,15 @@
                                 tabBlockedBtn.style.border = '1px solid #383838';
                             }
                             if (refreshBtn) refreshBtn.style.display = 'none';
+                            if (polarisFullBtn) polarisFullBtn.style.display = 'none';
                             if (importJsonBtn) importJsonBtn.style.display = 'none';
+                            if (clearCacheBtn) clearCacheBtn.style.display = 'none';
                             if (desbloquearBtn) desbloquearBtn.style.display = 'none';
                             if (syncDriveBtn) syncDriveBtn.style.display = 'inline-block';
                             if (exportCsvBtn) exportCsvBtn.style.display = 'inline-block';
                             if (bloquearBtn) bloquearBtn.style.display = 'inline-block';
                             if (importPhotosBtn) importPhotosBtn.style.display = 'inline-block';
+                            if (clearUnblockedBtn) clearUnblockedBtn.style.display = 'inline-block';
 
                             if (driveAlertEl) {
                                 driveAlertEl.style.display = 'block';
@@ -10847,23 +11333,33 @@
                     document.getElementById('tabUnblockedBtn')?.addEventListener('click', () => switchTab('unblocked'));
 
                     // Função para buscar e sincronizar dados com a Meta em tempo real
-                    async function sincronizarBloqueados(showFeedback = false) {
+                    async function sincronizarBloqueados(showFeedback = false, forcePolaris = false) {
                         const refreshBtn = document.getElementById("blockedRefreshBtn");
+                        const polarisBtn = document.getElementById("blockedPolarisFullBtn");
                         const syncIndicator = document.getElementById("blockedSyncStatusIndicator");
                         try {
-                            if (showFeedback && refreshBtn) {
-                                refreshBtn.disabled = true;
-                                refreshBtn.textContent = "🔄 Buscando...";
+                            if (showFeedback) {
+                                if (refreshBtn) { refreshBtn.disabled = true; refreshBtn.textContent = "🔄 Buscando..."; }
+                                if (polarisBtn) { polarisBtn.disabled = true; polarisBtn.textContent = "🌐 Carregando Polaris..."; }
                             }
                             if (syncIndicator) {
-                                syncIndicator.textContent = "🔄 Sincronizando com o Instagram...";
+                                syncIndicator.textContent = forcePolaris ? "🌐 Extraindo lista Polaris completa..." : "🔄 Sincronizando com o Instagram...";
                                 syncIndicator.style.color = "#0095f6";
                             }
 
-                            let wbloksUsers = await fetchBlockedAccountsWbloks();
+                            let wbloksUsers = null;
+                            const isOnBlockedPage = window.location.pathname.startsWith('/accounts/blocked_accounts');
 
-                            if ((!wbloksUsers || wbloksUsers.length === 0) && window.location.pathname === '/accounts/blocked_accounts/') {
+                            if (forcePolaris || isOnBlockedPage) {
+                                console.log('[IG Tools Bloqueados] Executando extração Polaris completa via rolagem e interceptação...');
                                 wbloksUsers = await extractBlockedAccountsUsernames();
+                            } else {
+                                console.log('[IG Tools Bloqueados] Buscando contas bloqueadas via Wbloks endpoint...');
+                                wbloksUsers = await fetchBlockedAccountsWbloks();
+                                if (!wbloksUsers || wbloksUsers.length === 0) {
+                                    console.log('[IG Tools Bloqueados] Wbloks direto retornou vazio. Tentando background HTML fetch...');
+                                    wbloksUsers = await fetchBlockedAccountsPageHtml();
+                                }
                             }
 
                             if (wbloksUsers && wbloksUsers.length > 0) {
@@ -10872,18 +11368,26 @@
                                     if (u && u.username) previousMap.set(u.username.toLowerCase(), u);
                                 });
 
-                                const unblockedSet = new Set(
-                                    (unblockedList || []).map(u => (u.username || '').toLowerCase()).filter(Boolean)
+                                // Contas desbloqueadas recentemente (menos de 60s) têm tolerância para propagação do Instagram
+                                const recentUnblockedCutoff = Date.now() - 60000;
+                                const recentUnblockedSet = new Set(
+                                    (unblockedList || [])
+                                        .filter(u => u && u.unblockedAt && u.unblockedAt > recentUnblockedCutoff)
+                                        .map(u => (u.username || '').toLowerCase())
+                                        .filter(Boolean)
                                 );
 
+                                const liveBlockedNames = new Set();
                                 const liveMap = new Map();
 
-                                // 1. O que a API do Instagram retornou agora é a fonte viva da verdade
-                                // Exclui contas que já foram registradas como desbloqueadas
+                                // 1. O que o Instagram retornou agora é a fonte viva da verdade
                                 wbloksUsers.forEach(u => {
-                                    if (!u || !u.username) return;
+                                    if (!u || !u.username || isForbiddenBlockedUsername(u.username)) return;
                                     const k = u.username.toLowerCase();
-                                    if (unblockedSet.has(k)) return; // Já foi desbloqueado
+                                    liveBlockedNames.add(k);
+
+                                    // Se foi desbloqueado há menos de 60s nesta sessão/dispositivo, aguarda propagação da Meta
+                                    if (recentUnblockedSet.has(k)) return;
 
                                     const prev = previousMap.get(k);
                                     if (prev) {
@@ -10897,16 +11401,32 @@
                                     }
                                 });
 
-                                // 2. Preserva contas importadas manualmente via JSON (se houver e não estiverem desbloqueadas)
+                                // Auto-reconciliação definitiva com Google Drive e Desbloqueados:
+                                // Se a conta foi retornada pelo Instagram como bloqueada e não é um desbloqueio dos últimos 60s,
+                                // ela já foi bloqueada novamente (no app ou web)! Remove automaticamente de Desbloqueados.
+                                const initialUnblockedCount = unblockedList.length;
+                                const reblockedCleanList = unblockedList.filter(u => {
+                                    if (!u || !u.username) return false;
+                                    const k = u.username.toLowerCase();
+                                    return !liveBlockedNames.has(k) || recentUnblockedSet.has(k);
+                                });
+
+                                if (reblockedCleanList.length !== initialUnblockedCount) {
+                                    const removedCount = initialUnblockedCount - reblockedCleanList.length;
+                                    console.log(`[IG Tools] Reconciliação: ${removedCount} conta(s) rebloqueada(s) no Instagram foram removidas da aba Desbloqueados e do Google Drive.`);
+                                    salvarDesbloqueadosNoDrive(reblockedCleanList, false);
+                                }
+
+                                // 2. Preserva contas importadas manualmente via JSON (se houver e não estiverem desbloqueadas recentemente)
                                 previousMap.forEach((prev, k) => {
-                                    if (!liveMap.has(k) && !unblockedSet.has(k)) {
+                                    if (!liveMap.has(k) && !recentUnblockedSet.has(k) && !isForbiddenBlockedUsername(prev.username)) {
                                         if (prev.secondaryText && prev.secondaryText.includes('Importado')) {
                                             liveMap.set(k, prev);
                                         }
                                     }
                                 });
 
-                                blockedList = Array.from(liveMap.values());
+                                blockedList = sanitizeBlockedList(Array.from(liveMap.values()));
                                 cachedBlockedAccounts = blockedList;
                                 try {
                                     localStorage.setItem('ig_tools_cached_blocked', JSON.stringify(blockedList));
@@ -10916,7 +11436,7 @@
                                 updateCounts();
 
                                 if (syncIndicator) {
-                                    syncIndicator.textContent = "✓ Atualizado em tempo real";
+                                    syncIndicator.textContent = `✓ ${blockedList.length} contas bloqueadas ativas`;
                                     syncIndicator.style.color = "#4ade80";
                                 }
 
@@ -10930,13 +11450,13 @@
                                     <div style="text-align: center; padding: 30px 15px; color: #666;">
                                         <div style="font-size: 15px; font-weight: 600; margin-bottom: 8px;">Nenhuma conta encontrada via requisição direta.</div>
                                         <div style="font-size: 13px; color: #888; max-width: 520px; margin: 0 auto 15px;">
-                                            Você pode tentar clicar em <b>🔄 Atualizar</b> novamente ou usar o botão <b>📥 Importar JSON</b> com o arquivo baixado da Central de Contas Meta.
+                                            Você pode tentar clicar em <b>🌐 Carregar via Polaris</b> para abrir a página oficial e extrair todas as contas ou importar o JSON exportado do Instagram.
                                         </div>
                                     </div>
                                 `;
                             } else {
                                 if (syncIndicator) {
-                                    syncIndicator.textContent = "✓ Sincronizado";
+                                    syncIndicator.textContent = `✓ ${blockedList.length} contas carregadas`;
                                     syncIndicator.style.color = "#4ade80";
                                 }
                             }
@@ -10951,7 +11471,7 @@
                                     <div style="text-align: center; padding: 30px 15px; color: #666;">
                                         <div style="font-size: 15px; font-weight: 600; margin-bottom: 8px; color: #ef4444;">Não foi possível carregar a lista no momento.</div>
                                         <div style="font-size: 13px; color: #888; max-width: 520px; margin: 0 auto 15px;">
-                                            Clique em <b>🔄 Atualizar</b> para tentar novamente ou importe o JSON exportado do Instagram.
+                                            Clique em <b>🌐 Carregar via Polaris</b> para extrair via página oficial ou importe o JSON exportado do Instagram.
                                         </div>
                                     </div>
                                 `;
@@ -10962,13 +11482,21 @@
                                 refreshBtn.disabled = false;
                                 refreshBtn.textContent = "🔄 Atualizar";
                             }
+                            if (polarisBtn) {
+                                polarisBtn.disabled = false;
+                                polarisBtn.textContent = "🌐 Carregar via Polaris";
+                            }
                         }
                     }
 
                     // 3. FLUXO DE EXIBIÇÃO: SE HOUVER CACHE, MOSTRA JÁ. SE NÃO, MOSTRA LOADING LIMPO
                     if (blockedList.length > 0) {
                         renderList(1);
-                        sincronizarBloqueados(false); // Sincroniza discretamente em segundo plano
+                        if (autoExtractPolaris) {
+                            sincronizarBloqueados(true, true);
+                        } else {
+                            sincronizarBloqueados(false);
+                        }
                     } else {
                         container.innerHTML = `
                             <div style="text-align: center; padding: 40px 20px; color: #555;">
@@ -10977,7 +11505,7 @@
                                 <div style="font-size: 12px; color: #888; margin-top: 4px;">Consultando o Instagram em segundo plano...</div>
                             </div>
                         `;
-                        sincronizarBloqueados(false);
+                        sincronizarBloqueados(false, autoExtractPolaris);
                     }
 
                     // Static header button listeners
@@ -11008,8 +11536,81 @@
 
                     // Botão Atualizar (sincroniza sem fechar o modal)
                     document.getElementById("blockedRefreshBtn").onclick = () => {
-                        sincronizarBloqueados(true);
+                        const isOnBlockedPage = window.location.pathname.startsWith('/accounts/blocked_accounts');
+                        if (!isOnBlockedPage) {
+                            if (confirm("Você está fora da tela oficial de contas bloqueadas do Instagram.\n\nPara sincronizar a lista completa de contas bloqueadas com 100% de precisão via Polaris, o script precisa acessar a página oficial (/accounts/blocked_accounts/).\n\nDeseja ir para a página agora? O gerenciador reabrirá automaticamente e sincronizará.")) {
+                                sessionStorage.setItem('ig_tools_reopen_blocked', '1');
+                                sessionStorage.setItem('ig_tools_auto_polaris_extract', '1');
+                                window.location.href = '/accounts/blocked_accounts/';
+                                return;
+                            }
+                        }
+                        sincronizarBloqueados(true, isOnBlockedPage);
                     };
+
+                    // Botão Carregar via Polaris (+1000 contas)
+                    const polarisBtnEl = document.getElementById("blockedPolarisFullBtn");
+                    if (polarisBtnEl) {
+                        polarisBtnEl.onclick = async () => {
+                            if (window.location.pathname.startsWith('/accounts/blocked_accounts')) {
+                                await sincronizarBloqueados(true, true);
+                            } else {
+                                if (confirm("Para carregar a lista completa de mais de 1000 contas bloqueadas via Polaris, o script abrirá a página oficial de contas bloqueadas do Instagram (/accounts/blocked_accounts/).\n\nDeseja ir para a página agora? O script reabrirá este gerenciador e extrairá automaticamente todas as contas.")) {
+                                    sessionStorage.setItem('ig_tools_reopen_blocked', '1');
+                                    sessionStorage.setItem('ig_tools_auto_polaris_extract', '1');
+                                    window.location.href = '/accounts/blocked_accounts/';
+                                }
+                            }
+                        };
+                    }
+
+                    // Botão Limpar Cache Bloqueados (Aba Bloqueados)
+                    const clearBlockedBtnEl = document.getElementById("blockedClearCacheBtn");
+                    if (clearBlockedBtnEl) {
+                        clearBlockedBtnEl.onclick = () => {
+                            if (!confirm("Tem certeza que deseja limpar o cache local de contas bloqueadas?")) return;
+                            blockedList = [];
+                            cachedBlockedAccounts = [];
+                            try {
+                                localStorage.removeItem('ig_tools_cached_blocked');
+                            } catch (_) { }
+                            updateCounts();
+                            renderList(1);
+                            showToast("✓ Cache de contas bloqueadas limpo com sucesso!");
+                        };
+                    }
+
+                    // Botão Limpar Desbloqueados (Aba Desbloqueados)
+                    const clearUnblockedBtnEl = document.getElementById("unblockedClearBtn");
+                    if (clearUnblockedBtnEl) {
+                        clearUnblockedBtnEl.onclick = async () => {
+                            const count = unblockedList.length;
+                            if (count === 0) return alert("A lista de contas desbloqueadas já está vazia.");
+                            if (!confirm(`Tem certeza que deseja limpar todas as ${count} contas da lista de desbloqueados?\n\nIsso removerá as contas salvas localmente e no Google Drive.`)) {
+                                return;
+                            }
+                            clearUnblockedBtnEl.disabled = true;
+                            clearUnblockedBtnEl.textContent = "⏳ Limpando...";
+                            try {
+                                await dbHelper.clearCache('unblockedAccounts');
+                                unblockedList = [];
+                                cachedUnblockedAccounts = [];
+                                try {
+                                    localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify([]));
+                                } catch (_) { }
+
+                                updateCounts();
+                                renderList(1);
+                                showToast("✓ Tabela de contas desbloqueadas limpa com sucesso!");
+                            } catch (err) {
+                                console.error('[IG Tools] Erro ao limpar desbloqueados:', err);
+                                alert("Erro ao limpar lista de desbloqueados: " + err);
+                            } finally {
+                                clearUnblockedBtnEl.disabled = false;
+                                clearUnblockedBtnEl.textContent = "🗑️ Limpar Desbloqueados";
+                            }
+                        };
+                    }
 
                     // Botão Sincronizar Google Drive (Aba Desbloqueados)
                     document.getElementById("unblockedSyncDriveBtn").onclick = async () => {
@@ -11560,9 +12161,15 @@
                         }
 
                         const res = await executeApiBlock(uid, username);
-                        if (res.success) {
+                        const isAlreadyBlocked = !res.success && (
+                            JSON.stringify(res.data || '').toLowerCase().includes('already') ||
+                            JSON.stringify(res.data || '').toLowerCase().includes('bloqueado') ||
+                            (res.text && (res.text.toLowerCase().includes('already') || res.text.toLowerCase().includes('bloqueado')))
+                        );
+
+                        if (res.success || isAlreadyBlocked) {
                             successfullyBlocked.push(username);
-                            showToast(`🔒 Bloqueou @${username}`);
+                            showToast(`🔒 @${username} ${isAlreadyBlocked ? '(já estava bloqueado no Instagram)' : 'bloqueado com sucesso'}`);
 
                             // Feedback visual imediato na tabela
                             const rows = document.querySelectorAll(`tr[data-username="${username}"]`);
@@ -11586,13 +12193,15 @@
 
                 // Verifica se há um pedido de reabertura do modal de bloqueados após navegação forçada
                 if (sessionStorage.getItem('ig_tools_reopen_blocked') === '1' &&
-                    window.location.pathname === '/accounts/blocked_accounts/') {
+                    window.location.pathname.startsWith('/accounts/blocked_accounts')) {
                     sessionStorage.removeItem('ig_tools_reopen_blocked');
-                    // Aguarda a página carregar os elementos e reabre o modal no modo scroll
+                    const autoExtract = sessionStorage.getItem('ig_tools_auto_polaris_extract') === '1';
+                    sessionStorage.removeItem('ig_tools_auto_polaris_extract');
+                    // Aguarda a página carregar os elementos e reabre o modal no modo Polaris scroll
                     setTimeout(() => {
-                        console.log('[IG Tools] Reabrindo modal de bloqueados após navegação forçada (modo scroll)...');
-                        iniciarProcessoBloqueados();
-                    }, 2500);
+                        console.log('[IG Tools] Reabrindo modal de bloqueados após navegação forçada (modo Polaris scroll)...');
+                        iniciarProcessoBloqueados(autoExtract);
+                    }, 2000);
                 }
 
                 function simulateClick(element, triggerChangeEvent = false) {
@@ -15148,8 +15757,16 @@
                     document.getElementById("btnClearDB").onclick = async () => {
                         const storeName = document.getElementById('dbStoreSelect').value;
                         if (!storeName) return alert("Selecione uma tabela.");
-                        if (confirm(`Tem certeza que deseja limpar a tabela '${storeName}'? Isso não pode ser desfeito.`)) { // Use dbHelper.clearCache
+                        if (confirm(`Tem certeza que deseja limpar a tabela '${storeName}'? Isso não pode ser desfeito.`)) {
                             await dbHelper.clearCache(storeName);
+
+                            if (storeName === 'unblockedAccounts' || storeName === 'unblocked') {
+                                if (typeof cachedUnblockedAccounts !== 'undefined') cachedUnblockedAccounts = [];
+                                if (typeof unblockedList !== 'undefined') unblockedList = [];
+                                const unblockedBadge = document.getElementById('tabUnblockedBadge');
+                                if (unblockedBadge) unblockedBadge.textContent = '0';
+                            }
+
                             alert(`Tabela '${storeName}' limpa com sucesso.`);
                             div.remove(); abrirModalParametros(); // Recarrega
                         }
@@ -16040,48 +16657,445 @@
                         await new Promise(r => setTimeout(r, 250));
                     }
 
-                    // 2. Extração de Stories (24h) e Destaques (Highlights) via API Oficial (Multi-camadas direta, independente de página)
-                    if (onProgress) onProgress('Buscando Stories e Destaques...', 90);
+                    // 2. Extração de Stories (24h) e Destaques (Highlights) via Polaris (GraphQL + Rotas Web Polaris)
+                    if (onProgress) onProgress('Buscando Stories e Destaques (Polaris)...', 90);
 
-                    const reelsToFetch = new Set();
-                    if (targetUserId) {
-                        reelsToFetch.add(String(targetUserId));
+                    const highlightIdsSet = new Set();
+                    const processedReelIds = new Set();
+
+                    // Carrega do cache local histórico de stories/destaques já visualizados com curtida
+                    try {
+                        const cachedLiked = JSON.parse(localStorage.getItem(`ig_tools_liked_media_${cleanUsername}`) || '[]');
+                        for (const item of cachedLiked) {
+                            if (likedPosts.some(p => p.id === item.id)) continue;
+                            if (item.type?.includes('Destaque')) {
+                                if (!likedHighlights.some(h => h.id === item.id)) likedHighlights.push(item);
+                            } else {
+                                if (!likedStories.some(s => s.id === item.id)) likedStories.push(item);
+                            }
+                        }
+                        if (likedHighlights.length > 0 || likedStories.length > 0) {
+                            console.log(`[IG Tools Cache] Carregado(s) do histórico local: ${likedHighlights.length} destaque(s) e ${likedStories.length} storie(s).`);
+                        }
+                    } catch (_) {}
+
+                    function isLikedStoryHeartElement(el) {
+                        if (!el) return false;
+                        try {
+                            // 1. Classe CSS oficial do coração ativo do Instagram Web (.xxk16z8)
+                            if (el.classList && el.classList.contains('xxk16z8')) return true;
+                            if (el.querySelector && el.querySelector('.xxk16z8')) return true;
+
+                            // 2. aria-label ou title "Descurtir" / "Unlike"
+                            const aria = (el.getAttribute('aria-label') || '').trim().toLowerCase();
+                            if (aria === 'descurtir' || aria === 'unlike') return true;
+
+                            const titleEl = el.querySelector ? el.querySelector('title') : null;
+                            if (titleEl) {
+                                const titleText = (titleEl.textContent || '').trim().toLowerCase();
+                                if (titleText === 'descurtir' || titleText === 'unlike') return true;
+                            }
+
+                            // 3. Path preenchido do coração de curtir
+                            const pathEl = el.querySelector ? el.querySelector('path') : null;
+                            if (pathEl) {
+                                const d = pathEl.getAttribute('d') || '';
+                                if (d.startsWith('M34.6 3.1c-4.5 0-7.9 1.8-10.6 5.6')) return true;
+                            }
+
+                            // 4. Detecção pela cor vermelha ativa (computedStyle ou inline)
+                            const comp = window.getComputedStyle(el);
+                            const cColor = comp.color || '';
+                            const cFill = comp.fill || '';
+                            if (cColor.includes('255, 48, 64') || cFill.includes('255, 48, 64') ||
+                                cColor.includes('254, 44, 85') || cFill.includes('254, 44, 85') ||
+                                cColor.includes('237, 73, 86') || cFill.includes('237, 73, 86')) {
+                                return true;
+                            }
+                        } catch (_) {}
+                        return false;
                     }
 
-                    // Camada 1: GraphQL Oficial da Web para Destaques (query_hash d4d88dc1500312af6f937f7b804c68c3)
+                    // Varredura direta e precisa do DOM procurando pelo coração curtido (cor, classe xxk16z8, aria-label)
+                    function scanDomForLikedStories() {
+                        if (typeof document === 'undefined') return;
+                        try {
+                            const candidates = Array.from(document.querySelectorAll('svg, div[role="button"], button'));
+                            const likedElements = candidates.filter(isLikedStoryHeartElement);
+
+                            if (likedElements.length > 0) {
+                                console.log(`%c[IG Tools DOM] Encontrado(s) ${likedElements.length} elemento(s) com coração curtido ativo no DOM!`, 'color: #00ffaa; font-weight: bold;');
+                            }
+
+                            for (const targetEl of likedElements) {
+                                let mediaObj = null;
+                                let detectedMediaId = '';
+
+                                // 1. Extração profunda pelo React Fiber (subindo pelos elementos pai)
+                                let el = targetEl;
+                                for (let i = 0; i < 20 && el; i++) {
+                                    const fKey = Object.keys(el).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+                                    if (fKey && el[fKey]) {
+                                        let fiber = el[fKey];
+                                        for (let j = 0; j < 35 && fiber; j++) {
+                                            const props = fiber.memoizedProps;
+                                            if (props) {
+                                                if (props.media && typeof props.media === 'object') { mediaObj = props.media; break; }
+                                                if (props.item && typeof props.item === 'object') { mediaObj = props.item; break; }
+                                                if (props.storyItem && typeof props.storyItem === 'object') { mediaObj = props.storyItem; break; }
+                                                if (props.story && typeof props.story === 'object') { mediaObj = props.story; break; }
+                                                if (props.reel && typeof props.reel === 'object') { mediaObj = props.reel; break; }
+                                                if (!detectedMediaId) {
+                                                    if (props.mediaId) detectedMediaId = String(props.mediaId);
+                                                    else if (props.storyId) detectedMediaId = String(props.storyId);
+                                                    else if (props.id && !String(props.id).startsWith('highlight:')) detectedMediaId = String(props.id);
+                                                }
+                                            }
+                                            fiber = fiber.return;
+                                        }
+                                    }
+                                    if (mediaObj) break;
+                                    el = el.parentElement;
+                                }
+
+                                const container = targetEl.closest('section') || targetEl.closest('[role="dialog"]') || document.body;
+
+                                // 2. Se ainda não achou dados, inspeciona o vídeo ou imagem do container do player
+                                if (!mediaObj && !detectedMediaId) {
+                                    const mediaEl = container.querySelector('video, img[draggable="false"]');
+                                    if (mediaEl) {
+                                        const fKey = Object.keys(mediaEl).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+                                        if (fKey && mediaEl[fKey]) {
+                                            let f = mediaEl[fKey];
+                                            for (let k = 0; k < 20 && f; k++) {
+                                                const p = f.memoizedProps;
+                                                if (p?.item || p?.media || p?.storyItem) {
+                                                    mediaObj = p.item || p.media || p.storyItem;
+                                                    break;
+                                                }
+                                                if (p?.mediaId || p?.id) {
+                                                    detectedMediaId = String(p.mediaId || p.id);
+                                                    break;
+                                                }
+                                                f = f.return;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                const currentUrl = window.location.href;
+                                const mMedia = currentUrl.match(/story_media_id=(\d+)/);
+                                const mHl = currentUrl.match(/\/stories\/highlights\/(\d+)/);
+                                const mStory = currentUrl.match(/\/stories\/([^/?#]+)\/(\d+)/);
+
+                                const mediaId = String(detectedMediaId || mediaObj?.id || mediaObj?.pk || (mMedia ? mMedia[1] : (mStory && mStory[1] !== 'highlights' ? mStory[2] : ''))).split('_')[0];
+                                const isHighlight = Boolean(mHl || (mediaObj && (mediaObj.reel_type === 'highlight_reel' || String(mediaObj.id).startsWith('highlight:'))));
+                                const highlightId = mHl ? mHl[1] : (mediaObj?.highlight_id || '');
+
+                                // 3. Captura Thumbnail (com suporte a vídeos poster, tag video e fotos)
+                                let thumb = mediaObj?.image_versions2?.candidates?.[0]?.url ||
+                                            mediaObj?.display_url ||
+                                            mediaObj?.display_resources?.[0]?.src ||
+                                            '';
+
+                                if (!thumb) {
+                                    const videoEl = container.querySelector('video');
+                                    if (videoEl) {
+                                        thumb = videoEl.getAttribute('poster') || '';
+                                    }
+                                    if (!thumb) {
+                                        const imgEl = container.querySelector('img[src*="cdninstagram"], img[src*="fbcdn"]');
+                                        if (imgEl) thumb = imgEl.src;
+                                    }
+                                }
+
+                                if (mediaId) {
+                                    if (isHighlight) {
+                                        if (!likedHighlights.some(h => h.id === mediaId)) {
+                                            console.log(`%c[IG Tools DOM] Destaque curtido adicionado via DOM: ${mediaId}`, 'color: yellow; background: green; font-weight: bold;', { mediaId, highlightId });
+                                            likedHighlights.push({
+                                                type: 'Story (Destaque)',
+                                                url: highlightId
+                                                    ? `https://www.instagram.com/stories/highlights/${highlightId}/?story_media_id=${mediaId}`
+                                                    : `https://www.instagram.com/stories/highlights/${mediaId}/`,
+                                                thumb: thumb,
+                                                id: mediaId,
+                                                rawId: mediaId
+                                            });
+                                        }
+                                    } else {
+                                        if (!likedStories.some(s => s.id === mediaId)) {
+                                            console.log(`%c[IG Tools DOM] Story curtido adicionado via DOM: ${mediaId}`, 'color: yellow; background: green; font-weight: bold;', { mediaId });
+                                            likedStories.push({
+                                                type: 'Story (24h)',
+                                                url: `https://www.instagram.com/stories/${cleanUsername}/${mediaId}/`,
+                                                thumb: thumb,
+                                                id: mediaId,
+                                                rawId: mediaId
+                                            });
+                                        }
+                                    }
+
+                                    // Persiste no cache local para não perder ao navegar
+                                    try {
+                                        localStorage.setItem(`ig_tools_liked_media_${cleanUsername}`, JSON.stringify([...likedStories, ...likedHighlights]));
+                                    } catch (_) {}
+                                }
+                            }
+                        } catch (errDom) {
+                            console.warn("[IG Tools DOM] Erro na varredura do DOM:", errDom);
+                        }
+                    }
+
+                    // Executa a primeira varredura do DOM imediatamente
+                    scanDomForLikedStories();
+
+                    function isStoryLiked(it) {
+                        if (!it || typeof it !== 'object') return false;
+                        if (it.has_liked === true || it.viewer_has_liked === true || it.viewer_has_liked_story === true) return true;
+                        if (it.liked === true || it.liked_by_viewer === true || it.has_viewer_liked === true) return true;
+                        if (it.story_like) return true; // Pode ser boolean (true) ou objeto { ... }
+                        if (it.viewer_interaction && (it.viewer_interaction.has_liked || it.viewer_interaction.liked || it.viewer_interaction.is_liked)) return true;
+                        if (it.viewer_reaction && (it.viewer_reaction.has_liked || it.viewer_reaction.liked)) return true;
+                        if (it.user_has_liked === true || it.is_liked === true) return true;
+                        for (const key of Object.keys(it)) {
+                            const k = key.toLowerCase();
+                            if ((k.includes('like') || k.includes('heart')) && !k.includes('count') && !k.includes('disabled') && !k.includes('allow') && !k.includes('can_')) {
+                                const val = it[key];
+                                if (val === true || val === 1 || val === 'true') return true;
+                                if (val && typeof val === 'object' && (val.has_liked || val.liked || val.is_liked)) return true;
+                            }
+                        }
+                        return false;
+                    }
+
+                    function processSingleStoryItem(it, isHighlight = false, cleanHighlightId = '') {
+                        if (!it || typeof it !== 'object') return;
+                        const hasLiked = isStoryLiked(it);
+                        const likeKeys = Object.keys(it).filter(k => k.toLowerCase().includes('like') || k.toLowerCase().includes('viewer') || k.toLowerCase().includes('heart'));
+                        console.log("[IG Tools Interações] Story/Destaque item analisado:", { id: it.id || it.pk, isHighlight, hasLiked, likeKeys, item: it });
+                        if (!hasLiked) return;
+
+                        const rawId = String(it.id || it.pk || it.story_media_id || '');
+                        if (!rawId) return;
+                        const cleanMediaId = rawId.split('_')[0];
+
+                        // REGRA FUNDAMENTAL: Se o item já é um Post do Feed, NUNCA duplique como Destaque nem Story
+                        if (likedPosts.some(p => p.id === cleanMediaId)) {
+                            return;
+                        }
+
+                        const thumb = it.image_versions2?.candidates?.[0]?.url ||
+                                      it.display_url ||
+                                      it.display_resources?.[0]?.src ||
+                                      it.thumbnail_src ||
+                                      it.cover_media?.cropped_image_version?.url ||
+                                      '';
+
+                        if (isHighlight) {
+                            if (!likedHighlights.some(s => s.id === cleanMediaId)) {
+                                likedHighlights.push({
+                                    type: 'Story (Destaque)',
+                                    url: cleanHighlightId
+                                        ? `https://www.instagram.com/stories/highlights/${cleanHighlightId}/?story_media_id=${cleanMediaId}`
+                                        : `https://www.instagram.com/stories/highlights/${cleanMediaId}/`,
+                                    thumb: thumb,
+                                    id: cleanMediaId,
+                                    rawId: rawId
+                                });
+                            }
+                        } else {
+                            if (!likedStories.some(s => s.id === cleanMediaId)) {
+                                likedStories.push({
+                                    type: 'Story (24h)',
+                                    url: `https://www.instagram.com/stories/${cleanUsername}/${cleanMediaId}/`,
+                                    thumb: thumb,
+                                    id: cleanMediaId,
+                                    rawId: rawId
+                                });
+                            }
+                        }
+                    }
+
+                    function processReelItems(reel, isHighlightDefault = false) {
+                        if (!reel) return;
+                        const reelId = String(reel?.id || reel?.pk || '');
+                        const isHighlight = isHighlightDefault || reelId.startsWith('highlight:') || reel?.reel_type === 'highlight_reel' || (String(reelId) !== String(targetUserId));
+                        const cleanHighlightId = reelId.replace(/^highlight:/, '');
+                        const items = Array.isArray(reel?.items)
+                            ? reel.items
+                            : (reel?.edge_story_media_to_story_item?.edges?.map(e => e?.node) || []);
+
+                        console.log(`[IG Tools Interações] processReelItems chamado para reel ${reelId} (isHighlight: ${isHighlight}). Total de itens:`, items.length);
+
+                        if (items.length > 0 && reelId) {
+                            processedReelIds.add(reelId);
+                            if (reelId.startsWith('highlight:')) processedReelIds.add(reelId.replace(/^highlight:/, ''));
+                            else processedReelIds.add(`highlight:${reelId}`);
+                        }
+
+                        for (const it of items) {
+                            processSingleStoryItem(it, isHighlight, cleanHighlightId);
+                        }
+                    }
+
+                    function findStoryItemsRecursively(obj, out = [], depth = 0) {
+                        if (!obj || depth > 45) return out;
+                        if (Array.isArray(obj)) {
+                            for (const it of obj) {
+                                findStoryItemsRecursively(it, out, depth + 1);
+                            }
+                            return out;
+                        }
+                        if (typeof obj === 'object') {
+                            const isStoryCandidate = (obj.id || obj.pk) && (
+                                'has_liked' in obj || 'viewer_has_liked' in obj || 'story_like' in obj ||
+                                'viewer_interaction' in obj || 'image_versions2' in obj || 'display_url' in obj ||
+                                obj.media_type === 1 || obj.media_type === 2
+                            );
+                            if (isStoryCandidate) {
+                                out.push(obj);
+                            }
+                            if (Array.isArray(obj.items)) {
+                                for (const it of obj.items) {
+                                    if (it && typeof it === 'object' && (it.id || it.pk)) {
+                                        out.push(it);
+                                    }
+                                }
+                            }
+                            for (const key of Object.keys(obj)) {
+                                if (key !== 'items' && typeof obj[key] === 'object' && obj[key] !== null) {
+                                    findStoryItemsRecursively(obj[key], out, depth + 1);
+                                }
+                            }
+                        }
+                        return out;
+                    }
+
+                    function extractPolarisStoryItems(htmlText) {
+                        const itemsFound = [];
+                        if (!htmlText || typeof htmlText !== 'string') return itemsFound;
+
+                        const trimmed = htmlText.trim();
+                        // 1. Se a resposta já for JSON puro
+                        if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                            try {
+                                const parsed = JSON.parse(trimmed);
+                                findStoryItemsRecursively(parsed, itemsFound);
+                                if (itemsFound.length > 0) return itemsFound;
+                            } catch (_) {}
+                        }
+
+                        // 2. Extração via tags <script> no HTML
+                        const scriptRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+                        let match;
+                        while ((match = scriptRegex.exec(htmlText)) !== null) {
+                            const content = match[1];
+                            if (!content || (!content.includes('has_liked') && !content.includes('viewer_has_liked') && !content.includes('story_like') && !content.includes('"items"') && !content.includes('reels_media') && !content.includes('display_url'))) continue;
+
+                            const sTrimmed = content.trim();
+                            if (sTrimmed.startsWith('{') || sTrimmed.startsWith('[')) {
+                                try {
+                                    const parsed = JSON.parse(sTrimmed);
+                                    findStoryItemsRecursively(parsed, itemsFound);
+                                } catch (_) {}
+                            } else {
+                                const start = content.indexOf('{');
+                                const end = content.lastIndexOf('}');
+                                if (start !== -1 && end > start) {
+                                    try {
+                                        const parsed = JSON.parse(content.substring(start, end + 1));
+                                        findStoryItemsRecursively(parsed, itemsFound);
+                                    } catch (_) {}
+                                }
+                            }
+                        }
+
+                        // 3. Extração de blocos "items": [ { ... } ]
+                        try {
+                            const itemsBlocks = htmlText.match(/"items"\s*:\s*(\[\s*\{[\s\S]*?\}\s*\])/g);
+                            if (itemsBlocks) {
+                                for (const block of itemsBlocks) {
+                                    const arrStr = block.replace(/^"items"\s*:\s*/, '');
+                                    try {
+                                        const arr = JSON.parse(arrStr);
+                                        findStoryItemsRecursively(arr, itemsFound);
+                                    } catch (_) {}
+                                }
+                            }
+                        } catch (_) {}
+
+                        // 4. Fallback de blocos com has_liked ou story_like
+                        if (itemsFound.length === 0) {
+                            const matches = htmlText.matchAll(/\{[^{}]*?"(?:has_liked|viewer_has_liked|story_like)"\s*:[^{}]*?\}/g);
+                            for (const m of matches) {
+                                try {
+                                    const parsedItem = JSON.parse(m[0]);
+                                    if (parsedItem && (parsedItem.id || parsedItem.pk)) {
+                                        itemsFound.push(parsedItem);
+                                    }
+                                } catch (_) {}
+                            }
+                        }
+
+                        return itemsFound;
+                    }
+
+                    const csrfToken = (typeof getCookie === 'function' ? getCookie('csrftoken') : '') || '';
+                    const baseApiHeaders = {
+                        'X-IG-App-ID': '936619743392459',
+                        'X-ASBD-ID': '129477',
+                        'X-CSRFToken': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': '*/*'
+                    };
+
+                    // Camada 1: Polaris GraphQL Oficial (query_hash d4d88dc1500312af6f937f7b804c68c3)
+                    // Consulta simultaneamente os Stories 24h ativos (include_reel: true) e a lista de Destaques (include_highlight_reels: true)
                     if (targetUserId) {
                         try {
-                            console.log(`[IG Tools Interações] Buscando destaques via GraphQL para ${targetUserId} (@${cleanUsername})...`);
-                            const gqlHlUrl = `https://www.instagram.com/graphql/query/?query_hash=d4d88dc1500312af6f937f7b804c68c3&variables=${encodeURIComponent(JSON.stringify({ user_id: String(targetUserId), include_highlight_reels: true }))}`;
+                            console.log(`[IG Tools Interações] Buscando Stories 24h e Destaques via Polaris GraphQL para ${targetUserId} (@${cleanUsername})...`);
+                            const gqlHlUrl = `https://www.instagram.com/graphql/query/?query_hash=d4d88dc1500312af6f937f7b804c68c3&variables=${encodeURIComponent(JSON.stringify({ user_id: String(targetUserId), include_highlight_reels: true, include_reel: true }))}`;
                             const gqlRes = await fetch(gqlHlUrl, {
-                                headers: {
-                                    'X-IG-App-ID': '936619743392459',
-                                    'X-Requested-With': 'XMLHttpRequest'
-                                },
+                                headers: baseApiHeaders,
                                 credentials: 'include'
                             });
                             if (gqlRes.ok) {
                                 const gqlData = await gqlRes.json();
+                                console.log("[IG Tools Interações] Resposta Camada 1 Polaris GraphQL (Stories/Destaques):", gqlData);
+
+                                // Processa Stories 24h ativos retornados pelo Polaris GraphQL
+                                const userReel = gqlData?.data?.user?.reel;
+                                if (userReel) {
+                                    console.log(`[IG Tools Interações] Polaris GraphQL retornou Stories 24h ativos para @${cleanUsername}:`, userReel);
+                                    processReelItems(userReel, false);
+                                }
+
+                                // Processa lista de Destaques
                                 const edges = gqlData?.data?.user?.edge_highlight_reels?.edges || [];
                                 for (const edge of edges) {
-                                    const hId = edge?.node?.id;
+                                    const node = edge?.node;
+                                    const hId = node?.id;
                                     if (hId) {
                                         const rawHlId = String(hId);
                                         const hlIdStr = rawHlId.startsWith('highlight:') ? rawHlId : `highlight:${rawHlId}`;
-                                        reelsToFetch.add(hlIdStr);
+                                        highlightIdsSet.add(hlIdStr);
+                                    }
+                                    if (Array.isArray(node?.items) && node.items.length > 0) {
+                                        processReelItems(node, true);
                                     }
                                 }
                                 if (edges.length > 0) {
-                                    console.log(`[IG Tools Interações] GraphQL retornou ${edges.length} destaque(s).`);
+                                    console.log(`[IG Tools Interações] Polaris GraphQL retornou ${edges.length} destaque(s). Exemplo node:`, edges[0]?.node);
                                 }
                             }
                         } catch (eGqlHl) {
-                            console.warn("[IG Tools Interações] Erro ao consultar destaques via GraphQL:", eGqlHl);
+                            console.warn("[IG Tools Interações] Erro ao consultar Polaris GraphQL:", eGqlHl);
                         }
                     }
 
-                    // Camada 2: web_profile_info estruturado (com headers limpos, sem cabeçalhos inválidos)
-                    if (reelsToFetch.size <= 1) {
+                    // Camada 2: web_profile_info estruturado (se ainda não achou destaques)
+                    if (highlightIdsSet.size === 0) {
                         try {
                             console.log(`[IG Tools Interações] Buscando destaques via web_profile_info para @${cleanUsername}...`);
                             const profileData = await safeFetchProfileInfo(cleanUsername);
@@ -16091,7 +17105,7 @@
                                 if (hId) {
                                     const rawHlId = String(hId);
                                     const hlIdStr = rawHlId.startsWith('highlight:') ? rawHlId : `highlight:${rawHlId}`;
-                                    reelsToFetch.add(hlIdStr);
+                                    highlightIdsSet.add(hlIdStr);
                                 }
                             }
                             if (hlEdges.length > 0) {
@@ -16102,130 +17116,140 @@
                         }
                     }
 
-                    // Camada 3: Verificação direta do DOM (APENAS se o navegador já estiver no perfil)
+                    // Camada 3: Verificação direta do DOM (se estiver na página do perfil)
                     try {
                         const currentPath = (window.location.pathname || '').replace(/^\/|\/$/g, '').toLowerCase().split('/')[0];
                         if (currentPath === cleanUsername && typeof document !== 'undefined') {
-                            if (reelsToFetch.size <= 1 && !document.querySelector('a[href*="/stories/highlights/"]')) {
-                                for (let wait = 0; wait < 3; wait++) {
-                                    await new Promise(r => setTimeout(r, 200));
-                                    if (document.querySelector('a[href*="/stories/highlights/"]')) break;
-                                }
-                            }
                             document.querySelectorAll('a[href*="/stories/highlights/"]').forEach(a => {
                                 const m = (a.getAttribute('href') || '').match(/\/stories\/highlights\/(\d+)/);
-                                if (m && m[1]) reelsToFetch.add(`highlight:${m[1]}`);
+                                if (m && m[1]) highlightIdsSet.add(`highlight:${m[1]}`);
                             });
 
                             const currentHl = (window.location.href || '').match(/\/stories\/highlights\/(\d+)/);
-                            if (currentHl && currentHl[1]) reelsToFetch.add(`highlight:${currentHl[1]}`);
+                            if (currentHl && currentHl[1]) highlightIdsSet.add(`highlight:${currentHl[1]}`);
                         }
                     } catch (eDom) {
                         console.warn("[IG Tools Interações] Verificação DOM de destaques:", eDom);
                     }
 
-                    // Camada 4: Fallback HTML puro do perfil (se nenhuma das anteriores localizou destaques)
-                    if (reelsToFetch.size <= 1) {
-                        try {
-                            console.log(`[IG Tools Interações] Buscando HTML do perfil @${cleanUsername} para extração de destaques...`);
-                            const profileHtmlRes = await fetch(`https://www.instagram.com/${cleanUsername}/`, {
-                                credentials: 'include',
-                                headers: {
-                                    'X-Requested-With': 'XMLHttpRequest'
-                                }
-                            });
-                            if (profileHtmlRes.ok) {
-                                const htmlText = await profileHtmlRes.text();
-                                const hlMatches = htmlText.matchAll(/\/stories\/highlights\/(\d+)/g);
-                                for (const match of hlMatches) {
-                                    if (match[1]) reelsToFetch.add(`highlight:${match[1]}`);
-                                }
-                                const jsonMatches = htmlText.matchAll(/"(?:id|reel_id)":\s*"?highlight:(\d+)"?/g);
-                                for (const match of jsonMatches) {
-                                    if (match[1]) reelsToFetch.add(`highlight:${match[1]}`);
-                                }
-                                const jsonMatches2 = htmlText.matchAll(/"highlight:(\d+)"/g);
-                                for (const match of jsonMatches2) {
-                                    if (match[1]) reelsToFetch.add(`highlight:${match[1]}`);
-                                }
-                                const jsonMatches3 = htmlText.matchAll(/highlight%3A(\d+)/g);
-                                for (const match of jsonMatches3) {
-                                    if (match[1]) reelsToFetch.add(`highlight:${match[1]}`);
+                    // Camada 4: Fallback e descoberta profunda via HTML Polaris do perfil
+                    try {
+                        console.log(`[IG Tools Interações] Analisando página do perfil @${cleanUsername} para descobrir destaques...`);
+                        const profileHtmlRes = await fetch(`https://www.instagram.com/${cleanUsername}/`, {
+                            credentials: 'include',
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        });
+                        if (profileHtmlRes.ok) {
+                            const htmlText = await profileHtmlRes.text();
+                            const hlMatches = htmlText.matchAll(/\/stories\/highlights\/(\d+)/g);
+                            for (const match of hlMatches) {
+                                if (match[1]) highlightIdsSet.add(`highlight:${match[1]}`);
+                            }
+                            const jsonMatches = htmlText.matchAll(/"(?:id|reel_id)":\s*"?highlight:(\d+)"?/g);
+                            for (const match of jsonMatches) {
+                                if (match[1]) highlightIdsSet.add(`highlight:${match[1]}`);
+                            }
+                            const hlKeyMatches = htmlText.matchAll(/"highlight:(\d+)"/g);
+                            for (const match of hlKeyMatches) {
+                                if (match[1]) highlightIdsSet.add(`highlight:${match[1]}`);
+                            }
+
+                            // Extrai itens já embutidos no HTML do perfil
+                            const profileItems = extractPolarisStoryItems(htmlText);
+                            if (profileItems.length > 0) {
+                                console.log(`[IG Tools Interações] Encontrados ${profileItems.length} itens embutidos no HTML do perfil.`);
+                                for (const it of profileItems) {
+                                    processSingleStoryItem(it, true, '');
                                 }
                             }
-                        } catch (eHlHtml) {
-                            console.warn("[IG Tools Interações] Fallback HTML de destaques:", eHlHtml);
                         }
+                    } catch (eHlHtml) {
+                        console.warn("[IG Tools Interações] Fallback HTML de perfil:", eHlHtml);
                     }
 
-                    console.log(`[IG Tools Interações] Buscando ${reelsToFetch.size} reel(s) (Stories 24h + Destaques)...`, Array.from(reelsToFetch));
+                    // --- ETAPA A: Stories 24h via Rota Polaris Web e GraphQL ---
+                    try {
+                        console.log(`[IG Tools Interações] Verificando Stories 24h para @${cleanUsername}...`);
+                        const storyPageRes = await fetch(`https://www.instagram.com/stories/${cleanUsername}/`, {
+                            credentials: 'include',
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        });
+                        if (storyPageRes.ok) {
+                            const storyHtml = await storyPageRes.text();
+                            const storyItems = extractPolarisStoryItems(storyHtml);
+                            console.log(`[IG Tools Interações] Stories 24h: extraídos ${storyItems.length} itens via Polaris HTML.`);
+                            for (const it of storyItems) {
+                                processSingleStoryItem(it, false, '');
+                            }
+                        }
+                    } catch (errStoryHtml) {
+                        console.warn("[IG Tools Interações] Falha ao verificar rota HTML de stories 24h:", errStoryHtml);
+                    }
 
-                    // D. Buscar reels_media em lotes de 5 via API oficial
-                    const reelIdList = Array.from(reelsToFetch);
-                    const batchSize = 5;
-                    for (let i = 0; i < reelIdList.length; i += batchSize) {
-                        const batch = reelIdList.slice(i, i + batchSize);
-                        const queryParams = batch.map(id => `reel_ids=${encodeURIComponent(id)}`).join('&');
-                        const reelsUrl = `https://www.instagram.com/api/v1/feed/reels_media/?${queryParams}`;
+                    // --- ETAPA B: Destaques (Highlights) via Rotas Polaris Web Oficiais ---
+                    const pendingHighlights = Array.from(highlightIdsSet).map(id => id.replace(/^highlight:/, ''));
+                    console.log(`[IG Tools Interações] Buscando mídias de ${pendingHighlights.length} destaque(s) identificados:`, pendingHighlights);
+
+                    for (const cleanHlId of pendingHighlights) {
+                        if (processedReelIds.has(cleanHlId) || processedReelIds.has(`highlight:${cleanHlId}`)) continue;
+                        processedReelIds.add(cleanHlId);
+                        processedReelIds.add(`highlight:${cleanHlId}`);
 
                         try {
-                            const reelsRes = await fetch(reelsUrl, {
+                            const hlUrl = `https://www.instagram.com/stories/highlights/${cleanHlId}/`;
+                            const hlRes = await fetch(hlUrl, {
+                                credentials: 'include',
                                 headers: {
-                                    'X-IG-App-ID': '936619743392459',
-                                    'X-Requested-With': 'XMLHttpRequest'
-                                },
-                                credentials: 'include'
+                                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                                    'Sec-Fetch-Dest': 'document',
+                                    'Sec-Fetch-Mode': 'navigate',
+                                    'Sec-Fetch-Site': 'same-origin'
+                                }
                             });
 
-                            if (reelsRes.ok) {
-                                const reelsData = await reelsRes.json();
-                                const reelsList = Array.isArray(reelsData?.reels_media)
-                                    ? reelsData.reels_media
-                                    : Object.values(reelsData?.reels || {});
-
-                                for (const reel of reelsList) {
-                                    const reelId = String(reel?.id || '');
-                                    const isHighlight = reelId.startsWith('highlight:') || reel?.reel_type === 'highlight_reel' || (String(reelId) !== String(targetUserId));
-                                    const cleanHighlightId = reelId.replace(/^highlight:/, '');
-                                    const items = reel?.items || [];
-
-                                    for (const it of items) {
-                                        const hasLiked = Boolean(it.has_liked || it.viewer_has_liked);
-                                        if (hasLiked) {
-                                            const rawId = String(it.id || it.pk || '');
-                                            const cleanMediaId = rawId.split('_')[0];
-                                            const thumb = it.image_versions2?.candidates?.[0]?.url || it.display_url || '';
-
-                                            if (isHighlight) {
-                                                if (!likedHighlights.some(s => s.id === cleanMediaId)) {
-                                                    likedHighlights.push({
-                                                        type: 'Story (Destaque)',
-                                                        url: `https://www.instagram.com/stories/highlights/${cleanHighlightId}/?story_media_id=${cleanMediaId}`,
-                                                        thumb: thumb,
-                                                        id: cleanMediaId,
-                                                        rawId: rawId
-                                                    });
-                                                }
-                                            } else {
-                                                if (!likedStories.some(s => s.id === cleanMediaId)) {
-                                                    likedStories.push({
-                                                        type: 'Story (24h)',
-                                                        url: `https://www.instagram.com/stories/${cleanUsername}/${cleanMediaId}/`,
-                                                        thumb: thumb,
-                                                        id: cleanMediaId,
-                                                        rawId: rawId
-                                                    });
-                                                }
-                                            }
-                                        }
-                                    }
+                            if (hlRes.ok) {
+                                const hlHtml = await hlRes.text();
+                                console.log(`[IG Tools DEBUG Destaque ${cleanHlId}] HTTP ${hlRes.status}, tamanho: ${hlHtml.length}. Amostra:`, hlHtml.substring(0, 300));
+                                const extractedItems = extractPolarisStoryItems(hlHtml);
+                                console.log(`[IG Tools Interações] Destaque ${cleanHlId}: extraídos ${extractedItems.length} item(ns) do HTML Polaris.`);
+                                for (const it of extractedItems) {
+                                    processSingleStoryItem(it, true, cleanHlId);
                                 }
+                            } else {
+                                console.warn(`[IG Tools Interações] Rota do destaque ${cleanHlId} retornou HTTP ${hlRes.status}`);
                             }
-                        } catch (errBatch) {
-                            console.warn("[IG Tools Interações] Erro ao buscar lote de stories/destaques:", errBatch);
+                        } catch (errHlRoute) {
+                            console.warn(`[IG Tools Interações] Erro ao carregar mídias do destaque ${cleanHlId}:`, errHlRoute);
                         }
-                        if (i + batchSize < reelIdList.length) {
-                            await new Promise(r => setTimeout(r, 250));
+
+                        await new Promise(r => setTimeout(r, 150));
+                    }
+
+                    // Verifica se o Sniffer capturou itens de stories/destaques em memória
+                    if (window._igRecentStoryItemsMap && window._igRecentStoryItemsMap.size > 0) {
+                        for (const [, item] of window._igRecentStoryItemsMap) {
+                            const isHl = item.reel_type === 'highlight_reel' || Boolean(item.highlight_id);
+                            processSingleStoryItem(item, isHl, item.highlight_id || '');
+                        }
+                        window._igRecentStoryItemsMap.clear();
+                    }
+
+                    // Varredura final no DOM para garantir captura de qualquer destaque/story aberto na tela
+                    scanDomForLikedStories();
+
+                    // PURGA ABSOLUTA DE DESDUPLICAÇÃO:
+                    // Post do feed é a fonte de verdade. Nenhuma mídia do feed pode constar como destaque ou story.
+                    const feedPostIds = new Set(likedPosts.map(p => p.id));
+                    for (let i = likedHighlights.length - 1; i >= 0; i--) {
+                        if (feedPostIds.has(likedHighlights[i].id)) {
+                            console.log(`[IG Tools Desduplicação] Removendo destaque duplicado do feed: ${likedHighlights[i].id}`);
+                            likedHighlights.splice(i, 1);
+                        }
+                    }
+                    for (let i = likedStories.length - 1; i >= 0; i--) {
+                        if (feedPostIds.has(likedStories[i].id)) {
+                            console.log(`[IG Tools Desduplicação] Removendo story duplicado do feed: ${likedStories[i].id}`);
+                            likedStories.splice(i, 1);
                         }
                     }
 
@@ -16238,6 +17262,28 @@
                         total: likedPosts.length + likedStories.length + likedHighlights.length
                     };
                 }
+
+                // Função de teste instantâneo exposta no Console do navegador (F12)
+                try {
+                    window.testarDestaquesUsuario = async function(target = 'kellyyamada_') {
+                        console.log(`%c[IG Tools TESTE RÁPIDO] Testando DESTAQUES de @${target}...`, 'color: yellow; background: purple; font-size: 14px; font-weight: bold;');
+                        try {
+                            const uId = await getUserId(target);
+                            console.log(`[IG Tools TESTE] ID do usuário @${target}: ${uId}`);
+                            const res = await fetchUserInteractionsData(target, uId, (msg, pct) => {
+                                console.log(`[TESTE ${pct}%] ${msg}`);
+                            }, 1);
+                            console.log(`%c[IG Tools TESTE CONCLUÍDO] Destaques encontrados: ${res.likedHighlights.length}`, 'color: #00ffaa; background: #003311; font-size: 15px; font-weight: bold;', res.likedHighlights);
+                            if (res.likedHighlights.length > 0) {
+                                console.table(res.likedHighlights.map(h => ({ Tipo: h.type, ID: h.id, URL: h.url })));
+                            }
+                            return res;
+                        } catch (e) {
+                            console.error('[IG Tools TESTE ERRO]', e);
+                        }
+                    };
+                    window.testarInteracoesUsuario = window.testarDestaquesUsuario;
+                } catch (_) {}
 
                 function renderSubrowInteracoesContent(username, data, containerEl, btnEl) {
                     const isDark = document.body.classList.contains('dark-mode') || document.querySelector('.dark-mode');
@@ -17978,11 +19024,146 @@
                 processDialogPrivacy();
             }
 
+            // --- RASTREADOR CONTÍNUO DE STORIES E DESTAQUES CURTIDOS EM TEMPO REAL ---
+            let _lastTrackedStoryTime = 0;
+            function trackActiveLikedStoryInDom() {
+                const now = Date.now();
+                if (now - _lastTrackedStoryTime < 600) return;
+                _lastTrackedStoryTime = now;
+
+                try {
+                    // Procura o coração ativo do player (.xxk16z8 ou aria-label="Descurtir")
+                    const heartEl = document.querySelector('svg.xxk16z8, svg[aria-label="Descurtir"], div[role="button"]:has(svg.xxk16z8), button:has(svg.xxk16z8)');
+                    if (!heartEl) return;
+
+                    // Descobre o username do dono do story sendo assistido
+                    let storyUsername = '';
+                    const urlMatch = window.location.pathname.match(/\/stories\/([^/?#]+)/);
+                    if (urlMatch && urlMatch[1] && urlMatch[1] !== 'highlights') {
+                        storyUsername = urlMatch[1].toLowerCase();
+                    }
+
+                    if (!storyUsername) {
+                        const replyInput = document.querySelector('textarea[placeholder*="Responder a"], input[placeholder*="Responder a"]');
+                        const mUser = replyInput?.getAttribute('placeholder')?.match(/Responder a\s+([^\s.]+)/i);
+                        if (mUser && mUser[1]) storyUsername = mUser[1].toLowerCase().replace(/[.,!?:;]$/, '');
+                    }
+
+                    if (!storyUsername) {
+                        const authorLink = document.querySelector('header a[href^="/"], div[role="dialog"] header a[href^="/"], section a[href^="/"]');
+                        if (authorLink) {
+                            const rawH = (authorLink.getAttribute('href') || '').replace(/^\/|\/$/g, '').split('/')[0];
+                            if (rawH && rawH !== 'stories' && rawH !== 'explore') storyUsername = rawH.toLowerCase();
+                        }
+                    }
+
+                    if (!storyUsername) return;
+
+                    const container = heartEl.closest('section') || heartEl.closest('[role="dialog"]') || document.body;
+                    let mediaObj = null;
+                    let detectedMediaId = '';
+
+                    // Inspeciona React Fiber
+                    let el = heartEl;
+                    for (let i = 0; i < 20 && el; i++) {
+                        const fKey = Object.keys(el).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+                        if (fKey && el[fKey]) {
+                            let f = el[fKey];
+                            for (let j = 0; j < 30 && f; j++) {
+                                const p = f.memoizedProps;
+                                if (p) {
+                                    if (p.media && typeof p.media === 'object') { mediaObj = p.media; break; }
+                                    if (p.item && typeof p.item === 'object') { mediaObj = p.item; break; }
+                                    if (p.storyItem && typeof p.storyItem === 'object') { mediaObj = p.storyItem; break; }
+                                    if (!detectedMediaId) {
+                                        if (p.mediaId) detectedMediaId = String(p.mediaId);
+                                        else if (p.storyId) detectedMediaId = String(p.storyId);
+                                        else if (p.id && !String(p.id).startsWith('highlight:')) detectedMediaId = String(p.id);
+                                    }
+                                }
+                                f = f.return;
+                            }
+                        }
+                        if (mediaObj) break;
+                        el = el.parentElement;
+                    }
+
+                    if (!mediaObj && !detectedMediaId) {
+                        const mediaEl = container.querySelector('video, img[draggable="false"]');
+                        if (mediaEl) {
+                            const fKey = Object.keys(mediaEl).find(k => k.startsWith('__reactFiber$'));
+                            if (fKey && mediaEl[fKey]) {
+                                let f = mediaEl[fKey];
+                                for (let k = 0; k < 20 && f; k++) {
+                                    const p = f.memoizedProps;
+                                    if (p?.item || p?.media || p?.storyItem) {
+                                        mediaObj = p.item || p.media || p.storyItem;
+                                        break;
+                                    }
+                                    if (p?.mediaId || p?.id) {
+                                        detectedMediaId = String(p.mediaId || p.id);
+                                        break;
+                                    }
+                                    f = f.return;
+                                }
+                            }
+                        }
+                    }
+
+                    const currentUrl = window.location.href;
+                    const mMedia = currentUrl.match(/story_media_id=(\d+)/);
+                    const mHl = currentUrl.match(/\/stories\/highlights\/(\d+)/);
+                    const mediaId = String(detectedMediaId || mediaObj?.id || mediaObj?.pk || (mMedia ? mMedia[1] : '')).split('_')[0];
+                    if (!mediaId) return;
+
+                    const highlightId = mHl ? mHl[1] : (mediaObj?.highlight_id || '');
+                    const isHighlight = Boolean(mHl || highlightId || mediaObj?.reel_type === 'highlight_reel');
+
+                    let thumb = mediaObj?.image_versions2?.candidates?.[0]?.url || mediaObj?.display_url || '';
+                    if (!thumb) {
+                        const videoEl = container.querySelector('video');
+                        if (videoEl) thumb = videoEl.getAttribute('poster') || '';
+                        if (!thumb) {
+                            const imgEl = container.querySelector('img[src*="cdninstagram"], img[src*="fbcdn"]');
+                            if (imgEl) thumb = imgEl.src;
+                        }
+                    }
+
+                    const storageKey = `ig_tools_liked_media_${storyUsername}`;
+                    let cachedList = [];
+                    try {
+                        cachedList = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                    } catch (_) {}
+
+                    if (!cachedList.some(item => item.id === mediaId)) {
+                        const newItem = {
+                            type: isHighlight ? 'Story (Destaque)' : 'Story (24h)',
+                            url: isHighlight
+                                ? (highlightId ? `https://www.instagram.com/stories/highlights/${highlightId}/?story_media_id=${mediaId}` : `https://www.instagram.com/stories/highlights/${mediaId}/`)
+                                : `https://www.instagram.com/stories/${storyUsername}/${mediaId}/`,
+                            thumb: thumb,
+                            id: mediaId,
+                            rawId: mediaId
+                        };
+                        cachedList.push(newItem);
+                        localStorage.setItem(storageKey, JSON.stringify(cachedList));
+                        console.log(`%c[IG Tools Tracker] ${newItem.type} curtido registrado automaticamente para @${storyUsername}: ${mediaId}`, 'color: yellow; background: green; font-weight: bold;');
+                    }
+                } catch (errTrack) {
+                    console.warn("[IG Tools Tracker] Erro:", errTrack);
+                }
+            }
+
             // --- DOWNLOAD DE MÍDIA DO FEED E REELS ---
             function addFeedDownloadButtons() {
                 const observer = new MutationObserver(mutations => {
                     mutations.forEach(mutation => {
                         if (mutation.addedNodes.length) {
+                            // Rastreia stories e destaques curtidos em tempo real enquanto o usuário assiste
+                            if (window.location.pathname.includes('/stories/')) {
+                                trackActiveLikedStoryInDom();
+                            }
+
                             // Busca por posts (articles) que ainda não foram processados
                             const articles = document.querySelectorAll('article:not([data-download-processed])');
                             articles.forEach(article => {

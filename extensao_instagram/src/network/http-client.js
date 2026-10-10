@@ -61,14 +61,22 @@ window.IGTools = window.IGTools || {};
         return new Promise((resolve, reject) => {
             const id = 'req_' + (++requestIdCounter) + '_' + Date.now();
 
-            // Configura timeout de segurança
+            // Configura timeout de segurança (25s para conexões em nuvem)
             const timeoutId = setTimeout(() => {
                 if (pendingRequests.has(id)) {
                     pendingRequests.delete(id);
-                    // Tentativa de fallback com fetch nativo
-                    fallbackFetch(options, resolve, reject);
+                    const url = options.url || '';
+                    const isInstagramUrl = url.includes('instagram.com') || url.startsWith('/');
+                    // Só tenta fallback direto se for na própria origem do Instagram (evita violar CSP com Google APIs)
+                    if (isInstagramUrl) {
+                        fallbackFetch(options, resolve, reject);
+                    } else {
+                        const err = new Error(`Timeout na requisição de rede em nuvem (${url})`);
+                        if (options.onerror) options.onerror(err);
+                        reject(err);
+                    }
                 }
-            }, 10000);
+            }, 25000);
 
             pendingRequests.set(id, {
                 options,

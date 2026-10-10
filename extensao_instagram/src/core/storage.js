@@ -340,7 +340,25 @@ window.IGTools = window.IGTools || {};
         clearCache: async function (storeName) {
             await this._init();
             delete this._cache[storeName];
-            await window.IGTools.GDriveApi.saveData(this._cache);
+
+            // Limpa chaves do localStorage associadas
+            try {
+                localStorage.removeItem('ig_tools_cache_' + storeName);
+                localStorage.removeItem('ig_tools_cached_' + storeName);
+            } catch (_) { }
+
+            // Se for unblockedAccounts ou unblocked, garante limpeza completa
+            if (storeName === 'unblockedAccounts' || storeName === 'unblocked') {
+                this._cache.unblockedAccounts = [];
+                try {
+                    localStorage.removeItem('ig_tools_cached_unblocked');
+                    localStorage.setItem('ig_tools_cached_unblocked', JSON.stringify([]));
+                } catch (_) { }
+            }
+
+            if (window.IGTools?.GDriveApi) {
+                await window.IGTools.GDriveApi.saveData(this._cache);
+            }
         }
     };
 

@@ -1933,27 +1933,41 @@
                 const loggedUser = ((typeof getLoggedInUsername === 'function' ? getLoggedInUsername() : '') || localStorage.getItem('ig_tools_logged_user') || '').toLowerCase();
                 const isLogged = cleanUsername === loggedUser || !loggedUser;
 
-                // 1. Se estiver na página do perfil, extrai do DOM / React instantaneamente
+                // 1. Se estiver na página do perfil, tenta extrair com precisão do DOM
                 try {
                     const currentProf = (typeof getProfilePageUsername === 'function') ? getProfilePageUsername() : null;
                     if (currentProf === cleanUsername) {
-                        const header = document.querySelector('header');
+                        const header = document.querySelector('header') || document.querySelector('main');
                         if (header) {
                             let followers = 0;
                             let following = 0;
-                            const links = header.querySelectorAll('a[href*="/followers/"], a[href*="/following/"]');
-                            for (const l of links) {
-                                const txt = l.textContent || '';
-                                const m = txt.replace(/[,.]/g, '').match(/\d+/);
-                                if (m) {
-                                    if (l.getAttribute('href').includes('/followers/')) followers = parseInt(m[0], 10);
-                                    else if (l.getAttribute('href').includes('/following/')) following = parseInt(m[0], 10);
+
+                            // Varre links, botões, itens de lista e spans procurando números de seguidores e seguindo
+                            const items = header.querySelectorAll('a, button, li, span');
+                            for (const el of items) {
+                                const href = (el.getAttribute && el.getAttribute('href')) || '';
+                                const txt = (el.textContent || '').trim();
+                                const cleanTxt = txt.replace(/[,.\s]/g, '');
+
+                                // Seguidores
+                                if (!followers && (href.includes('/followers/') || txt.toLowerCase().includes('seguidor') || txt.toLowerCase().includes('follower'))) {
+                                    const m = cleanTxt.match(/(\d+)/);
+                                    if (m) followers = parseInt(m[1], 10);
+                                }
+                                // Seguindo
+                                if (!following && (href.includes('/following/') || txt.toLowerCase().includes('seguindo') || txt.toLowerCase().includes('following'))) {
+                                    const m = cleanTxt.match(/(\d+)/);
+                                    if (m) following = parseInt(m[1], 10);
                                 }
                             }
+
                             const avatarImg = header.querySelector('img[alt*="perfil"], img[alt*="profile"], img');
                             const photoUrl = avatarImg ? avatarImg.src : null;
                             const uid = (isLogged ? (getCookie('ds_user_id') || getActorId()) : getCachedUserId(cleanUsername)) || '';
-                            if ((followers > 0 || following > 0 || uid) && uid !== '936619743392459') {
+
+                            // CRÍTICO: Só retorna direto do DOM se REALMENTE encontrou contagens válidas (> 0)!
+                            // Se followers ou following forem 0, NÃO invente 1000 aqui; deixe cair no GraphQL HoverCard oficial abaixo!
+                            if (followers > 0 && following > 0 && uid && uid !== '936619743392459') {
                                 return {
                                     data: {
                                         user: {
@@ -1961,8 +1975,8 @@
                                             pk: String(uid || 'current'),
                                             username: cleanUsername,
                                             profile_pic_url: photoUrl,
-                                            edge_followed_by: { count: followers || 1000 },
-                                            edge_follow: { count: following || 1000 },
+                                            edge_followed_by: { count: followers },
+                                            edge_follow: { count: following },
                                             edge_owner_to_timeline_media: { count: 0 }
                                         }
                                     }
@@ -12819,8 +12833,18 @@
                                 toggleLoading(true, null, "Atualizando dados...");
 
                                 const userId = profileId;
-                                const totalFollowing = Number(cachedData.profileInfo?.data?.user?.edge_follow?.count) || 1000;
-                                const totalFollowers = Number(cachedData.profileInfo?.data?.user?.edge_followed_by?.count) || 1000;
+                                const parsedFollowing = Number(cachedData.profileInfo?.data?.user?.edge_follow?.count);
+                                const parsedFollowers = Number(cachedData.profileInfo?.data?.user?.edge_followed_by?.count);
+                                let totalFollowing = (parsedFollowing && parsedFollowing !== 1000) ? parsedFollowing : (cachedData.seguindo?.size || parsedFollowing || 1000);
+                                let totalFollowers = (parsedFollowers && parsedFollowers !== 1000) ? parsedFollowers : (cachedData.seguidores?.size || parsedFollowers || 1000);
+
+                                if ((totalFollowing === 1000 || totalFollowers === 1000) && userId && typeof executeGraphqlUserHoverCard === 'function') {
+                                    try {
+                                        const hCard = await executeGraphqlUserHoverCard(userId);
+                                        if (hCard && hCard.following) totalFollowing = Number(hCard.following);
+                                        if (hCard && hCard.followers) totalFollowers = Number(hCard.followers);
+                                    } catch (_) {}
+                                }
 
                                 let apiFollowing = null;
                                 let apiFollowers = null;

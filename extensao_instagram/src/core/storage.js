@@ -182,7 +182,7 @@ window.IGTools = window.IGTools || {};
             try {
                 localStorage.setItem('ig_tools_cache_' + storeName, JSON.stringify(formattedData));
                 await window.IGTools.GDriveApi.saveData(this._cache);
-                
+
                 // Se for a lista de seguidores, sincroniza automaticamente com o Service Worker em background
                 if (storeName === 'followers' && formattedData.length > 0) {
                     sendBridgeMessage('SYNC_FOLLOWERS_BASELINE', { followers: formattedData }).catch(e => {

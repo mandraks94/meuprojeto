@@ -34,7 +34,17 @@
         return /^[a-zA-Z0-9._]{1,30}$/.test(clean);
     };
     const makeDraggable = (el) => (typeof window.makeDraggable === 'function' ? window.makeDraggable(el) : null);
-    const getUserListCache = () => (window.userListCache || { muted: new Set(), mutedDetails: new Map() });
+    const getUserListCache = () => {
+        if (!window.userListCache) {
+            window.userListCache = {
+                muted: null,
+                mutedDetails: new Map(),
+                closeFriends: null,
+                hiddenStory: null
+            };
+        }
+        return window.userListCache;
+    };
     let cachedMutedAccounts = window.cachedMutedAccounts || [];
 
     // --- EXECUÇÃO GRAPHQL POLARIS (RELAY MODERN) ---

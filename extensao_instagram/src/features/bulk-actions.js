@@ -27,11 +27,16 @@
         saveCache: async () => { }
     };
 
-    const getUserListCache = () => window.userListCache || {
-        muted: null,
-        mutedDetails: new Map(),
-        closeFriends: null,
-        hiddenStory: null
+    const getUserListCache = () => {
+        if (!window.userListCache) {
+            window.userListCache = {
+                muted: null,
+                mutedDetails: new Map(),
+                closeFriends: null,
+                hiddenStory: null
+            };
+        }
+        return window.userListCache;
     };
 
     /**

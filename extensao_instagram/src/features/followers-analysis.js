@@ -43,11 +43,16 @@
         }
     });
 
-    const getUserListCache = () => window.userListCache || {
-        muted: null,
-        mutedDetails: new Map(),
-        closeFriends: null,
-        hiddenStory: null
+    const getUserListCache = () => {
+        if (!window.userListCache) {
+            window.userListCache = {
+                muted: null,
+                mutedDetails: new Map(),
+                closeFriends: null,
+                hiddenStory: null
+            };
+        }
+        return window.userListCache;
     };
 
     const getCachedUserId = (u) => (typeof window.getCachedUserId === 'function' ? window.getCachedUserId(u) : null);
@@ -1369,6 +1374,7 @@
         const loadCacheFromDB = async (key) => {
             try {
                 let set = new Set();
+                let hasLoadedAny = false;
                 const data = await dbHelper.loadCache(key);
 
                 let localKey = '';
@@ -1379,7 +1385,10 @@
                 let localData = null;
                 if (localKey) {
                     try {
-                        localData = JSON.parse(localStorage.getItem(localKey) || 'null');
+                        const raw = localStorage.getItem(localKey);
+                        if (raw !== null) {
+                            localData = JSON.parse(raw);
+                        }
                     } catch (_) { }
                 }
 
@@ -1389,46 +1398,68 @@
 
                 const populateFrom = (source) => {
                     if (!source) return;
+                    hasLoadedAny = true;
                     if (source instanceof Set) {
                         source.forEach(item => {
                             if (item) {
                                 const uname = typeof item === 'object' ? (item.username || '') : String(item);
-                                if (uname) set.add(uname.toLowerCase());
+                                if (uname) {
+                                    set.add(uname);
+                                    set.add(uname.toLowerCase());
+                                }
                             }
                         });
+                        if (source.details && source.details instanceof Map) {
+                            source.details.forEach((val, uname) => {
+                                if (key === 'closeFriends' && (val?.isCloseFriend === false || val?.isChecked === false)) return;
+                                if (key === 'hiddenStory' && (val?.isHidden === false || val?.isChecked === false)) return;
+                                if (key === 'muted' && val?.isMuted === false) return;
+                                const uStr = String(uname);
+                                const uLower = uStr.toLowerCase();
+                                set.add(uStr);
+                                set.add(uLower);
+                                if (key === 'muted') {
+                                    const s = (typeof val === 'object' ? val?.status : val) || 'Silenciado';
+                                    userListCache.mutedDetails.set(uStr, s);
+                                    userListCache.mutedDetails.set(uLower, s);
+                                }
+                            });
+                        }
                     } else if (Array.isArray(source)) {
                         source.forEach(item => {
                             if (item) {
                                 const uname = typeof item === 'object' ? (item.username || '') : String(item);
                                 if (uname) {
-                                    const uLower = uname.toLowerCase();
+                                    if (typeof item === 'object') {
+                                        if (key === 'closeFriends' && (item.isCloseFriend === false || item.isChecked === false)) return;
+                                        if (key === 'hiddenStory' && (item.isHidden === false || item.isChecked === false)) return;
+                                        if (key === 'muted' && item.isMuted === false) return;
+                                    }
+                                    const uStr = String(uname);
+                                    const uLower = uStr.toLowerCase();
+                                    set.add(uStr);
                                     set.add(uLower);
-                                    if (key === 'muted' && typeof item === 'object' && item.status) {
-                                        userListCache.mutedDetails.set(uLower, item.status);
+                                    if (key === 'muted') {
+                                        const s = (typeof item === 'object' ? item.status : 'Silenciado') || 'Silenciado';
+                                        userListCache.mutedDetails.set(uStr, s);
+                                        userListCache.mutedDetails.set(uLower, s);
                                     }
                                 }
                             }
                         });
-                    } else if (typeof source === 'object') {
-                        if (source.details && source.details instanceof Map) {
-                            source.details.forEach((val, uname) => {
-                                const uLower = String(uname).toLowerCase();
-                                set.add(uLower);
-                                if (key === 'muted') {
-                                    userListCache.mutedDetails.set(uLower, val?.status || 'Silenciado');
-                                }
-                            });
-                        } else {
-                            Object.keys(source).forEach(k => set.add(k.toLowerCase()));
-                        }
                     }
                 };
 
                 populateFrom(data);
                 populateFrom(localData);
 
-                userListCache[key] = set;
+                if (hasLoadedAny || data !== null || localData !== null) {
+                    userListCache[key] = set;
+                } else {
+                    userListCache[key] = null;
+                }
             } catch (e) {
+                console.warn(`[IG Tools] Erro ao carregar cache de ${key}:`, e);
                 userListCache[key] = new Set();
             }
         };
@@ -1614,6 +1645,7 @@
             let sortConfig = { key: 'username', direction: 'ascending' };
 
             const renderList = (page) => {
+                currentPage = page;
                 const startIndex = (page - 1) * itemsPerPage;
                 const endIndex = startIndex + itemsPerPage;
 
@@ -1661,14 +1693,14 @@
                         <thead style="cursor: pointer;">
                             <tr style="text-align: left;">
                                 <th style="padding: 8px 4px; width: 30px; text-align: center; border-bottom: 2px solid #dbdbdb;"><input type="checkbox" id="selectAllCheckbox" title="Selecionar Todos"></th>
-                                <th style="padding: 8px 6px; min-width: 140px; border-bottom: 2px solid #dbdbdb;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="isMuted">Silenciado? ${sortConfig.key === 'isMuted' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="isCloseFriend">Melhores Amigos? ${sortConfig.key === 'isCloseFriend' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="isStoryHidden">Ocultar Stories? ${sortConfig.key === 'isStoryHidden' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="followers">Seguidores ${sortConfig.key === 'followers' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="following">Seguindo ${sortConfig.key === 'following' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="status">Status ${sortConfig.key === 'status' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
-                                <th style="padding: 8px 6px; white-space: nowrap; border-bottom: 2px solid #dbdbdb;" data-sort-key="categories">Categorias ${sortConfig.key === 'categories' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                <th style="padding: 8px 6px; min-width: 140px; border-bottom: 2px solid #dbdbdb; cursor: pointer; user-select: none;" data-sort-key="username">Usuário ${sortConfig.key === 'username' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb; cursor: pointer; user-select: none;" data-sort-key="isMuted" title="${userListCache.muted === null ? 'Visite o menu Contas Silenciadas para carregar estes dados.' : ''}">Silenciado? ${userListCache.muted === null ? '??' : (sortConfig.key === 'isMuted' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
+                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb; cursor: pointer; user-select: none;" data-sort-key="isCloseFriend" title="${userListCache.closeFriends === null ? 'Visite o menu Amigos Próximos para carregar estes dados.' : ''}">Melhores Amigos? ${userListCache.closeFriends === null ? '??' : (sortConfig.key === 'isCloseFriend' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
+                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb; cursor: pointer; user-select: none;" data-sort-key="isStoryHidden" title="${userListCache.hiddenStory === null ? 'Visite o menu Ocultar Story para carregar estes dados.' : ''}">Ocultar Stories? ${userListCache.hiddenStory === null ? '??' : (sortConfig.key === 'isStoryHidden' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '')}</th>
+                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb; cursor: pointer; user-select: none;" data-sort-key="followers">Seguidores ${sortConfig.key === 'followers' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb; cursor: pointer; user-select: none;" data-sort-key="following">Seguindo ${sortConfig.key === 'following' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                <th style="padding: 8px 4px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb; cursor: pointer; user-select: none;" data-sort-key="status">Status ${sortConfig.key === 'status' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
+                                <th style="padding: 8px 6px; white-space: nowrap; border-bottom: 2px solid #dbdbdb; cursor: pointer; user-select: none;" data-sort-key="categories">Categorias ${sortConfig.key === 'categories' ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : ''}</th>
                                 <th style="padding: 8px 6px; text-align: center; white-space: nowrap; border-bottom: 2px solid #dbdbdb;">Interações</th>
                             </tr>
                         </thead>
@@ -1679,16 +1711,31 @@
                     const getSortValue = (user, key) => {
                         const uLower = user.username.toLowerCase();
                         if (key === 'username') return uLower;
-                        if (key === 'isMuted') return userListCache.muted ? (userListCache.muted.has(uLower) ? 1 : 2) : 3;
-                        if (key === 'isCloseFriend') return userListCache.closeFriends ? (userListCache.closeFriends.has(uLower) ? 1 : 2) : 3;
-                        if (key === 'isStoryHidden') return userListCache.hiddenStory ? (userListCache.hiddenStory.has(uLower) ? 1 : 2) : 3;
-                        if (key === 'followers') return (user.followers || 0);
-                        if (key === 'following') return (user.following || 0);
+                        if (key === 'isMuted') return userListCache.muted ? ((userListCache.muted.has(user.username) || userListCache.muted.has(uLower)) ? 1 : 2) : 3;
+                        if (key === 'isCloseFriend') return userListCache.closeFriends ? ((userListCache.closeFriends.has(user.username) || userListCache.closeFriends.has(uLower)) ? 1 : 2) : 3;
+                        if (key === 'isStoryHidden') return userListCache.hiddenStory ? ((userListCache.hiddenStory.has(user.username) || userListCache.hiddenStory.has(uLower)) ? 1 : 2) : 3;
+                        if (key === 'followers') return (Number(user.followers) || 0);
+                        if (key === 'following') return (Number(user.following) || 0);
+                        if (key === 'status') {
+                            if (user.followers !== undefined && user.following !== undefined && user.following > user.followers) {
+                                return 1;
+                            }
+                            return 2;
+                        }
+                        if (key === 'categories') {
+                            const cats = userCategoryMap.get(uLower) || [];
+                            return cats.map(cid => allCategories.find(c => c.id === cid)?.name || '').filter(Boolean).sort().join(', ');
+                        }
                         return 0;
                     };
 
                     const valA = getSortValue(a, sortConfig.key);
                     const valB = getSortValue(b, sortConfig.key);
+
+                    if (typeof valA === 'string' && typeof valB === 'string') {
+                        const cmp = valA.localeCompare(valB);
+                        return sortConfig.direction === 'ascending' ? cmp : -cmp;
+                    }
 
                     if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
                     if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
@@ -1705,9 +1752,24 @@
                         const { username: uname, photoUrl } = userObj;
                         const isChecked = selectedUsers.has(uname);
                         const unameLower = uname.toLowerCase();
-                        const isMutedSimple = userListCache.muted && userListCache.muted.has(unameLower) ? "Sim" : "Não";
-                        const isCloseFriend = userListCache.closeFriends && userListCache.closeFriends.has(unameLower) ? "Sim" : "Não";
-                        const isStoryHidden = userListCache.hiddenStory && userListCache.hiddenStory.has(unameLower) ? "Sim" : "Não";
+                        const isMutedSimple = userListCache.muted ? ((userListCache.muted.has(uname) || userListCache.muted.has(unameLower)) ? "Sim" : "Não") : "??";
+                        const isCloseFriend = userListCache.closeFriends ? ((userListCache.closeFriends.has(uname) || userListCache.closeFriends.has(unameLower)) ? "Sim" : "Não") : "??";
+                        const isStoryHidden = userListCache.hiddenStory ? ((userListCache.hiddenStory.has(uname) || userListCache.hiddenStory.has(unameLower)) ? "Sim" : "Não") : "??";
+
+                        let mutedDetailText = '';
+                        if (isMutedSimple === "Sim") {
+                            const detail = userListCache.mutedDetails?.get(uname) || userListCache.mutedDetails?.get(unameLower) || '';
+                            const dLower = detail.toLowerCase();
+                            if ((dLower.includes('stories') || dLower.includes('story')) && (dLower.includes('publicações') || dLower.includes('posts'))) {
+                                mutedDetailText = '(Stories e Publicações)';
+                            } else if (dLower.includes('stories') || dLower.includes('story')) {
+                                mutedDetailText = '(Stories)';
+                            } else if (dLower.includes('publicações') || dLower.includes('posts')) {
+                                mutedDetailText = '(Publicações)';
+                            } else if (detail) {
+                                mutedDetailText = `(${detail})`;
+                            }
+                        }
 
                         const userCategories = userCategoryMap.get(unameLower) || [];
                         const categorySpans = userCategories.map(catId => {
@@ -1716,9 +1778,18 @@
                             return `<span style="background-color: ${category.color}; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-right: 4px; display: inline-block;">${category.name}</span>`;
                         }).join('');
 
-                        const getStatusStyle = (status) => {
-                            if (status === 'Sim') return `background-color: #2ecc71; color: white;`;
-                            if (status === 'Não') return `background-color: #ecf0f1; color: #7f8c8d;`;
+                        const getStatusStyle = (status, type) => {
+                            if (status === 'Sim') {
+                                const colors = {
+                                    muted: { bg: '#e74c3c', text: 'white' },
+                                    closeFriend: { bg: '#2ecc71', text: 'white' },
+                                    storyHidden: { bg: '#f39c12', text: 'white' }
+                                };
+                                return `background-color: ${colors[type].bg}; color: ${colors[type].text};`;
+                            }
+                            if (status === 'Não') {
+                                return 'background-color: #ecf0f1; color: #7f8c8d;';
+                            }
                             return '';
                         };
 
@@ -1746,22 +1817,28 @@
                                 <td style="padding: 6px 4px; text-align: center;"><input type="checkbox" class="user-checkbox" data-username="${uname}" style="cursor: pointer;" ${isChecked ? 'checked' : ''}></td>
                                 <td style="padding: 6px 6px;">
                                     <div style="display:flex; align-items:center; gap:8px;">
-                                        <img src="${photoUrl || DEFAULT_AVATAR}" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${uname}" style="width:34px; height:34px; border-radius:50%; object-fit:cover;">
-                                        <a href="https://www.instagram.com/${uname}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600; font-size:13px;">${uname}</a>
+                                        <img src="${photoUrl || DEFAULT_AVATAR}" onerror="this.onerror=null; this.src=DEFAULT_AVATAR;" alt="${uname}" style="width:34px; height:34px; border-radius:50%; object-fit:cover; flex-shrink: 0;">
+                                        <div style="display:flex; flex-direction:column; overflow: hidden; max-width: 140px;">
+                                            <div style="display:flex; align-items:center; gap:4px; overflow: hidden;">
+                                                <a href="https://www.instagram.com/${uname}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600; font-size:13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${uname}</a>
+                                                ${loadSettings().validateProfileStatus ? `<span class="seguindo-privacy-badge" data-username="${uname}"></span>` : ''}
+                                            </div>
+                                            ${mutedDetailText ? `<span class="muted-detail-label" style="font-size:10px; color:gray; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${mutedDetailText}">${mutedDetailText}</span>` : `<span class="muted-detail-label" style="display:none; font-size:10px; color:gray; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></span>`}
+                                        </div>
                                     </div>
                                 </td>
                                 <td style="text-align: center; padding: 6px 4px;">
-                                    <button class="btn-toggle-status" data-type="muted" data-username="${uname}" data-userid="${userObj.id || ''}" data-current="${isMutedSimple}" title="Clique para alternar Silenciado" style="padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; font-weight: bold; font-size: 11px; transition: all 0.2s; ${getStatusStyle(isMutedSimple)}">
+                                    <button class="btn-toggle-status" data-type="muted" data-username="${uname}" data-userid="${userObj.id || ''}" data-current="${isMutedSimple}" title="Clique para alternar Silenciado" style="padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; font-weight: bold; font-size: 11px; transition: all 0.2s; ${getStatusStyle(isMutedSimple, 'muted')}">
                                         ${isMutedSimple}
                                     </button>
                                 </td>
                                 <td style="text-align: center; padding: 6px 4px;">
-                                    <button class="btn-toggle-status" data-type="closeFriends" data-username="${uname}" data-userid="${userObj.id || ''}" data-current="${isCloseFriend}" title="Clique para alternar Melhores Amigos" style="padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; font-weight: bold; font-size: 11px; transition: all 0.2s; ${getStatusStyle(isCloseFriend)}">
+                                    <button class="btn-toggle-status" data-type="closeFriends" data-username="${uname}" data-userid="${userObj.id || ''}" data-current="${isCloseFriend}" title="Clique para alternar Melhores Amigos" style="padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; font-weight: bold; font-size: 11px; transition: all 0.2s; ${getStatusStyle(isCloseFriend, 'closeFriend')}">
                                         ${isCloseFriend}
                                     </button>
                                 </td>
                                 <td style="text-align: center; padding: 6px 4px;">
-                                    <button class="btn-toggle-status" data-type="hiddenStory" data-username="${uname}" data-userid="${userObj.id || ''}" data-current="${isStoryHidden}" title="Clique para alternar Ocultar Stories" style="padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; font-weight: bold; font-size: 11px; transition: all 0.2s; ${getStatusStyle(isStoryHidden)}">
+                                    <button class="btn-toggle-status" data-type="hiddenStory" data-username="${uname}" data-userid="${userObj.id || ''}" data-current="${isStoryHidden}" title="Clique para alternar Ocultar Stories" style="padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; font-weight: bold; font-size: 11px; transition: all 0.2s; ${getStatusStyle(isStoryHidden, 'storyHidden')}">
                                         ${isStoryHidden}
                                     </button>
                                 </td>
@@ -1789,6 +1866,21 @@
                 paginationHtml += `</div>`;
 
                 container.innerHTML = tableHtml + paginationHtml;
+
+                // Adiciona eventos de clique para ordenação nos cabeçalhos
+                container.querySelectorAll('th[data-sort-key]').forEach(th => {
+                    th.addEventListener('click', () => {
+                        const key = th.dataset.sortKey;
+                        if (sortConfig.key === key) {
+                            sortConfig.direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+                        } else {
+                            sortConfig.key = key;
+                            sortConfig.direction = (key === 'followers' || key === 'following') ? 'descending' : 'ascending';
+                        }
+                        currentPage = 1;
+                        renderList(1);
+                    });
+                });
 
                 const prevBtn = document.getElementById("prevPageBtn");
                 if (prevBtn) prevBtn.onclick = () => renderList(--currentPage);
@@ -1819,10 +1911,16 @@
                 }
 
                 const searchInput = document.getElementById("seguindoSearchInput");
-                searchInput.oninput = () => renderList(1);
+                searchInput.oninput = () => {
+                    currentPage = 1;
+                    renderList(1);
+                };
 
                 const filterSelect = document.getElementById("seguindoFilterSelect");
-                filterSelect.onchange = () => renderList(1);
+                filterSelect.onchange = () => {
+                    currentPage = 1;
+                    renderList(1);
+                };
 
                 // Popula dinamicamente as categorias no filtro
                 Array.from(filterSelect.options).forEach(opt => {
@@ -1894,7 +1992,12 @@
                         if (!uname || !type) return;
 
                         const unameLower = uname.toLowerCase();
-                        let uid = explicitUid || getCachedUserId(uname) || (await getUserId(uname));
+                        let uid = explicitUid || null;
+                        if (!uid && typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                            const found = seguindoList.find(x => (typeof x === 'object' ? x?.username : x)?.toLowerCase() === unameLower);
+                            if (found && (found.id || found.pk)) uid = String(found.id || found.pk);
+                        }
+                        if (!uid) uid = getCachedUserId(uname) || (await getUserId(uname));
                         if (!uid) {
                             showToast(`⚠️ Não foi possível obter o ID de @${uname}.`);
                             return;
@@ -1916,11 +2019,24 @@
 
                                 if (isSuccess) {
                                     if (action === 'mute') {
+                                        userListCache.muted.add(uname);
                                         userListCache.muted.add(unameLower);
-                                        if (userListCache.mutedDetails) userListCache.mutedDetails.set(unameLower, 'Stories e Publicações');
+                                        if (userListCache.mutedDetails) {
+                                            userListCache.mutedDetails.set(uname, 'Stories e Publicações');
+                                            userListCache.mutedDetails.set(unameLower, 'Stories e Publicações');
+                                        }
                                     } else {
+                                        userListCache.muted.delete(uname);
                                         userListCache.muted.delete(unameLower);
-                                        if (userListCache.mutedDetails) userListCache.mutedDetails.delete(unameLower);
+                                        for (const item of userListCache.muted) {
+                                            if (typeof item === 'string' && item.toLowerCase() === unameLower) {
+                                                userListCache.muted.delete(item);
+                                            }
+                                        }
+                                        if (userListCache.mutedDetails) {
+                                            userListCache.mutedDetails.delete(uname);
+                                            userListCache.mutedDetails.delete(unameLower);
+                                        }
                                     }
                                     try {
                                         let cachedMuted = JSON.parse(localStorage.getItem('ig_tools_cached_muted') || '[]');
@@ -1933,13 +2049,21 @@
                                         }
                                         localStorage.setItem('ig_tools_cached_muted', JSON.stringify(cachedMuted));
                                         await dbHelper.saveCache('muted', Array.from(userListCache.muted));
-                                    } catch (_) {}
+                                    } catch (_) { }
 
                                     const newStatus = action === 'mute' ? 'Sim' : 'Não';
                                     btn.dataset.current = newStatus;
                                     btn.textContent = newStatus;
-                                    btn.style.backgroundColor = newStatus === 'Sim' ? '#2ecc71' : '#ecf0f1';
+                                    btn.style.backgroundColor = newStatus === 'Sim' ? '#e74c3c' : '#ecf0f1';
                                     btn.style.color = newStatus === 'Sim' ? 'white' : '#7f8c8d';
+
+                                    const userRow = document.querySelector(`tr[data-username="${uname}"]`);
+                                    const detailSpan = userRow?.querySelector('.muted-detail-label');
+                                    if (detailSpan) {
+                                        detailSpan.textContent = action === 'mute' ? '(Stories e Publicações)' : '';
+                                        detailSpan.style.display = action === 'mute' ? '' : 'none';
+                                    }
+
                                     showToast(`🔇 @${uname} ${action === 'mute' ? 'silenciado(a)' : 'reativado(a)'}!`);
                                 } else {
                                     throw new Error("Falha na chamada da API");
@@ -1949,8 +2073,15 @@
                                 const res = await executeGraphqlSetBesties(isRemove ? [] : [uid], isRemove ? [uid] : []);
                                 if (res?.success) {
                                     if (isRemove) {
+                                        userListCache.closeFriends.delete(uname);
                                         userListCache.closeFriends.delete(unameLower);
+                                        for (const item of userListCache.closeFriends) {
+                                            if (typeof item === 'string' && item.toLowerCase() === unameLower) {
+                                                userListCache.closeFriends.delete(item);
+                                            }
+                                        }
                                     } else {
+                                        userListCache.closeFriends.add(uname);
                                         userListCache.closeFriends.add(unameLower);
                                     }
                                     try {
@@ -1962,7 +2093,7 @@
                                         }
                                         localStorage.setItem('ig_tools_cached_close_friends', JSON.stringify(cachedCF));
                                         await dbHelper.saveCache('closeFriends', Array.from(userListCache.closeFriends));
-                                    } catch (_) {}
+                                    } catch (_) { }
 
                                     const newStatus = isRemove ? 'Não' : 'Sim';
                                     btn.dataset.current = newStatus;
@@ -1978,9 +2109,16 @@
                                 const res = await executeWbloksHideStory(uid, uname, action);
                                 if (res?.success) {
                                     if (action === 'hide') {
+                                        userListCache.hiddenStory.add(uname);
                                         userListCache.hiddenStory.add(unameLower);
                                     } else {
+                                        userListCache.hiddenStory.delete(uname);
                                         userListCache.hiddenStory.delete(unameLower);
+                                        for (const item of userListCache.hiddenStory) {
+                                            if (typeof item === 'string' && item.toLowerCase() === unameLower) {
+                                                userListCache.hiddenStory.delete(item);
+                                            }
+                                        }
                                     }
                                     try {
                                         let cachedHide = JSON.parse(localStorage.getItem('ig_tools_cached_hide_story') || '[]');
@@ -1991,12 +2129,12 @@
                                         }
                                         localStorage.setItem('ig_tools_cached_hide_story', JSON.stringify(cachedHide));
                                         await dbHelper.saveCache('hiddenStory', Array.from(userListCache.hiddenStory));
-                                    } catch (_) {}
+                                    } catch (_) { }
 
                                     const newStatus = action === 'hide' ? 'Sim' : 'Não';
                                     btn.dataset.current = newStatus;
                                     btn.textContent = newStatus;
-                                    btn.style.backgroundColor = newStatus === 'Sim' ? '#2ecc71' : '#ecf0f1';
+                                    btn.style.backgroundColor = newStatus === 'Sim' ? '#f39c12' : '#ecf0f1';
                                     btn.style.color = newStatus === 'Sim' ? 'white' : '#7f8c8d';
                                     showToast(`👁️ Stories ${action === 'hide' ? 'ocultados para' : 'desocultados para'} @${uname}!`);
                                 } else {
@@ -2034,9 +2172,87 @@
                 }
             };
 
+            const getFollowersAndFollowing = async (username, existingId = null) => {
+                let uid = existingId || getCachedUserId(username);
+                if (!uid && typeof seguindoList !== 'undefined' && Array.isArray(seguindoList)) {
+                    const item = seguindoList.find(x => (typeof x === 'object' ? x?.username : x)?.toLowerCase() === username.toLowerCase());
+                    if (item && typeof item === 'object') {
+                        const foundId = item.id || item.pk || item.pk_id;
+                        if (foundId) {
+                            uid = String(foundId);
+                            setCachedUserId(username, uid);
+                        }
+                    }
+                }
+                if (!uid) {
+                    uid = await getUserId(username);
+                }
+
+                if (uid) {
+                    const graphqlStats = await executeGraphqlUserHoverCard(uid);
+                    if (graphqlStats) return graphqlStats;
+                }
+
+                const info = await safeFetchProfileInfo(username);
+                if (info && info.data?.user && info.data.user.edge_followed_by?.count !== undefined) {
+                    return {
+                        followers: info.data.user.edge_followed_by?.count || 0,
+                        following: info.data.user.edge_follow?.count || 0
+                    };
+                }
+                return null;
+            };
+
+            const loadStatsBtn = document.getElementById('loadStatsSeguindoBtn');
+            if (loadStatsBtn) {
+                loadStatsBtn.onclick = async () => {
+                    loadStatsBtn.disabled = true;
+                    const originalText = loadStatsBtn.textContent;
+                    loadStatsBtn.textContent = 'Carregando...';
+
+                    for (let i = 0; i < currentPaginatedUsers.length; i++) {
+                        if (processoCancelado) break;
+                        const user = currentPaginatedUsers[i];
+
+                        loadStatsBtn.textContent = `Carregando (${i + 1}/${currentPaginatedUsers.length})...`;
+                        const stats = await getFollowersAndFollowing(user.username, user.id || user.pk);
+                        if (stats) {
+                            user.followers = stats.followers;
+                            user.following = stats.following;
+
+                            const mainUser = seguindoList.find(u => (typeof u === 'object' ? u?.username : u)?.toLowerCase() === user.username.toLowerCase());
+                            if (mainUser && typeof mainUser === 'object') {
+                                mainUser.followers = stats.followers;
+                                mainUser.following = stats.following;
+                            }
+
+                            const tr = document.querySelector(`tr[data-username="${user.username}"]`);
+                            if (tr) {
+                                const tds = tr.querySelectorAll('td');
+                                if (tds[5]) tds[5].textContent = stats.followers.toLocaleString();
+                                if (tds[6]) tds[6].textContent = stats.following.toLocaleString();
+                                if (tds[7]) {
+                                    if (stats.following > stats.followers) {
+                                        tds[7].innerHTML = '<span style="color:#e74c3c;font-weight:bold;">Unfollow</span>';
+                                    } else {
+                                        tds[7].textContent = '-';
+                                    }
+                                }
+                            }
+                        }
+                        await new Promise(r => setTimeout(r, 400));
+                    }
+                    loadStatsBtn.disabled = false;
+                    loadStatsBtn.textContent = originalText;
+                    try {
+                        await dbHelper.saveCache('following', seguindoList);
+                    } catch (_) { }
+                };
+            }
+
             document.getElementById('unfollowSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'unfollow', updateLocalState);
             document.getElementById('blockSeguindoBtn').onclick = () => handleActionOnSelected(Array.from(selectedUsers), 'block', updateLocalState);
-            document.getElementById('executarSeguindoBtn').onclick = () => abrirModalExecutarSeguindo(Array.from(selectedUsers), updateLocalState);
+            document.getElementById('executarSeguindoBtn').onclick = () => abrirModalExecutarSeguindo(Array.from(selectedUsers), updateLocalState, userListCache, seguindoList);
 
             renderList(currentPage);
         }
@@ -2047,12 +2263,12 @@
     /**
      * 3. MODAL DE AÇÕES EM MASSA PARA SEGUINDO
      */
-    async function abrirModalExecutarSeguindo(selectedUsernames, updateCallback) {
+    async function abrirModalExecutarSeguindo(selectedUsernames, updateCallback, userListCacheParam = null, seguindoListParam = null) {
         if (!selectedUsernames || selectedUsernames.length === 0) return alert("Selecione pelo menos um usuário na tabela.");
         if (document.getElementById("executarModal")) return;
 
         const dbHelper = getDbHelper();
-        const userListCache = getUserListCache();
+        const userListCache = userListCacheParam || getUserListCache();
         const categories = await dbHelper.loadCategories();
 
         const execDiv = document.createElement("div");
@@ -2099,8 +2315,8 @@
                     </div>
                     <div style="max-height: 150px; overflow-y: auto; border: 1px solid #eee; padding: 5px; border-radius: 5px;">
                         ${categories.length === 0 ? '<p style="font-size: 12px; color: gray;">Nenhuma categoria cadastrada.</p>' :
-                            categories.map(cat => `<div class="toggle-item" style="background: transparent; border: none; padding: 0;"><div style="display: flex; align-items: center; gap: 5px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: ${cat.color};"></span><span style="font-size: 14px;">${cat.name}</span></div><label class="switch"><input type="checkbox" class="execCatItem" value="${cat.id}"><span class="slider"></span></label></div>`).join('')
-                        }
+                categories.map(cat => `<div class="toggle-item" style="background: transparent; border: none; padding: 0;"><div style="display: flex; align-items: center; gap: 5px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: ${cat.color};"></span><span style="font-size: 14px;">${cat.name}</span></div><label class="switch"><input type="checkbox" class="execCatItem" value="${cat.id}"><span class="slider"></span></label></div>`).join('')
+            }
                     </div>
                 </div>
                 <button id="aplicarExecutarBtn" style="margin-top: 10px; background: #3498db; color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold;">Aplicar Ações</button>
@@ -2155,10 +2371,14 @@
                     selectedUsernames.forEach(u => {
                         const uLower = u.toLowerCase();
                         if (muteAction === 'unmute') {
+                            userListCache.muted.delete(u);
                             userListCache.muted.delete(uLower);
+                            userListCache.mutedDetails.delete(u);
                             userListCache.mutedDetails.delete(uLower);
                         } else {
+                            userListCache.muted.add(u);
                             userListCache.muted.add(uLower);
+                            userListCache.mutedDetails.set(u, statusStr);
                             userListCache.mutedDetails.set(uLower, statusStr);
                         }
                     });
@@ -2184,25 +2404,44 @@
                     } catch (_) { }
                 }
 
+                const getTargetUid = async (u) => {
+                    const uLower = u.toLowerCase();
+                    if (seguindoListParam && Array.isArray(seguindoListParam)) {
+                        const found = seguindoListParam.find(x => (typeof x === 'object' ? x?.username : x)?.toLowerCase() === uLower);
+                        if (found && (found.id || found.pk)) return String(found.id || found.pk);
+                    }
+                    return getCachedUserId(u) || (await getUserId(u));
+                };
+
                 if (doCF) {
                     if (loadSettings().useApi) {
                         const adds = [];
                         const removes = [];
                         for (const u of selectedUsernames) {
-                            const uid = getCachedUserId(u) || await getUserId(u);
+                            const uid = await getTargetUid(u);
                             if (uid) {
-                                if (cfAction === 'remove') removes.push(uid);
-                                else adds.push(uid);
+                                if (cfAction === 'remove') removes.push(String(uid));
+                                else adds.push(String(uid));
                             }
                         }
                         if (adds.length > 0 || removes.length > 0) {
                             const res = await executeGraphqlSetBesties(adds, removes);
-                            if (res.success) {
+                            if (res?.success) {
                                 if (!userListCache.closeFriends) userListCache.closeFriends = new Set();
                                 selectedUsernames.forEach(u => {
                                     const uLower = u.toLowerCase();
-                                    if (cfAction === 'remove') userListCache.closeFriends.delete(uLower);
-                                    else userListCache.closeFriends.add(uLower);
+                                    if (cfAction === 'remove') {
+                                        userListCache.closeFriends.delete(u);
+                                        userListCache.closeFriends.delete(uLower);
+                                        for (const item of userListCache.closeFriends) {
+                                            if (typeof item === 'string' && item.toLowerCase() === uLower) {
+                                                userListCache.closeFriends.delete(item);
+                                            }
+                                        }
+                                    } else {
+                                        userListCache.closeFriends.add(u);
+                                        userListCache.closeFriends.add(uLower);
+                                    }
                                 });
                                 try {
                                     let cachedCF = JSON.parse(localStorage.getItem('ig_tools_cached_close_friends') || '[]');
@@ -2228,14 +2467,24 @@
                 if (doHide) {
                     if (loadSettings().useApi) {
                         for (const u of selectedUsernames) {
-                            const uid = getCachedUserId(u) || await getUserId(u);
+                            const uid = await getTargetUid(u);
                             if (uid) {
                                 const res = await executeWbloksHideStory(uid, u, hideAction);
-                                if (res.success) {
+                                if (res?.success) {
                                     if (!userListCache.hiddenStory) userListCache.hiddenStory = new Set();
                                     const uLower = u.toLowerCase();
-                                    if (hideAction === 'unhide') userListCache.hiddenStory.delete(uLower);
-                                    else userListCache.hiddenStory.add(uLower);
+                                    if (hideAction === 'unhide') {
+                                        userListCache.hiddenStory.delete(u);
+                                        userListCache.hiddenStory.delete(uLower);
+                                        for (const item of userListCache.hiddenStory) {
+                                            if (typeof item === 'string' && item.toLowerCase() === uLower) {
+                                                userListCache.hiddenStory.delete(item);
+                                            }
+                                        }
+                                    } else {
+                                        userListCache.hiddenStory.add(u);
+                                        userListCache.hiddenStory.add(uLower);
+                                    }
                                 }
                             }
                             await new Promise(r => setTimeout(r, loadSettings().requestDelay || 400));
@@ -2263,6 +2512,50 @@
             } finally {
                 toggleLoading(false);
             }
+
+            // Atualização visual imediata das linhas na tabela aberta
+            selectedUsernames.forEach(u => {
+                const uLower = u.toLowerCase();
+                const row = document.querySelector(`tr[data-username="${u}"]`) || Array.from(document.querySelectorAll('#seguindoModal tr[data-username]')).find(tr => tr.dataset.username?.toLowerCase() === uLower);
+                if (row) {
+                    if (doCF) {
+                        const cfBtn = row.querySelector('.btn-toggle-status[data-type="closeFriends"]');
+                        if (cfBtn) {
+                            const newCF = cfAction === 'remove' ? 'Não' : 'Sim';
+                            cfBtn.dataset.current = newCF;
+                            cfBtn.textContent = newCF;
+                            cfBtn.style.backgroundColor = newCF === 'Sim' ? '#2ecc71' : '#ecf0f1';
+                            cfBtn.style.color = newCF === 'Sim' ? 'white' : '#7f8c8d';
+                        }
+                    }
+                    if (doMute) {
+                        const muteBtn = row.querySelector('.btn-toggle-status[data-type="muted"]');
+                        if (muteBtn) {
+                            const newMute = muteAction === 'unmute' ? 'Não' : 'Sim';
+                            muteBtn.dataset.current = newMute;
+                            muteBtn.textContent = newMute;
+                            muteBtn.style.backgroundColor = newMute === 'Sim' ? '#e74c3c' : '#ecf0f1';
+                            muteBtn.style.color = newMute === 'Sim' ? 'white' : '#7f8c8d';
+                        }
+                        const detailSpan = row.querySelector('.muted-detail-label');
+                        if (detailSpan) {
+                            const statusStr = muteType === 'all' ? '(Stories e Publicações)' : (muteType === 'stories' ? '(Stories)' : '(Publicações)');
+                            detailSpan.textContent = muteAction === 'unmute' ? '' : statusStr;
+                            detailSpan.style.display = muteAction === 'unmute' ? 'none' : '';
+                        }
+                    }
+                    if (doHide) {
+                        const hideBtn = row.querySelector('.btn-toggle-status[data-type="hiddenStory"]');
+                        if (hideBtn) {
+                            const newHide = hideAction === 'unhide' ? 'Não' : 'Sim';
+                            hideBtn.dataset.current = newHide;
+                            hideBtn.textContent = newHide;
+                            hideBtn.style.backgroundColor = newHide === 'Sim' ? '#f39c12' : '#ecf0f1';
+                            hideBtn.style.color = newHide === 'Sim' ? 'white' : '#7f8c8d';
+                        }
+                    }
+                }
+            });
 
             if (updateCallback) await updateCallback(selectedUsernames, 'exec');
             showToast("Ações concluídas!");

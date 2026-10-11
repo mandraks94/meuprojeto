@@ -59,13 +59,109 @@ window.IGTools = window.IGTools || {};
         }
     };
 
+    function getCurrentLanguage() {
+        try {
+            if (window.IGTools?.Storage?.loadSettings) {
+                return window.IGTools.Storage.loadSettings()?.language || 'pt-BR';
+            }
+            if (typeof window.loadSettings === 'function') {
+                return window.loadSettings()?.language || 'pt-BR';
+            }
+            const saved = JSON.parse(localStorage.getItem('instagramToolsSettings_v2') || '{}');
+            return saved.language || 'pt-BR';
+        } catch (_) {
+            return 'pt-BR';
+        }
+    }
+
     function getText(key) {
-        const lang = window.IGTools.Storage?.loadSettings()?.language || 'pt-BR';
+        const lang = getCurrentLanguage();
         return (translations[lang] && translations[lang][key]) || (translations['pt-BR'] && translations['pt-BR'][key]) || key;
+    }
+
+    function updateInterfaceLanguage(lang) {
+        if (!lang) return;
+        
+        // 1. Salva a preferência
+        try {
+            if (window.IGTools?.Storage?.saveSettings) {
+                window.IGTools.Storage.saveSettings({ language: lang });
+            } else if (typeof window.saveSettings === 'function') {
+                window.saveSettings({ language: lang });
+            } else {
+                const current = JSON.parse(localStorage.getItem('instagramToolsSettings_v2') || '{}');
+                current.language = lang;
+                localStorage.setItem('instagramToolsSettings_v2', JSON.stringify(current));
+            }
+        } catch (e) {
+            console.error("[IG Tools i18n] Erro ao salvar idioma:", e);
+        }
+
+        // 2. Atualiza elementos com atributo data-i18n
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            if (key) {
+                const trans = (translations[lang] && translations[lang][key]) || (translations['pt-BR'] && translations['pt-BR'][key]) || key;
+                if (el.tagName === 'INPUT' && (el.type === 'button' || el.type === 'submit')) {
+                    el.value = trans;
+                } else {
+                    el.textContent = trans;
+                }
+            }
+        });
+
+        // 3. Atualiza os itens do menu flutuante (assistive-menu) caso não possuam data-i18n ainda
+        const menuSelectors = {
+            '#curtidasBtn': 'likes',
+            '#comentariosBtn': 'comments',
+            '#bloqueadosBtn': 'blocked',
+            '#mensagensBtn': 'messages',
+            '#naoSegueDeVoltaBtn': 'notFollowingBack',
+            '#seguindoBtn': 'following',
+            '#closeFriendsBtn': 'closeFriends',
+            '#hideStoryBtn': 'hideStory',
+            '#mutedAccountsBtn': 'mutedAccounts',
+            '#interacoesBtn': 'interactions',
+            '#reelsMenuBtn': 'reelsMenu',
+            '#baixarStoryBtn': 'downloadStory',
+            '#settingsBtn': 'settings'
+        };
+
+        Object.entries(menuSelectors).forEach(([btnId, k]) => {
+            const btn = document.querySelector(btnId);
+            if (btn && btn.parentElement) {
+                const span = btn.parentElement.querySelector('span');
+                if (span) {
+                    const trans = (translations[lang] && translations[lang][k]) || (translations['pt-BR'] && translations['pt-BR'][k]) || k;
+                    span.textContent = trans;
+                    span.setAttribute('data-i18n', k);
+                }
+            }
+        });
+
+        // 4. Atualiza o modal de configurações se estiver aberto
+        const settingsModal = document.getElementById('settingsModal');
+        if (settingsModal) {
+            const titleEl = settingsModal.querySelector('.modal-title');
+            if (titleEl) {
+                const textNodes = Array.from(titleEl.childNodes).filter(node => node.nodeType === Node.TEXT_NODE);
+                if (textNodes.length > 0) {
+                    textNodes[0].textContent = (translations[lang] && translations[lang]['settings']) || 'Configurações';
+                }
+            }
+        }
+
+        // 5. Emite evento para que qualquer componente possa reagir
+        window.dispatchEvent(new CustomEvent('igtools:languageChanged', { detail: { language: lang } }));
     }
 
     window.IGTools.I18n = {
         translations,
-        getText
+        getText,
+        updateInterfaceLanguage,
+        getCurrentLanguage
     };
+
+    window.getText = getText;
+    window.updateInterfaceLanguage = updateInterfaceLanguage;
 })();

@@ -38,12 +38,38 @@ window.IGTools = window.IGTools || {};
     }
 
     const googleAuth = {
-        getAccessToken: () => rawStorage.get('gdrive_token'),
-        setAccessToken: (token) => rawStorage.set('gdrive_token', token),
+        getAccessToken: () => {
+            const token = rawStorage.get('gdrive_token');
+            if (!token) return null;
+            const savedTime = Number(localStorage.getItem('ig_tools_gdrive_token_timestamp')) || 0;
+            const expiresIn = Number(localStorage.getItem('ig_tools_gdrive_expires_in')) || 3600;
+            if (savedTime && (Date.now() - savedTime > (expiresIn - 60) * 1000)) {
+                console.log("[IG Tools] Sessão do Google Drive expirada.");
+                googleAuth.setAccessToken(null);
+                return null;
+            }
+            return token;
+        },
+        isConnected: function () {
+            return !!this.getAccessToken();
+        },
+        setAccessToken: (token) => {
+            rawStorage.set('gdrive_token', token);
+            if (!token) {
+                try {
+                    localStorage.removeItem('ig_tools_gdrive_token');
+                    localStorage.removeItem('ig_tools_gdrive_token_timestamp');
+                    localStorage.removeItem('ig_tools_gdrive_expires_in');
+                } catch (_) { }
+            }
+        },
 
         login: function () {
-            const config = window.IGTools.Config.GDRIVE_CONFIG;
-            if (config.clientId.includes('SEU_CLIENT_ID')) {
+            const config = window.IGTools.Config?.GDRIVE_CONFIG || {
+                clientId: '118908063115-j6fj7f069urt69vh5fa6ha1luh4fgvea.apps.googleusercontent.com',
+                scope: 'https://www.googleapis.com/auth/drive.appdata'
+            };
+            if (!config.clientId || config.clientId.includes('SEU_CLIENT_ID')) {
                 alert("ERRO: Você precisa configurar seu Client ID do Google Cloud no código!");
                 window.open('https://console.cloud.google.com/');
                 return;
@@ -58,11 +84,18 @@ window.IGTools = window.IGTools || {};
                 console.log("[IG Tools] Hash detectado após login.");
                 const params = new URLSearchParams(hash.substring(1));
                 const token = params.get('access_token');
+                const expiresIn = Number(params.get('expires_in')) || 3600;
                 console.log("[IG Tools] Sucesso! Token recebido.");
                 this.setAccessToken(token);
-                localStorage.setItem('ig_tools_gdrive_token', token);
-                if (window.IGTools.UI?.showToast) {
-                    window.IGTools.UI.showToast("✅ Logado no Google Drive!");
+                try {
+                    localStorage.setItem('ig_tools_gdrive_token', token);
+                    localStorage.setItem('ig_tools_gdrive_token_timestamp', String(Date.now()));
+                    localStorage.setItem('ig_tools_gdrive_expires_in', String(expiresIn));
+                } catch (_) { }
+                if (window.IGTools.DOMUtils?.showToast) {
+                    window.IGTools.DOMUtils.showToast("✅ Logado no Google Drive!");
+                } else if (typeof window.showToast === 'function') {
+                    window.showToast("✅ Logado no Google Drive!");
                 }
                 window.location.hash = '';
             }
@@ -84,6 +117,10 @@ window.IGTools = window.IGTools || {};
             if (btn) btn.onclick = () => googleAuth.login();
         }
     };
+
+    try {
+        googleAuth.checkUrlToken();
+    } catch (_) { }
 
     // Helper consolidado para Google Drive / Cache de dados
     const dbHelper = {
@@ -389,6 +426,12 @@ window.IGTools = window.IGTools || {};
         googleAuth,
         dbHelper
     };
+
+    // Aliases no escopo global para compatibilidade direta
+    window.googleAuth = googleAuth;
+    window.dbHelper = dbHelper;
+    window.loadSettings = loadSettings;
+    window.saveSettings = saveSettings;
 
     window.IGTools.BackgroundMonitor = {
         syncFollowers: (followers) => sendBridgeMessage('SYNC_FOLLOWERS_BASELINE', { followers }),
